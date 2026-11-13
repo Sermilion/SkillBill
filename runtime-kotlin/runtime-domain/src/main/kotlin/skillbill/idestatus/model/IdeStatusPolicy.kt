@@ -72,6 +72,7 @@ data class IdeStatusWorkPolicyFacts(
   val scope: IdeStatusExecutionScope?,
   val freshness: IdeStatusFreshness,
   val finishedAt: Instant?,
+  val operatorFinalizedAt: Instant? = null,
   val awaitingOperatorDecision: Boolean,
   val planningPrepared: Boolean,
   val controlTargetPresent: Boolean,
@@ -200,33 +201,29 @@ object IdeStatusPolicy {
   }
 
   fun work(facts: IdeStatusWorkPolicyFacts): IdeStatusWorkPolicy {
-    val goal = facts.family == IdeStatusWorkflowFamily.FEATURE_GOAL || facts.launchScope == IdeStatusLaunchScope.GOAL
-    val controlEligible =
-      goal && facts.scope != IdeStatusExecutionScope.STANDALONE_PHASE &&
-        facts.controlTargetPresent && facts.lifecycle == IdeStatusLifecycleState.ACTIVE &&
-        facts.freshness == IdeStatusFreshness.FRESH
+    val goal = isGoal(facts)
+    val controlEligible = controlEligible(facts, goal)
     val liveSection = liveSection(facts, goal)
     val displayGroup = displayGroup(facts, goal)
     val recent =
       windowed(
-        facts,
+        facts.operatorFinalizedAt,
         RECENT_PHASE_WINDOW,
         displayGroup in setOf(IdeStatusDisplayGroup.PHASES, IdeStatusDisplayGroup.OPERATIONS),
+        facts.observedAt,
       )
     val done =
       windowed(
-        facts,
+        facts.finishedAt,
         DONE_WINDOW,
         facts.lifecycle == IdeStatusLifecycleState.TERMINAL && facts.successfulGoalCompletion,
+        facts.observedAt,
       )
     return IdeStatusWorkPolicy(
       liveSection = liveSection,
       controlEligible = controlEligible,
       pauseEligible = controlEligible && !facts.pauseRequested,
-      requiresAttention =
-        facts.lifecycle in setOf(IdeStatusLifecycleState.BLOCKED, IdeStatusLifecycleState.FAILED) ||
-          facts.awaitingOperatorDecision ||
-          (goal && facts.lifecycle == IdeStatusLifecycleState.IDLE && facts.finishedAt == null),
+      requiresAttention = requiresAttention(facts, goal),
       displayGroup = displayGroup,
       displayPriority = displayPriority(facts),
       running =
@@ -242,18 +239,43 @@ object IdeStatusPolicy {
     )
   }
 
-  private fun windowed(
+  private fun isGoal(facts: IdeStatusWorkPolicyFacts): Boolean =
+    facts.family == IdeStatusWorkflowFamily.FEATURE_GOAL || facts.launchScope == IdeStatusLaunchScope.GOAL
+
+  private fun controlEligible(
     facts: IdeStatusWorkPolicyFacts,
+    goal: Boolean,
+  ): Boolean {
+    if (!goal || facts.scope == IdeStatusExecutionScope.STANDALONE_PHASE) {
+      return false
+    }
+    if (!facts.controlTargetPresent || facts.lifecycle != IdeStatusLifecycleState.ACTIVE) {
+      return false
+    }
+    return facts.freshness == IdeStatusFreshness.FRESH
+  }
+
+  private fun requiresAttention(
+    facts: IdeStatusWorkPolicyFacts,
+    goal: Boolean,
+  ): Boolean {
+    if (facts.lifecycle in setOf(IdeStatusLifecycleState.BLOCKED, IdeStatusLifecycleState.FAILED)) return true
+    if (facts.awaitingOperatorDecision) return true
+    if (goal && facts.lifecycle == IdeStatusLifecycleState.IDLE && facts.finishedAt == null) return true
+    return !goal && facts.lifecycle == IdeStatusLifecycleState.TERMINAL && facts.operatorFinalizedAt == null
+  }
+
+  private fun windowed(
+    anchor: Instant?,
     window: Duration,
     applies: Boolean,
+    observedAt: Instant?,
   ): WindowedFact {
-    val finishedAt = facts.finishedAt
-    val observedAt = facts.observedAt
-    if (!applies || finishedAt == null || observedAt == null) return WindowedFact(false, null)
+    if (!applies || anchor == null || observedAt == null) return WindowedFact(false, null)
     return when {
-      finishedAt.isAfter(observedAt) -> WindowedFact(false, finishedAt)
-      finishedAt.isBefore(observedAt.minus(window)) -> WindowedFact(false, null)
-      else -> WindowedFact(true, finishedAt.plus(window).plusNanos(1))
+      anchor.isAfter(observedAt) -> WindowedFact(false, anchor)
+      anchor.isBefore(observedAt.minus(window)) -> WindowedFact(false, null)
+      else -> WindowedFact(true, anchor.plus(window).plusNanos(1))
     }
   }
 
@@ -262,23 +284,32 @@ object IdeStatusPolicy {
   private fun liveSection(
     facts: IdeStatusWorkPolicyFacts,
     goal: Boolean,
-  ): IdeStatusLiveSection? =
-    if (facts.finishedAt != null) {
-      null
-    } else {
-      when (facts.lifecycle) {
+  ): IdeStatusLiveSection? {
+    if (goal) {
+      if (facts.finishedAt != null) return null
+      return when (facts.lifecycle) {
         IdeStatusLifecycleState.BLOCKED, IdeStatusLifecycleState.FAILED, IdeStatusLifecycleState.PAUSED ->
           IdeStatusLiveSection.NEEDS_YOU
-        IdeStatusLifecycleState.ACTIVE ->
-          when {
-            goal -> IdeStatusLiveSection.GOALS
-            facts.family == IdeStatusWorkflowFamily.FEATURE_VERIFY -> IdeStatusLiveSection.OPERATIONS
-            else -> IdeStatusLiveSection.PHASES
-          }
-        IdeStatusLifecycleState.IDLE -> IdeStatusLiveSection.NEEDS_YOU.takeIf { goal }
+        IdeStatusLifecycleState.ACTIVE -> IdeStatusLiveSection.GOALS
+        IdeStatusLifecycleState.IDLE -> IdeStatusLiveSection.NEEDS_YOU
         else -> null
       }
     }
+    if (facts.operatorFinalizedAt != null) return null
+    return when (facts.lifecycle) {
+      IdeStatusLifecycleState.BLOCKED, IdeStatusLifecycleState.FAILED, IdeStatusLifecycleState.PAUSED,
+      IdeStatusLifecycleState.TERMINAL,
+      ->
+        IdeStatusLiveSection.NEEDS_YOU
+      IdeStatusLifecycleState.ACTIVE ->
+        if (facts.family == IdeStatusWorkflowFamily.FEATURE_VERIFY) {
+          IdeStatusLiveSection.OPERATIONS
+        } else {
+          IdeStatusLiveSection.PHASES
+        }
+      else -> null
+    }
+  }
 
   private fun displayPriority(facts: IdeStatusWorkPolicyFacts): Int =
     when {

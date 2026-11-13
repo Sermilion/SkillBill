@@ -35,6 +35,7 @@ import java.time.ZoneOffset
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class StandalonePhaseStatusStoreTest {
@@ -484,13 +485,22 @@ class StandalonePhaseStatusStoreTest {
       }
     }
 
+    DriverManager.getConnection("jdbc:sqlite:${database.resolveDbPath()}").use { connection ->
+      connection.prepareStatement(
+        "UPDATE standalone_phase_status SET operator_finalized_at = finished_at WHERE invocation_id = 'settled-1'",
+      ).use { it.executeUpdate() }
+    }
+
     fun read(page: StandaloneEligiblePage) =
       database.read { it.standalonePhaseStatuses.readEligible("repo", "main", now, page) }.map { it.invocationId }
     val head = database.read { it.standalonePhaseStatuses.readEligible("repo", "main", now, StandaloneEligiblePage(2)) }
 
     assertEquals(listOf("live-3", "settled-1"), head.map { it.invocationId })
     val live = StandaloneEligibleSlice.LIVE
-    assertEquals(listOf("live-3", "live-2", "live-1"), read(StandaloneEligiblePage(slice = live)))
+    assertEquals(
+      listOf("live-3", "live-2", "settled-old", "live-1"),
+      read(StandaloneEligiblePage(slice = live)),
+    )
     assertEquals(listOf("settled-1"), read(StandaloneEligiblePage(slice = StandaloneEligibleSlice.SETTLED)))
     val anchor = StandalonePhaseExecutionAnchor(head.first().runSequence, head.first().invocationId)
     assertEquals(listOf("live-2"), read(StandaloneEligiblePage(1, anchor, live)))
@@ -760,6 +770,35 @@ class StandalonePhaseStatusStoreTest {
     finishedAt = started, terminalResult = "QA verdict: findings_open.",
     qaOutcome = StandaloneQaOutcome.FINDINGS, qaReportText = reportText,
   )
+
+  @Test
+  fun `terminal complete leaves operator finalization unset`() {
+    val directory = Files.createTempDirectory("standalone-operator-finalized")
+    val database = sqliteDatabaseSessionFactory(userHome = directory, environment = mapOf("TEST" to "1"))
+    val started = Instant.parse("2026-10-20T16:58:18Z")
+    database.transaction {
+      it.standalonePhaseStatuses.register(
+        monitorRegistration("validate", started, started.plusSeconds(3600)).copy(phaseId = "validation"),
+      )
+      it.standalonePhaseStatuses.update(
+        StandalonePhaseStatusUpdate(
+          executionId = "execution-validate",
+          expectedRevision = "1",
+          leaseOwner = "owner",
+          leaseGeneration = 1,
+          lifecycleState = "terminal",
+          currentStep = "validation",
+          currentActivity = null,
+          updatedAt = started,
+          finishedAt = started,
+          terminalResult = "done",
+        ),
+      )
+    }
+    val record = database.read { it.standalonePhaseStatuses.readByInvocation("run-validate") }
+    assertEquals(started, record?.finishedAt)
+    assertNull(record?.operatorFinalizedAt)
+  }
 
   @Test
   fun `a settled plan run keeps the subtasks it planned`() {

@@ -363,7 +363,8 @@ CREATE TABLE IF NOT EXISTS producer_output_evidence (
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       state_entered_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       state_entered_at_estimated INTEGER NOT NULL DEFAULT 0,
-      finished_at TEXT
+      finished_at TEXT,
+      operator_finalized_at TEXT
     )
     """.trimIndent(),
     """

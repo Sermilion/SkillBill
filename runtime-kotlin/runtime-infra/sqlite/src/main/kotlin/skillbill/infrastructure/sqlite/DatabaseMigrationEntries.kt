@@ -35,6 +35,7 @@ import skillbill.infrastructure.sqlite.core.migration.area.blockincident.blockIn
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.PrimaryRepositoryRootMigration
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.StandalonePhaseStatusMigration
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.buildrun.recordAgentBuildRuns
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.operatorFinalizedAtMigrations
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.pruneWorktreeEditJournalToLatestTick
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.qadetails.QA_DETAILS_COLUMN
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.qadetails.SqliteQaDetailsKeys
@@ -1195,4 +1196,4 @@ internal val databaseMigrations: List<DatabaseMigration> =
       version = 126,
       name = "fence-goal-planning-checkout-recovery",
       operation = ::addGoalPlanningCheckoutRecovery,
-    )
+    ) + operatorFinalizedAtMigrations

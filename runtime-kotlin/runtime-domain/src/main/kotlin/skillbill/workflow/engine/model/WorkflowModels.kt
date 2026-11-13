@@ -36,6 +36,7 @@ data class WorkflowStateSnapshot(
   val startedAt: Instant?,
   val updatedAt: Instant?,
   val finishedAt: Instant?,
+  val operatorFinalizedAt: Instant? = null,
   val mode: FeatureTaskWorkflowMode? = null,
 ) {
   fun step(stepId: String): WorkflowStepState? = steps.firstOrNull { it.stepId == stepId }

@@ -47,6 +47,7 @@ data class WorkBoardItem(
   val snapshot: IdeStatusSnapshot,
   val repositoryRoot: String,
   val finishedAt: Instant? = null,
+  val operatorFinalizedAt: Instant? = null,
   val finishedAtSource: WorkBoardCompletionSource? = null,
   val controlLease: GoalRunnerExecutionLease? = null,
   val observation: WorkStoreObservation? = null,

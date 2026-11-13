@@ -35,7 +35,9 @@ import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.infrastructure.sqlite.core.ops.inNestedWriteTransaction
 import skillbill.infrastructure.sqlite.core.schema.AGENT_ENVIRONMENT_COLUMN
 import skillbill.infrastructure.sqlite.core.schema.LAUNCH_SCOPE_COLUMN
+import skillbill.infrastructure.sqlite.core.schema.OPERATOR_FINALIZED_AT_COLUMN
 import skillbill.infrastructure.sqlite.core.schema.REPORTED_MODEL_COLUMN
+import skillbill.infrastructure.sqlite.core.schema.STANDALONE_SUCCESSFUL_COMPLETION_LIFECYCLES_SQL
 import skillbill.infrastructure.sqlite.core.schema.agentEnvironmentJson
 import skillbill.infrastructure.sqlite.core.schema.readAgentEnvironment
 import skillbill.infrastructure.sqlite.core.schema.readLaunchScope
@@ -172,9 +174,22 @@ internal class StandalonePhaseStatusStore(
     val liveFrom = now.minus(LIVE_RETENTION)
     val settledFrom = now.minus(SETTLED_RETENTION)
     val liveStates = LIVE_STATES.joinToString(", ") { "'$it'" }
+    val successfulTerminal = "lifecycle_state IN ($STANDALONE_SUCCESSFUL_COMPLETION_LIFECYCLES_SQL)"
+    val unfinalizedCompleted =
+      "($successfulTerminal AND $OPERATOR_FINALIZED_AT_COLUMN IS NULL)"
     val live =
-      "(lifecycle_state IN ($liveStates) AND ${instantAtOrAfterBoundSql("updated_at", "live_from")})"
-    val settled = "(finished_at IS NOT NULL AND ${instantAfterBoundSql("finished_at", "settled_from")})"
+      "((lifecycle_state IN ($liveStates) AND ${instantAtOrAfterBoundSql("updated_at", "live_from")})" +
+        " OR $unfinalizedCompleted)"
+    val finalizedSettled =
+      "($successfulTerminal AND $OPERATOR_FINALIZED_AT_COLUMN IS NOT NULL AND " +
+        "${instantAfterBoundSql(OPERATOR_FINALIZED_AT_COLUMN, "settled_from")})"
+    val failedCanceled =
+      listOf(IdeStatusLifecycleState.FAILED.wireValue, IdeStatusLifecycleState.CANCELED.wireValue)
+        .joinToString(", ") { "'$it'" }
+    val failedCanceledSettled =
+      "(lifecycle_state IN ($failedCanceled) AND finished_at IS NOT NULL AND " +
+        "${instantAfterBoundSql("finished_at", "settled_from")})"
+    val settled = "($finalizedSettled OR $failedCanceledSettled)"
     val eligible =
       when (slice) {
         StandaloneEligibleSlice.LIVE -> live
@@ -849,6 +864,7 @@ internal class StandalonePhaseStatusStore(
       startedAt = standaloneInstant("started_at"),
       updatedAt = standaloneInstant("updated_at"),
       finishedAt = standaloneInstantOrNull("finished_at"),
+      operatorFinalizedAt = standaloneInstantOrNull(OPERATOR_FINALIZED_AT_COLUMN),
       activeDurationMs = getLong("active_duration_ms").takeIf { !wasNull() },
       activeDurationAsOf = standaloneInstantOrNull("active_duration_as_of"),
       leaseOwner = getString("lease_owner"),

@@ -237,8 +237,18 @@ public class WorkBoardItemProjection(
   ): WorkBoardItem? {
     val item = projectBoardItem(candidate, context, work)
     if (item.finishedAt == null && !isFinished(item.snapshot)) return item
-    val finishedAt = item.finishedAt
-    if (finishedAt == null) {
+    val goal =
+      item.snapshot.workflowFamily == IdeStatusWorkflowFamily.FEATURE_GOAL ||
+        item.snapshot.execution?.launchScope == IdeStatusLaunchScope.GOAL
+    if (
+      item.operatorFinalizedAt == null &&
+      item.snapshot.lifecycleState == IdeStatusLifecycleState.TERMINAL &&
+      !goal
+    ) {
+      return item
+    }
+    val retentionInstant = item.operatorFinalizedAt ?: item.finishedAt
+    if (retentionInstant == null) {
       diagnostics +=
         WorkBoardDiagnostic(
           WorkBoardDiagnosticReason.MISSING_COMPLETION_TIME,
@@ -248,7 +258,7 @@ public class WorkBoardItemProjection(
         )
       return null
     }
-    return item.takeIf { finishedAt >= finishedFrom && finishedAt <= context.observedAt }
+    return item.takeIf { retentionInstant >= finishedFrom && retentionInstant <= context.observedAt }
   }
 
   internal fun resolvedWorkItems(
@@ -292,24 +302,27 @@ public class WorkBoardItemProjection(
       }
     val superseded = supersededPhase(candidate.standaloneStatus, context.unitOfWork, context.observedAt)
     val finishedAt = completion.first ?: candidate.standaloneStatus?.updatedAt?.takeIf { superseded }
+    val operatorFinalizedAt = operatorFinalizationEvidence(candidate, context.unitOfWork)
     val windowed =
       workPolicy(
         snapshot,
         finishedAt,
         context.observedAt,
         successfulGoalCompletion = completion.second == WorkBoardCompletionSource.GOAL_COMPLETION,
+        operatorFinalizedAt = operatorFinalizedAt,
       )
     return WorkBoardItem(
       snapshot,
       context.repoRoot.toString(),
       finishedAt,
+      operatorFinalizedAt,
       completion.second,
       context.unitOfWork.goalRunnerControls.controlState(candidate.workflowId).executionLease,
       context.unitOfWork.workList.observation(),
       snapshot.updatedAt.plus(IdeStatusFreshnessClassifier.FRESH_WINDOW).plusNanos(1),
-      workLiveSection(snapshot, finishedAt).takeUnless { superseded },
+      workLiveSection(snapshot, finishedAt, operatorFinalizedAt).takeUnless { superseded },
       workControlEligible(snapshot) && !superseded,
-      workRequiresAttention(snapshot) && !superseded,
+      workRequiresAttention(snapshot, operatorFinalizedAt) && !superseded,
       workDisplayGroup(snapshot, completion.first),
       workDisplayPriority(snapshot, completion.first),
       projection.exactPauseReason,
@@ -483,6 +496,15 @@ public class WorkBoardItemProjection(
       workflowId = workflowId,
       invocationId = invocationId,
     )
+
+  private fun operatorFinalizationEvidence(
+    candidate: IdeStatusCandidate,
+    unitOfWork: UnitOfWork,
+  ): Instant? {
+    candidate.standaloneStatus?.operatorFinalizedAt?.let { return it }
+    if (candidate.workflowFamily != IdeStatusWorkflowFamily.FEATURE_VERIFY) return null
+    return unitOfWork.workflowStates.get(WorkflowFamily.VERIFY, candidate.workflowId)?.operatorFinalizedAt
+  }
 
   internal fun completionEvidence(
     standalone: StandalonePhaseStatusRecord?,

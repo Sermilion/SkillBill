@@ -44,10 +44,12 @@ class IdeStatusPolicyVerifyLifecycleTest {
 
   @Test
   fun `finished verification stays in recent operations without becoming a finished phase`() {
+    val finalizedAt = observedAt.minusSeconds(30)
     val policy =
       IdeStatusPolicy.work(
         facts(IdeStatusLifecycleState.TERMINAL).copy(
-          finishedAt = observedAt.minusSeconds(30),
+          finishedAt = finalizedAt,
+          operatorFinalizedAt = finalizedAt,
           observedAt = observedAt,
         ),
       )
