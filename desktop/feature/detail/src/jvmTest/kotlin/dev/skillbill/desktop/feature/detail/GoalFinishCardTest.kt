@@ -4,6 +4,8 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isSelectable
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.runComposeUiTest
@@ -14,6 +16,7 @@ import dev.skillbill.desktop.core.domain.model.GoalAssessmentState
 import dev.skillbill.desktop.core.domain.model.QaRunDetails
 import dev.skillbill.desktop.core.domain.model.QaRunOccurrence
 import dev.skillbill.desktop.core.domain.model.QaRunStage
+import dev.skillbill.desktop.core.domain.model.PhaseCardState
 import dev.skillbill.desktop.core.domain.model.WorkKind
 import dev.skillbill.desktop.core.domain.model.WorkSubtask
 import dev.skillbill.desktop.core.ui.input.LocalShellInput
@@ -27,6 +30,30 @@ import kotlin.test.assertTrue
 
 @OptIn(ExperimentalTestApi::class)
 class GoalFinishCardTest {
+  @Test
+  fun `current PR opens automatically before its URL is available while explicit folding remains respected`() = runComposeUiTest {
+    val item = workItem("goal")
+    val detail = emptyDetail.copy(
+      currentPhase = "pr",
+      goalFinishCards = listOf(finishCard("validate"), finishCard("pr", PhaseCardState.Running)),
+    )
+    val state = mutableStateOf(DetailUiState(item, SectionsUi.Loaded(detail, null, emptyMap(), emptySet()), false, epoch))
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        GoalFinishPhases(item, detail, state.value, mutableStateOf(AssessmentOrder.Default)) {
+          if (it is DetailAction.SelectPhase) state.value = state.value.copy(
+            phaseChoice = mapOf(PhaseChoiceKey(item.id, SubtaskKey.GoalFinish) to PhaseDisclosure.Folded),
+          )
+        }
+      }
+    }
+    onNode(isSelectable() and hasText("pr")).assertIsSelected()
+    onNodeWithText("Pull request").assertExists()
+    onNodeWithText("Select a phase to see what it did.").assertDoesNotExist()
+    onNode(isSelectable() and hasText("pr")).performClick()
+    onNodeWithText("Select a phase to see what it did.").assertExists()
+  }
+
   @Test
   fun `changing QA rounds shows that rounds evidence and keeps stages folded until opened`() = runComposeUiTest {
     val history = QaRunDetails(historyAvailability = "recorded", occurrences = listOf(round("first"), round("retest")))

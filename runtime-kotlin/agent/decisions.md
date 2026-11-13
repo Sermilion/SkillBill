@@ -3890,3 +3890,8 @@ receipt. The review prompt still asks for citations, so repair starts from them.
 Context: A completed goal can retain a monitor cycle without its final timestamp or CI outcome. The finish projection treated that observation as a live monitor indefinitely.
 Decision: Pass recorded goal completion into the finish projection. Stop the monitor card when that goal is complete, preserve every cycle field, and emit a degraded-read diagnostic for the missing terminal CI record. Child workflow completion alone does not end the goal's monitor.
 Reason: A historical observation cannot override durable goal completion or prove that CI passed. This changes only read projection and does not migrate or rewrite persisted cycles.
+
+## [2026-11-13] Project the current PR phase before its URL exists
+Context: Goal finish omitted the PR card until a pull request URL was recorded. While PR creation ran, the desktop could neither select that phase nor show Goal finish as active.
+Decision: Use the parent workflow's current PR step and status to project its running, blocked, paused or failed card before a URL exists. Preserve a recorded URL during retries. A child's PR step and a completed goal do not reactivate the goal's PR card.
+Reason: Current execution state establishes phase availability independently of the output it has yet to produce. The existing automatic phase selection can then open it without overriding an explicit fold or selection.

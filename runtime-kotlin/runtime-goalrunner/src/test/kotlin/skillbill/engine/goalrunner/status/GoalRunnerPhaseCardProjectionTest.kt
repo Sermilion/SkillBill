@@ -27,6 +27,32 @@ import kotlin.test.assertTrue
 
 class GoalRunnerPhaseCardProjectionTest {
   @Test
+  fun `current goal PR is available before a pull request URL exists without borrowing a child phase`() {
+    val sources = GoalFinishCardSources(null, null, emptyList(), null)
+    val read = GoalRunnerStatusDurableReadTracker(NoopRuntimeDiagnostics)
+    val running = goalFinishCards(sources, "pr", WorkflowStatus.RUNNING, null, read).single()
+    assertEquals("pr", running.phaseId)
+    assertEquals(GoalRunnerPhaseCardState.RUNNING, running.state)
+    assertNull(running.pullRequestUrl)
+    assertEquals(
+      GoalRunnerPhaseCardState.BLOCKED,
+      goalFinishCards(sources, "pr", WorkflowStatus.BLOCKED, null, read).single().state,
+    )
+    assertTrue(goalFinishCards(sources, "pr", WorkflowStatus.RUNNING, "child", read).isEmpty())
+    assertTrue(goalFinishCards(sources.copy(goalCompleted = true), "pr", WorkflowStatus.RUNNING, null, read).isEmpty())
+    val retained =
+      goalFinishCards(
+        sources.copy(goalPullRequestUrl = "https://example.test/pull/1"),
+        "pr",
+        WorkflowStatus.RUNNING,
+        null,
+        read,
+      ).single()
+    assertEquals(GoalRunnerPhaseCardState.RUNNING, retained.state)
+    assertEquals("https://example.test/pull/1", retained.pullRequestUrl)
+  }
+
+  @Test
   fun `completed goal stops an unfinished monitor projection without inventing a CI result`() {
     val at = Instant.parse("2026-11-13T15:44:00Z")
     val cycle = MonitorCiCycleRecord(2, "monitor", at, at)
