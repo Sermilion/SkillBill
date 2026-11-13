@@ -44,13 +44,13 @@ class CliInstallMcpRuntimeTest {
         context,
       )
     assertEquals(0, register.exitCode, register.stdout)
-    assertContains(Files.readString(configPath), "skill-bill")
+    assertContains(Files.readString(configPath), "\"sona\"")
     assertFalse(Files.exists(stale))
 
-    val removal = CliRuntime.run(removeArguments + listOf("--runtime-mcp-bin", command), context)
+    val removal = CliRuntime.run(removeArguments, context)
 
     assertEquals(0, removal.exitCode, removal.stdout)
-    assertFalse(Files.readString(configPath).contains("skill-bill"))
+    assertFalse(Files.readString(configPath).contains("\"sona\""))
   }
 
   @Test

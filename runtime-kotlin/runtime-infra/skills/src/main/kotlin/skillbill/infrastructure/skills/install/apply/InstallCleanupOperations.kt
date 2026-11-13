@@ -12,6 +12,8 @@ import java.nio.file.attribute.BasicFileAttributes
 import java.util.stream.Collectors
 
 internal object InstallCleanupOperations {
+  private val LEGACY_CHECKOUT_SKILL_ROOTS = setOf("skills", "platform-packs")
+
   fun isOwnedSymlink(
     path: Path,
     installedSkillsRoot: Path,
@@ -81,6 +83,9 @@ internal object InstallCleanupOperations {
     if (Files.isSymbolicLink(target)) {
       if (installedSkillsRoot != null && removeOwnedSymlink(target, installedSkillsRoot) != null) {
         removed.add(target)
+      } else if (isLegacyCheckoutSkillLink(target)) {
+        Files.delete(target)
+        removed.add(target)
       } else {
         skipped.add(target)
       }
@@ -93,6 +98,19 @@ internal object InstallCleanupOperations {
     } else if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
       skipped.add(target)
     }
+  }
+
+  private fun isLegacyCheckoutSkillLink(link: Path): Boolean {
+    val rawTarget =
+      try {
+        Files.readSymbolicLink(link)
+      } catch (_: IOException) {
+        return false
+      }
+    val target = (if (rawTarget.isAbsolute) rawTarget else link.parent.resolve(rawTarget)).normalize()
+    val segments = target.map(Path::toString)
+    return target.fileName == link.fileName &&
+      segments.dropLast(1).any { segment -> segment in LEGACY_CHECKOUT_SKILL_ROOTS }
   }
 
   private fun deleteTree(target: Path) {

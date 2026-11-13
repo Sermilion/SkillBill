@@ -21,6 +21,7 @@ import java.nio.file.Path
 internal fun cleanupExistingSkillBillLinks(
   plan: InstallPlan,
   platformManifests: List<PlatformManifest>,
+  warnings: MutableList<InstallApplyIssue>,
   failures: MutableList<InstallApplyIssue>,
 ) {
   if (!plan.request.replaceExistingSkillBillLinks) return
@@ -61,11 +62,11 @@ internal fun cleanupExistingSkillBillLinks(
         ),
       )
     } else {
-      cleanupOneTarget(agentTarget.agent, targetDir, cleanupContext, failures)
+      cleanupOneTarget(agentTarget.agent, targetDir, cleanupContext, warnings, failures)
     }
 
     legacyClaudeCommandsDir(agentTarget.agent, targetDir)?.let { legacyDir ->
-      cleanupOneTarget(agentTarget.agent, legacyDir, cleanupContext, failures)
+      cleanupOneTarget(agentTarget.agent, legacyDir, cleanupContext, warnings, failures)
     }
   }
   pruneLegacySkillCacheDirs(
@@ -86,6 +87,7 @@ private fun cleanupOneTarget(
   agent: SupportedAgent,
   targetDir: Path,
   cleanupContext: InstallCleanupContext,
+  warnings: MutableList<InstallApplyIssue>,
   failures: MutableList<InstallApplyIssue>,
 ) {
   catchingNonCancellation {
@@ -98,13 +100,14 @@ private fun cleanupOneTarget(
     )
   }.onSuccess { (_, skipped) ->
     skipped.forEach { path ->
-      failures.add(
+      warnings.add(
         InstallApplyIssue(
           kind = InstallApplyIssueKind.SKILL_LINK_FAILED,
           message = "Existing target at $path was preserved because cleanup ownership could not be established.",
           skillName = path.fileName.toString(),
           agent = agent,
           path = path.toFileLocation(),
+          guidance = "Remove it if it is left over from an earlier Skill Bill install.",
         ),
       )
     }

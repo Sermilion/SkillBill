@@ -4,10 +4,12 @@ import skillbill.cli.core.CliRuntime
 import skillbill.infrastructure.skills.nativeagent.composition.parseNativeAgentSource
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentProvider
 import java.nio.file.Files
+import java.nio.file.LinkOption
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class CliInstallNativeAgentRuntimeTest {
   @Test
@@ -35,6 +37,18 @@ class CliInstallNativeAgentRuntimeTest {
 
     assertEquals(0, runInstall(fixture, "unlink-cursor-agents").exitCode)
     assertFalse(Files.exists(target))
+  }
+
+  @Test
+  fun `opencode native subagent commands link and unlink authored agent files`() {
+    val fixture = installFixture()
+    val target = fixture.home.resolve(".config/opencode/agents/${fixture.cursorMd.fileName}")
+
+    assertEquals(0, runInstall(fixture, "link-opencode-agents").exitCode)
+    assertTrue(Files.isSymbolicLink(target))
+
+    assertEquals(0, runInstall(fixture, "unlink-opencode-agents").exitCode)
+    assertFalse(Files.exists(target, LinkOption.NOFOLLOW_LINKS))
   }
 
   @Test

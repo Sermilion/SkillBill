@@ -3232,13 +3232,26 @@ build_runtime_install_args() {
 
 apply_runtime_install() {
   local status=0
+  local output_file failures
 
   info "Applying install through the runtime plan/apply path."
-  run_runtime_cli "${RUNTIME_INSTALL_ARGS[@]}" || status=$?
+  output_file="$(mktemp "${TMPDIR:-/tmp}/sona-install-apply.XXXXXX")" || return 1
+  run_runtime_cli "${RUNTIME_INSTALL_ARGS[@]}" | tee "$output_file" || status=$?
   if [[ "$status" -ne 0 ]]; then
     err "Runtime install apply failed."
+    # The apply report is long; repeat its failures here so they are not lost in scrollback.
+    failures="$(sed -n '/^failures:/,/^windows_symlink_outcome:/p' "$output_file" | sed '$d')"
+    if [[ -n "$failures" ]]; then
+      err "Apply failures:"
+      printf '%s\n' "$failures" >&2
+    else
+      err "Last runtime output:"
+      tail -n 20 "$output_file" >&2
+    fi
+    err "Full apply output: $output_file"
     return "$status"
   fi
+  rm -f "$output_file"
   ok "Runtime install apply completed"
 }
 

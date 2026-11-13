@@ -20,6 +20,16 @@ Context: A user's existing sona target can block installation while an owned ski
 Decision: Preserve unowned targets and return typed install issues through every affected caller. Retire owned obsolete dispatcher links only after public linking succeeds, and retain previous link targets for scaffold rollback.
 Reason: A reserved public name does not establish filesystem ownership. Preserving the old payload keeps a refused upgrade usable; reporting failure prevents false success and lets the operator resolve the conflict before retrying. Scaffold must restore pre-existing links when its transaction fails.
 
+## [2026-11-13] Remove legacy checkout links and warn on other leftovers
+Context: Adding an agent (OpenCode) exposed skill dirs holding links from pre-cache installs, which pointed straight into a source checkout. Cleanup preserved each one as unowned and failed the install, though none collided with a link the install creates.
+Decision: Treat a cleanup-named link whose target is the same-named directory under a `skills` or `platform-packs` folder as an old Skill Bill install and remove the link. Report any other preserved cleanup leftover as a warning. A conflicting public dispatcher target still fails.
+Reason: Ownership evidence is the Skill Bill name plus the old install's path shape; removing a link never touches its target. Failing on a non-conflicting leftover blocks every user with an old install, and a warning still prevents silent preservation.
+
+## [2026-11-13] Give OpenCode the same install ownership as other agents
+Context: OpenCode registered its MCP server as `skill-bill`, refused to replace a differing entry, and removed one only with a recorded launcher identity. An old Python-era entry therefore stayed forever, and the shell uninstall could not unregister OpenCode or unlink its native agents.
+Decision: Register OpenCode as `sona` and treat both product server names as owned in the target file, replacing or removing them by name like JSON and TOML agents. Keep the shadowing-source and host-managed refusals. Expose link and unlink commands for OpenCode and Devin native agents so the shell uninstall removes them.
+Reason: The product server names are reserved by Sona in every agent; an identity check only for OpenCode left stale servers that pointed at deleted launchers. Shadowing refusals stay because OpenCode merges several config sources.
+
 ## [2026-11-13] Remove MCP configuration by product server ownership
 Context: The namespace migration must replace old and new product registrations without losing unrelated profile settings. Product TOML configuration can include nested tables beside other servers.
 Decision: Registration and removal recognize both product names. TOML removal matches parsed table paths rooted at either product server and tracks multiline values before treating a line as a table header.

@@ -114,7 +114,6 @@ object McpRegistrationOperations {
     agent: String,
     home: Path? = null,
     environment: Map<String, String> = emptyMap(),
-    expectedRuntimeMcpBin: Path? = null,
     hostPlatform: HostPlatformPort = JdkHostPlatformPort,
   ): McpRegistrationOutcome {
     val resolvedHome = resolveUserHome(home, hostPlatform)
@@ -123,7 +122,6 @@ object McpRegistrationOperations {
         agent,
         resolvedHome,
         resolvedProfileEnvironment(environment, hostPlatform),
-        expectedRuntimeMcpBin,
       ),
       hostPlatform,
     )
@@ -137,7 +135,6 @@ object McpRegistrationOperations {
     val agent = request.agent
     val home = request.home
     val profileEnvironment = checkNotNull(request.profileEnvironment)
-    val expectedRuntimeMcpBin = request.expectedRuntimeMcpBin
     val resolvedHome = resolveUserHome(home, hostPlatform)
     return when (val installAgent = SupportedAgent.fromId(agent)) {
       SupportedAgent.CLAUDE ->
@@ -156,7 +153,7 @@ object McpRegistrationOperations {
         resolveOpenCodeRoots(resolvedHome, profileEnvironment, diagnostics).let { roots ->
           reportOpenCodeErrors(diagnostics) {
             OpenCodeMcpConfig(resolvedHome, profileEnvironment, roots, hostPlatform)
-              .unregister(openCodeTargetPath(roots), expectedRuntimeMcpBin)
+              .unregister(openCodeTargetPath(roots))
           }
         }
       SupportedAgent.DEVIN ->

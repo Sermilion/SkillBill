@@ -7,7 +7,6 @@ import skillbill.install.model.McpRegistrationOutcome
 import skillbill.ports.install.mcp.model.InstallMcpProfileEnvironment
 import java.io.IOException
 import java.nio.file.Files
-import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -56,22 +55,44 @@ class OpenCodeMcpConfigTest {
     assertContains(afterFirst, "\"command\":[\"$command\"]")
     assertContains(afterFirst, "\"type\":\"local\"")
     assertContains(afterFirst, "\"other\"")
-    val removal = OpenCodeMcpConfig(home, profile).unregister(path, expectedRuntimeMcpBin = Path.of(command))
+    assertContains(afterFirst, "\"sona\"")
+    val removal = OpenCodeMcpConfig(home, profile).unregister(path)
     assertTrue(assertIs<McpRegistrationOutcome.Applied>(removal).mutation.changed)
     val afterRemove = Files.readString(path)
     assertContains(afterRemove, "// keep this note")
     assertContains(afterRemove, "\"other\"")
-    assertFalse(afterRemove.contains("\"skill-bill\""))
-
-    val replacement = """{"mcp":{"skill-bill":{"type":"local","command":["other"],"environment":{}}}}"""
-    Files.writeString(path, replacement)
-    val refusedRemoval = OpenCodeMcpConfig(home, profile).unregister(path, expectedRuntimeMcpBin = Path.of(command))
-    assertTrue(refusedRemoval is McpRegistrationOutcome.ProfilesFailed)
-    assertEquals(replacement, Files.readString(path))
+    assertFalse(afterRemove.contains("\"sona\""))
   }
 
   @Test
-  fun `empty MCP object supports registration and a changed runtime binding prevents removal`() {
+  fun `registration replaces a legacy skill-bill entry and removal clears any product entry`() {
+    val home = Files.createTempDirectory("opencode-legacy")
+    val path = home.resolve("opencode.json")
+    val legacy =
+      """{"mcp":{"skill-bill":{"type":"local","command":["/old/.venv/bin/python","-m","skill_bill.mcp_server"],""" +
+        """"enabled":true},"other":{"type":"remote","url":"https://example.test"}}}"""
+    Files.writeString(path, legacy)
+    val profile = InstallMcpProfileEnvironment(workingDirectory = home.toString())
+
+    val registration = OpenCodeMcpConfig(home, profile).register(path, "/runtime-mcp")
+
+    assertTrue(assertIs<McpRegistrationOutcome.Applied>(registration).mutation.changed)
+    val registered = Files.readString(path)
+    assertFalse(registered.contains("skill_bill.mcp_server"))
+    assertFalse(registered.contains("\"skill-bill\""))
+    assertContains(registered, "\"sona\"")
+    assertContains(registered, "\"other\"")
+
+    val foreignDefinition = """{"mcp":{"sona":{"type":"local","command":["other"]},"skill-bill":{"type":"local"}}}"""
+    Files.writeString(path, foreignDefinition)
+    val removal = OpenCodeMcpConfig(home, profile).unregister(path)
+
+    assertTrue(assertIs<McpRegistrationOutcome.Applied>(removal).mutation.changed)
+    assertEquals("""{"mcp":{}}""", Files.readString(path).filterNot(Char::isWhitespace))
+  }
+
+  @Test
+  fun `empty MCP object supports registration and removal ignores a changed runtime binding`() {
     val home = Files.createTempDirectory("opencode-empty-mcp")
     val path = home.resolve("opencode.jsonc")
     val original = """{"model":"provider/model","mcp":{}}"""
@@ -86,15 +107,9 @@ class OpenCodeMcpConfigTest {
     val registration = OpenCodeMcpConfig(home, profile).register(path, command.toString())
     assertTrue(assertIs<McpRegistrationOutcome.Applied>(registration).mutation.changed)
     val managed = Files.readString(path)
-    val replaced = managed.replace("original.db", "user-owned.db")
-    Files.writeString(path, replaced)
+    Files.writeString(path, managed.replace("original.db", "user-owned.db"))
 
-    val refusal = OpenCodeMcpConfig(home, profile).unregister(path, expectedRuntimeMcpBin = command)
-
-    assertTrue(refusal is McpRegistrationOutcome.ProfilesFailed)
-    assertEquals(replaced, Files.readString(path))
-    Files.writeString(path, managed)
-    val removal = OpenCodeMcpConfig(home, profile).unregister(path, expectedRuntimeMcpBin = command)
+    val removal = OpenCodeMcpConfig(home, profile).unregister(path)
     assertTrue(assertIs<McpRegistrationOutcome.Applied>(removal).mutation.changed)
     val removed = Files.readString(path)
     assertContains(removed, "provider/model")
@@ -117,7 +132,7 @@ class OpenCodeMcpConfigTest {
       assertEquals(McpRegistrationFailureCode.OPENCODE_CONFIG_INVALID, registrationError.code)
       val removalError =
         assertFailsWith<SkillBillRuntimeException> {
-          OpenCodeMcpConfig(home, profile).unregister(path, expectedRuntimeMcpBin = Path.of("/runtime-mcp"))
+          OpenCodeMcpConfig(home, profile).unregister(path)
         }
       assertEquals(McpRegistrationFailureCode.OPENCODE_CONFIG_INVALID, removalError.code)
       assertEquals(original, Files.readString(path))

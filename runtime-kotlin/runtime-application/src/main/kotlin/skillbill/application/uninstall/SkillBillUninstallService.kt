@@ -61,7 +61,6 @@ class SkillBillUninstallService(
       ) + claudeTargets + codexTargets + devinTargets +
         listOf(installAgentService.agentPath(SupportedAgent.OPENCODE.id, home, environment))
     val stateRuntimeRoot = stateRoot.resolve("runtime")
-    val runtimeMcpBin = stateRuntimeRoot.resolve("runtime-mcp/bin/runtime-mcp")
     val binDir = request.environment["SKILL_BILL_BIN_DIR"]?.let(Path::of) ?: home.resolve(".local/bin")
     return UninstallPlan(
       home = home,
@@ -81,7 +80,6 @@ class SkillBillUninstallService(
           os = currentOs(hostPlatform.osName),
         ),
       environment = environment,
-      runtimeMcpBinIdentity = runtimeMcpBin,
     )
   }
 

@@ -87,4 +87,10 @@ object InstallOperations {
     environment: Map<String, String>,
     hostPlatform: HostPlatformPort = JdkHostPlatformPort,
   ): Path = InstallOperationsPaths.devinAgentsPath(home, environment, hostPlatform)
+
+  fun openCodeAgentsPath(
+    home: Path?,
+    environment: Map<String, String>,
+    hostPlatform: HostPlatformPort = JdkHostPlatformPort,
+  ): Path = InstallOperationsPaths.openCodeAgentsPath(home, environment, hostPlatform)
 }

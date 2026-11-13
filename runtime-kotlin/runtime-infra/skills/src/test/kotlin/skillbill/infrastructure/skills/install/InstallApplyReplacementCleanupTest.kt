@@ -221,7 +221,7 @@ class InstallApplyReplacementCleanupTest : InstallApplyTestSupport() {
   }
 
   @Test
-  fun `apply reports an unowned legacy alias instead of silently preserving it`() {
+  fun `apply preserves an unowned legacy alias and reports it without failing the install`() {
     val fixture = setupApplyFixture()
     val targetDir = Files.createDirectories(fixture.home.resolve("agent-skill-targets/codex"))
     val legacyLink = targetDir.resolve("bill-quality-check")
@@ -234,13 +234,33 @@ class InstallApplyReplacementCleanupTest : InstallApplyTestSupport() {
 
     val result = applyInstallForTest(plan)
 
-    assertEquals(InstallApplyStatus.FAILURE, result.status)
+    assertEquals(InstallApplyStatus.WARNING, result.status)
+    assertTrue(result.failures.isEmpty())
     assertEquals(externalTarget, readSymlinkTarget(legacyLink))
     assertTrue(
-      result.failures.any { issue ->
+      result.warnings.any { issue ->
         issue.kind == InstallApplyIssueKind.SKILL_LINK_FAILED && issue.path?.toPath() == legacyLink
       },
     )
+  }
+
+  @Test
+  fun `apply removes a legacy link into an old source checkout`() {
+    val fixture = setupApplyFixture()
+    val targetDir = Files.createDirectories(fixture.home.resolve("agent-skill-targets/codex"))
+    val legacyLink = targetDir.resolve("bill-quality-check")
+    val deletedCheckoutSkill = fixture.home.resolve("Development/skill-bill/skills/bill-quality-check")
+    createSymlinkOrSkip(legacyLink, deletedCheckoutSkill)
+    val plan =
+      planInstallForTest(
+        fixture.request(agents = setOf(SupportedAgent.CODEX), replaceExistingSkillBillLinks = true),
+      )
+
+    val result = applyInstallForTest(plan)
+
+    assertTrue(result.failures.isEmpty())
+    assertTrue(result.warnings.none { issue -> issue.path?.toPath() == legacyLink })
+    assertFalse(Files.exists(legacyLink, LinkOption.NOFOLLOW_LINKS))
   }
 
   @Test

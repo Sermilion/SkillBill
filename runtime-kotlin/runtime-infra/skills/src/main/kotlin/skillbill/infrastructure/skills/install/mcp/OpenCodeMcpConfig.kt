@@ -32,7 +32,8 @@ internal class OpenCodeMcpConfig(
   },
 ) {
   private object Keys {
-    const val MANAGED_NAME = "skill-bill"
+    const val MANAGED_NAME = McpConfigKeys.SONA_SERVER
+    val PRODUCT_NAMES = listOf(McpConfigKeys.SKILL_BILL_SERVER, McpConfigKeys.SONA_SERVER)
     const val MCP = "mcp"
     const val TYPE = "type"
     const val LOCAL = "local"
@@ -54,7 +55,6 @@ internal class OpenCodeMcpConfig(
     val mcp = root.get(Keys.MCP)
     if (mcp != null && !mcp.isObject) invalid(path)
     val mcpNode = (mcp as? ObjectNode) ?: mapper.createObjectNode()
-    val existing = mcpNode.get(Keys.MANAGED_NAME)
     val normalizedCommand = normalizeCommand(command, roots.workingDirectory ?: home)
     if (hasUnanchoredRelativeDatabasePath(environment, roots, path)) {
       return refused(
@@ -64,31 +64,34 @@ internal class OpenCodeMcpConfig(
     }
     val normalizedEnvironment = normalizedEnvironment(home, environment, roots)
     val desired = managedEntry(normalizedCommand, normalizedEnvironment)
-    return when {
-      existing != null && existing != desired -> refused(path, "mcp.skill-bill has a different, unowned definition")
-      existing != null -> applied(path, changed = false)
-      else -> registerNewEntry(path, original, existed, desired)
-    }
+    val upToDate = mcpNode.get(Keys.MANAGED_NAME) == desired && !mcpNode.has(McpConfigKeys.SKILL_BILL_SERVER)
+    return if (upToDate) applied(path, changed = false) else writeEntry(path, original, existed, desired)
   }
 
-  private fun registerNewEntry(
+  private fun writeEntry(
     path: Path,
     original: String,
     existed: Boolean,
     desired: ObjectNode,
   ): McpRegistrationOutcome {
-    val rootSpan = objectSpan(original, path, emptyList())
-    val mcpSpan = OpenCodeJsoncEditor.objectAt(original, listOf(Keys.MCP))
+    val withoutProductEntries = removeProductEntries(original, path)
+    val rootSpan = objectSpan(withoutProductEntries, path, emptyList())
+    val mcpSpan = OpenCodeJsoncEditor.objectAt(withoutProductEntries, listOf(Keys.MCP))
     val patched =
       if (mcpSpan == null) {
         OpenCodeJsoncEditor.insertProperty(
-          original,
+          withoutProductEntries,
           rootSpan,
           Keys.MCP,
           "{\"${Keys.MANAGED_NAME}\": ${mapper.writeValueAsString(desired)}}",
         )
       } else {
-        OpenCodeJsoncEditor.insertProperty(original, mcpSpan, Keys.MANAGED_NAME, mapper.writeValueAsString(desired))
+        OpenCodeJsoncEditor.insertProperty(
+          withoutProductEntries,
+          mcpSpan,
+          Keys.MANAGED_NAME,
+          mapper.writeValueAsString(desired),
+        )
       }
     verifyRegistrationPostcondition(original, patched, path, desired)
     if (!publish(path, existed, original, patched, publishFile)) {
@@ -97,49 +100,35 @@ internal class OpenCodeMcpConfig(
     return applied(path, changed = true)
   }
 
-  fun unregister(
-    path: Path,
-    expectedRuntimeMcpBin: Path? = null,
-  ): McpRegistrationOutcome {
+  fun unregister(path: Path): McpRegistrationOutcome {
     refusal(path, roots, host, environment)?.let { return it }
     val existed = observeSource(path) != null
     val original = read(path)
     val root = parse(original, path) as? ObjectNode ?: invalid(path)
     val mcpValue = root.get(Keys.MCP)
     if (mcpValue != null && !mcpValue.isObject) invalid(path)
-    val entry = (mcpValue as? ObjectNode)?.get(Keys.MANAGED_NAME)
-    val expected = expectedRuntimeMcpBin?.let { normalizeCommand(it.toString(), roots.workingDirectory ?: home) }
-    return when {
-      entry == null -> applied(path, changed = false)
-      expected == null ->
-        refused(
-          path,
-          "expected Skill Bill launcher identity is unavailable; supply --runtime-mcp-bin",
-        )
-      hasUnanchoredRelativeDatabasePath(environment, roots, path) ->
-        refused(
-          path,
-          "relative runtime database binding cannot be anchored without the captured caller working directory",
-        )
-      entry != managedEntry(expected, normalizedEnvironment(home, environment, roots)) ->
-        refused(path, "mcp.skill-bill is not a recognized managed entry")
-      else -> removeEntry(path, original, existed)
-    }
-  }
-
-  private fun removeEntry(
-    path: Path,
-    original: String,
-    existed: Boolean,
-  ): McpRegistrationOutcome {
-    val objectSpan = objectSpan(original, path, listOf(Keys.MCP))
-    val property = objectSpan.properties.singleOrNull { it.key == Keys.MANAGED_NAME } ?: invalid(path)
-    val patched = OpenCodeJsoncEditor.removeProperty(original, objectSpan, property)
+    if (!hasProductEntry(root)) return applied(path, changed = false)
+    val patched = removeProductEntries(original, path)
     verifyRemovalPostcondition(original, patched, path)
     if (!publish(path, existed, original, patched, publishFile)) {
       return refused(path, "configuration changed while removal was being prepared")
     }
     return applied(path, changed = true)
+  }
+
+  private fun removeProductEntries(
+    source: String,
+    path: Path,
+  ): String =
+    Keys.PRODUCT_NAMES.fold(source) { current, name ->
+      val mcpSpan = OpenCodeJsoncEditor.objectAt(current, listOf(Keys.MCP)) ?: return@fold current
+      val property = mcpSpan.properties.singleOrNull { it.key == name } ?: return@fold current
+      OpenCodeJsoncEditor.removeProperty(current, mcpSpan, property).also { parse(it, path) }
+    }
+
+  private fun hasProductEntry(root: ObjectNode): Boolean {
+    val servers = root.get(Keys.MCP) as? ObjectNode ?: return false
+    return Keys.PRODUCT_NAMES.any(servers::has)
   }
 
   private fun applied(
@@ -196,7 +185,7 @@ internal class OpenCodeMcpConfig(
       if (observeSource(source) == null) return@forEach
       val root = parse(read(source), source) as? ObjectNode ?: invalid(source)
       if (hasUnresolvedManagedSubtree(root)) {
-        return refused(source, "mcp.skill-bill in another configuration source may shadow the selected target")
+        return refused(source, "a Sona MCP entry in another configuration source may shadow the selected target")
       }
     }
     return null
@@ -209,7 +198,7 @@ internal class OpenCodeMcpConfig(
       if (hasUnresolvedManagedSubtree(root)) {
         return refused(
           "OPENCODE_CONFIG_CONTENT",
-          "inline configuration defines mcp.skill-bill and cannot be safely persisted",
+          "inline configuration defines a Sona MCP entry and cannot be safely persisted",
         )
       }
     }
@@ -231,7 +220,7 @@ internal class OpenCodeMcpConfig(
         }
         val root = parse(read(source), source) as? ObjectNode ?: invalid(source)
         if (hasUnresolvedManagedSubtree(root)) {
-          return refused(source, "host-managed mcp.skill-bill may override the selected local target")
+          return refused(source, "a host-managed Sona MCP entry may override the selected local target")
         }
       }
     }
@@ -316,7 +305,7 @@ internal class OpenCodeMcpConfig(
 
   private fun hasUnresolvedManagedSubtree(root: ObjectNode): Boolean {
     val servers = root.get(Keys.MCP) ?: return false
-    return !servers.isObject || servers.has(Keys.MANAGED_NAME)
+    return !servers.isObject || Keys.PRODUCT_NAMES.any(servers::has)
   }
 
   private fun objectSpan(
@@ -334,11 +323,11 @@ internal class OpenCodeMcpConfig(
     val beforeTree = parse(before, path).deepCopy<JsonNode>() as ObjectNode
     val afterTree = parse(after, path).deepCopy<JsonNode>() as ObjectNode
     val afterMcp = afterTree.path(Keys.MCP) as? ObjectNode ?: invalid(path)
-    if (afterMcp.get(Keys.MANAGED_NAME) != desired) invalid(path)
-    afterMcp.remove(Keys.MANAGED_NAME)
+    if (afterMcp.get(Keys.MANAGED_NAME) != desired || afterMcp.has(McpConfigKeys.SKILL_BILL_SERVER)) invalid(path)
+    afterMcp.remove(Keys.PRODUCT_NAMES)
     if (afterMcp.isEmpty) afterTree.remove(Keys.MCP)
     val beforeMcp = beforeTree.path(Keys.MCP) as? ObjectNode
-    beforeMcp?.remove(Keys.MANAGED_NAME)
+    beforeMcp?.remove(Keys.PRODUCT_NAMES)
     if (beforeMcp?.isEmpty == true) beforeTree.remove(Keys.MCP)
     if (beforeTree != afterTree) invalid(path)
   }
@@ -351,11 +340,11 @@ internal class OpenCodeMcpConfig(
     val beforeTree = parse(before, path).deepCopy<JsonNode>() as ObjectNode
     val afterTree = parse(after, path).deepCopy<JsonNode>() as ObjectNode
     val beforeMcp = beforeTree.path(Keys.MCP) as? ObjectNode ?: invalid(path)
-    if (!beforeMcp.has(Keys.MANAGED_NAME)) invalid(path)
-    beforeMcp.remove(Keys.MANAGED_NAME)
+    if (Keys.PRODUCT_NAMES.none(beforeMcp::has)) invalid(path)
+    beforeMcp.remove(Keys.PRODUCT_NAMES)
     if (beforeMcp.isEmpty) beforeTree.remove(Keys.MCP)
     val afterMcp = afterTree.path(Keys.MCP) as? ObjectNode
-    if (afterMcp?.has(Keys.MANAGED_NAME) == true) invalid(path)
+    if (afterMcp != null && Keys.PRODUCT_NAMES.any(afterMcp::has)) invalid(path)
     if (afterMcp?.isEmpty == true) afterTree.remove(Keys.MCP)
     if (beforeTree != afterTree || before == after) invalid(path)
   }

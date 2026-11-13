@@ -44,7 +44,6 @@ data class UninstallPlan(
   val launchers: List<LauncherRemoval>,
   val desktop: DesktopRemoval,
   val environment: Map<String, String> = emptyMap(),
-  val runtimeMcpBinIdentity: Path? = null,
 )
 
 data class UninstallResult(

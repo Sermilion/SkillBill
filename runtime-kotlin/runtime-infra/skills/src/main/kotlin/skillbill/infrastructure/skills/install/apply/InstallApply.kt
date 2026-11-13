@@ -58,7 +58,7 @@ internal fun applyInstallPlan(
     )
   }
   val platformManifests = discoverPlatformManifests(plan.request, catalogLoader = catalogLoader)
-  cleanupExistingSkillBillLinks(plan, platformManifests, failures)
+  cleanupExistingSkillBillLinks(plan, platformManifests, warnings, failures)
   val appliedSkills = applyPlannedSkills(plan, platformManifests, failures, catalogLoader)
   if (failures.isEmpty()) {
     materializeAgentPlatformPackViews(plan, platformManifests, appliedSkills, failures)

@@ -92,7 +92,6 @@ data class InstallMcpUnregistrationRequest(
   val agent: String,
   val home: Path?,
   val profileEnvironment: InstallMcpProfileEnvironment? = null,
-  val expectedRuntimeMcpBin: Path? = null,
 )
 
 data class InstallMcpRegistrationResult(
