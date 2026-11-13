@@ -11,10 +11,12 @@ import skillbill.infrastructure.skills.scaffold.platformpack.catalog.PlatformPac
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.discoverPlatformPackManifests
 import skillbill.infrastructure.skills.scaffold.runtime.service.ADD_ON_INSTALL_NOTE
 import skillbill.infrastructure.skills.scaffold.runtime.service.PLATFORM_PACK_INSTALL_NOTE
+import skillbill.infrastructure.skills.scaffold.runtime.service.ScaffoldInstallOutcome
 import skillbill.infrastructure.skills.scaffold.runtime.service.ScaffoldPlan
 import skillbill.infrastructure.skills.scaffold.runtime.service.ScaffoldRuntimeContext
 import skillbill.infrastructure.skills.scaffold.runtime.service.ScaffoldTransaction
 import skillbill.infrastructure.skills.scaffold.runtime.service.noAgentsNote
+import skillbill.install.model.InstallApplyIssue
 import skillbill.install.model.InstallPlanSkill
 import skillbill.install.model.InstallPlanSkillKind
 import skillbill.install.model.InstallTransaction
@@ -31,12 +33,15 @@ internal fun performScaffoldInstall(
   plan: ScaffoldPlan,
   repoRoot: Path,
   runtime: ScaffoldRuntimeContext = ScaffoldRuntimeContext(resolveInstallHome(null, JdkHostPlatformPort)),
-): Pair<List<Path>, List<String>> {
+): ScaffoldInstallOutcome {
   if (plan.externalPackRegistrationMode == "register") {
-    return emptyList<Path>() to
-      listOf(
-        "Registered existing external platform pack without rewriting pack files.",
-      )
+    return ScaffoldInstallOutcome(
+      targets = emptyList(),
+      notes =
+        listOf(
+          "Registered existing external platform pack without rewriting pack files.",
+        ),
+    )
   }
   val hostPlatform = JdkHostPlatformPort
   val home = runtime.userHome
@@ -72,23 +77,31 @@ internal fun performScaffoldInstall(
       environment = environment,
       catalogLoader = runtime.catalogLoader,
     )
-  val targets =
-    installPaths.flatMap { installPath ->
-      val outcome = installSkill(installPath, agents, transaction = installTx, context = context)
-      installTx = outcome.transaction ?: installTx
-      outcome.linkPaths
-    }
-  txn.installTargets += targets
-  val notes =
-    when {
-      plan.kind == SKILL_KIND_ADD_ON -> listOf(ADD_ON_INSTALL_NOTE)
-      plan.kind == SKILL_KIND_AGENT_ADDON -> listOf("Agent add-on consumers rendered and installed atomically.")
-      agents.isEmpty() -> listOf(noAgentsNote())
-      plan.kind == SKILL_KIND_PLATFORM_PACK -> listOf(PLATFORM_PACK_INSTALL_NOTE)
-      else -> emptyList()
-    }
-  return targets to notes
+  val targets = mutableListOf<Path>()
+  val issues = mutableListOf<InstallApplyIssue>()
+  installPaths.forEach { installPath ->
+    val outcome = installSkill(installPath, agents, transaction = installTx, context = context)
+    installTx = outcome.transaction ?: installTx
+    targets += outcome.linkPaths
+    issues += outcome.issues
+    txn.installTargets += outcome.linkPaths
+    txn.replacedInstallTargets += outcome.replacedSymlinks
+    txn.retiredInstallTargets += outcome.retiredSymlinks
+  }
+  return ScaffoldInstallOutcome(targets, scaffoldInstallNotes(plan.kind, agents.isEmpty()), issues)
 }
+
+private fun scaffoldInstallNotes(
+  kind: String,
+  noAgents: Boolean,
+): List<String> =
+  when {
+    kind == SKILL_KIND_ADD_ON -> listOf(ADD_ON_INSTALL_NOTE)
+    kind == SKILL_KIND_AGENT_ADDON -> listOf("Agent add-on consumers rendered and installed atomically.")
+    noAgents -> listOf(noAgentsNote())
+    kind == SKILL_KIND_PLATFORM_PACK -> listOf(PLATFORM_PACK_INSTALL_NOTE)
+    else -> emptyList()
+  }
 
 internal fun internalPlatformInstallSkills(plan: ScaffoldPlan): List<InstallPlanSkill> {
   if (plan.kind != SKILL_KIND_PLATFORM_PACK) {

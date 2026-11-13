@@ -28,7 +28,7 @@ internal val repoValidationSkillReferencePattern =
   )
 internal val repoValidationOrchestrationPathPattern = Regex("""orchestration/[\w/.-]+""")
 internal val repoValidationReadmeSkillRowPattern =
-  Regex("""^\| `/(bill-[a-z0-9-]+|${ListedSkillNames.DISPATCHER})` \|""")
+  Regex("""^\| `/(bill-[a-z0-9-]+|${ListedSkillNames.DISPATCHER}|${ListedSkillNames.PUBLIC_DISPATCHER})` \|""")
 internal val repoValidationOverrideSectionPattern = Regex("""^## (bill-[a-z0-9-]+)$""")
 internal val repoValidationExternalPlaybookReferencePatterns =
   listOf(
@@ -68,6 +68,7 @@ internal fun validateReadme(
   val catalogSkills =
     Files.readAllLines(readme)
       .mapNotNull { line -> repoValidationReadmeSkillRowPattern.find(line)?.groupValues?.get(1) }
+      .map(ListedSkillNames::sourceName)
       .toSet()
   val missing = (skillNames - internalSkills) - catalogSkills
   if (missing.isNotEmpty()) {

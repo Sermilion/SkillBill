@@ -1,5 +1,6 @@
 package skillbill.infrastructure.skills.install.runtime
 
+import skillbill.infrastructure.skills.install.opencode.opencodeConfigRoots
 import skillbill.infrastructure.skills.install.plan.SUPPORTED_AGENTS
 import skillbill.infrastructure.skills.install.plan.agentPaths
 import skillbill.infrastructure.skills.install.plan.claudeConfigRoot
@@ -78,5 +79,14 @@ internal object InstallOperationsPaths {
   ): Path {
     val resolvedHome = resolveInstallHome(home, hostPlatform)
     return devinAgentsDirectory(devinConfigRoot(resolvedHome, environment, hostPlatform))
+  }
+
+  fun openCodeAgentsPath(
+    home: Path?,
+    environment: Map<String, String>,
+    hostPlatform: HostPlatformPort,
+  ): Path {
+    val resolvedHome = resolveInstallHome(home, hostPlatform)
+    return opencodeConfigRoots(resolvedHome, environment).configDirectory.resolve("agents")
   }
 }

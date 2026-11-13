@@ -440,7 +440,7 @@ private fun renderParentSpec(input: ParentSpecRenderInput): String =
     appendLine()
     appendLine("## Validation Strategy")
     appendLine()
-    appendLine(input.validationStrategy.ifBlank { "skill-bill phase validation" })
+    appendLine(input.validationStrategy.ifBlank { "sona phase validation" })
   }
 
 private fun renderSubtaskSpec(

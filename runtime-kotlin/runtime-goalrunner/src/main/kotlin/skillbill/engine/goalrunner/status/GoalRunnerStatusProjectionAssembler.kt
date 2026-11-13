@@ -453,6 +453,7 @@ public class GoalRunnerStatusProjectionAssembler(
           currentStep,
           assembly.progress?.workflowStatus,
           assembly.childWorkflowId,
+          assembly.loadedState.controlState.goalCompletedAt != null,
         ),
         outcomeStore,
         database,
@@ -742,7 +743,13 @@ public class GoalRunnerStatusProjectionAssembler(
       auditResult = projectSubtaskAudit(artifacts, auditRecord, auditConclusion, degradation),
       runningReviewPass = runningReviewPass(reviewRecord, reviewState, database, degradation),
       execution = subtaskExecution(workflowId, records.values),
-      phaseCards = subtaskPhaseCards(workflowId, records, database, degradation),
+      phaseCards =
+        attachPlanningRecord(
+          subtaskPhaseCards(workflowId, records, database, degradation),
+          artifacts,
+          records,
+          degradation,
+        ),
     )
   }
 

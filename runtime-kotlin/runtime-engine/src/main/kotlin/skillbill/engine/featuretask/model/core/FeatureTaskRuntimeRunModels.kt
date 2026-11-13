@@ -5,6 +5,7 @@ import skillbill.agentaddon.model.HydratedAgentAddonSelection
 import skillbill.application.decomposition.decompositionManifestPath
 import skillbill.application.decomposition.parentSpecPath
 import skillbill.config.model.CompactionSettings
+import skillbill.contracts.system.OpenCodeLaunchIdentity
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairRunState
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.model.execution.MonitorExecutionContext
@@ -58,6 +59,7 @@ public data class FeatureTaskRuntimeRunRequest(
   public override val stopAfterIntake: Boolean = false,
   public val acceptanceCriterionRepair: AcceptanceCriterionRepairRunState? = null,
   public override val activityParentWorkflowId: String? = null,
+  public override val openCodeIdentity: OpenCodeLaunchIdentity? = null,
 ) : FeatureTaskRuntimeRunFacts {
   override val qaSelection: FeatureTaskRuntimeQaSelection? = null
   override val reviewInvocation: ReviewInvocation? = null
@@ -106,6 +108,7 @@ public data class FeatureTaskRuntimeRunInput(
   public val qaSelection: FeatureTaskRuntimeQaSelection? = null,
   internal val inheritRecordedPlanningTimeout: Boolean = false,
   public val activityParentWorkflowId: String? = null,
+  public val openCodeIdentity: OpenCodeLaunchIdentity? = null,
   public val workflowIdForCreation: String? = null,
 )
 

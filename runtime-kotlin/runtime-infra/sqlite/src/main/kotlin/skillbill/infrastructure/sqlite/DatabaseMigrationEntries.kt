@@ -85,6 +85,7 @@ import skillbill.infrastructure.sqlite.core.schema.separateAgentActivityRevision
 import skillbill.infrastructure.sqlite.core.schema.separateDesktopChangeSignals
 import skillbill.infrastructure.sqlite.review.stats.migrateLegacyTelemetryOutboxLedger
 import skillbill.infrastructure.sqlite.workflow.goalrunner.addGoalPlanningOwnership
+import skillbill.infrastructure.sqlite.workflow.goalrunner.recordGoalPlanningGitWorktreeIdentity
 import skillbill.infrastructure.sqlite.workflow.goalrunner.runner.applyLegacyGoalRunnerControlLedgerMigration
 
 internal val databaseMigrations: List<DatabaseMigration> =
@@ -1158,19 +1159,7 @@ internal val databaseMigrations: List<DatabaseMigration> =
     DatabaseMigration(
       version = 124,
       name = "record-goal-planning-git-worktree-identity",
-      operation = { connection ->
-        val exists =
-          connection.createStatement().use { statement ->
-            statement.executeQuery(
-              "SELECT 1 FROM pragma_table_info('goal_planning_ownership') WHERE name = 'git_worktree_identity'",
-            ).use { it.next() }
-          }
-        if (!exists) {
-          connection.createStatement().use { statement ->
-            statement.execute("ALTER TABLE goal_planning_ownership ADD COLUMN git_worktree_identity TEXT")
-          }
-        }
-      },
+      operation = ::recordGoalPlanningGitWorktreeIdentity,
     ) +
     DatabaseMigration(
       version = 125,
@@ -1191,4 +1180,8 @@ internal val databaseMigrations: List<DatabaseMigration> =
           }
         }
       },
-    ) + operatorFinalizedAtMigrations + branchWorktreeRetainedMigrations
+    ) +
+    operatorFinalizedAtMigrations +
+    branchWorktreeRetainedMigrations +
+    skillbill.infrastructure.sqlite.core.migration.area.operation.openCodeLaunchIdentityMigration() +
+    skillbill.infrastructure.sqlite.core.migration.area.idestatus.verifyCriterionResolutionsMigration()

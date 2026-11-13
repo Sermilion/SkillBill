@@ -31,7 +31,7 @@ class GoalChildRecoveryTest {
       ),
     )
     assertEquals(
-      "skill-bill goal reset SKILL-143 --subtask 2 --delete-child-workflow",
+      "sona goal reset SKILL-143 --subtask 2 --delete-child-workflow",
       recoverySafeAction(
         "SKILL-143",
         2,

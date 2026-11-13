@@ -12,16 +12,89 @@ import skillbill.goalrunner.model.GoalRunnerPhaseCardState
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.idestatus.model.MonitorCiCycleOutcome
 import skillbill.ports.idestatus.model.MonitorCiCycleRecord
+import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
+import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalPlanningImport
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class GoalRunnerPhaseCardProjectionTest {
+  @Test
+  fun `completed goal stops an unfinished monitor projection without inventing a CI result`() {
+    val at = Instant.parse("2026-11-13T15:44:00Z")
+    val cycle = MonitorCiCycleRecord(2, "monitor", at, at)
+    val sources = GoalFinishCardSources(null, null, listOf(cycle), null)
+    val activeRead = GoalRunnerStatusDurableReadTracker(NoopRuntimeDiagnostics)
+    val active = goalFinishCards(sources, "monitor", WorkflowStatus.COMPLETED, "child", activeRead)
+    assertEquals(GoalRunnerPhaseCardState.RUNNING, active.single().state)
+
+    val completedRead = GoalRunnerStatusDurableReadTracker(NoopRuntimeDiagnostics)
+    val completed = goalFinishCards(sources.copy(goalCompleted = true), null, null, null, completedRead)
+    assertEquals(GoalRunnerPhaseCardState.COMPLETED, completed.single().state)
+    assertNull(completed.single().ciCycles.single().finishedAt)
+    assertNull(completed.single().ciCycles.single().outcome)
+    assertEquals(cycle.observedAt, completed.single().ciCycles.single().observedAt)
+    assertTrue(completedRead.degraded)
+  }
+
+  @Test
+  fun `plan provenance remains visible when the older phase envelope was not retained`() {
+    val imported =
+      FeatureTaskRuntimeGoalPlanningImport(
+        "goal-workflow", "SONA-1", "/repo", "parent-hash", "manifest-hash", "planning", "0.3", "phase-output", "0.7",
+        1, 0, "spec_subtask_1.md", "spec-hash", "preplan-hash", "plan-hash",
+      )
+    val artifacts =
+      DurableWorkflowArtifacts.fromMap(
+        mapOf(DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_PLANNING_IMPORT.entry(imported)),
+      )
+    val plan =
+      requireNotNull(
+        FeatureTaskRuntimePhaseRecord(
+          "plan",
+          WorkflowStepStatus.COMPLETED,
+          attemptCount = 1,
+          startedAt = Instant.EPOCH,
+          resolvedAgentId = "codex",
+        ).toPhaseCardHeader(),
+      )
+    val degradation = SubtaskReadDegradation(GoalRunnerStatusDurableReadTracker(NoopRuntimeDiagnostics))
+
+    val result = attachPlanningRecord(listOf(plan), artifacts, emptyMap(), degradation).single()
+
+    assertEquals("spec_subtask_1.md", result.output?.planRecord?.specPath)
+    assertEquals("spec-hash", result.output?.planRecord?.specHash)
+    assertEquals("plan-hash", result.output?.planRecord?.payloadHash)
+    assertEquals(0, result.output?.planRecord?.manifestOrder)
+    assertNull(result.output?.text)
+    assertNull(degradation.source)
+  }
+
+  @Test
+  fun `preplan projection retains the saved digest and summary for the desktop card`() {
+    val digest =
+      "## History and decisions\nSelected the migration boundary.\n" +
+        "## Validation strategy\nRun the module checks."
+    val output =
+      phaseCardOutput(
+        mapOf(
+          SharedPayloadKeys.SUMMARY to "Read the planning context",
+          SharedPayloadKeys.PRODUCED_OUTPUTS to mapOf(SharedPayloadKeys.VALUE to digest),
+        ),
+        "preplan",
+      )
+
+    assertEquals("Read the planning context", output.summary)
+    assertEquals(digest, output.text)
+  }
+
   @Test
   fun `output projection reads commit push history and pull request facts from owned keys`() {
     val output =

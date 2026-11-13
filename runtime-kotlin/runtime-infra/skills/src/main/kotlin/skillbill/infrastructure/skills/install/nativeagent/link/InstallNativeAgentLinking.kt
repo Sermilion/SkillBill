@@ -29,6 +29,7 @@ internal fun installNativeAgentFile(
   return applyInstallDecision(
     linkPath = linkPath.toPath(),
     resolvedSource = resolvedSource,
+    ownership = ownership,
     decision = decideInstallAction(linkPath.toPath(), resolvedSource, managedSourceRoots, ownership),
     beforeMutation = beforeMutation,
   )
@@ -37,6 +38,7 @@ internal fun installNativeAgentFile(
 private fun applyInstallDecision(
   linkPath: Path,
   resolvedSource: Path,
+  ownership: NativeAgentLinkOwnership?,
   decision: InstallAction,
   beforeMutation: (Path) -> Unit,
 ): InstallNativeAgentResult =
@@ -44,7 +46,18 @@ private fun applyInstallDecision(
     InstallAction.Skip ->
       InstallNativeAgentResult.Skipped(
         linkPath,
-        "existing non-managed file at $linkPath was preserved",
+        if (Files.isSymbolicLink(linkPath)) {
+          val ownershipReason =
+            if (ownership?.recordedTarget == null) {
+              "no recorded historical ownership is available"
+            } else {
+              "its target differs from the recorded managed target"
+            }
+          "existing symbolic link at $linkPath was preserved because $ownershipReason; " +
+            "restore the original inventory or inspect and repoint the link before applying again"
+        } else {
+          "existing non-managed file at $linkPath was preserved"
+        },
       )
     InstallAction.AlreadyLinked -> InstallNativeAgentResult.Skipped(linkPath, "already linked to $resolvedSource")
     InstallAction.Replace, InstallAction.Create -> {
@@ -66,6 +79,7 @@ internal data class NativeAgentLinkOwnership(
   val home: Path,
   val provider: NativeAgentProvider,
   val logicalName: String,
+  val recordedTarget: Path?,
 )
 
 private fun decideInstallAction(
@@ -81,6 +95,7 @@ private fun decideInstallAction(
   return when {
     existingTarget == resolvedSource -> InstallAction.AlreadyLinked
     existingTarget != null && ownership != null &&
+      ownership.recordedTarget?.toAbsolutePath()?.normalize() == existingTarget &&
       isCanonicalNativeAgentArtifactTarget(
         ownership.home,
         ownership.provider,
@@ -90,15 +105,6 @@ private fun decideInstallAction(
       )
     ->
       InstallAction.Replace
-    existingTarget != null &&
-      managedSourceRoots.any { root ->
-        val normalizedRoot = root.toAbsolutePath().normalize()
-        existingTarget == normalizedRoot.resolve(resolvedSource.fileName) ||
-          existingTarget == normalizedRoot.resolve(resolvedSource.parent.fileName).resolve(resolvedSource.fileName)
-      }
-    ->
-      InstallAction.Replace
-    existingTarget != null && Files.notExists(existingTarget) -> InstallAction.Replace
     else -> InstallAction.Skip
   }
 }

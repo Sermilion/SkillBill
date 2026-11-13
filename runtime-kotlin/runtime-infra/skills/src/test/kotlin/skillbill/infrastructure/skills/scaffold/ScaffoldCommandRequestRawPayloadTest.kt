@@ -2,9 +2,9 @@ package skillbill.infrastructure.skills.scaffold
 
 import skillbill.contracts.JsonCodec
 import skillbill.infrastructure.skills.scaffold.payload.toRawScaffoldPayload
-import skillbill.scaffold.model.CodeReviewBaselineLayer
-import skillbill.scaffold.model.CodeReviewCompositionMode
-import skillbill.scaffold.model.CodeReviewCompositionScope
+import skillbill.review.model.CodeReviewBaselineLayer
+import skillbill.review.model.CodeReviewCompositionMode
+import skillbill.review.model.CodeReviewCompositionScope
 import skillbill.scaffold.model.command.RoutingSignalsInput
 import skillbill.scaffold.model.command.ScaffoldCommandRequest
 import kotlin.test.Test

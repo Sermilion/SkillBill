@@ -28,17 +28,24 @@ import skillbill.engine.goalrunner.model.GoalRunnerReplanRequest
 import skillbill.engine.goalrunner.model.GoalRunnerReplanResult
 import skillbill.engine.goalrunner.model.GoalRunnerResetRequest
 import skillbill.engine.goalrunner.model.GoalRunnerResetResult
+import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
+import skillbill.engine.goalrunner.monitoring.isCiWaitingOperation
 import skillbill.engine.goalrunner.repair.GoalRunnerFreshQualityCoordinator
 import skillbill.engine.goalrunner.repair.GoalRunnerRepairCoordinator
 import skillbill.engine.goalrunner.reset.GoalRunnerArchiveCoordinator
 import skillbill.engine.goalrunner.reset.GoalRunnerPurgeCoordinator
 import skillbill.engine.goalrunner.reset.GoalRunnerResetReplanCoordinator
+import skillbill.goalrunner.ledger.parseInstantOrNull
 import skillbill.goalrunner.model.GoalRunnerAcceptedSubtask
 import skillbill.goalrunner.model.GoalRunnerStatusProjection
+import skillbill.idestatus.model.WorktreeEditSummary
 import skillbill.model.RepositoryRoot
 import skillbill.ports.filesystem.model.DatabaseFileObservation
 import skillbill.workflow.decomposition.model.DecompositionSubtask
+import skillbill.workflow.model.goalobservability.GoalProgressEvent
+import skillbill.workflow.model.goalobservability.GoalProgressEventKind
 import java.nio.file.Path
+import java.time.Instant
 
 @Inject
 public class GoalRunnerStatusService(
@@ -170,3 +177,23 @@ internal fun effectiveGoalRepoRoot(
   repoRoot: Path?,
   repositoryRoot: RepositoryRoot,
 ): Path = repoRoot ?: repositoryRoot.path
+
+internal data class GoalProgressStallSignals(
+  val progress: GoalRunnerWorkflowProgress?,
+  val agentActivityStamps: List<Instant>,
+  val latestWorktreeEdit: WorktreeEditSummary?,
+) {
+  fun latestProgressAt(): Instant? =
+    (
+      agentActivityStamps +
+        listOfNotNull(
+          progress?.latestDurableProgressEvent?.timestamp?.let(::parseInstantOrNull),
+          progress?.latestDeclaredProgressEvent?.takeIf(::reportsProgress)?.timestamp,
+          latestWorktreeEdit?.recordedAt,
+          progress?.currentStepEnteredAt,
+        )
+    ).maxOrNull()
+
+  private fun reportsProgress(event: GoalProgressEvent): Boolean =
+    event.eventKind != GoalProgressEventKind.OPERATION_HEARTBEAT || isCiWaitingOperation(event.operationName)
+}

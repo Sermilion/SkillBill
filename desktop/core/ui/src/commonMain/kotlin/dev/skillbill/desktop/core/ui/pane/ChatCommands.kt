@@ -33,6 +33,9 @@ interface ChatCommands {
 
   fun openChat(item: WorkItem)
 
+  /** Opens the chat of [item], a verify run parked for confirmation, with its card; [adjust] also asks how to change the proposal. */
+  fun openParkedVerify(item: WorkItem, adjust: Boolean) = openChat(item)
+
   fun runReviewAction(item: WorkItem, action: ReviewFindingsAction)
 
   /** Opens the verify item's chat and sends one combined fix brief through pause-and-act. */

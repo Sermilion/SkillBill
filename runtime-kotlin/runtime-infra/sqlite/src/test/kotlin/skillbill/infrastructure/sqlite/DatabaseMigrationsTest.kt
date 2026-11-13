@@ -2447,6 +2447,8 @@ private val expectedMigrationDefinitions =
     127 to "add-operator-finalized-at",
     128 to "add-branch-worktree-retained",
     129 to "add-feature-verify-branch-worktree-retained",
+    130 to "record-opencode-launch-identity",
+    131 to "record-verify-criterion-resolutions",
   )
 
 private object NoopMigrationDiagnostics : RuntimeDiagnostics {

@@ -65,6 +65,8 @@ internal fun linkProviderAgentsBody(args: NativeAgentLinkProviderBodyArgs): Nati
       managedRoots = managedRoots,
       sourceRoot = args.validationRoot,
       environment = args.request.environment,
+      expectedPrevious = if (args.hasInventory) args.priorInventory else emptyList(),
+      expectedInventoryPresent = args.hasInventory,
       beforeMutation = args.journal::beforeMutation,
       afterTemporaryCreation = args.journal::afterTemporaryCreation,
     ),
@@ -95,6 +97,12 @@ private fun linkGeneratedNativeAgentFiles(
                 args.resolvedHome,
                 args.provider,
                 requireNotNull(artifactsByPath[file]).logicalName,
+                args.priorInventory.firstOrNull { entry ->
+                  entry.provider == args.provider.name.lowercase() &&
+                    entry.logicalName == requireNotNull(artifactsByPath[file]).logicalName &&
+                    entry.installedPath.toAbsolutePath().normalize() ==
+                    target.path.toPath().resolve(file.fileName).toAbsolutePath().normalize()
+                }?.cacheTargetPath,
               ),
             beforeMutation = args.journal::beforeMutation,
           )
@@ -161,10 +169,10 @@ internal fun effectivePackRootsForInstall(
     .map { loaded -> Path.of(loaded.canonicalRoot) }
 }
 
-internal fun linkProviderAgentsWithJournal(
+internal fun <T> withNativeAgentMutationJournal(
   journal: ProviderMutationJournal,
-  block: () -> NativeAgentLinkOutcome,
-): NativeAgentLinkOutcome =
+  block: () -> T,
+): T =
   try {
     catchingNonCancellation(block).onFailure { error ->
       journal.restore().forEach { suppressed -> error.addSuppressed(suppressed) }

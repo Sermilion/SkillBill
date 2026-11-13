@@ -18,7 +18,9 @@ import skillbill.cli.install.nativeagent.InstallLinkSkillCommand
 import skillbill.cli.install.nativeagent.NativeAgentClaudeCliCommands
 import skillbill.cli.install.nativeagent.NativeAgentCodexCliCommands
 import skillbill.cli.install.nativeagent.NativeAgentCursorCliCommands
+import skillbill.cli.install.nativeagent.NativeAgentDevinCliCommands
 import skillbill.cli.install.nativeagent.NativeAgentJunieCliCommands
+import skillbill.cli.install.nativeagent.NativeAgentOpenCodeCliCommands
 
 @Inject
 class InstallPlanCliSubcommands(
@@ -80,8 +82,11 @@ class InstallNativeAgentCliSubcommands(
   codex: NativeAgentCodexCliCommands,
   junie: NativeAgentJunieCliCommands,
   cursor: NativeAgentCursorCliCommands,
+  opencode: NativeAgentOpenCodeCliCommands,
+  devin: NativeAgentDevinCliCommands,
 ) {
-  val commands: List<CliktCommand> = claude.commands + codex.commands + junie.commands + cursor.commands
+  val commands: List<CliktCommand> =
+    claude.commands + codex.commands + junie.commands + cursor.commands + opencode.commands + devin.commands
 }
 
 @Inject

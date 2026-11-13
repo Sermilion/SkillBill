@@ -46,6 +46,32 @@ class ShellKeyboardEscapeTest {
     assertEquals(NewTaskRoute, navigator.top.route)
   }
 
+  @Test
+  fun `details consume Esc and the second Cmd I toggles the active detail`() {
+    val selection = SelectionHolder()
+    val navigator = WindowNavigator(OpenSession, selection)
+    navigator.navigate(DetailRoute(workItem("goal-1")))
+    val input = ShellInput()
+    val panes = ShellPanes()
+    val keyboard = ShellKeyboard(navigator, panes, input, CommandMenuState(), TerminalTriggers(NoTerminal), NoChat, selection)
+    var open = true
+    var closes = 0
+    input.registerDetails(navigator.top.contentKey, ShellInput.DetailControls(
+      toggle = { open = !open },
+      close = { if (open) { open = false; closes++; true } else false },
+    ))
+
+    assertTrue(keyboard.onKey(KeyPress(ShellKey.Escape)))
+    assertEquals(false, open)
+    assertEquals(1, closes)
+    assertTrue(navigator.top.route is DetailRoute)
+
+    open = true
+    assertTrue(keyboard.onKey(KeyPress(ShellKey.Char('i'), meta = true)))
+    assertEquals(false, open)
+    assertTrue(navigator.top.route is DetailRoute)
+  }
+
   private object NoTerminal : PaneCommands {
     override val terminalOpen: StateFlow<Boolean> = MutableStateFlow(false)
     override val terminalFocused: StateFlow<Boolean> = MutableStateFlow(false)

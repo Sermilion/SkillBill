@@ -29,7 +29,7 @@ Two further per-specialist limits bound a lane's own work: 40 tool calls and 24 
 
 Delegated specialists never rediscover what the parent already resolved. Repository status, scope, base/head revisions, diff recomputation, build and test invocation, platform-pack and add-on resolution, routing, learnings resolution, and project-guidance files are refused at the broker with a typed forbidden-operation category. Evidence outside a lane's assignment requires an authorized expansion recorded in the parent packet's ledger; the default budget admits three per assignment.
 
-Harness-native specialists are verified before any lane starts. A missing, stale, or dangling managed native-agent link fails the review with the logical specialist name, harness, expected path, reason, and the repair command `skill-bill install apply`. There is no generic-specialist fallback — repair the install and rerun.
+Harness-native specialists are verified before any lane starts. A missing, stale, or dangling managed native-agent link fails the review with the logical specialist name, harness, expected path, reason, and the repair command `sona install apply`. There is no generic-specialist fallback — repair the install and rerun.
 
 Durable output and telemetry retain only byte/count accounting, lane identifiers
 (harness-returned launch id when the harness provides one, otherwise plan-identity
@@ -44,10 +44,10 @@ Skill Bill can record a measurement loop for code-review usefulness. Telemetry u
 - each finding in `### 2. Risk Register` should use `- [F-001] Severity | Confidence | file:line | description`
 - feedback history and learnings stay local in SQLite regardless of telemetry state
 
-The `skill-bill` CLI and MCP server are installed automatically by `./install.sh`. The MCP server exposes review, learning, workflow-state, workflow-stats, telemetry, scaffold, quality-check, PR-description, and health tools. The CLI provides the same runtime functionality plus learnings CRUD, install primitives, validation, and telemetry management.
+The `sona` CLI and MCP server are installed automatically by `./install.sh`. The MCP server exposes review, learning, workflow-state, workflow-stats, telemetry, scaffold, quality-check, PR-description, and health tools. The CLI provides the same runtime functionality plus learnings CRUD, install primitives, validation, and telemetry management.
 
 ```bash
-skill-bill --help
+sona --help
 ```
 
 Default database path:
@@ -76,19 +76,19 @@ Typical workflow:
 Example:
 
 ```bash
-skill-bill import-review review.txt
-skill-bill triage --run-id rvw-20260402-001
-skill-bill triage --run-id rvw-20260402-001 --decision "1 fix - keep current terminology" --decision "2 skip - intentional"
-skill-bill triage --run-id rvw-20260402-001 --decision "fix=[1] reject=[2]"
-skill-bill triage --run-id rvw-20260402-001 --decision "all fix"
-skill-bill learnings resolve --repo Sermilion/skill-bill --skill bill-kotlin-code-review --review-session-id rvs-20260402-001
-skill-bill stats --run-id rvw-20260402-001 --format json
-skill-bill feature-task-stats --format json
-skill-bill goal-stats --format json
-skill-bill verify-stats --format json
+sona import-review review.txt
+sona triage --run-id rvw-20260402-001
+sona triage --run-id rvw-20260402-001 --decision "1 fix - keep current terminology" --decision "2 skip - intentional"
+sona triage --run-id rvw-20260402-001 --decision "fix=[1] reject=[2]"
+sona triage --run-id rvw-20260402-001 --decision "all fix"
+sona learnings resolve --repo Sermilion/skill-bill --skill bill-kotlin-code-review --review-session-id rvs-20260402-001
+sona stats --run-id rvw-20260402-001 --format json
+sona feature-task-stats --format json
+sona goal-stats --format json
+sona verify-stats --format json
 ```
 
-`skill-bill stats` (and MCP `review_stats`) include per-stage verdict distribution and `refutation_rate_by_stage` from the same durable-row aggregator as `skillbill_review_finished`. A `--run-id` payload also carries that run's `resolved_tier`. Unscoped stats group those rates by `inline` and `delegated` under `stage_metrics_by_tier` and do not emit a pooled rate.
+`sona stats` (and MCP `review_stats`) include per-stage verdict distribution and `refutation_rate_by_stage` from the same durable-row aggregator as `skillbill_review_finished`. A `--run-id` payload also carries that run's `resolved_tier`. Unscoped stats group those rates by `inline` and `delegated` under `stage_metrics_by_tier` and do not emit a pooled rate.
 
 The `triage` command maps the visible numbers back to the stable `F-001` ids internally. For agent-driven flows, prefer a structured selection string like `fix=[1,3] reject=[2]` so every finding is resolved deterministically in one step. Use `all <action>` to apply the same action to every finding. Supported triage actions are:
 
@@ -103,7 +103,7 @@ In agent-driven review flows, only the parent review that owns the final merged 
 You can still use the low-level command when you want direct control:
 
 ```bash
-skill-bill record-feedback --run-id rvw-20260402-001 --event fix_applied --finding F-001 --note "keep current terminology"
+sona record-feedback --run-id rvw-20260402-001 --event fix_applied --finding F-001 --note "keep current terminology"
 ```
 
 ## Learnings
@@ -112,17 +112,17 @@ Learnings are actionable domain-specific knowledge derived from **rejected** rev
 
 ```bash
 # First reject a finding during triage:
-skill-bill triage --run-id rvw-20260402-001 --decision "2 reject - installer wording is intentionally informal"
+sona triage --run-id rvw-20260402-001 --decision "2 reject - installer wording is intentionally informal"
 
 # Then promote the rejection into a learning:
-skill-bill learnings add --scope repo --scope-key Sermilion/skill-bill --title "Installer wording is intentionally informal" --rule "Do not flag installer prompt wording as inconsistent — the informal tone is a deliberate UX choice for CLI tools." --from-run rvw-20260402-001 --from-finding F-002
+sona learnings add --scope repo --scope-key Sermilion/skill-bill --title "Installer wording is intentionally informal" --rule "Do not flag installer prompt wording as inconsistent — the informal tone is a deliberate UX choice for CLI tools." --from-run rvw-20260402-001 --from-finding F-002
 
 # Manage learnings:
-skill-bill learnings list
-skill-bill learnings show --id 1
-skill-bill learnings edit --id 1 --reason "Confirmed by repeated skip feedback."
-skill-bill learnings disable --id 1
-skill-bill learnings delete --id 1
+sona learnings list
+sona learnings show --id 1
+sona learnings edit --id 1 --reason "Confirmed by repeated skip feedback."
+sona learnings disable --id 1
+sona learnings delete --id 1
 ```
 
 Both `--from-run` and `--from-finding` are required — learnings must trace back to a rejected finding. When `--reason` is omitted, the rationale is auto-populated from the rejection note.
@@ -136,7 +136,7 @@ Reviews apply those learnings automatically. The review driver resolves them ins
 Inspect the same resolution by hand with:
 
 ```bash
-skill-bill learnings resolve --repo Sermilion/skill-bill --skill bill-kotlin-code-review --review-session-id rvs-20260402-001 --format json
+sona learnings resolve --repo Sermilion/skill-bill --skill bill-kotlin-code-review --review-session-id rvs-20260402-001 --format json
 ```
 
 Resolution stays local-first and explicit:
@@ -144,7 +144,7 @@ Resolution stays local-first and explicit:
 - only `active` learnings apply
 - precedence is `skill > repo > global`
 - resolution yields stable learning references such as `L-003`
-- a review session id keys the resolved set so the resolved-learning event groups with the matching review session; pass `--review-session-id` to `skill-bill code-review` when a parent workflow already holds one, otherwise the driver mints one
+- a review session id keys the resolved set so the resolved-learning event groups with the matching review session; pass `--review-session-id` to `sona code-review` when a parent workflow already holds one, otherwise the driver mints one
 - review output surfaces `Applied learnings: none | <learning references>` so the behavior is auditable
 
 This is intentionally not hidden auto-learning. The learnings layer remains inspectable, editable, disable-able, and deletable by the user.
@@ -267,10 +267,10 @@ snapshots are never deleted automatically. Selection is by filename pattern; the
 
 ```bash
 # Dry run (default): lists candidate snapshots and deletes nothing.
-skill-bill prune-snapshots
+sona prune-snapshots
 
 # Actually delete the listed snapshots.
-skill-bill prune-snapshots --confirm
+sona prune-snapshots --confirm
 ```
 
 `--confirm` is the only flag that deletes; without it the command lists candidates only.
@@ -324,10 +324,10 @@ Skill Bill uses **parent-owned telemetry** across the whole skill suite. A singl
 
 Every telemeterable entry point must be usable alone. When invoked directly by a user, each one generates its own session id and emits its own events:
 
-- `/skill-bill phase:review` lifecycle — `skillbill_review_finished` once the final review output is imported and all findings resolve
-- `/skill-bill phase:validation` lifecycle — `skillbill_quality_check_started` + `_finished`
-- `/skill-bill operation:verify` (`skill-bill operation verify`) — `skillbill_feature_verify_started` + `_finished`
-- `/skill-bill phase:pr` — `skillbill_pr_description_generated`
+- `/sona phase:review` lifecycle — `skillbill_review_finished` once the final review output is imported and all findings resolve
+- `/sona phase:validation` lifecycle — `skillbill_quality_check_started` + `_finished`
+- `/sona operation:verify` (`sona operation verify`) — `skillbill_feature_verify_started` + `_finished`
+- `/sona phase:pr` — `skillbill_pr_description_generated`
 
 ### The `orchestrated` flag
 
@@ -404,9 +404,9 @@ If a parent skill forgets to pass `orchestrated=true` to a child, the child emit
 | `skillbill_review_stage_degradation` | verification/adjudication measurement after those stages settle | none; queued even at telemetry `off` |
 | `skillbill_quality_check_started` | standalone quality-check lifecycle | skipped in orchestrated mode |
 | `skillbill_quality_check_finished` | standalone quality-check lifecycle | `quality_check_finished(orchestrated=true)` returns payload |
-| `skillbill_feature_verify_started` | `/skill-bill operation:verify` (standalone) | skipped in orchestrated mode |
-| `skillbill_feature_verify_finished` | `/skill-bill operation:verify` (standalone) | `feature_verify_finished(orchestrated=true)` returns payload |
-| `skillbill_pr_description_generated` | the runtime `pr` step after it completes (skeleton run and standalone `/skill-bill phase:pr`) | `pr_description_generated(orchestrated=true)` returns payload |
+| `skillbill_feature_verify_started` | `/sona operation:verify` (standalone) | skipped in orchestrated mode |
+| `skillbill_feature_verify_finished` | `/sona operation:verify` (standalone) | `feature_verify_finished(orchestrated=true)` returns payload |
+| `skillbill_pr_description_generated` | the runtime `pr` step after it completes (skeleton run and standalone `/sona phase:pr`) | `pr_description_generated(orchestrated=true)` returns payload |
 
 ## Quality-check telemetry
 
@@ -448,13 +448,13 @@ Both `anonymous` and `full`:
 A `reconciler_stale` row carries no failure count at all, so a query that treats a missing count as
 zero reports checks as clean that nobody ever observed finishing.
 
-The same rule governs the local aggregates. `skill-bill feature-task-stats` reports `finished_runs`
+The same rule governs the local aggregates. `sona feature-task-stats` reports `finished_runs`
 (rows with a terminal of any kind), `observed_runs` (terminals the run itself reported), and
 `reconciler_closed_runs`. Every rate — `completed_rate`, `blocked_rate`, `decomposed_rate`,
 `error_rate` — is over `observed_runs`, not `finished_runs`. Mirror that denominator in any dashboard
 query rather than dividing by the terminal count.
 
-`skill-bill goal-stats` has the same shape at a different grain. A `goal_run_sessions` row is one
+`sona goal-stats` has the same shape at a different grain. A `goal_run_sessions` row is one
 invocation segment, and every resume writes a new one, so `total_runs` counts invocations rather than
 goals. Read `logical_goals` for the goal count, `resumed_invocations` for how many of those segments
 were restarts, and `goal_identity_availability` to know whether the attribution is complete:
@@ -597,7 +597,7 @@ A run can know its agents and not its models: a phase that ran with no model dir
 
 ## PostHog dashboard spec
 
-The local `skill-bill feature-task-stats`, `skill-bill goal-stats`, and `skill-bill verify-stats` commands are the source of truth for workflow-summary semantics. PostHog dashboards should mirror those summaries instead of inventing a separate analytics vocabulary.
+The local `sona feature-task-stats`, `sona goal-stats`, and `sona verify-stats` commands are the source of truth for workflow-summary semantics. PostHog dashboards should mirror those summaries instead of inventing a separate analytics vocabulary.
 
 Recommended global filters:
 
@@ -752,11 +752,11 @@ For org-wide analysis, Skill Bill can query aggregate workflow metrics through t
 CLI:
 
 ```bash
-skill-bill telemetry capabilities
-skill-bill telemetry stats verify --since 30d
-skill-bill telemetry stats implement --date-from 2026-04-01 --date-to 2026-04-22
-skill-bill telemetry stats verify --since 30d --group-by day
-skill-bill telemetry stats implement --since 30d --group-by week
+sona telemetry capabilities
+sona telemetry stats verify --since 30d
+sona telemetry stats implement --date-from 2026-04-01 --date-to 2026-04-22
+sona telemetry stats verify --since 30d --group-by day
+sona telemetry stats implement --since 30d --group-by week
 ```
 
 MCP:
@@ -849,12 +849,12 @@ Fresh installs default telemetry to `anonymous`, with a level prompt during `./i
 
 - enabled telemetry (`anonymous` or `full`) can enqueue local telemetry events in SQLite before sync
 - the helper can batch-sync pending events automatically after local writes to the hosted relay, or to a configured custom proxy override
-- automatic sync and manual `skill-bill telemetry sync` both reconcile stale lifecycle rows before flushing the outbox, so CLI-only sessions receive the same terminal-event repair as MCP sessions
+- automatic sync and manual `sona telemetry sync` both reconcile stale lifecycle rows before flushing the outbox, so CLI-only sessions receive the same terminal-event repair as MCP sessions
 - reconciliation uses a durable cadence independent of upload timing and one globally ordered maximum batch per SQLite transaction; eligible repeated runs drain larger backlogs without holding an unbounded write transaction
 - reconciliation is best-effort: a reconciliation failure is recorded diagnostically and does not prevent the requested telemetry flush
 - if the remote destination is missing or unavailable, local workflows still succeed and the enabled telemetry outbox stays pending
 - `off` telemetry is a no-op: no telemetry config is required, no telemetry events are queued locally, and telemetry payload-building is skipped
-- `skill-bill telemetry disable` sets the level to `off` and clears any queued telemetry events without deleting non-telemetry review data; it is an in-place level write, so `install_id` and every other key in `config.json` are retained and re-enabling reuses the same install identity
+- `sona telemetry disable` sets the level to `off` and clears any queued telemetry events without deleting non-telemetry review data; it is an in-place level write, so `install_id` and every other key in `config.json` are retained and re-enabling reuses the same install identity
 
 Default hosted relay:
 
@@ -871,13 +871,13 @@ Custom proxy setup for your own deployment:
 Telemetry commands:
 
 ```bash
-skill-bill telemetry status
-skill-bill telemetry enable                  # defaults to anonymous
-skill-bill telemetry enable --level full     # enable with full detail
-skill-bill telemetry set-level full          # change level directly
-skill-bill telemetry set-level anonymous
-skill-bill telemetry disable                 # sets level to off
-skill-bill telemetry sync
+sona telemetry status
+sona telemetry enable                  # defaults to anonymous
+sona telemetry enable --level full     # enable with full detail
+sona telemetry set-level full          # change level directly
+sona telemetry set-level anonymous
+sona telemetry disable                 # sets level to off
+sona telemetry sync
 ```
 
 Proxy configuration:
@@ -891,4 +891,4 @@ export SKILL_BILL_TELEMETRY_BATCH_SIZE="50"                # optional override
 export SKILL_BILL_CONFIG_PATH="/custom/path/config.json"  # optional: pin config to a custom path (overrides the durable default)
 ```
 
-When telemetry is enabled, the local config stores the generated install id used as the anonymous event `distinct_id`. The config lives at the durable `~/.config/skill-bill/config.json` by default, outside the `~/.skill-bill/` tree that installs wipe; you can edit it directly if you want to keep the hosted relay or replace it with your own proxy target, but the supported way to opt out is `skill-bill telemetry disable`.
+When telemetry is enabled, the local config stores the generated install id used as the anonymous event `distinct_id`. The config lives at the durable `~/.config/skill-bill/config.json` by default, outside the `~/.skill-bill/` tree that installs wipe; you can edit it directly if you want to keep the hosted relay or replace it with your own proxy target, but the supported way to opt out is `sona telemetry disable`.

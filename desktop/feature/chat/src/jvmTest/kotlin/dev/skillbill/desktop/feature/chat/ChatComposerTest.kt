@@ -52,6 +52,7 @@ import androidx.compose.ui.test.hasText
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
 import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
+import dev.skillbill.desktop.core.domain.model.SavedChatProjection
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import java.awt.image.BufferedImage
@@ -290,7 +291,7 @@ class ChatComposerTest {
       listOf(ChatHistoryLine(ChatHistoryRole.Operator, "fix the list"), ChatHistoryLine(ChatHistoryRole.Agent, "done")),
     )
     val cli = ChatHistoryEntry("cli-session", null, ChatAgent("codex", null, null), now, "from the terminal", emptyList())
-    session.resumeChoicesState.value = listOf(saved, cli)
+    session.resumeChoicesState.value = SavedChatProjection(listOf(saved, cli))
     runComposeUiTest {
       setContent {
         SkillBillTheme(reducedMotion = true) {

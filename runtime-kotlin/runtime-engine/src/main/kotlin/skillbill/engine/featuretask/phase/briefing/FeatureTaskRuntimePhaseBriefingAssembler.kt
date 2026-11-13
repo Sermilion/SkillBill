@@ -5,6 +5,7 @@ import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimeBriefingProjec
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBriefing
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposer
 import skillbill.error.featuretask.InvalidFeatureTaskRuntimeHandoffProjectionContext
+import skillbill.ports.taskruntime.model.PreplanEvidenceWriteResult
 import skillbill.workflow.taskruntime.handoff.FeatureTaskRuntimeHandoffProjectionValidator
 import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionDeclaration
 import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionShape
@@ -36,6 +37,7 @@ public data class FeatureTaskRuntimeBriefingScope(
   public val sharedReviewEvidence: FeatureTaskRuntimeSharedReviewEvidenceReference? = null,
   public val invariantFields: Set<FeatureTaskRuntimeRunInvariantPromptField> =
     FeatureTaskRuntimeRunInvariantPromptAllowlist.ACCEPTANCE_CONTRACT_PHASES,
+  public val preplanEvidence: PreplanEvidenceWriteResult.Written? = null,
 )
 
 public object FeatureTaskRuntimePhaseBriefingAssembler {
@@ -88,7 +90,8 @@ public object FeatureTaskRuntimePhaseBriefingAssembler {
         is FeatureTaskRuntimeHandoffProjectionResult.Accepted -> envelopeResult.envelope
       }
     val projectedHandoff = handoff.copy(projectionDeclarations = promptDeclarations)
-    val briefingText = renderFeatureTaskRuntimePhaseBriefing(projectedHandoff, envelope, invariantFields)
+    val briefingText =
+      renderFeatureTaskRuntimePhaseBriefing(projectedHandoff, envelope, invariantFields, scope.preplanEvidence)
     return FeatureTaskRuntimePhaseBriefingAssemblyResult.Accepted(
       FeatureTaskRuntimePhaseLaunchBriefing(
         phaseId = handoff.phaseId,

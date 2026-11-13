@@ -49,3 +49,17 @@ internal fun addGoalPlanningOwnership(connection: Connection) {
     )
   }
 }
+
+internal fun recordGoalPlanningGitWorktreeIdentity(connection: Connection) {
+  val exists =
+    connection.createStatement().use { statement ->
+      statement.executeQuery(
+        "SELECT 1 FROM pragma_table_info('goal_planning_ownership') WHERE name = 'git_worktree_identity'",
+      ).use { it.next() }
+    }
+  if (!exists) {
+    connection.createStatement().use { statement ->
+      statement.execute("ALTER TABLE goal_planning_ownership ADD COLUMN git_worktree_identity TEXT")
+    }
+  }
+}

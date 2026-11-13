@@ -70,6 +70,8 @@ import dev.skillbill.desktop.core.designsystem.icon.SbIcon
 import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
+import dev.skillbill.desktop.core.domain.model.ChatRecoveryEntry
+import dev.skillbill.desktop.core.domain.model.SavedChatProjection
 import dev.skillbill.desktop.core.ui.input.ShellLayer
 import java.time.ZoneId
 import kotlin.time.Instant
@@ -85,7 +87,7 @@ internal data class ResumeScope(val label: String?, val worktree: Boolean)
  */
 @Composable
 internal fun ResumePalette(
-  choices: List<ChatHistoryEntry>, now: Instant, scope: ResumeScope, branchOf: (ChatHistoryEntry) -> String?,
+  choices: SavedChatProjection, now: Instant, scope: ResumeScope, branchOf: (ChatHistoryEntry) -> String?,
   returnFocusTo: FocusRequester?, onResume: (ChatHistoryEntry) -> Unit, onDismiss: () -> Unit,
   zone: ZoneId = ZoneId.systemDefault(),
 ) {
@@ -96,7 +98,7 @@ internal fun ResumePalette(
     var query by remember { mutableStateOf("") }
     var active by remember { mutableIntStateOf(0) }
     var showAll by remember { mutableStateOf(false) }
-    val listing = remember(choices, query, showAll) { resumeListing(choices, query, showAll, branchOf) }
+    val listing = remember(choices, query, showAll) { resumeListing(choices.entries, query, showAll, branchOf) }
     val selected = active.coerceAtMost(listing.shown.lastIndex).coerceAtLeast(0)
     val current = listing.shown.getOrNull(selected)
     val resume: () -> Unit = { current?.let(onResume) }
@@ -115,7 +117,7 @@ internal fun ResumePalette(
         }, onSubmit = resume)
         Row(Modifier.weight(1f).fillMaxWidth()) {
           Box(Modifier.weight(1f).fillMaxHeight().hairline(Edge.End, colors.borderSubtle)) {
-            ResumeList(choices.isEmpty(), listing, query, showAll, selected, now, zone, branchOf, onShowAll = { showAll = true }, onActivate = { active = it }, onResume = onResume)
+            ResumeList(choices.entries.isEmpty(), choices.recoveries, listing, query, showAll, selected, now, zone, branchOf, onShowAll = { showAll = true }, onActivate = { active = it }, onResume = onResume)
           }
           Box(Modifier.weight(1f).fillMaxHeight()) {
             ResumePreview(current, now, branchOf, onResume = resume, onDismiss = onDismiss)
@@ -174,12 +176,12 @@ private fun FilterBar(query: String, scope: ResumeScope, onQuery: (String) -> Un
 
 @Composable
 private fun ResumeList(
-  noChats: Boolean, listing: ResumeListing, query: String, showAll: Boolean, active: Int, now: Instant, zone: ZoneId,
+  noChats: Boolean, recoveries: List<ChatRecoveryEntry>, listing: ResumeListing, query: String, showAll: Boolean, active: Int, now: Instant, zone: ZoneId,
   branchOf: (ChatHistoryEntry) -> String?, onShowAll: () -> Unit, onActivate: (Int) -> Unit, onResume: (ChatHistoryEntry) -> Unit,
 ) {
   val q = query.trim()
-  if (noChats) return PaneNote("No saved chats yet", "Chats you start here show up in this list.")
-  if (listing.shown.isEmpty()) return PaneNote("No chat matches \"$q\"", "The filter checks titles, branches and agents.")
+  if (noChats && recoveries.isEmpty()) return PaneNote("No saved chats yet", "Chats you start here show up in this list.")
+  if (listing.shown.isEmpty() && recoveries.isEmpty()) return PaneNote("No chat matches \"$q\"", "The filter checks titles, branches and agents.")
   val groups = remember(listing, now, zone) { listing.shown.map { resumeGroup(it.updatedAt, now, zone) } }
   val headed = remember(groups) { groups.indices.filter { it == 0 || groups[it] != groups[it - 1] }.toSet() }
   val rowIndex = remember(groups) {
@@ -216,6 +218,39 @@ private fun ResumeList(
       item {
         Box(Modifier.fillMaxWidth().padding(8.dp).focusProperties { canFocus = false }, contentAlignment = Alignment.Center) {
           SbButton("Show all ${listing.total} chats", onShowAll, variant = SbButtonVariant.Ghost, size = SbControlSize.Small)
+        }
+      }
+    }
+    if (recoveries.isNotEmpty()) {
+      item {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+          BasicText("Saved chats needing recovery", style = type.t2xs.copy(color = colors.fgFaint))
+          recoveries.forEach { recovery ->
+            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+              BasicText(
+                "${recovery.sessionId}: ${recovery.reason.description} Original data: ${recovery.originalDataPath}. Preserve or repair that file, or start a separate new chat. This record cannot be resumed.",
+                style = type.tXs.copy(color = colors.fgMuted),
+              )
+              recovery.lines.forEach { line ->
+                BasicText("${line.role}: ${line.text}", style = type.t2xs.copy(color = colors.fgFaint))
+                line.actions.forEach { action ->
+                  BasicText("Saved action: ${action.label}", style = type.t2xs.copy(color = colors.fgFaint))
+                }
+                line.selectedAction?.let { action ->
+                  BasicText("Selected action: ${action.label}", style = type.t2xs.copy(color = colors.fgFaint))
+                }
+                line.approval?.let { card ->
+                  BasicText("Saved approval: ${card.title}. ${card.subject}. ${card.inputText}. State: ${card.state}.", style = type.t2xs.copy(color = colors.fgFaint))
+                  card.options.forEach { option ->
+                    BasicText("Offered option: ${option.label} (${option.optionId})", style = type.t2xs.copy(color = colors.fgFaint))
+                  }
+                }
+                line.operationCard?.let { card ->
+                  BasicText("Saved operation card: ${card.operationId}. State: ${card.state}. ${card.refusal.orEmpty()}", style = type.t2xs.copy(color = colors.fgFaint))
+                }
+              }
+            }
+          }
         }
       }
     }

@@ -45,7 +45,7 @@ class McpStdioServerTest {
     assertTrue(requireNotNull(rawResponse).contains(""""jsonrpc":"2.0""""))
     assertEquals(1, response["id"])
     assertEquals("2025-11-25", result["protocolVersion"])
-    assertEquals("skill-bill", result.fieldMap("serverInfo")["name"])
+    assertEquals("sona", result.fieldMap("serverInfo")["name"])
     assertTrue(result.fieldMap("capabilities").containsKey("tools"))
   }
 

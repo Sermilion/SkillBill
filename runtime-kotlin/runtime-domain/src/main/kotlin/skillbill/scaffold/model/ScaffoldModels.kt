@@ -1,6 +1,8 @@
 package skillbill.scaffold.model
 
+import skillbill.install.model.InstallApplyIssue
 import skillbill.model.FileLocation
+import skillbill.review.model.CodeReviewComposition
 import skillbill.telemetry.model.CustomFieldMap
 
 data class RoutingSignals(
@@ -31,36 +33,6 @@ data class PointerSpec(
   val skillRelativeDir: String,
   val name: String,
   val target: String,
-)
-
-enum class CodeReviewCompositionScope(val wireValue: String) {
-  SameReviewScope("same-review-scope"),
-  ;
-
-  companion object {
-    fun fromWireValue(value: String): CodeReviewCompositionScope? = entries.firstOrNull { it.wireValue == value }
-  }
-}
-
-enum class CodeReviewCompositionMode(val wireValue: String) {
-  KmpBaseline("kmp-baseline"),
-  ;
-
-  companion object {
-    fun fromWireValue(value: String): CodeReviewCompositionMode? = entries.firstOrNull { it.wireValue == value }
-  }
-}
-
-data class CodeReviewBaselineLayer(
-  val platform: String,
-  val skill: String,
-  val scope: CodeReviewCompositionScope,
-  val required: Boolean,
-  val mode: CodeReviewCompositionMode,
-)
-
-data class CodeReviewComposition(
-  val baselineLayers: List<CodeReviewBaselineLayer>,
 )
 
 data class GovernedAddonUsage(
@@ -332,6 +304,7 @@ data class ScaffoldResult(
   val symlinks: List<FileLocation> = emptyList(),
   val installTargets: List<FileLocation> = emptyList(),
   val notes: List<String> = emptyList(),
+  val installIssues: List<InstallApplyIssue> = emptyList(),
 )
 
 data class SkillClassMatcher(

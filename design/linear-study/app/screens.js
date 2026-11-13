@@ -138,7 +138,7 @@
         })) }),
       ],
       footer: [
-        S.SidebarItem({ icon: 'fileText', label: 'Specs', act: 'specs-toggle', on: st.specsOpen, tip: 'Specs pane', kbd: 'G S' }),
+        S.SidebarItem({ icon: 'fileText', label: 'Plans', act: 'specs-toggle', on: st.specsOpen, tip: 'Plans pane', kbd: 'G S' }),
         S.SidebarItem({ icon: 'terminal', label: 'Terminal', act: 'term-toggle', on: st.termOpen, tip: 'Terminal', kbd: '⌃ `' }),
         S.SidebarItem({ icon: 'sliders', label: 'Settings', act: 'nav', arg: 'settings', tip: 'Settings', kbd: 'G ,' }),
         S.SidebarItem({ icon: 'keyboard', label: 'Keyboard shortcuts', act: 'shortcuts', tip: 'Keyboard shortcuts', kbd: '?' }),
@@ -218,7 +218,7 @@
   function paneToggles(st) {
     return [
       S.IconButton({ icon: 'refresh', label: 'Refresh', act: 'refresh' }),
-      S.IconButton({ icon: 'fileText', label: st.specsOpen ? 'Close specs pane' : 'Specs', kbd: 'G S', act: 'specs-toggle', on: st.specsOpen }),
+      S.IconButton({ icon: 'fileText', label: st.specsOpen ? 'Close plans pane' : 'Plans', kbd: 'G S', act: 'specs-toggle', on: st.specsOpen }),
       S.IconButton({ icon: 'terminal', label: st.termOpen ? 'Close terminal' : 'Terminal', kbd: '⌃ `', act: 'term-toggle', on: st.termOpen }),
     ];
   }
@@ -290,7 +290,7 @@
   /* A no-change pause waits for an operator decision. The app only explains it: the operator settles it in chat or runs the
    * command, then resumes the goal. */
   function operatorDecision(st, it) {
-    const cmd = `skill-bill goal operator-decision ${it.id} --subtask ${it.current} --decision retry_fix|accept_and_advance|abandon_subtask`;
+    const cmd = `sona goal operator-decision ${it.id} --subtask ${it.current} --decision retry_fix|accept_and_advance|abandon_subtask`;
     return `<div class="l-col g-2">
       ${S.Hint({ tone: 'info', text: `Subtask ${it.current} finished with no code changes and is waiting for your decision. Settle it in chat, or run this command and then resume the goal. Pass --instructions with retry_fix.` })}
       <div class="l-row g-2"><span class="mono t-muted t-sm l-grow">${esc(cmd)}</span>${S.IconButton({ icon: 'copy', label: 'Copy decision command', act: 'copy', arg: cmd, size: 'sm' })}</div>
@@ -503,33 +503,29 @@
       fold('rec', 'Plan record', p.repaired ? `order ${s.id - 1} · repaired` : `order ${s.id - 1}`, S.KeyValues(facts)),
     ])}</div>`;
   }
-  /* Audit, laid out like Review: the verdict and summary, then one block per attempt, oldest first. Each block has its line
-   * ("Attempt 2 · Gaps found · 2 of 3 criteria uncovered → audit_implement_fix") and the criteria as that attempt graded
-   * them, in the audit's CriterionRows. A criterion counts as met from the attempt that fixed it (`fixedIn`); one without
-   * `fixedIn` was met from the first attempt, unless it is still missing. A running audit ends with "Attempt N · Auditing". */
+  /* Audit history stays compact above the current criteria. Every criterion expands in place. */
   function auditBody(st, it, s, a) {
-    if (a.outcome === 'upcoming') return S.Note({ text: 'Runs after implementation', small: true });
+    if (a.outcome === 'upcoming') return S.AuditResult({ verdict: S.Note({ text: 'Runs after implementation', small: true }) });
     const atts = a.attempts || [], run = a.outcome === 'running', crit = a.criteria || [];
     const counts = a.total != null ? ` · ${a.met} of ${a.total} criteria met` : '';
-    const verdict = { passed: ['Passed' + counts, 'var(--st-done)'], failed: ['Failed' + counts, 'var(--st-failed)'], running: [`Attempt ${atts.length + 1} · Auditing`, 'var(--st-active)'] }[a.outcome] || [a.verdict || 'Unknown', 'var(--fg-faint)'];
-    const metAt = (c, n) => (c.fixedIn ? n >= c.fixedIn : c.met);
-    const parts = [S.Label({ text: verdict[0], color: verdict[1] })];
-    if (!run && a.summary) parts.push(S.ExpandableText({ text: a.summary, cls: 'sb-insp-note' }));
-    const blocks = atts.map((x) => {
-      const graded = crit.map((c) => ({ c, met: metAt(c, x.n) })).sort((p, q) => (p.met === q.met ? 0 : p.met ? 1 : -1));
-      const gaps = crit.length ? graded.filter((g) => !g.met).length : x.uncovered;
-      const result = x.unavailable ? 'Historical result unavailable' : (x.passed || (crit.length && !gaps)) ? 'Passed' : `Gaps found · ${crit.length ? `${gaps} of ${crit.length}` : gaps} ${gaps === 1 && !crit.length ? 'criterion' : 'criteria'} uncovered`;
-      const line = S.InspectorLine({ lead: `Attempt ${x.n}`, parts: [result, x.next ? { html: `→ <span class="mono">${esc(x.next)}</span>` } : null] });
-      const rows = graded.length && !x.unavailable ? S.VerifyDoc([S.Box(graded.map(({ c, met }) => {
-        const key = `${it.id}|${s.id}|${x.n}|${c.ref}`;
-        return S.CriterionRow({ n: c.ref, html: esc(c.text), badge: met ? { text: 'Met', tone: 'done' } : { text: 'Missing', tone: 'failed' }, hint: c.fixedIn === x.n ? 'Fixed in this attempt' : '', act: 'audit-met', arg: key, open: st.auditMet.has(key),
-          body: S.FieldText({ label: met ? 'Covered by' : "What's missing", html: esc(met ? `the change in subtask ${pad(s.id)}${c.fixedIn ? `, from attempt ${c.fixedIn}` : ''}.` : x.next ? `Not covered yet; ${x.next} runs next to address it.` : 'No change in this subtask covers it.') }) });
-      }))]) : '';
-      return `<div class="l-col g-2">${line}${rows}</div>`;
-    });
-    if (run) blocks.push(`<div class="l-col g-2">${S.Label({ text: `Attempt ${atts.length + 1} · Auditing`, color: 'var(--st-active)' })}</div>`);
-    if (!atts.length && crit.length) blocks.push(S.VerifyDoc([S.Box(crit.map((c) => S.CriterionRow({ n: c.ref, html: esc(c.text), badge: c.met ? { text: 'Met', tone: 'done' } : { text: 'Missing', tone: 'failed' } })))]));
-    return `<div class="l-col g-2">${parts.join('')}<div class="l-col g-4">${blocks.join('')}</div></div>`;
+    const verdict = { passed: ['Passed' + counts, 'var(--st-done)'], failed: ['Failed' + counts, 'var(--st-failed)'], running: ['Auditing' + counts, 'var(--st-active)'] }[a.outcome] || [a.verdict || 'Unknown', 'var(--fg-faint)'];
+    const body = [];
+    if (!run && a.summary) body.push(S.ExpandableText({ text: a.summary, cls: 'sb-insp-note' }));
+    body.push(`<div class="l-col g-1">${atts.map((x) => {
+      const result = x.unavailable ? 'Historical result unavailable' : x.passed ? 'Passed' : `Gaps found · ${x.uncovered} ${x.uncovered === 1 ? 'criterion' : 'criteria'} uncovered`;
+      return S.Label({ text: `Attempt ${x.n} · ${result}${x.next ? ` → ${x.next}` : ''}`, color: 'var(--fg-muted)' });
+    }).join('')}</div>`);
+    const row = (c) => {
+      const key = `${it.id}|${s.id}|criterion|${c.ref}`;
+      return S.CriterionRow({ n: c.ref, html: esc(c.text), audit: true,
+        badge: c.met ? { text: 'Met', tone: 'done' } : { text: 'Missing', tone: 'failed' },
+        act: 'audit-met', arg: key, open: st.auditMet.has(key),
+        body: c.fixedIn ? esc(`fixed in attempt ${c.fixedIn}`) : '' });
+    };
+    const ordered = crit.filter((c) => !c.met).concat(crit.filter((c) => c.met));
+    if (ordered.length) body.push(S.Box(ordered.map(row)));
+    if (run) body.push(S.Label({ text: `Attempt ${atts.length + 1} · Auditing`, color: 'var(--st-active)' }));
+    return S.AuditResult({ verdict: S.Label({ text: verdict[0], color: verdict[1] }), end: auditEnd(a), body });
   }
   const auditEnd = (a) => (a.outcome === 'running' ? `attempt ${(a.attempts || []).length + 1} running` : a.attemptTotal ? plural(a.attemptTotal, 'attempt', 'attempts') : '');
   /* Review findings use the audit's CriterionRow: the ref, the severity Badge and text, the status as the row Badge; open,
@@ -736,7 +732,7 @@
     const end = sortable ? (it.assessment && it.assessment.findings.length > 1 ? S.Segmented({ act: 'assess-order', value: st.assessOrder || 'default', items: [{ id: 'default', label: 'Default' }, { id: 'priority', label: 'Priority' }, { id: 'status', label: 'Status' }] }) : '') : c.madeEnd ? esc(c.madeEnd) : '';
     const parts = [
       c.now && ['now', 'wait'].includes(state) ? S.PeekPart({ title: c.nowTitle || (state === 'wait' ? 'Waiting on' : 'Now'), live: state === 'now', body: blocks(c.now) }) : '',
-      c.made && c.made.length ? S.PeekPart({ title: c.madeTitle || 'Produced', end, control: !!(sortable && end), body: blocks(c.made) }) : '',
+      c.made && c.made.length ? (id === 'audit' ? blocks(c.made) : S.PeekPart({ title: c.madeTitle || 'Produced', end, control: !!(sortable && end), body: blocks(c.made) })) : '',
       c.results ? S.PeekPart({ title: c.resultsTitle || 'Results', end: c.resultsEnd ? esc(c.resultsEnd) : '', body: blocks(c.results) }) : '',
     ];
     const ag = c.agent ? agentOf(c.agent) : null;
@@ -1260,8 +1256,8 @@
   /* Rows open per run (st.qaOpen keys "qa:<runKey>:<part>"). Evidence opens against the run's invocation directory, so a run
    * without one draws no evidence chips. Returns the verdict for the section's end slot and the body. */
   /* `namesOnly` draws evidence chips that name files and open nothing; `select(findingId)` adds a checkbox, a Chat or Goal
-   * switch and a shared-code hint per open finding, and `selectHead` a Select all row. A Verify run's QA step no longer
-   * uses them: it renders VerifyQa (Verify run design). */
+   * switch and a shared-code hint per open finding, and `selectHead` a Select all row. A Verify run's QA step uses all
+   * three. */
   function qaResults(st, q, o) {
     o = o || {};
     const v = qaView(q, o);
@@ -2176,30 +2172,17 @@
     return warn[s.id] ? 'warn' : 'done';
   }
   const tally = (list, key) => Object.entries(list.reduce((m, x) => { m[x[key]] = (m[x[key]] || 0) + 1; return m; }, {})).map(([k, n]) => ({ text: `${n} ${k.toLowerCase()}` }));
-  const V_QA = { passed: ['Passed', 'done'], findings_open: ['Needs your review', 'failed'], incomplete: ['Incomplete', 'blocked'], skipped: ['Skipped', 'faint'] };
   const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
-  /* The QA step: QA runs inline in Verify, so its directory is not stored and evidence chips only name their files. */
+  /* The QA step: the same QA results as a standalone QA run, the verdict above them. QA runs inline in Verify, so its
+   * directory is not stored and evidence chips only name their files; each open finding takes the fix selection. */
   function verifyQa(st, it, ctx) {
-    const q = ctx.r.qa, as = q.details.assertions, passed = as.filter((a) => a.outcome === 'passed'), gaps = as.filter((a) => a.outcome === 'not_exercised');
-    const open = q.findings.filter((f) => !f.fixed);
-    const [word, tone] = V_QA[ctx.r.qaVerdict] || ['Unknown', 'faint'];
-    const bits = [open.length && `QA found ${plural(open.length, 'problem', 'problems')}`, gaps.length && `could not test ${plural(gaps.length, 'thing', 'things')}`].filter(Boolean);
-    const sentence = (bits.length ? bits.join(' and ') + '. ' : '') + (passed.length === as.length ? `All ${passed.length} checks passed.` : `${passed.length} ${passed.length === 1 ? 'check' : 'checks'} passed.`);
-    const chips = (paths) => (paths || []).map((p) => S.Chip({ mono: true,  icon: /\.(png|jpe?g|webp|mp4)$/i.test(p) ? 'image' : 'file', label: qaFile(p), tip: `${p}. The QA run directory is not stored, so this file does not open.` }));
-    const key = (k) => `${it.id}:q:${k}`;
-    return S.VerifyQa({ word, tone, sentence, head: selAll(it, ctx, 'qa', { boxed: true }),
-      needs: open.map((f) => {
-        const sel = selCtl(it, ctx, 'qa:' + f.id);
-        return { id: `qaf-${f.id}`, ref: f.id, title: f.title, line: f.observed ? md(f.observed) : '', open: st.vOpen.has(key(f.id)), act: 'v-toggle', arg: key(f.id), lead: ctx.pick ? sel.lead || '' : undefined, end: sel.end,
-          body: [f.expected ? S.FieldText({ label: 'Expected', html: md(f.expected) }) : '', f.steps ? S.FieldText({ label: 'Steps', html: md(f.steps) }) : '', (f.evidencePaths || []).length ? S.FileChips(chips(f.evidencePaths)) : ''].join('') };
-      }),
-      gaps: gaps.map((g) => ({ title: g.title, html: md(g.detail) })),
-      passed: { rows: passed.map((p) => ({ title: p.title, html: md(p.detail), chips: chips(p.evidencePaths) })), open: st.vOpen.has(key('passed')), act: 'v-toggle', arg: key('passed') },
-      report: q.reportText ? { text: q.reportText, open: st.vOpen.has(key('report')), act: 'v-toggle', arg: key('report') } : null,
-      targets: q.details.coverage.map((c) => `<span><b>${esc(capFirst(c.kind))}</b> ${c.verdict === 'skipped' ? (c.reason === 'empty_scope' ? 'not in scope' : 'skipped') : 'tested'}</span>`) });
+    const outcome = { findings_open: 'findings' }[ctx.r.qaVerdict] || ctx.r.qaVerdict;
+    const r = qaResults(st, Object.assign({}, ctx.r.qa, { runKey: `verify:${it.id}`, outcome }), {
+      namesOnly: true, select: (id) => selCtl(it, ctx, 'qa:' + id), selectHead: selAll(it, ctx, 'qa') || null });
+    return S.VerifyQa(r);
   }
   /* The Components page shows the QA step of a sample run with QA-1 open and selected. */
-  const verifyQaDemo = (id) => { const it = lookup(id), st = { vOpen: new Set([`${id}:q:QA-1`]), vSel: { [id]: { 'qa:QA-1': 'chat' } }, vMarks: {}, vFilter: {} }; return verifyQa(st, it, verifyCtx(st, it)); };
+  const verifyQaDemo = (id) => { const it = lookup(id), st = { vOpen: new Set(), qaOpen: new Set([`qa:verify:${id}:f:QA-1`]), vSel: { [id]: { 'qa:QA-1': 'chat' } }, vMarks: {}, vFilter: {} }; return verifyQa(st, it, verifyCtx(st, it)); };
   /* Each step's one-line summary and, when it has a receipt, the body it opens to. */
   function stepInfo(st, it, ctx, s) {
     const r = ctx.r, none = { sum: [{ text: 'No receipt recorded' }], body: '' };
@@ -2442,10 +2425,10 @@
     const danger = [
       v.canCancel && { icon: 'x', label: 'Cancel goal…', danger: true, act: 'spec-cancel', arg: sp.key },
       v.purgeVisible && { icon: 'rerun', label: 'Purge run history…', danger: true, act: 'spec-purge', arg: sp.key, disabled: !v.canPurge, sub: v.canPurge ? null : 'Pause or cancel the goal first' },
-      { icon: 'trash', label: 'Delete spec files…', danger: true, act: 'spec-delete', arg: sp.key, disabled: !v.canDelete, sub: v.canDelete ? null : 'Pause or cancel the goal first' },
+      { icon: 'trash', label: 'Delete plan files…', danger: true, act: 'spec-delete', arg: sp.key, disabled: !v.canDelete, sub: v.canDelete ? null : 'Pause or cancel the goal first' },
     ].filter(Boolean);
     return [
-      { icon: 'fileText', label: 'Open spec', kbd: '↵', act: 'spec-open', arg: sp.key },
+      { icon: 'fileText', label: 'Open plan', kbd: '↵', act: 'spec-open', arg: sp.key },
       { icon: 'folder', label: 'Reveal folder', act: 'spec-reveal', arg: sp.key },
       { icon: 'copy', label: 'Copy key', act: 'copy', arg: sp.key },
       { icon: 'star', label: sp.fav ? 'Remove favorite' : 'Add favorite', kbd: 'F', key: 'f', act: 'spec-fav', arg: sp.key },
@@ -2457,7 +2440,7 @@
     const pr = specProject(st);
     return [
       { icon: 'chevronsUpDown', label: 'Collapse all', act: 'spec-collapse' },
-      { icon: 'folder', label: 'Reveal specs folder', act: 'spec-reveal-store', sub: pr.store },
+      { icon: 'folder', label: 'Reveal plans folder', act: 'spec-reveal-store', sub: pr.store },
       { icon: 'file', label: 'Import work…', act: 'spec-import', disabled: !pr.checkout, sub: pr.checkout ? null : 'This project has no checkout on this machine.' },
     ];
   }
@@ -2526,18 +2509,18 @@
       : `${S.ViewTabs({ act: 'spec-status', value: st.specStatus, items: SPEC_FILTERS.map(([id, label]) => ({ id, label, count: count(id) })) })}<span class="l-grow"></span>${S.IconButton({ icon: 'search', label: 'Filter by key, title or file', kbd: '/', act: 'spec-search', on: !!st.specQuery })}`;
     let body;
     if (!project.checkout) body = S.EmptyState({ icon: 'folder', title: 'This project has no checkout on this machine.' });
-    else if (project.problem) body = S.EmptyState({ icon: 'alert', title: 'Specs unavailable', body: esc(project.problem), actions: [S.Button({ label: 'Retry', act: 'spec-retry' })] });
-    else if (!mine.length) { specRows = []; body = S.EmptyState({ icon: 'fileText', title: 'No specs yet', body: 'Plan a feature with <span class="mono">/skill-bill phase:plan</span> and its bundle shows up here.' }); }
+    else if (project.problem) body = S.EmptyState({ icon: 'alert', title: 'Plans unavailable', body: esc(project.problem), actions: [S.Button({ label: 'Retry', act: 'spec-retry' })] });
+    else if (!mine.length) { specRows = []; body = S.EmptyState({ icon: 'fileText', title: 'No plans yet', body: 'Plan a feature with <span class="mono">/skill-bill phase:plan</span> and its bundle shows up here.' }); }
     else {
       const tree = specTree(st, project);
-      body = tree || S.EmptyState({ icon: 'search', title: 'No specs match', body: 'Nothing in this project matches the filter and status.', actions: [S.Button({ label: 'Clear filters', act: 'spec-clear' })] });
+      body = tree || S.EmptyState({ icon: 'search', title: 'No plans match', body: 'Nothing in this project matches the filter and status.', actions: [S.Button({ label: 'Clear filters', act: 'spec-clear' })] });
     }
     const sp = project.checkout && !project.problem ? specOf(st.specSel) : null;
     return S.SidePane({
-      title: 'Specs',
+      title: 'Plans',
       head: S.PickerButton({ lead: S.RepoIcon(repoOf(project.name)), label: project.name, act: 'project-menu' }),
-      actions: [S.IconButton({ icon: 'more', label: 'Panel actions', act: 'spec-panel-menu', size: 'sm' }), S.IconButton({ icon: 'x', label: 'Close specs pane', kbd: 'G S', act: 'specs-toggle', size: 'sm' })],
-      bar: filters, body: S.ScrollArea({ id: 'specs', zone: 'specs', tabIndex: 0, role: 'tree', label: 'Specs', body }) + (sp ? specBar(st, sp) : ''),
+      actions: [S.IconButton({ icon: 'more', label: 'Panel actions', act: 'spec-panel-menu', size: 'sm' }), S.IconButton({ icon: 'x', label: 'Close plans pane', kbd: 'G S', act: 'specs-toggle', size: 'sm' })],
+      bar: filters, body: S.ScrollArea({ id: 'specs', zone: 'specs', tabIndex: 0, role: 'tree', label: 'Plans', body }) + (sp ? specBar(st, sp) : ''),
     });
   }
 
@@ -2692,12 +2675,22 @@
     const p = ntPrimary(c);
     return S.Button({ label: p.label, variant: 'primary', size: 'sm', kbd: '↵', act: 'chat-send', disabled: p.disabled, id: 'composer-send' });
   }
+  /* An agent action: a goal or plan start renders as a StartCard (kind · repository from base branch), anything else as a chip.
+   * An action is its label, or { label, title } when the agent named the change. */
+  function ntAction(c, a, j) {
+    const label = typeof a === 'string' ? a : a.label;
+    const start = /^Run phase:(goal|plan)\b/.exec(label);
+    if (!start) return S.SuggestionChip({ label, primary: j === 0, act: 'chat-suggested', arg: label });
+    const where = c.repo ? `${c.repo}${baseBranch(c) ? ` from ${baseBranch(c)}` : ''}` : '';
+    const sub = [start[1] === 'goal' ? 'Goal' : 'Plan', where].filter(Boolean).join(' · ');
+    return S.StartCard({ kind: start[1], title: typeof a === 'string' ? '' : a.title, sub, act: 'chat-suggested', arg: label, tip: label });
+  }
   function ntTranscript(c) {
     const avatar = S.Avatar({ name: c.agent, initials: agentOf(c.agent).initials, color: agentOf(c.agent).color, size: 'sm' });
     const messages = c.lines.map((l) => S.ChatMessage({
       role: l.role, text: l.text, agent: c.agent, avatar,
       images: l.images && l.images.length ? l.images.map((f) => S.ChatPill({ icon: 'image', text: f })).join('') : null,
-      actions: (l.actions || []).map((a, j) => S.SuggestionChip({ label: a, primary: j === 0, act: 'chat-suggested', arg: a })),
+      actions: (l.actions || []).map((a, j) => ntAction(c, a, j)),
     }));
     if (c.stream) messages.push(S.ChatMessage({ role: 'agent', agent: c.agent, avatar, text: c.stream.full.slice(0, c.stream.shown), streaming: true, streamId: c.id }));
     return S.ChatTranscript({ scroll: 'chat-' + c.id, messages });

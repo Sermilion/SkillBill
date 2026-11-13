@@ -70,7 +70,7 @@ class UpdateCheckOperationTest {
   }
 
   @Test
-  fun `a newer prerelease is ignored, as skill-bill update-check ignores it by default`() {
+  fun `a newer prerelease is ignored, as sona update-check ignores it by default`() {
     assertEquals(
       "status: up_to_date\ninstalled_version: 1.2.3\nlatest_version: v1.2.3\n",
       report(releases("v1.2.3", "v1.3.0-rc.1")),

@@ -15,6 +15,7 @@ import java.nio.file.StandardOpenOption
 fun atomicWriteBytes(
   path: Path,
   bytes: ByteArray,
+  strictAtomic: Boolean = false,
 ) {
   val parent = path.parent
   if (parent != null) {
@@ -25,15 +26,16 @@ fun atomicWriteBytes(
   Closeable { Files.deleteIfExists(temp) }.use {
     Files.write(temp, bytes)
     FileChannel.open(temp, StandardOpenOption.WRITE).use { channel -> channel.force(true) }
-    atomicMoveReplacing(temp, path)
+    atomicMoveReplacing(temp, path, strictAtomic)
   }
 }
 
 fun atomicWriteString(
   path: Path,
   text: String,
+  strictAtomic: Boolean = false,
 ) {
-  atomicWriteBytes(path, text.toByteArray())
+  atomicWriteBytes(path, text.toByteArray(), strictAtomic)
 }
 
 fun replaceDirectory(

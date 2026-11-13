@@ -30,7 +30,7 @@ internal object FeatureGuardPromptRules {
       "The operator confirmed the proposal under `Prior step value: $PROPOSAL_STEP`. Implement exactly that " +
       "proposal: its flag, files, pattern, single switch point, Legacy vs New split, flag setup, and rollback " +
       "plan. Do not change the plan; if it cannot be implemented as written, stop and report why instead of " +
-      "improvising. Do not run `./gradlew check`, `skill-bill phase validation`, or any other check suite. Finish " +
+      "improvising. Do not run `./gradlew check`, `sona phase validation`, or any other check suite. Finish " +
       "with a short report of the files changed, where the single switch point lives, and why the flag-OFF path " +
       "is unchanged.\n\n" +
       "Apply these feature-guard rules:"

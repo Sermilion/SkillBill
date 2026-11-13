@@ -5,6 +5,7 @@ import dev.skillbill.desktop.core.domain.model.NewTaskKind
 import dev.skillbill.desktop.core.domain.model.NewTaskStart
 import dev.skillbill.desktop.core.domain.model.NewTaskStartOutcome
 import dev.skillbill.desktop.core.domain.model.OperationCardConfirmation
+import dev.skillbill.desktop.core.domain.model.OperationCardDetailsView
 import dev.skillbill.desktop.core.domain.model.OperationCardDismissOutcome
 import dev.skillbill.desktop.core.domain.model.OperationCardLookup
 import dev.skillbill.desktop.core.domain.model.OperationCardState
@@ -31,8 +32,8 @@ internal class OperationCardCoordinator(
   private val historyChanged: suspend (ChatThread) -> Boolean = { true },
   private val pollMillis: Long = RESTORED_CONFIRMING_POLL_MILLIS,
   private val runs: RunOpener = UnavailableRunOpener,
+  private val requests: OperationCardRequests = OperationCardRequests(),
 ) {
-  private val requests = ConcurrentHashMap<String, NewTaskStart>()
   private val observations = ConcurrentHashMap<String, Job>()
   private val pendingAdjustments = ConcurrentHashMap<ChatThread, String>()
   private val outstanding = ConcurrentHashMap<ChatThread, Int>()
@@ -40,9 +41,7 @@ internal class OperationCardCoordinator(
   fun hasOutstanding(thread: ChatThread): Boolean = outstanding.containsKey(thread)
 
   /** Keeps the request that parked [launchId], so Adjust can ask for a replacement with the same target and branch. */
-  fun remember(launchId: String, request: NewTaskStart) {
-    requests[launchId] = request.copy(confirmation = null)
-  }
+  fun remember(launchId: String, request: NewTaskStart) = requests.remember(launchId, request)
 
   /** Reads and shows the card [launchId] parked; false when the store holds none. */
   suspend fun show(thread: ChatThread, launchId: String): Boolean {
@@ -118,12 +117,13 @@ internal class OperationCardCoordinator(
       onDismiss = { token -> dismiss(thread, token) },
       onAdjust = { token -> adjust(thread, token) },
       onChangeVerify = { token, choices -> changeVerify(thread, token, choices) },
-      canAdjust = { token -> !thread.busy.value && thread.operationCard(token)?.card?.launchId?.let(requests::containsKey) == true },
+      canAdjust = { token -> thread.operationCard(token)?.card?.launchId?.let { it in requests } == true },
+      busy = thread.busy,
       onOpenRun = { token -> openRun(thread, token) },
     )
 
   private fun openRun(thread: ChatThread, token: String) {
-    val message = thread.operationCard(token)?.takeIf { it.opensVerifyRun() } ?: return
+    val message = thread.operationCard(token)?.takeIf { it.card.details is OperationCardDetailsView.Verify } ?: return
     scope.launch {
       runs.open(message.card.token)?.let { problem ->
         thread.append(ChatMessage.Notice(problem))
@@ -198,8 +198,9 @@ internal class OperationCardCoordinator(
   }
 
   private fun adjust(thread: ChatThread, token: String) {
+    if (thread.busy.value) return
     val message = thread.operationCard(token) ?: return
-    if (!requests.containsKey(message.card.launchId)) {
+    if (message.card.launchId !in requests) {
       thread.operationCardSubmitting(token, false, ADJUST_UNAVAILABLE_TEXT)
       scope.launch { persistOrWarn(thread) }
       return

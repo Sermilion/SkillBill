@@ -126,7 +126,7 @@ internal class ChatSteeringDelivery(
     }
   }
 
-  fun recover(deliveryId: String, retry: Boolean): Boolean = synchronized(ownerLock) {
+  fun recover(deliveryId: String, retry: Boolean, drainAfter: Boolean = true): Boolean = synchronized(ownerLock) {
     if (thread.delivery.value?.deliveryId != deliveryId) return@synchronized false
     if (retry) settle() else {
       val attempt = active
@@ -144,7 +144,10 @@ internal class ChatSteeringDelivery(
     if (retry && thread.delivery.value?.status != ChatDeliveryStatus.Uncertain) return@synchronized false
     active?.let(::retire)
     val released = thread.releaseDelivery(deliveryId, retry)
-    if (released) diagnostics.record(if (retry) "chat.steering_explicit_retry" else "chat.steering_explicit_discard")
+    if (released) {
+      diagnostics.record(if (retry) "chat.steering_explicit_retry" else "chat.steering_explicit_discard")
+      if (retry && drainAfter) drain()
+    }
     released
   }
 

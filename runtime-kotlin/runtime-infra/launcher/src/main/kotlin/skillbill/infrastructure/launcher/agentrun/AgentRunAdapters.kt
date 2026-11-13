@@ -475,6 +475,7 @@ internal class ProcessAgentRunAdapter(
       AgentRunApprovalProtocol.CURSOR_ACP,
       AgentRunApprovalProtocol.JUNIE_ACP,
       AgentRunApprovalProtocol.DEVIN_ACP,
+      AgentRunApprovalProtocol.OPENCODE_ACP,
       -> null
       null -> refusedOpening("agent '${agent.id}' cannot host approval cards for this launch")
     }
@@ -835,6 +836,10 @@ internal fun headlessAgentRunAdapters(
       runtimeMcpBin = workerBinding.runtimeMcpBin,
     ),
     JunieAgentRunCommandBuilder(databasePath = workerBinding.databasePath),
+    OpenCodeAgentRunCommandBuilder(
+      databasePath = workerBinding.databasePath,
+      runtimeMcpBin = workerBinding.runtimeMcpBin,
+    ),
     DevinAgentRunCommandBuilder(
       databasePath = workerBinding.databasePath,
       runtimeMcpBin = workerBinding.runtimeMcpBin,
@@ -873,5 +878,6 @@ private fun AgentRunApprovalProtocol.acpProvider(): AcpProvider? =
     AgentRunApprovalProtocol.CURSOR_ACP -> AcpProvider.Cursor
     AgentRunApprovalProtocol.JUNIE_ACP -> AcpProvider.Junie
     AgentRunApprovalProtocol.DEVIN_ACP -> AcpProvider.Devin
+    AgentRunApprovalProtocol.OPENCODE_ACP -> AcpProvider.OpenCode
     AgentRunApprovalProtocol.CLAUDE_HOST, AgentRunApprovalProtocol.CODEX_APP_SERVER -> null
   }

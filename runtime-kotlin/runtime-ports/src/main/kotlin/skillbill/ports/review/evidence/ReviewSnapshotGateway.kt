@@ -8,7 +8,7 @@ import java.nio.file.Path
  *
  * Retention policy: snapshots are never created, rotated, or deleted automatically. They are
  * operator artifacts with no expiry, and nothing in the runtime removes them — deletion happens
- * only when an operator runs `skill-bill review prune-snapshots --confirm`. The live
+ * only when an operator runs `sona review prune-snapshots --confirm`. The live
  * `review-metrics.db` is never a snapshot and is never a deletion candidate.
  */
 interface ReviewSnapshotGateway {

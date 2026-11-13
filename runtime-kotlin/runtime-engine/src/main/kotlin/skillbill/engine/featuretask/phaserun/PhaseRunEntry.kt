@@ -459,29 +459,10 @@ public class PhaseRunEntry(
     monitor: MonitorPreparation.Prepared? = null,
     body: (PhaseRunRequest) -> PhaseRunResult,
   ): PhaseRunResult {
-    val publisher =
-      monitor?.let {
-        statusPublisherFactory.forMonitor(
-          MonitorAttemptTarget(
-            it.context.target,
-            it.context.callerRoot,
-            it.context.primaryRoot,
-            it.context.worktree.path,
-          ),
-          publicPhaseId,
-          invocationId,
-          request.invokedAgentId,
-          request.launchArguments,
-        )
-      } ?: statusPublisherFactory.forPhase(
-        request.repoRoot,
-        publicPhaseId,
-        invocationId,
-        request.invokedAgentId,
-        request.launchArguments,
-      )
+    val publisher = statusPublisher(request, invocationId, publicPhaseId, monitor)
     val statusRequest =
       request.copy(
+        openCodeIdentity = publisher.openCodeIdentity ?: request.openCodeIdentity,
         modelObserver = publisher.modelObserver(request.modelObserver),
         eventSink = statusPublisherFactory.compose(request.eventSink::emit, publisher),
         activityOutput = { stepName, activity ->
@@ -525,6 +506,38 @@ public class PhaseRunEntry(
       }
   }
 
+  private fun statusPublisher(
+    request: PhaseRunRequest,
+    invocationId: String,
+    publicPhaseId: String,
+    monitor: MonitorPreparation.Prepared?,
+  ): StandalonePhaseStatusEventSink {
+    val launch =
+      StandalonePhaseLaunch(
+        request.invokedAgentId,
+        request.launchArguments,
+        acceptedIdentity = request.openCodeIdentity,
+      )
+    return monitor?.let {
+      statusPublisherFactory.forMonitor(
+        MonitorAttemptTarget(
+          it.context.target,
+          it.context.callerRoot,
+          it.context.primaryRoot,
+          it.context.worktree.path,
+        ),
+        publicPhaseId,
+        invocationId,
+        launch,
+      )
+    } ?: statusPublisherFactory.forPhase(
+      request.repoRoot,
+      publicPhaseId,
+      invocationId,
+      launch,
+    )
+  }
+
   private fun monitorBlocked(
     request: PhaseRunRequest,
     invocationId: String,
@@ -546,8 +559,7 @@ public class PhaseRunEntry(
         it,
         request.definitionId,
         invocationId,
-        request.invokedAgentId,
-        request.launchArguments,
+        StandalonePhaseLaunch(request.invokedAgentId, request.launchArguments),
       ).settle(result)
     }
     return result

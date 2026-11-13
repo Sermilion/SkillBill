@@ -6,6 +6,7 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.contracts.workflow.goal.GOAL_QUALITY_EXECUTION_CONTRACT_VERSION
 import skillbill.contracts.workflow.identity.task.FEATURE_TASK_RUNTIME_WORKER_OWNERSHIP_CONTRACT_VERSION
+import skillbill.engine.featuretask.phase.core.scriptedPhaseValueRecord
 import skillbill.engine.featuretask.slot.OpenPullRequestIdentityLookup
 import skillbill.engine.featuretask.slot.PassingPullRequestChecksLookup
 import skillbill.engine.goalrunner.execution.core.testWorkflowGoalRunnerOutcomeStore
@@ -501,15 +502,22 @@ internal class GoalFixtureAgentRunLauncher(
         .find(skillRequest.promptOverride.orEmpty())
         ?.groupValues?.get(1)
         ?: "preplan"
-    return agentRunLaunchFacts(
-      agent = SupportedAgent.CODEX,
-      stdout =
-        if ("# Goal assessment:" in skillRequest.promptOverride.orEmpty()) {
-          "Finding: none"
-        } else {
-          phasePlanningPayload(phaseId, skillRequest.promptOverride.orEmpty())
-        },
-      stderr = "",
+    val outcome =
+      agentRunLaunchFacts(
+        agent = SupportedAgent.CODEX,
+        stdout =
+          if ("# Goal assessment:" in skillRequest.promptOverride.orEmpty()) {
+            "Finding: none"
+          } else {
+            phasePlanningPayload(phaseId, skillRequest.promptOverride.orEmpty())
+          },
+        stderr = "",
+      )
+    return RuntimeWorkflowTestSupport.settlePhase(
+      outcome,
+      skillRequest.promptOverride,
+      dbPath,
+      fixture.context(launcher = this),
     )
   }
 
@@ -859,7 +867,7 @@ internal fun phasePlanningPayload(
             appendLine("criterion $it: The fixture supplies this subtask's dependencies and its implementation path.")
           }
         }.trimEnd()
-      return evidence
+      return scriptedPhaseValueRecord(phaseId, evidence)
     } else {
       planningProjectionOutputs(phaseId) ?: """{"result":"$phaseId"}"""
     }

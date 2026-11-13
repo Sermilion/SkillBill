@@ -3,12 +3,12 @@ package skillbill.infrastructure.skills.scaffold.platformpack.loader
 
 import skillbill.infrastructure.skills.scaffold.rendering.defaultAreaFocus
 import skillbill.ports.repository.toFileLocation
+import skillbill.review.model.CodeReviewBaselineLayer
+import skillbill.review.model.CodeReviewComposition
+import skillbill.review.model.CodeReviewCompositionMode
+import skillbill.review.model.CodeReviewCompositionScope
 import skillbill.scaffold.model.BuildToolDeclaration
 import skillbill.scaffold.model.BuildToolVersionSource
-import skillbill.scaffold.model.CodeReviewBaselineLayer
-import skillbill.scaffold.model.CodeReviewComposition
-import skillbill.scaffold.model.CodeReviewCompositionMode
-import skillbill.scaffold.model.CodeReviewCompositionScope
 import skillbill.scaffold.model.DeclaredFiles
 import skillbill.scaffold.model.ReviewLaneCondition
 import skillbill.scaffold.model.RoutingSignals

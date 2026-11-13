@@ -143,7 +143,7 @@ class FeatureVerifyWorkflowRuntimeTest {
   fun `verify continuation directives preserve oracle text`() {
     assertEquals(
       "Reuse criteria_summary, review_rubric, and diff_projection, pass orchestrated=true to " +
-        "`skill-bill phase review`, persist code_review_receipt, and keep telemetry in its dedicated store.",
+        "`sona phase review`, persist code_review_receipt, and keep telemetry in its dedicated store.",
       definition.continuationDirectives["code_review"],
     )
     assertEquals(

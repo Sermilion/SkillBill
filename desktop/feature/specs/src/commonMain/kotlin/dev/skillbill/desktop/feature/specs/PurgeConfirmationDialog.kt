@@ -81,7 +81,7 @@ internal fun DeleteSpecFilesDialog(target: SpecDeleteTarget, onAction: (SpecsAct
     title = deleteTitle(target),
     icon = LucideIcons.trash,
     keepLabel = KEEP_SPEC_FILES,
-    confirmLabel = "Delete spec files",
+    confirmLabel = "Delete plan files",
     onKeep = { onAction(SpecsAction.KeepSpecFiles) },
     onConfirm = { onAction(SpecsAction.ConfirmDelete) },
   ) {

@@ -166,7 +166,7 @@
     run('History', () => as({ view: 'history', termOpen: false }, () => X.app(st)));
     /* Every project state, a bundle in each run state, a filter that matches nothing and the open search field; then the
      * spec and panel menus. */
-    run('Specs pane', () => D.specs.map((sp) => as({ specsOpen: true, specSel: X.specPath(sp), specOpen: new Set([X.specPath(sp), 'done']) }, () => X.specsPane(st))).join('')
+    run('Plans pane', () => D.specs.map((sp) => as({ specsOpen: true, specSel: X.specPath(sp), specOpen: new Set([X.specPath(sp), 'done']) }, () => X.specsPane(st))).join('')
       + ['l-9c1b', 'l-51d0', 'l-a7e2'].map((id) => as({ specsOpen: true, specProject: id, specSel: null }, () => X.specsPane(st))).join('')
       + as({ specsOpen: true, specQuery: 'zzz', specSearch: true }, () => X.specsPane(st))
       + ['spec', 'spec-panel'].map((t) => S.Popover({ x: 0, y: 0, body: popoverBody({ type: t, arg: 'SKILL-442' }) })).join(''));
@@ -189,7 +189,7 @@
   /* ---------- rendering ---------- */
   function docBar() {
     return `<div class="doc-bar">${S.BrandMark(18)}<span class="doc-bar-ti">Sona</span><span class="doc-bar-sub">Linear study</span>
-      <span class="l-grow"></span>${S.Segmented({ act: 'mode', value: st.mode, items: [{ id: 'prototype', label: 'Prototype' }, { id: 'states', label: 'States' }, { id: 'components', label: 'Components' }, { id: 'foundations', label: 'Foundations' }] })}</div>`;
+      <span class="l-grow"></span>${S.Segmented({ act: 'mode', value: st.mode, items: [{ id: 'prototype', label: 'Prototype' }, { id: 'states', label: 'States' }, { id: 'components', label: 'Components' }, { id: 'foundations', label: 'Foundations' }, { id: 'tour', label: 'Tour' }] })}</div>`;
   }
   function body() {
     if (st.mode === 'components') return L.components();
@@ -526,13 +526,13 @@
       const pv = it.incident.preview;
       return S.Dialog({ title: pv.label, icon: S.Icon('refresh'), body: S.PropertyList([{ label: 'Effects', value: esc(pv.effects) }, { label: 'Workflow', value: S.ShortId({ value: pv.workflow, label: 'workflow id' }) }, { label: 'Phase', value: `<span class="mono">${esc(pv.phase)}</span>` }]), actions: [S.Button({ label: 'Cancel', variant: 'ghost', act: 'dialog-close' }), S.Button({ label: 'Apply and resume', variant: 'primary', act: 'recover-confirm', arg: d.arg, id: 'dialog-primary' })] });
     }
-    if (d.type === 'purge') return S.Dialog({ title: `Purge ${d.arg} run history?`, icon: S.Icon('rerun'), body: `<span>Purge deletes everything Sona recorded while running this spec, so it can start again from scratch.</span>${S.Ledger({ leftTitle: 'Deleted', left: ['Goal and subtask run history', 'Run evidence and task tracking', 'Checkpoint refs', 'Subtask progress, back to not started'], rightTitle: 'Kept', right: ['Every spec file in the folder', 'Your branch and its commits', 'Open pull requests'] })}<span>This can’t be undone. Afterwards the spec shows as not started and Start runs it from the first subtask.</span>`, actions: [S.Button({ label: 'Keep run history', variant: 'ghost', act: 'dialog-close', id: 'dialog-primary' }), S.Button({ label: `Purge ${d.arg}`, variant: 'danger-solid', act: 'purge-confirm', arg: d.arg })] });
+    if (d.type === 'purge') return S.Dialog({ title: `Purge ${d.arg} run history?`, icon: S.Icon('rerun'), body: `<span>Purge deletes everything Sona recorded while running this plan, so it can start again from scratch.</span>${S.Ledger({ leftTitle: 'Deleted', left: ['Goal and subtask run history', 'Run evidence and task tracking', 'Checkpoint refs', 'Subtask progress, back to not started'], rightTitle: 'Kept', right: ['Every plan file in the folder', 'Your branch and its commits', 'Open pull requests'] })}<span>This can’t be undone. Afterwards the plan shows as not started and Start runs it from the first subtask.</span>`, actions: [S.Button({ label: 'Keep run history', variant: 'ghost', act: 'dialog-close', id: 'dialog-primary' }), S.Button({ label: `Purge ${d.arg}`, variant: 'danger-solid', act: 'purge-confirm', arg: d.arg })] });
     /* Specs: cancel, delete and the export guard share the Purge dialog's shape; the safe action has focus and Enter. */
     if (d.type === 'spec-cancel') return S.Dialog({ title: `Cancel ${d.arg}?`, icon: S.Icon('x'), body: '<span>The run stops and the goal is marked canceled. Its branch and commits stay.</span>', actions: [S.Button({ label: 'Keep running', variant: 'ghost', act: 'dialog-close', id: 'dialog-primary' }), S.Button({ label: 'Cancel goal', variant: 'danger-solid', act: 'spec-cancel-confirm', arg: d.arg })] });
     if (d.type === 'spec-delete') {
       const sp = D.specs.find((x) => x.key === d.arg);
       const pr = D.projects.find((x) => x.id === sp.project);
-      return S.Dialog({ title: `Delete ${d.arg} spec files?`, icon: S.Icon('trash'), body: `<span>${esc(sp.title)}</span><span>This removes the spec folder and every file in it from disk.</span><span class="mono t-2">${esc(pr.store)}/${esc(sp.key.toLowerCase())}</span><span>Run history stays in the database. Use Purge to remove it.</span><span>This can’t be undone.</span>`, actions: [S.Button({ label: 'Keep spec files', variant: 'ghost', act: 'dialog-close', id: 'dialog-primary' }), S.Button({ label: 'Delete spec files', variant: 'danger-solid', act: 'spec-delete-confirm', arg: d.arg })] });
+      return S.Dialog({ title: `Delete ${d.arg} plan files?`, icon: S.Icon('trash'), body: `<span>${esc(sp.title)}</span><span>This removes the plan folder and every file in it from disk.</span><span class="mono t-2">${esc(pr.store)}/${esc(sp.key.toLowerCase())}</span><span>Run history stays in the database. Use Purge to remove it.</span><span>This can’t be undone.</span>`, actions: [S.Button({ label: 'Keep plan files', variant: 'ghost', act: 'dialog-close', id: 'dialog-primary' }), S.Button({ label: 'Delete plan files', variant: 'danger-solid', act: 'spec-delete-confirm', arg: d.arg })] });
     }
     if (d.type === 'spec-export-live') return S.Dialog({ title: 'Pause before exporting', icon: S.Icon('pause'), body: '<span>This goal must be paused before it can be exported.</span>', actions: [S.Button({ label: 'Dismiss', variant: 'ghost', act: 'dialog-close', id: 'dialog-primary' }), S.Button({ label: 'Pause', act: 'spec-pause', arg: d.arg })] });
     if (d.type === 'shortcuts') return S.Dialog({ title: 'Keyboard shortcuts', icon: S.Icon('keyboard'), body: S.ShortcutGrid(SHORTCUTS), actions: [S.Button({ label: 'Done', variant: 'primary', act: 'dialog-close', id: 'dialog-primary' })] });
@@ -545,7 +545,7 @@
     return '';
   }
   /* The app binds ⌘ or Ctrl with T, W, Tab and 1 to 9 for chats. Browsers keep those, so the prototype also takes Alt. */
-  const SHORTCUTS = [['Command menu', '⌘ K'], ['Go to New task', 'G N'], ['New chat', '⌘ T'], ['Close chat', '⌘ W'], ['Next or previous chat', '⌘ Tab'], ['Resume a saved chat', '/resume'], ['Go to Work', 'G W'], ['Go to History', 'G H'], ['Toggle specs pane', 'G S'], ['Go to Settings', 'G ,'], ['Toggle terminal', '⌃ `'], ['New terminal tab', '⌃ ⇧ `'], ['Filter', '/'], ['Move down / up', 'J K'], ['Open', '↵'], ['Move in the Subtasks list', '↑ ↓'], ['Open the subtask spec file', '↵'], ['Pause after subtask', 'P'], ['Pause now', '⇧ P'], ['Resume', 'R'], ['Toggle details pane', '⌘ I'], ['Toggle sidebar', '['], ['Back / close', 'esc']];
+  const SHORTCUTS = [['Command menu', '⌘ K'], ['Go to New task', 'G N'], ['New chat', '⌘ T'], ['Close chat', '⌘ W'], ['Next or previous chat', '⌘ Tab'], ['Resume a saved chat', '/resume'], ['Go to Work', 'G W'], ['Go to History', 'G H'], ['Toggle plans pane', 'G S'], ['Go to Settings', 'G ,'], ['Toggle terminal', '⌃ `'], ['New terminal tab', '⌃ ⇧ `'], ['Filter', '/'], ['Move down / up', 'J K'], ['Open', '↵'], ['Move in the Subtasks list', '↑ ↓'], ['Open the subtask spec file', '↵'], ['Pause after subtask', 'P'], ['Pause now', '⇧ P'], ['Resume', 'R'], ['Toggle details pane', '⌘ I'], ['Toggle sidebar', '['], ['Back / close', 'esc']];
 
   /* ---------- command menu ---------- */
   function commandGroups() {
@@ -581,9 +581,10 @@
       ...X.SECTIONS.map(([id, label, state]) => ({ id: 'section:' + id, lead: S.StatusIcon(state, 0.5), label: `Go to ${label}` })),
       { id: 'nav:history', icon: 'history', label: 'Go to History', kbd: 'G H' }, { id: 'nav:settings', icon: 'sliders', label: 'Go to Settings', kbd: 'G ,' },
       { id: 'mode:components', icon: 'layers', label: 'Open component library' },
+      { id: 'mode:tour', icon: 'play', label: 'Show tour' },
     ] });
     groups.push({ head: 'Panes', items: [
-      { id: 'specs', icon: 'fileText', label: st.specsOpen ? 'Close specs pane' : 'Open specs pane', kbd: 'G S' },
+      { id: 'specs', icon: 'fileText', label: st.specsOpen ? 'Close plans pane' : 'Open plans pane', kbd: 'G S' },
       { id: 'term', icon: 'terminal', label: st.termOpen ? 'Close terminal' : 'Open terminal', kbd: '⌃ `' },
       { id: 'term-new', icon: 'plus', label: 'New terminal tab', kbd: '⌃ ⇧ `' },
       { id: 'refresh', icon: 'refresh', label: 'Refresh' },
@@ -987,7 +988,7 @@
       if (location.hash === '#' + name) { st.mode = 'prototype'; applyRoute({ view: name }); render(); }
       else location.hash = name;
     },
-    mode(m) { st.mode = m; st.popover = null; history.replaceState(null, '', '#' + m); render(); const sc = root.querySelector('[data-scroll="lib"],[data-scroll="found"]'); if (sc) sc.scrollTop = 0; },
+    mode(m) { if (m === 'tour') { location.href = '../onboarding/index.html'; return; } st.mode = m; st.popover = null; history.replaceState(null, '', '#' + m); render(); const sc = root.querySelector('[data-scroll="lib"],[data-scroll="found"]'); if (sc) sc.scrollTop = 0; },
     anchor(id) { const el = document.getElementById(id); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); },
     nav(v) { go(v, v === 'work' ? { section: null } : {}); },
     section(id) { go('work', { section: id }); },
@@ -1123,7 +1124,7 @@
     'spec-panel-menu'(a, el) { st.popover = Object.assign({ type: 'spec-panel' }, anchorPos(el)); render(); },
     'spec-open'(k) { const sp = specBy(k); st.popover = null; render(); if (sp) openSpecFile(sp, X.specPath(sp) + '/spec.md'); },
     'spec-reveal'(k) { const sp = specBy(k); st.popover = null; render(); toast({ icon: 'folder', title: 'Revealed the spec folder', body: `${X.specProject(st).store}/${sp.key.toLowerCase()}` }); },
-    'spec-reveal-store'() { st.popover = null; render(); toast({ icon: 'folder', title: 'Revealed the specs folder', body: X.specProject(st).store }); },
+    'spec-reveal-store'() { st.popover = null; render(); toast({ icon: 'folder', title: 'Revealed the plans folder', body: X.specProject(st).store }); },
     'spec-import'() { st.popover = null; render(); toast({ icon: 'file', title: 'Import work', body: 'Opens a file chooser for a work archive, then asks to import it.' }); },
     'spec-fav'(k) { const sp = specBy(k); st.popover = null; if (sp) sp.fav = !sp.fav; render(); },
     'spec-export'(k) {
@@ -1154,7 +1155,7 @@
     'spec-purge'(k) { st.popover = null; if (X.specControl(specBy(k)).canPurge) st.dialog = { type: 'purge', arg: k }; render(); },
     'purge-confirm'(k) { const sp = specBy(k); if (sp) Object.assign(sp, { run: 'not_started', ever: false, status: 'pending', subState: sp.subState.map(() => 'pending') }); st.dialog = null; render(); toast({ icon: 'rerun', title: `${k} run history purged` }); },
     'spec-delete'(k) { st.popover = null; if (X.specControl(specBy(k)).canDelete) st.dialog = { type: 'spec-delete', arg: k }; render(); },
-    'spec-delete-confirm'(k) { const i = D.specs.findIndex((x) => x.key === k); const path = X.specPath(D.specs[i]); D.specs.splice(i, 1); st.dialog = null; if (st.specSel && (st.specSel === path || st.specSel.startsWith(path + '/'))) st.specSel = null; render(); toast({ icon: 'trash', title: `${k} spec files deleted`, body: 'Reload the page to restore the sample.' }); },
+    'spec-delete-confirm'(k) { const i = D.specs.findIndex((x) => x.key === k); const path = X.specPath(D.specs[i]); D.specs.splice(i, 1); st.dialog = null; if (st.specSel && (st.specSel === path || st.specSel.startsWith(path + '/'))) st.specSel = null; render(); toast({ icon: 'trash', title: `${k} plan files deleted`, body: 'Reload the page to restore the sample.' }); },
     'project-menu'(a, el) { st.popover = Object.assign({ type: 'project' }, anchorPos(el)); render(); },
     'project-pick'(id) { st.specProject = id; st.specSel = null; st.popover = null; render(); },
 

@@ -2,6 +2,7 @@ package dev.skillbill.desktop.feature.chat
 
 import dev.skillbill.desktop.core.domain.model.ReviewFindingsAction
 import dev.skillbill.desktop.core.domain.model.Detail
+import dev.skillbill.desktop.core.domain.model.VerifyRunDetails
 import dev.skillbill.desktop.core.domain.model.WorkItem
 
 private const val VALUE_CAP = 2000
@@ -51,6 +52,7 @@ fun snapshot(item: WorkItem, detail: Detail?): ExecutionSnapshot {
           ?.let { entries.put("detail.review.action.${action.name.lowercase()}", it) }
       }
     }
+    detail.verifyRun?.let { run -> entries.putVerifyRun(item, run) }
   }
   return ExecutionSnapshot(entries)
 }
@@ -92,6 +94,19 @@ private fun MutableList<SnapshotEntry>.putDetail(detail: Detail) {
   }
   put("detail.spec.parent", detail.goalSpecBundle?.parentSpecPath)
   detail.goalSpecBundle?.subtasks.orEmpty().forEach { put("detail.spec.subtask.${it.id}", it.specPath) }
+}
+
+private fun MutableList<SnapshotEntry>.putVerifyRun(item: WorkItem, run: VerifyRunDetails) {
+  put("detail.verify.reviewRunId", run.reviewFindings?.reviewRunId)
+  run.reviewFindings?.items.orEmpty().forEach { finding ->
+    put("detail.verify.finding.${finding.ref}",
+      "[${finding.severity}] ${finding.location} ${finding.description} (${finding.status?.name ?: "Open"})")
+  }
+  run.completenessAudit?.grades.orEmpty().forEach { grade ->
+    put("detail.verify.criterion.${grade.number}",
+      grade.resolution?.let { "Resolved after the run, which graded it ${grade.status}: ${it.evidence}" } ?: grade.status)
+  }
+  verifyRecordInstruction(item, run)?.takeIf { it.length <= VALUE_CAP }?.let { put("detail.verify.record", it) }
 }
 
 private fun latestActivity(detail: Detail): String? {

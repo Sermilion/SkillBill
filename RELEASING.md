@@ -185,9 +185,9 @@ Skill Bill should stay on pre-1.0 SemVer until the install surface, taxonomy, an
 - bump `minor` for new skills, new platform coverage, new routing behavior, or other user-visible capability additions
 - reserve `major` for intentional breaking changes to taxonomy, install behavior, or stable entry points
 
-## Cutting a release with `/skill-bill operation:release`
+## Cutting a release with `/sona operation:release`
 
-The `/skill-bill operation:release` operation automates the changelog-and-tag path
+The `/sona operation:release` operation automates the changelog-and-tag path
 of the checklist below. Pass the bump type and it will:
 
 1. verify the working tree is clean, HEAD matches the remote default branch, and
@@ -200,7 +200,7 @@ of the checklist below. Pass the bump type and it will:
    triggering the `Release` workflow
 
 ```text
-/skill-bill operation:release bump:minor
+/sona operation:release bump:minor
 ```
 
 The bump type is required — `bump:patch`, `bump:minor`, or `bump:major`, per the
@@ -214,7 +214,7 @@ the gate. The `Release` workflow still reruns validation on the pushed tag.
 
 ## Release checklist
 
-Use this when cutting a release by hand, or to know what `/skill-bill operation:release` does
+Use this when cutting a release by hand, or to know what `/sona operation:release` does
 under the hood.
 
 1. Make sure the release commit matches remote `main` and all push workflows for
@@ -223,7 +223,7 @@ under the hood.
 2. Run the local checks:
 
    ```bash
-   skill-bill validate
+   sona validate
    (cd runtime-kotlin && ./gradlew check)
    npx --yes agnix --strict .
    scripts/validate_agent_configs

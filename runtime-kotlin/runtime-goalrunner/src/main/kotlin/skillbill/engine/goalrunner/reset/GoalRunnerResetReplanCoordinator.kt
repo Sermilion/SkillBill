@@ -79,7 +79,7 @@ public class GoalRunnerResetReplanCoordinator(
         latest,
         GoalRunnerHardResetBranchCoordination.Refused(
           reason = "The goal worktree could not be recreated for hard reset.",
-          remedyCommand = "skill-bill goal reset ${request.issueKey}",
+          remedyCommand = "sona goal reset ${request.issueKey}",
         ),
       )
     }
@@ -208,8 +208,8 @@ public class GoalRunnerResetReplanCoordinator(
     val selected = requireReplanTarget(loaded.manifest, request)
     require(!request.includeSharedPreplan) {
       "A plan-workflow goal keeps one preplan for its whole bundle. Replan subtask ${request.subtaskId} without " +
-        "--include-shared-preplan, or run `skill-bill goal purge ${request.issueKey}` then " +
-        "`skill-bill phase plan ${request.issueKey}`."
+        "--include-shared-preplan, or run `sona goal purge ${request.issueKey}` then " +
+        "`sona phase plan ${request.issueKey}`."
     }
     requireIdleForScopedReplan(loaded, request)
     val invokedRoot = request.repoRoot ?: repositoryRoot.path

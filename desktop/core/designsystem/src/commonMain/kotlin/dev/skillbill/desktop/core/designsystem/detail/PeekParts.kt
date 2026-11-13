@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -26,6 +27,9 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.em
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
@@ -50,10 +54,10 @@ class PeekStat(val value: String, val label: String, val tone: PeekStatTone? = n
 @Composable
 fun PeekPart(title: String, end: String? = null, endControl: (@Composable () -> Unit)? = null, live: Boolean = false, body: @Composable () -> Unit) {
   val colors = SkillBillTheme.colors
-  Column(Modifier.fillMaxWidth().drawBehind { drawLine(colors.borderSubtle, Offset(0f, 0f), Offset(size.width, 0f), 1.dp.toPx()) }.then(if (live) Modifier.background(colors.stActive.copy(alpha = .06f)) else Modifier).padding(9.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+  Column(Modifier.fillMaxWidth().drawBehind { drawLine(colors.borderSubtle, Offset(0f, 0f), Offset(size.width, 0f), 1.dp.toPx()) }.then(if (live) Modifier.background(colors.stActive.copy(alpha = .06f)) else Modifier).padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
       if (live) Box(Modifier.padding(end = 5.dp).size(5.dp).sbPulse().background(colors.stActive, CircleShape))
-      BasicText(title, Modifier.weight(1f), style = SkillBillTheme.type.tXs.copy(fontWeight = FontWeight.Medium, color = colors.fg2), maxLines = 1)
+      BasicText(title.uppercase(), Modifier.weight(1f), style = SkillBillTheme.type.tXs.copy(fontSize = 10.5.sp, lineHeight = 10.5.sp, letterSpacing = .04.em, fontWeight = FontWeight.Medium, color = colors.fgFaint), maxLines = 1)
       end?.let { BasicText(it, style = SkillBillTheme.type.t2xs.copy(color = colors.fgMuted)) }
       endControl?.invoke()
     }
@@ -101,7 +105,7 @@ fun PeekStats(items: List<PeekStat>) {
 fun PeekOutput(icon: ImageVector, text: String, end: String? = null, onClick: (() -> Unit)? = null, external: Boolean = false, tooltip: String? = null, endSlot: (@Composable () -> Unit)? = null) {
   val colors = SkillBillTheme.colors
   val row: @Composable () -> Unit = {
-    Row(Modifier.fillMaxWidth().background(colors.bgHover.copy(alpha = if (onClick == null) 0f else .45f), RoundedCornerShape(SkillBillRadius.xs))
+    Row(Modifier.fillMaxWidth().background(if (onClick == null) Color.Transparent else colors.bgHover, RoundedCornerShape(SkillBillRadius.xs))
       .then(if (onClick == null) Modifier else Modifier.clickable(role = Role.Button, onClick = onClick).semantics { contentDescription = tooltip ?: text })
       .padding(horizontal = 7.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
       CompositionLocalProvider(LocalContentColor provides colors.fgMuted) { SbIcon(icon, 13.dp) }
@@ -152,17 +156,17 @@ fun PeekTimeline(rows: List<PeekTimelineRow>) {
   if (rows.isEmpty()) return
   PeekPart("Activity") {
     Column(Modifier.fillMaxWidth().drawBehind {
-      val trackX = if (layoutDirection == androidx.compose.ui.unit.LayoutDirection.Ltr) 10.5.dp.toPx() else size.width - 10.5.dp.toPx()
+      val trackX = if (layoutDirection == androidx.compose.ui.unit.LayoutDirection.Ltr) 69.dp.toPx() else size.width - 69.dp.toPx()
       drawLine(colors.border, Offset(trackX, 0f), Offset(trackX, size.height - 9.dp.toPx()), 1.dp.toPx())
     }, verticalArrangement = Arrangement.spacedBy(3.dp)) {
       rows.takeLast(5).forEach { row ->
         val dotColor = row.tone?.let { peekTone(it) } ?: colors.borderStrong
         Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Top) {
-          Box(Modifier.padding(start = 7.dp).size(7.dp).background(colors.bgRaised, CircleShape), contentAlignment = Alignment.Center) {
+          BasicText(row.time, Modifier.width(52.dp), style = SkillBillTheme.type.t2xs.copy(color = colors.fgFaint, fontWeight = FontWeight.Normal, textAlign = TextAlign.End), maxLines = 1)
+          Box(Modifier.padding(horizontal = 4.dp, vertical = 4.dp).size(10.dp).background(colors.bgRaised, CircleShape), contentAlignment = Alignment.Center) {
             Box(Modifier.size(5.dp).then(if (row.tone == PeekState.Now) Modifier.sbPulse() else Modifier).background(dotColor, CircleShape))
           }
           PeekActivityText(row.text, Modifier.weight(1f))
-          BasicText(row.time, style = SkillBillTheme.type.t2xs.copy(color = colors.fgFaint), maxLines = 1)
         }
       }
     }

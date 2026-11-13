@@ -252,6 +252,17 @@ data class GoalRunnerPhaseCardOutput(
   val pushed: Boolean?,
   val pullRequestUrl: String?,
   val pullRequestNumber: Int?,
+  val summary: String? = null,
+  val text: String? = null,
+  val planRecord: GoalRunnerPlanRecord? = null,
+)
+
+data class GoalRunnerPlanRecord(
+  val manifestOrder: Int,
+  val specPath: String,
+  val specHash: String,
+  val payloadHash: String,
+  val repair: String?,
 )
 
 data class GoalRunnerCiCycle(

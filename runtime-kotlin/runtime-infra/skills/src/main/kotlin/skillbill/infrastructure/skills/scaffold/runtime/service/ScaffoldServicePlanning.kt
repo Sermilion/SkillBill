@@ -57,10 +57,21 @@ internal fun executeScaffold(
     }
   registerPlannedExternalPlatformPack(plan, txn, repoRoot, runtime)
   adapters.validateScaffold(plan, repoRoot)
-  val (installTargets, installNotes) = performInstall(txn, plan, repoRoot, adapters)
+  val install = performInstall(txn, plan, repoRoot, adapters)
+  if (install.issues.isNotEmpty()) {
+    return ScaffoldExecutionResult(
+      createdFiles = emptyList(),
+      manifestEdits = emptyList(),
+      symlinks = emptyList(),
+      installTargets = emptyList(),
+      notes = listOf("Scaffold was rolled back after skill installation failed."),
+      installIssues = install.issues,
+    )
+  }
   return execution.copy(
-    installTargets = installTargets,
-    notes = execution.notes + installNotes + subagentEmissionNotes(plan),
+    installTargets = install.targets,
+    notes = execution.notes + install.notes + subagentEmissionNotes(plan),
+    installIssues = install.issues,
   )
 }
 

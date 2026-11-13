@@ -75,8 +75,8 @@ class GoalFinishCardTest {
   }
 
   @Test
-  fun `Goal finish uses one selected card inline in a narrow window and in the wide pane`() = runComposeUiTest {
-    val layout = mutableStateOf(ShellLayout(showDetailsPane = false, drawerMode = true))
+  fun `Goal finish keeps the details overlay available in drawer mode`() = runComposeUiTest {
+    val layout = mutableStateOf(ShellLayout(drawerMode = true))
     val input = ShellInput()
     val detail = emptyDetail.copy(
       subtasks = listOf(WorkSubtask(1, "Build", "completed", null, null, emptyList())),
@@ -85,22 +85,17 @@ class GoalFinishCardTest {
     val state = mutableStateOf(DetailUiState(
       workItem("goal"), SectionsUi.Loaded(detail, null, emptyMap(), emptySet()), false, epoch,
       subtaskChoice = SubtaskChoice(SubtaskKey.GoalFinish),
-      phaseChoice = mapOf(PhaseChoiceKey("goal", SubtaskKey.GoalFinish) to "goal_assessment"),
+      phaseChoice = mapOf(PhaseChoiceKey("goal", SubtaskKey.GoalFinish) to PhaseDisclosure.Open("goal_assessment")),
     ))
     setContent {
       SkillBillTheme(reducedMotion = true) {
         CompositionLocalProvider(LocalShellLayout provides layout.value, LocalShellInput provides input) {
-          DetailScreen(state.value, DetailScreenHost(true, "Ctrl I", {})) {}
+          DetailScreen(state.value, DetailScreenHost(true, "Ctrl I", {}, {})) {}
         }
       }
     }
     onNodeWithText("No assessment result is available for this run.").assertExists()
-    onNodeWithText("Details").assertDoesNotExist()
-    runOnIdle { layout.value = ShellLayout(showDetailsPane = true, drawerMode = false) }
-    onNodeWithText("Details").assertExists()
-    onNodeWithText("No assessment result is available for this run.").assertExists()
-    runOnIdle { layout.value = ShellLayout(showDetailsPane = false, drawerMode = true) }
-    onNodeWithText("Details").assertDoesNotExist()
+    onNodeWithText("2/2").assertExists()
     onNodeWithText("No assessment result is available for this run.").assertExists()
   }
 

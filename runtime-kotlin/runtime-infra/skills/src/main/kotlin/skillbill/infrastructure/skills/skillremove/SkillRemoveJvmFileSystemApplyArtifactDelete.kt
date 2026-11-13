@@ -1,7 +1,9 @@
 package skillbill.infrastructure.skills.skillremove
 
 import skillbill.error.core.failureCodeLabel
-import skillbill.infrastructure.skills.install.nativeagent.link.unlinkProviderAgents
+import skillbill.infrastructure.skills.install.nativeagent.link.ProviderMutationJournal
+import skillbill.infrastructure.skills.nativeagent.composition.parseNativeAgentSourceFile
+import skillbill.infrastructure.skills.nativeagent.discovery.discoverNativeAgentSources
 import skillbill.infrastructure.skills.scaffold.manifest.removeAddonReferences
 import skillbill.infrastructure.skills.scaffold.manifest.removeCodeReviewArea
 import skillbill.infrastructure.skills.scaffold.manifest.removeDeclaredFilesBaseline
@@ -29,22 +31,42 @@ internal fun SkillRemoveJvmFileSystemApply.applyCascadeBody(
   preview: SkillRemovalPreview,
   repoRoot: Path,
   rollbackStash: MutableList<SkillRemoveJvmFileSystemApply.RollbackEntry>,
+  nativeJournal: ProviderMutationJournal,
 ): AppliedCascade {
   val removedPaths = mutableListOf<String>()
   val editedManifests = mutableListOf<String>()
   val unlinkedSymlinks = mutableListOf<String>()
   val readmeWarnings = mutableListOf<ReadmeCatalogWarning>()
+  val nativeAgentNames =
+    when (request.target) {
+      is SkillRemovalTarget.AddOn, is SkillRemovalTarget.ExternalAddOn -> emptySet()
+      is SkillRemovalTarget.HorizontalSkill, is SkillRemovalTarget.PlatformPack ->
+        nativeAgentNamesBeforeRemoval(repoRoot, preview.filesystemPaths)
+    }
   stashCascadeTargets(repoRoot, preview, rollbackStash)
   applyManifestEdits(repoRoot, preview.manifestEdits, editedManifests)
   applyReadmeCatalogEdits(request, repoRoot, preview.readmeCatalogEdits, readmeWarnings)
   removeFilesystemPaths(repoRoot, preview.filesystemPaths, removedPaths)
-  unlinkedSymlinks += unlinkProviderAgents(request).map { it.toString().replace('\\', '/') }
+  unlinkedSymlinks +=
+    unlinkProviderAgents(request, nativeAgentNames, nativeJournal).map { it.toString().replace('\\', '/') }
   return AppliedCascade(
     removedPaths = removedPaths,
     editedManifests = editedManifests,
     unlinkedSymlinks = unlinkedSymlinks,
     readmeWarnings = readmeWarnings,
   )
+}
+
+private fun nativeAgentNamesBeforeRemoval(
+  repoRoot: Path,
+  removalPaths: List<String>,
+): Set<String> {
+  val absoluteRoots = removalPaths.map { repoRoot.resolve(it).toAbsolutePath().normalize() }
+  return discoverNativeAgentSources(repoRoot.resolve("platform-packs"), repoRoot.resolve("skills"))
+    .filter { source -> absoluteRoots.any(source.toAbsolutePath().normalize()::startsWith) }
+    .flatMap(::parseNativeAgentSourceFile)
+    .map { it.name }
+    .toSet()
 }
 
 internal fun SkillRemoveJvmFileSystemApply.stashCascadeTargets(
@@ -135,8 +157,10 @@ internal fun SkillRemoveJvmFileSystemApply.removeFilesystemPaths(
 internal fun SkillRemoveJvmFileSystemApply.handleApplyCascadeFailure(
   error: Throwable,
   rollbackStash: List<SkillRemoveJvmFileSystemApply.RollbackEntry>,
+  nativeJournal: ProviderMutationJournal,
 ): Nothing {
   logApplyCascadeFailure(error)
+  nativeJournal.restore().forEach(error::addSuppressed)
   val rollbackOk = attemptRollback(rollbackStash)
   if (!rollbackOk) {
     throw SkillBillRollbackException(
@@ -149,6 +173,6 @@ internal fun SkillRemoveJvmFileSystemApply.handleApplyCascadeFailure(
 
 internal fun SkillRemoveJvmFileSystemApply.logApplyCascadeFailure(error: Throwable) {
   SkillRemoveJvmFileSystemApply.log.info(
-    "skill-bill remove failed: exceptionName=${error.failureCodeLabel() ?: error::class.simpleName.orEmpty()}",
+    "sona remove failed: exceptionName=${error.failureCodeLabel() ?: error::class.simpleName.orEmpty()}",
   )
 }

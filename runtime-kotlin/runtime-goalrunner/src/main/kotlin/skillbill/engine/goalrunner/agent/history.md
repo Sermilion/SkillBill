@@ -377,7 +377,7 @@ Acceptance criteria: 8/8 implemented
 
 ## [2026-08-24] SKILL-200 subtask 4 — Runtime-owned preflight and add-on resolution
 Areas: runtime-application/{goalrunner,featuretask,decomposition,workflow}, runtime-domain, runtime-cli/goal, runtime-infra-{fs,sqlite}, runtime-ports, orchestration/contracts
-- Added read-only `skill-bill goal preflight` projections for continuation verdicts, the confirmation gate, and missing Linear spec rehydration targets without launch-side effects.
+- Added read-only `sona goal preflight` projections for continuation verdicts, the confirmation gate, and missing Linear spec rehydration targets without launch-side effects.
 - Reused continuation classification and resolved raw ordered add-on slugs inside `goal`, while preserving structured source-identity and content-digest verification.
 - Pattern: keep pre-launch decisions in a read-only runtime projection and share classification and selection seams with launch. reusable
 - Limitation: Linear fetching remains agent-side; preflight reports missing targets but does not retrieve them.
@@ -445,3 +445,8 @@ Areas: runtime-application/goalrunner, .feature-specs/SKILL-181-preplan-provenan
 - Limitation: StaleValid does not yet re-run preplan, cascade, CLI replan, exit codes, or `planning_reason`
 Feature flag: N/A
 Acceptance criteria: 5/5 implemented
+
+## [2026-11-13] Resume plans after provider-paused workers release their leases
+- PlanWorkflowLookup repairs a running parent with retained provider-paused units after ownership release. Both discovered and explicitly selected plans use recovery.
+- The transaction requires a prior worker generation, absent ownership and no running phase records. Accepted plans, phase records, execution identity and history remain unchanged.
+- PlanWorkflowLookupTest covers selection, repeat recovery and continuation admission, plus retained leases and missing or ambiguous settlement evidence.

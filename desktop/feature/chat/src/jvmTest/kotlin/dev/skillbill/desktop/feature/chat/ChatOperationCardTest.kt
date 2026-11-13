@@ -1,5 +1,11 @@
 package dev.skillbill.desktop.feature.chat
 
+import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.runComposeUiTest
+import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
 import dev.skillbill.desktop.core.domain.model.NewTaskKind
 import dev.skillbill.desktop.core.domain.model.NewTaskStart
@@ -15,6 +21,8 @@ import dev.skillbill.desktop.core.domain.model.VerifyQaChoice
 import dev.skillbill.desktop.core.domain.model.VerifyReviewModeChoice
 import dev.skillbill.desktop.core.domain.model.VerifyStartChoices
 import dev.skillbill.desktop.core.testing.FakeWorkControlRepository
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -341,6 +349,63 @@ class ChatOperationCardTest {
     runCurrent()
 
     assertEquals(listOf("verify-token"), runs.opened)
+  }
+
+  @Test
+  fun `a parked verify card opens its run`() = runTest {
+    val runs = RecordingRunOpener()
+    val coordinator = OperationCardCoordinator(FakeWorkControlRepository(), backgroundScope, { null }, runs = runs)
+    val thread = ChatThread(Clock.System)
+    thread.showOperationCard(verify())
+
+    coordinator.actions(thread).onOpenRun("verify-token")
+    runCurrent()
+
+    assertEquals(listOf("verify-token"), runs.opened)
+  }
+
+  @Test
+  fun `a chat adjusts a card another chat parked through the shared requests`() = runTest {
+    val original = verify()
+    val controls = FakeWorkControlRepository().apply {
+      operationCards[original.launchId] = original
+      newTaskOutcome = NewTaskStartOutcome.Refused("unused")
+    }
+    val requests = OperationCardRequests()
+    val request = NewTaskStart("/repo", "", null, "codex", NewTaskKind.Verify, null, null, target = "WE-1", branch = "feat/we-1")
+    OperationCardCoordinator(controls, backgroundScope, { request }, requests = requests).remember(original.launchId, request)
+    val runChat = OperationCardCoordinator(controls, backgroundScope, { request }, requests = requests)
+    val thread = ChatThread(Clock.System)
+    thread.showOperationCard(original)
+
+    assertEquals(true, runChat.actions(thread).canAdjust(original.token))
+    runChat.actions(thread).onAdjust(original.token)
+    runChat.submitAdjustment(thread, "Only the first criterion")
+    runCurrent()
+
+    assertEquals(request.copy(proposalChanges = "Only the first criterion"), controls.newTaskRequests.single())
+  }
+
+  @OptIn(ExperimentalTestApi::class)
+  @Test
+  fun `a card shown during the opening turn enables Adjust once the turn ends`() = runComposeUiTest {
+    val original = verify()
+    val request = NewTaskStart("/repo", "", null, "codex", NewTaskKind.Verify, null, null, target = "WE-1")
+    val coordinator = OperationCardCoordinator(FakeWorkControlRepository(), CoroutineScope(Job()), { request })
+    coordinator.remember(original.launchId, request)
+    val thread = ChatThread(Clock.System)
+    thread.busyState.value = true
+    thread.showOperationCard(original)
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        ChatOperationCard(thread.operationCard(original.token)!!, coordinator.actions(thread))
+      }
+    }
+    onNodeWithText("Adjust").assertIsNotEnabled()
+
+    thread.busyState.value = false
+
+    onNodeWithText("Adjust").assertIsEnabled()
   }
 
   @Test

@@ -9,6 +9,8 @@ import skillbill.application.review.snapshot.reviewHarness
 import skillbill.application.review.snapshot.reviewed
 import skillbill.application.review.snapshot.sparseReviewPack
 import skillbill.application.runner
+import skillbill.model.EnvironmentContext
+import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -48,5 +50,31 @@ class ParallelCodeReviewStandaloneEntryTest {
     result.accountingSummary?.lanes?.let { lanes ->
       assertTrue(lanes.none { it.lane == "parallel-agent-2" })
     }
+  }
+
+  @Test
+  fun `governed OpenCode specialist launches keep the selected effort`() {
+    val recorder = ReviewRecorder()
+    val userHome = Files.createTempDirectory("review-opencode-home")
+    val pack =
+      sparseReviewPack(
+        slug = "kotlin",
+        requiredArea = "architecture",
+        pathAreas = mapOf("testing" to listOf("src/test/")),
+      )
+
+    reviewHarness(
+      ReviewHarnessConfig(
+        manifests = listOf(pack),
+        diff = diffForPaths("src/Main.kt"),
+        response = { RecordedWorkerResponse(stdout = "NO_FINDINGS\nverdict: approved") },
+        environment = EnvironmentContext(environment = mapOf("HOME" to userHome.toString()), userHome = userHome),
+      ),
+      recorder,
+    ).reviewed(harnessRequest(agent1Id = "opencode").copy(effortOverride = "high"))
+
+    val specialistLaunches = recorder.parentLaunches.filter { it.skillRunRequest.issueKey == "code-review" }
+    assertTrue(specialistLaunches.isNotEmpty(), "OpenCode must launch its governed specialist review.")
+    assertTrue(specialistLaunches.all { it.skillRunRequest.effortOverride == "high" })
   }
 }

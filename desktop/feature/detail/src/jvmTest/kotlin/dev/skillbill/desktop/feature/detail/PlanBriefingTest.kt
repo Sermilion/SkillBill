@@ -51,6 +51,27 @@ NOT READ
   }
 
   @Test
+  fun `evidence file briefing shows the file path and excerpt index in place of the digest`() {
+    val evidence = """## Preplan evidence (layer 2, file)
+path: /store/run-evidence/wf-1/preplan-evidence.md
+The full preplan digest is in this file.
+excerpts:
+  - core/Mapper.kt:12-40
+  - feature/Whole.kt
+
+"""
+    val planText = "## Upstream projections (layer 2, declared and validated)\n(none)\n\n" + evidence
+    val result = planBriefing(listOf(stage("plan", planText)), setOf("preplan", "plan"))
+
+    assertEquals(
+      listOf("/store/run-evidence/wf-1/preplan-evidence.md", "core/Mapper.kt:12-40", "feature/Whole.kt"),
+      result.digest?.single()?.items,
+    )
+    assertEquals(evidence.encodeToByteArray().size, result.stages[1].digestBytes)
+    assertEquals("run setup + preplan evidence file", result.stages[1].layers)
+  }
+
+  @Test
   fun `briefing without run invariants leaves setup absent and exposes missing stages`() {
     val result = planBriefing(
       listOf(stage("preplan", "A saved briefing without governed setup.")),

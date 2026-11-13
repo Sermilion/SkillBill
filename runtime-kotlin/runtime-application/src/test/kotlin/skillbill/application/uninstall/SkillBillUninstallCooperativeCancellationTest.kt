@@ -27,10 +27,14 @@ import skillbill.ports.install.model.InstallCleanupResult
 import skillbill.ports.install.nativeagent.InstallNativeAgentLinkPort
 import skillbill.ports.install.nativeagent.model.InstallNativeAgentLinkOperationRequest
 import skillbill.ports.install.nativeagent.model.InstallNativeAgentLinkOperationResult
+import skillbill.ports.install.nativeagent.model.InstallNativeAgentPreservationRequest
+import skillbill.ports.install.nativeagent.model.InstallNativeAgentPreservationResult
 import skillbill.ports.install.nativeagent.model.InstallNativeAgentUnlinkOperationResult
 import skillbill.ports.repository.toFileLocation
 import skillbill.ports.system.HostPlatformPort
 import skillbill.ports.system.UninstallPathsPort
+import java.nio.file.Files
+import java.nio.file.LinkOption
 import java.nio.file.Path
 import java.util.concurrent.CancellationException
 import java.util.concurrent.atomic.AtomicInteger
@@ -122,7 +126,7 @@ class SkillBillUninstallCooperativeCancellationTest {
       nativeSourceRoots = emptyList(),
       mcpAgents = agents,
       launchers = emptyList(),
-      desktop = DesktopRemoval(launcher = null, files = emptyList(), directories = emptyList()),
+      desktop = DesktopRemoval(launchers = emptyList(), files = emptyList(), directories = emptyList()),
     )
 
   private companion object {
@@ -146,6 +150,8 @@ private object NoopRuntimeDiagnostics : RuntimeDiagnostics {
 }
 
 private object StubHostPlatformPort : HostPlatformPort {
+  override fun resolveUserName(): String? = "test-user"
+
   override fun resolveUserHome(): Path = Path.of(System.getProperty("user.home"))
 
   override fun resolveEnvironment(): Map<String, String> = System.getenv()
@@ -163,6 +169,12 @@ private object StubHostPlatformPort : HostPlatformPort {
 }
 
 private object AbsentUninstallPathsPort : UninstallPathsPort {
+  override fun isRegularFile(path: Path): Boolean = Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)
+
+  override fun isDirectory(path: Path): Boolean = Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)
+
+  override fun readRegularFile(path: Path): String = Files.readString(path)
+
   override fun <T> withConfigTransaction(
     userHome: Path,
     environment: Map<String, String>,
@@ -220,4 +232,8 @@ private object StubInstallNativeAgentLinkPort : InstallNativeAgentLinkPort {
   override fun unlinkNativeAgents(
     request: InstallNativeAgentLinkOperationRequest,
   ): InstallNativeAgentUnlinkOperationResult = InstallNativeAgentUnlinkOperationResult(emptyList())
+
+  override fun discoverPreservedTargets(
+    request: InstallNativeAgentPreservationRequest,
+  ): InstallNativeAgentPreservationResult = InstallNativeAgentPreservationResult(emptyList())
 }

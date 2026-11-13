@@ -66,7 +66,7 @@ flowchart LR
 | Pull request | Create or update the PR, including the QA outcome. |
 | Monitor | Watch CI and repair failing checks and merge conflicts. |
 
-QA runs when the routed platform pack declares a QA target. Specs live under `.feature-specs/` as a parent spec, per-subtask specs, and a decomposition manifest. Local specs are the default; Linear-backed preparation is optional.
+QA runs when the routed platform pack declares a QA target. Specs live under `.feature-specs/` as a parent spec, per-subtask specs, and a decomposition manifest. This repository requires Linear tracking for new work through the configured `linear-sona` connection; existing local specs and historical issue keys keep their identities.
 
 Chat preparation gathers context before a run starts. Only clicking the goal start card launches a goal from chat. A standalone planning run writes the spec bundle and stops before implementation.
 
@@ -91,7 +91,13 @@ See [runtime command guidance](docs/runtime-command-guidance.md) for command syn
 
 | Command | Purpose |
 | --- | --- |
-| `/skill-bill` | Run the durable feature workflow or resume a saved goal. |
+| `/sona` | Run the durable feature workflow or resume a saved goal. |
+
+The public runtime executable is `sona`; its stdio MCP server is `sona-mcp` and
+registers as `sona`. The desktop launcher is `sona-app`, and the app's visible
+name is Sona. The listed skill's source remains `skills/skill-bill/`, and
+internal sidecars still declare `internal-for: skill-bill`. The final SONA-5
+subtask leaves `skill-bill` as a notice-only compatibility command.
 
 ## Watching and controlling runs
 

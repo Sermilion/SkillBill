@@ -6,6 +6,7 @@ import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
 import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
+import dev.skillbill.desktop.core.domain.model.ChatStopSettlement
 import dev.skillbill.desktop.core.domain.model.ChatSteeringPolicy
 import dev.skillbill.desktop.core.domain.model.ChatSteeringRequest
 import dev.skillbill.desktop.core.domain.model.ChatSteeringResult
@@ -13,6 +14,7 @@ import dev.skillbill.desktop.core.domain.model.ChatSteeringUpdate
 import dev.skillbill.desktop.core.domain.model.Detail
 import dev.skillbill.desktop.core.domain.model.RunOptions
 import dev.skillbill.desktop.core.domain.model.SessionMoveResult
+import dev.skillbill.desktop.core.domain.model.SavedChatProjection
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
@@ -63,15 +65,18 @@ interface ExecutionChatRepository {
    */
   fun end(sessionId: String)
 
-  /** Waits for [end] cleanup to publish any retained steering responses. */
+  /** Waits for cleanup started by [end] to publish retained steering responses. */
   suspend fun awaitEnd(sessionId: String) {}
 
+  /** Stops the active turn and waits for its terminal settlement when the selected transport supports it. */
+  suspend fun stopTurn(sessionId: String): ChatStopSettlement
+
   /**
-   * What `/resume` offers, newest first: every agent CLI's own sessions in [repositoryRoot], and the app's saved chats of
-   * [executionId] for agents without a session store. The chat now open as [currentSessionId] is left out. A store that cannot
-   * be read gives no entries.
+   * What `/resume` offers: native sessions in [repositoryRoot], readable app chats of [executionId], and separate recovery
+   * records for unreadable or unsafe app saves. Native sessions and app chats exclude [currentSessionId]. Recovery records stay
+   * visible without becoming resumable chats.
    */
-  suspend fun savedChats(executionId: String, repositoryRoot: String, currentSessionId: String): List<ChatHistoryEntry>
+  suspend fun savedChats(executionId: String, repositoryRoot: String, currentSessionId: String): SavedChatProjection
 
   /** The latest lines of [entry] to show again; it also records what the agent needs so the next turn continues that session. */
   suspend fun openSavedChat(entry: ChatHistoryEntry): List<ChatHistoryLine>
@@ -92,8 +97,8 @@ interface ExecutionChatRepository {
     return true
   }
 
-  /** Every repository's saved new-task drafts, newest first, at most [limit] when one is given. */
-  suspend fun savedNewTaskDrafts(limit: Int? = null): List<ChatHistoryEntry>
+  /** Every repository's saved new-task drafts, newest first, at most [limit], plus recovery records outside that limit. */
+  suspend fun savedNewTaskDrafts(limit: Int? = null): SavedChatProjection
 
   /** Deletes the saved chat of [sessionId] with its resume state. */
   suspend fun deleteSavedChat(sessionId: String)

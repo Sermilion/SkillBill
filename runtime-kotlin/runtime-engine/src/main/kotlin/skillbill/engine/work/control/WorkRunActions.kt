@@ -128,6 +128,11 @@ public class WorkRunActions(
             workRunOwnershipKey(item, phase),
             WorkRunLaunchKind.RuntimeCommand(runtimeResumeArguments(arguments, target.repositoryRoot)),
             recordedAgentEnvironment(item, phase, unit),
+            openCodeIdentity =
+              recordedOpenCodeIdentity(item, phase, unit)
+                .takeIf { agent == SupportedAgent.OPENCODE.wireValue },
+            validateOpenCodeIdentity =
+              agent == SupportedAgent.OPENCODE.wireValue && recordedOpenCodeIdentity(item, phase, unit) != null,
           ),
         )
       if (result is WorkRunLaunchResult.Refused) return@operation WorkControlResult.LaunchFailed(result.reason)
@@ -410,6 +415,13 @@ public class WorkRunActions(
     phase?.agentEnvironment
       ?: item.snapshot.workflowId?.let(unit.standalonePhaseStatuses::latestWorkflowExecution)?.agentEnvironment
       ?: emptyMap()
+
+  private fun recordedOpenCodeIdentity(
+    item: WorkDetailItem,
+    phase: StandalonePhaseStatusRecord?,
+    unit: UnitOfWork,
+  ) = phase?.openCodeIdentity
+    ?: item.snapshot.workflowId?.let(unit.standalonePhaseStatuses::latestWorkflowExecution)?.openCodeIdentity
 }
 
 internal fun goalStartRefusal(result: GoalPreflightResult): String? {

@@ -48,7 +48,13 @@ class StandalonePhaseRegistrationFactoryTest {
     val operator = factory(emptyMap(), repositories)
 
     val phase = operator.phaseRegistration(checkout, "implement", "run-1", "SKILL-535")
-    val workflow = operator.workflowRegistration(checkout, "SKILL-535", "goal-parent", goalScoped = true)
+    val workflow =
+      operator.workflowRegistration(
+        checkout,
+        "SKILL-535",
+        "goal-parent",
+        launch = WorkflowStatusLaunch(goalScoped = true),
+      )
 
     assertEquals(TestRepositoryEnclosingRoot.repositoryIdentity(checkout), phase.repositoryIdentity)
     assertEquals(TestRepositoryEnclosingRoot.primaryRepositoryIdentity(checkout), workflow.repositoryIdentity)

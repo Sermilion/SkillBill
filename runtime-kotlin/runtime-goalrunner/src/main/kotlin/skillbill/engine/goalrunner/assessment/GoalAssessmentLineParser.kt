@@ -96,19 +96,7 @@ internal object GoalAssessmentLineParser {
         )
       }
     }
-    return TEST_VALUE.matchEntire(line)?.let { match ->
-      val (location, guarded, reason) = match.destructured
-      sourceLineOf(location)?.let { (path, lineNumber) ->
-        GoalAssessmentCandidate(
-          kind = GoalAssessmentFindingKind.TEST_VALUE,
-          severity = FeatureTaskRuntimeReviewSeverity.MINOR,
-          path = path,
-          line = lineNumber,
-          failureScenario = "The test does not guard $guarded: ${reason.trim()}",
-          guardedRef = guarded.removePrefix("./"),
-        )
-      }
-    }
+    return null
   }
 
   private fun sourceLineOf(location: String): Pair<String, Int>? {
@@ -148,8 +136,6 @@ internal object GoalAssessmentLineParser {
   private val FINDING =
     Regex("""^Finding:\s*(blocker|major|minor)\s+(\S+?:\d+)\s+scenario\s+(.+)$""", RegexOption.IGNORE_CASE)
   private val FINDING_NONE = Regex("""^Finding:\s*none\.?$""", RegexOption.IGNORE_CASE)
-  private val TEST_VALUE =
-    Regex("""^Test value:\s*(\S+?:\d+)\s+guards\s+(\S+?:\d+)\s+reason\s+(.+)$""", RegexOption.IGNORE_CASE)
   private val SCENARIO =
     Regex("""^Scenario\s+(IS-\d{3}):\s*(holds|broken)\s+evidence\s+(.+)$""", RegexOption.IGNORE_CASE)
   private val REGRESSION =

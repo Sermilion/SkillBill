@@ -41,12 +41,13 @@ internal fun verifyOutcomeView(run: VerifyRunDetails): VerifyOutcomeView {
   val criterionGrades = run.criteria.mapNotNull { criterion -> grades.firstOrNull { it.number == criterion.number } }
   val ungradedCriteria = (run.criteria.size - criterionGrades.size).coerceAtLeast(0)
   val criteriaSegments = listOf(
-    VerifyScoreSegment(criterionGrades.count { it.status.equals("PASS", true) }, VerifyScoreTone.Green),
-    VerifyScoreSegment(criterionGrades.count { it.status.equals("PARTIAL", true) }, VerifyScoreTone.Amber),
-    VerifyScoreSegment(criterionGrades.count { it.status.equals("FAIL", true) }, VerifyScoreTone.Red),
+    VerifyScoreSegment(criterionGrades.count { it.met }, VerifyScoreTone.Green),
+    VerifyScoreSegment(criterionGrades.count { it.gap && it.status == "PARTIAL" }, VerifyScoreTone.Amber),
+    VerifyScoreSegment(criterionGrades.count { it.gap && it.status == "FAIL" }, VerifyScoreTone.Red),
     VerifyScoreSegment(ungradedCriteria, VerifyScoreTone.Faint),
   ).filter { it.count > 0 }
   val review = run.reviewFindings
+  val openReviewItems = review?.items.orEmpty().filter { it.open }
   val reviewFindingCount = review?.findings?.size ?: 0
   val knownReviewSeverityCount = review?.items?.count {
     it.severity.equals("nit", true) || it.severity.equals("minor", true) ||
@@ -56,9 +57,10 @@ internal fun verifyOutcomeView(run: VerifyRunDetails): VerifyOutcomeView {
     review == null -> emptyList()
     reviewFindingCount == 0 -> listOf(VerifyScoreSegment(1, VerifyScoreTone.Green))
     else -> listOf(
-      VerifyScoreSegment(review.items.count { it.severity.equals("nit", true) }, VerifyScoreTone.Faint),
-      VerifyScoreSegment(review.items.count { it.severity.equals("minor", true) }, VerifyScoreTone.Amber),
-      VerifyScoreSegment(review.items.count { it.severity.equals("major", true) || it.severity.equals("blocker", true) }, VerifyScoreTone.Red),
+      VerifyScoreSegment(review.items.size - openReviewItems.size, VerifyScoreTone.Green),
+      VerifyScoreSegment(openReviewItems.count { it.severity.equals("nit", true) }, VerifyScoreTone.Faint),
+      VerifyScoreSegment(openReviewItems.count { it.severity.equals("minor", true) }, VerifyScoreTone.Amber),
+      VerifyScoreSegment(openReviewItems.count { it.severity.equals("major", true) || it.severity.equals("blocker", true) }, VerifyScoreTone.Red),
       VerifyScoreSegment((reviewFindingCount - knownReviewSeverityCount).coerceAtLeast(0), VerifyScoreTone.Faint),
     ).filter { it.count > 0 }
   }

@@ -30,6 +30,13 @@ class ShellPanes {
       if (value) specs = false
     }
   var detailsPaneOpen by mutableStateOf(false)
+
+  /** Opens details and gives it precedence over Specs when the panes share the drawer slot. */
+  fun openDetails(drawerMode: Boolean) {
+    detailsPaneOpen = true
+    if (drawerMode) specsOpen = false
+  }
+
   var drawerOpen by mutableStateOf(false)
   var shortcutsOpen by mutableStateOf(false)
 

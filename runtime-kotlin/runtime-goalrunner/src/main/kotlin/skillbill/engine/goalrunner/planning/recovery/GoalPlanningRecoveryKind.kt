@@ -14,7 +14,7 @@ internal enum class GoalPlanningRecoveryKind {
   BLOCKED,
 }
 
-internal fun goalPlanningHardResetRemedy(issueKey: String): String = "skill-bill goal reset $issueKey --hard --yes"
+internal fun goalPlanningHardResetRemedy(issueKey: String): String = "sona goal reset $issueKey --hard --yes"
 
 internal fun classifyGoalPlanningRecovery(cause: Throwable?): GoalPlanningRecoveryKind {
   var current = cause

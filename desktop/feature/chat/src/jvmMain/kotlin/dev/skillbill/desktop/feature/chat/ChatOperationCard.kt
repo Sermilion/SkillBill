@@ -19,6 +19,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -33,6 +34,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.LocalContentColor
 import dev.skillbill.desktop.core.designsystem.SkillBillRadius
@@ -50,13 +52,16 @@ import dev.skillbill.desktop.core.domain.model.OperationCardView
 import dev.skillbill.desktop.core.domain.model.VerifyQaChoice
 import dev.skillbill.desktop.core.domain.model.VerifyReviewModeChoice
 import dev.skillbill.desktop.core.domain.model.VerifyStartChoices
+import kotlinx.coroutines.flow.StateFlow
 
 private val SUMMARY_MAX_HEIGHT = 220.dp
 
 /**
  * What an operation card can do. Each callback is a click the operator made on that card: [onConfirm] is the only way to
  * start the parked continuation, and [onAdjust] asks for a replacement proposal instead of confirming the old one.
- * [onChangeVerify] replaces a verify proposal with one using other QA or review mode choices.
+ * [onChangeVerify] replaces a verify proposal with one using other QA or review mode choices. With [handOffVerify] a verify
+ * card only reports that the run started and links to it; the run's own chat holds the decision. Adjust stays off while
+ * [busy], since the chat's next message would be taken as the requested change.
  */
 internal data class ChatOperationCardActions(
   val onChooseOption: (token: String, ordinal: String, optionId: String) -> Unit,
@@ -65,8 +70,10 @@ internal data class ChatOperationCardActions(
   val onDismiss: (token: String) -> Unit,
   val onAdjust: (token: String) -> Unit,
   val canAdjust: (token: String) -> Boolean,
+  val busy: StateFlow<Boolean>,
   val onOpenRun: (token: String) -> Unit = {},
   val onChangeVerify: (token: String, choices: VerifyStartChoices) -> Unit = { _, _ -> },
+  val handOffVerify: Boolean = false,
 )
 
 /** True once the operator confirmed a verify proposal and its run went ahead; the card token is that run's id. */
@@ -147,6 +154,8 @@ private fun ChatMessage.OperationCard.title(): String = "Confirm ${card.operatio
 /** One parked operation: its complete stored proposal and outcome, and while it awaits, the operator's own controls. */
 @Composable
 internal fun ChatOperationCard(message: ChatMessage.OperationCard, actions: ChatOperationCardActions?) {
+  val verify = message.card.details as? OperationCardDetailsView.Verify
+  if (verify != null && actions?.handOffVerify == true) return VerifyHandOff(message, verify, actions)
   val colors = SkillBillTheme.colors
   val type = SkillBillTheme.type
   val card = message.card
@@ -206,6 +215,47 @@ internal fun ChatOperationCard(message: ChatMessage.OperationCard, actions: Chat
         icon = LucideIcons.external,
       )
     }
+    message.refusal?.let {
+      BasicText(it, style = type.tSm.copy(color = colors.stFailed), modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive })
+    }
+  }
+}
+
+/** A verify proposal as the chat that started it shows it: the run started, and the decision waits on the run. */
+@Composable
+private fun VerifyHandOff(message: ChatMessage.OperationCard, details: OperationCardDetailsView.Verify, actions: ChatOperationCardActions) {
+  val colors = SkillBillTheme.colors
+  val type = SkillBillTheme.type
+  val card = message.card
+  val awaiting = card.state.decidable
+  val status = if (awaiting) {
+    "Confirm or adjust its ${details.criteria.size} acceptance criteria on the run."
+  } else {
+    card.state.outcomeText()
+  }
+  Column(
+    Modifier.fillMaxWidth()
+      .border(1.dp, colors.border, RoundedCornerShape(SkillBillRadius.md))
+      .background(colors.bgRaised, RoundedCornerShape(SkillBillRadius.md))
+      .padding(12.dp)
+      .semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
+    verticalArrangement = Arrangement.spacedBy(8.dp),
+  ) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+      CompositionLocalProvider(LocalContentColor provides if (awaiting) colors.accentText else colors.fgMuted) {
+        SbIcon(LucideIcons.shield, SbIconSize.Md)
+      }
+      BasicText("Verify started", Modifier.weight(1f), style = type.tBaseMedium.copy(color = colors.fg))
+    }
+    BasicText(details.intake, style = type.tSm.copy(color = colors.fg2), maxLines = 2, overflow = TextOverflow.Ellipsis)
+    BasicText(status, style = type.tSm.copy(color = if (awaiting) colors.accentText else colors.fgMuted))
+    SbButton(
+      label = "Go to verify",
+      onClick = { actions.onOpenRun(card.token) },
+      variant = SbButtonVariant.Secondary,
+      size = SbControlSize.Small,
+      icon = LucideIcons.external,
+    )
     message.refusal?.let {
       BasicText(it, style = type.tSm.copy(color = colors.stFailed), modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive })
     }
@@ -313,7 +363,8 @@ private fun OperationCardControls(message: ChatMessage.OperationCard, actions: C
   val sharedActionsEnabled = sharedActionOffReason == null && actions != null
   val isPrReviewFix = card.details is OperationCardDetailsView.PrReviewFix
   val missing = message.missingChoiceText()
-  val adjustable = actions?.canAdjust?.invoke(card.token) == true
+  val busy = actions?.busy?.collectAsState()?.value == true
+  val adjustable = !busy && actions?.canAdjust?.invoke(card.token) == true
   Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
       (card.details as? OperationCardDetailsView.Verify)?.let { details ->
@@ -350,7 +401,7 @@ private fun OperationCardControls(message: ChatMessage.OperationCard, actions: C
         enabled = sharedActionsEnabled,
       )
     }
-    val note = offReason ?: missing ?: ADJUST_UNAVAILABLE.takeUnless { adjustable }
+    val note = offReason ?: missing ?: ADJUST_UNAVAILABLE.takeUnless { adjustable || busy }
     note?.let { BasicText(it, style = type.tSm.copy(color = colors.fgMuted)) }
   }
 }

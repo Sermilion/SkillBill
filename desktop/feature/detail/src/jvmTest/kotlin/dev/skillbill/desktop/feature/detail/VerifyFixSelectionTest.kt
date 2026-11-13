@@ -1,7 +1,10 @@
 package dev.skillbill.desktop.feature.detail
 
 import dev.skillbill.desktop.core.domain.model.VerifyCompletenessAudit
+import dev.skillbill.desktop.core.domain.model.ReviewFindingStatus
 import dev.skillbill.desktop.core.domain.model.VerifyCriterionGrade
+import dev.skillbill.desktop.core.domain.model.VerifyCriterionResolution
+import dev.skillbill.desktop.core.domain.model.VerifyReviewFinding
 import dev.skillbill.desktop.core.domain.model.VerifyReviewSection
 import dev.skillbill.desktop.core.domain.model.VerifyRunCriterion
 import dev.skillbill.desktop.core.domain.model.VerifyRunDetails
@@ -12,6 +15,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Instant
 
 class VerifyFixSelectionTest {
   @Test
@@ -50,5 +54,36 @@ class VerifyFixSelectionTest {
     assertTrue(brief.indexOf("Partial") < brief.indexOf("Fail"))
     assertTrue(verifyGoalIntake(run, items.take(2)).endsWith("Build the fixes on branch feature/verify."))
     assertNull(selectAllState(items.filterIsInstance<FixItem.Criterion>().map { it.copy(mark = CriterionMark.SpecQuestion) }, emptyMap()))
+  }
+
+  @Test
+  fun `work recorded after a finished run counts as met and is no longer offered for fixing`() {
+    val resolution = VerifyCriterionResolution("Device run passed.", Instant.parse("2026-11-13T15:00:00Z"))
+    val run = VerifyRunDetails(
+      workflowId = "verify-1", issueKey = null, workflowStatus = "completed", currentStepId = null,
+      startedAt = null, finishedAt = null, intake = "SKILL-1", target = "feature/verify", repoRoot = "/repo",
+      baseRevision = "base", headRevision = "head", reviewMode = null, qaSelection = null, specPath = null,
+      steps = emptyList(),
+      criteria = listOf(VerifyRunCriterion(1, "Pass"), VerifyRunCriterion(2, "Resolved"), VerifyRunCriterion(3, "Open gap")),
+      criteriaRaw = null, nonGoals = emptyList(), technicalConstraints = emptyList(), rolloutExpectation = null,
+      completenessAudit = VerifyCompletenessAudit(null, emptyList(), listOf(
+        VerifyCriterionGrade(1, "PASS", "Pass", emptyList(), null, null, emptyList()),
+        VerifyCriterionGrade(2, "FAIL", "Resolved", emptyList(), null, "not found", emptyList(), resolution),
+        VerifyCriterionGrade(3, "PARTIAL", "Open gap", emptyList(), "missing", null, emptyList()),
+      )),
+      reviewFindings = VerifyReviewSection(null, emptyList(), listOf(
+        VerifyReviewFinding("F-001", "Minor", "Medium", "A.kt:5", "fixed", emptyList(), emptyList(), ReviewFindingStatus.Fixed),
+        VerifyReviewFinding("F-002", "Minor", "Medium", "B.kt:9", "open", emptyList(), emptyList(), ReviewFindingStatus.Open),
+      ), reviewRunId = "rvw-1"),
+      flagAudit = null, unitTestValue = null, changedFiles = emptyList(), verdict = null, qa = null,
+      qaVerdict = null, qaOutcome = null, qaFindingLocations = emptyMap(), supersededBy = null, staleReason = null,
+    )
+
+    assertEquals(listOf("f:F-002", "c:3"), verifyFixItems(run, emptyMap()).map { it.key })
+    val view = verifyCriteriaView(run, VerifyCriteriaFilter.Gaps)
+    assertEquals(1, view.gapCount)
+    assertEquals(2, view.metCount)
+    assertEquals(listOf(3), view.rows.map { it.number })
+    assertEquals("1 partial · 1 resolved", verifyScoreNotes(run).getValue("Criteria"))
   }
 }

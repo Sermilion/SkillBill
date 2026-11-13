@@ -16,7 +16,7 @@ import java.nio.file.Path
 
 internal fun launchPrompt(request: SkillRunRequest): String =
   requireNotNull(request.promptOverride) {
-    "launchPrompt requires a promptOverride; goal-continuation runs spawn skill-bill directly."
+    "launchPrompt requires a promptOverride; goal-continuation runs spawn sona directly."
   }
 
 internal fun governedReviewConversationIsolation(request: SkillRunRequest): ReviewConversationIsolation? =
@@ -85,7 +85,7 @@ internal fun goalContinuationArguments(
       context.childWorkflowId?.takeIf(String::isNotBlank) ?: context.assignedWorkflowId?.takeIf(String::isNotBlank),
     ) { "Goal-child launch requires a persisted child workflow id." }
   return buildList {
-    add("skill-bill")
+    add("sona")
     databasePath?.let { db ->
       add("--db")
       add(db.toString())

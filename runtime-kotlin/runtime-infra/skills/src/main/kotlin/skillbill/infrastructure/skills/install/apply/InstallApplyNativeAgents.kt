@@ -259,6 +259,13 @@ private val nativeAgentInstallers: List<NativeAgentInstaller> =
           link = InstallNativeAgentOperations::linkCursorAgents,
           unlink = InstallNativeAgentOperations::unlinkCursorAgents,
         )
+      NativeAgentProvider.OpenCode ->
+        NativeAgentInstaller(
+          agent = SupportedAgent.OPENCODE,
+          provider = NativeAgentProviderId.OPENCODE,
+          link = InstallNativeAgentOperations::linkOpenCodeAgents,
+          unlink = InstallNativeAgentOperations::unlinkOpenCodeAgents,
+        )
       NativeAgentProvider.Devin ->
         NativeAgentInstaller(
           agent = SupportedAgent.DEVIN,

@@ -53,8 +53,8 @@ class RouteIntakeTokensTest {
       val colon = CliRuntime.run(listOf("--db", db, "phase:verify", "APP-1"), context)
       assertNotEquals(0, split.exitCode, split.stdout + split.stderr)
       assertNotEquals(0, colon.exitCode, colon.stdout + colon.stderr)
-      assertContains(split.stderr, "skill-bill operation verify")
-      assertContains(colon.stderr, "skill-bill operation verify")
+      assertContains(split.stderr, "sona operation verify")
+      assertContains(colon.stderr, "sona operation verify")
     } finally {
       tempDir.toFile().deleteRecursively()
     }

@@ -2,7 +2,15 @@ package skillbill.ports.system
 
 import java.nio.file.Path
 
-interface UninstallPathsPort {
+interface UninstallFileInspection {
+  fun isRegularFile(path: Path): Boolean
+
+  fun isDirectory(path: Path): Boolean
+
+  fun readRegularFile(path: Path): String
+}
+
+interface UninstallPathsPort : UninstallFileInspection {
   fun listImmediateDirectoryNames(root: Path): List<String>
 
   fun exists(path: Path): Boolean

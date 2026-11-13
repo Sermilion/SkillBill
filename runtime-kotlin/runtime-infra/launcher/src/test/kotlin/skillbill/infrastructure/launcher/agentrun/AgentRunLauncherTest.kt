@@ -80,6 +80,7 @@ class HeadlessAgentRunAdapterTest {
         SupportedAgent.CODEX,
         SupportedAgent.JUNIE,
         SupportedAgent.CURSOR,
+        SupportedAgent.OPENCODE,
         SupportedAgent.DEVIN,
       ),
       adapters.keys,

@@ -180,6 +180,16 @@ class DataStoreAppSettingsRepository(
     it[AppPreferenceKeys.CHAT_WIDTH_DP] = widthDp.coerceIn(AppSettings.CHAT_WIDTH_MIN_DP, AppSettings.CHAT_WIDTH_MAX_DP)
   }
 
+  override suspend fun setDetailsWidthDp(widthDp: Int?): Outcome<Unit, SettingsRejection> {
+    if (widthDp != null && widthDp < AppSettings.DETAILS_WIDTH_MIN_DP) {
+      return Outcome.Failure(SettingsRejection.InvalidDetailsWidth)
+    }
+    return edit { preferences ->
+      if (widthDp == null) preferences.remove(AppPreferenceKeys.DETAILS_WIDTH_DP)
+      else preferences[AppPreferenceKeys.DETAILS_WIDTH_DP] = widthDp
+    }
+  }
+
   override suspend fun setTrayLastTab(tab: TrayTab) = edit { it[AppPreferenceKeys.TRAY_LAST_TAB] = tab.wireValue }
 
   override suspend fun setFavorite(key: FavoriteWorkKey, favorite: Boolean) = edit { preferences ->

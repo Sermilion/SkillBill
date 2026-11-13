@@ -1,13 +1,14 @@
 package dev.skillbill.desktop.feature.chat
 
 import dev.skillbill.desktop.core.domain.model.ReviewFindingsAction
+import dev.skillbill.desktop.core.domain.model.VerifyRunDetails
 import dev.skillbill.desktop.core.domain.model.WorkItem
 
 internal fun reviewActionInstruction(item: WorkItem, action: ReviewFindingsAction): String? {
   if (!item.standaloneExecution || item.control.phaseId != "review") return null
   val invocation = item.control.invocationId ?: return null
   val database = item.control.databaseFile?.path ?: return null
-  val cli = "skill-bill --db ${shellArgument(database)}"
+  val cli = "sona --db ${shellArgument(database)}"
   val task = when (action) {
     ReviewFindingsAction.Fix ->
       "Fix the open findings in this review against the current worktree. Preserve unrelated edits. " +
@@ -34,4 +35,23 @@ internal fun reviewActionInstruction(item: WorkItem, action: ReviewFindingsActio
 
 }
 
-private fun shellArgument(value: String): String = "'" + value.replace("'", "'\\''") + "'"
+internal fun verifyRecordInstruction(item: WorkItem, run: VerifyRunDetails): String? {
+  if (run.completenessAudit == null && run.reviewFindings?.reviewRunId == null) return null
+  val database = item.control.databaseFile?.path ?: return null
+  val cli = "sona --db ${shellArgument(database)}"
+  return buildString {
+    append("This verify run is finished and immutable; record work done after it beside it. Record only what current code ")
+    append("and relevant checks support, with the evidence as the note.")
+    run.reviewFindings?.reviewRunId?.let { runId ->
+      append(" A fixed review finding: $cli record-feedback --run-id ${shellArgument(runId)} --event fix_applied ")
+      append("--finding <finding ref> --note <evidence> --format json.")
+    }
+    if (run.completenessAudit != null) {
+      append(" A PARTIAL or FAIL criterion that is now met: $cli verify-workflow resolve-criterion ")
+      append("${shellArgument(run.workflowId)} --criterion <number> --evidence <evidence> --format json.")
+    }
+    append(" A new verify run re-audits everything.")
+  }
+}
+
+internal fun shellArgument(value: String): String = "'" + value.replace("'", "'\\''") + "'"

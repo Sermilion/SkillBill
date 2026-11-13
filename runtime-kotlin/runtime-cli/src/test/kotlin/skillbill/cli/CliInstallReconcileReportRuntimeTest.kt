@@ -68,7 +68,7 @@ class CliInstallReconcileReportRuntimeTest {
   }
 
   @Test
-  fun `a locally diverged skill is reported as adopt and overwritten by apply`() {
+  fun `a locally diverged skill is reported as locally authored and preserved by apply`() {
     val home = Files.createTempDirectory("skillbill-reconcile-diverged-home")
     val upstream = Files.createTempDirectory("skillbill-reconcile-diverged-upstream")
     val local = home.resolve(".skill-bill")
@@ -87,10 +87,10 @@ class CliInstallReconcileReportRuntimeTest {
 
     assertEquals(0, result.exitCode, result.stdout)
     val outcomeLine = result.stdout.lines().single { it.startsWith("reconcile_outcome:") }
-    assertTrue(outcomeLine.startsWith("reconcile_outcome: kind=adopt "), outcomeLine)
+    assertTrue(outcomeLine.startsWith("reconcile_outcome: kind=locally-authored "), outcomeLine)
     assertContains(
       Files.readString(local.resolve("skills/bill-sample/content.md")),
-      "UPSTREAM divergence.",
+      "LOCAL divergence.",
     )
   }
 
