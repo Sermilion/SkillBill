@@ -6,6 +6,7 @@ import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.infrastructure.host.jvm.rollbackRestoreBytes
 import skillbill.infrastructure.skills.scaffold.runtime.service.contract.supportingFileTargets
 import skillbill.infrastructure.skills.scaffold.runtime.service.support.requiredSupportingFilesForSkill
+import skillbill.infrastructure.skills.scaffold.validation.shape.parseSkillFrontmatter
 import skillbill.infrastructure.skills.scaffold.validation.shape.validateAuthoredContent
 import skillbill.infrastructure.skills.scaffold.validation.shape.validateSkillMdShape
 import skillbill.install.model.ListedSkillNames
@@ -66,8 +67,9 @@ private fun collectTargetIssues(
   issues: MutableList<String>,
 ) {
   val contentText = Files.readString(target.contentFile)
-  if (!contentText.contains("name: ${ListedSkillNames.publicName(target.skillName)}\n")) {
-    issues += "${target.contentFile}: frontmatter name does not match directory '${target.skillName}'"
+  val declaredName = parseSkillFrontmatter(contentText)["name"].orEmpty()
+  if (ListedSkillNames.publicName(declaredName) != ListedSkillNames.publicName(target.skillName)) {
+    issues += "${target.contentFile}: frontmatter name '$declaredName' does not match directory '${target.skillName}'"
   }
   if (repoRoot != null && isSourceOwnedSkillTarget(repoRoot, target)) {
     collectSourceSidecarIssues(repoRoot, target, issues)

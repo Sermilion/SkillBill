@@ -139,6 +139,27 @@ class CliAuthoringParityTest {
   }
 
   @Test
+  fun `render command payload exposes public dispatcher skill name`() {
+    val repoRoot = outerRepoRoot()
+    val tempDir = Files.createTempDirectory("skillbill-cli-render-sona-skill-name")
+    val context = CliRuntimeContext(userHome = tempDir)
+
+    val result =
+      CliRuntime.run(
+        listOf(
+          "render",
+          "sona",
+          "--repo-root",
+          repoRoot.toString(),
+        ),
+        context,
+      )
+
+    assertEquals(0, result.exitCode, result.stdout)
+    assertEquals("sona", result.payload?.get("skill_name"))
+  }
+
+  @Test
   fun `render command emits read-only stdout and dry run matches normal output`() {
     val tempDir = Files.createTempDirectory("skillbill-cli-authoring-render")
     val context = CliRuntimeContext(userHome = tempDir)

@@ -317,6 +317,6 @@ class FileSystemScaffoldCatalogGateway : ScaffoldCatalogGateway {
 private fun AuthoringRenderResult.toPortRenderResult(): ScaffoldRenderResult =
   ScaffoldRenderResult(
     repoRoot = repoRoot,
-    skillName = skillName,
+    skillName = ListedSkillNames.publicName(skillName),
     blocks = blocks.map { block -> ScaffoldRenderBlock(header = block.header, content = block.content) },
   )

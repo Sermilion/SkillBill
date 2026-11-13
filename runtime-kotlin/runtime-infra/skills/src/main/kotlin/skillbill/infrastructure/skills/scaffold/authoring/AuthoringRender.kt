@@ -20,7 +20,7 @@ internal fun renderWrapper(target: AuthoringTarget): String {
   val sourceDescription = sourceFrontmatter["description"].orEmpty()
   val frontmatter =
     renderFrontmatter(
-      skillName = ListedSkillNames.publicName(sourceFrontmatter["name"].orEmpty()),
+      skillName = ListedSkillNames.publicName(target.skillName),
       description = if (isDispatcher) adaptLegacyDispatcherText(sourceDescription) else sourceDescription,
     )
   val authoredExecutionBody = renderedAuthoredExecutionBody(contentText, target.contentFile, target.skillName)
@@ -133,7 +133,7 @@ internal fun renderGeneratedSubagentSpawnRuntimeNotes(target: AuthoringTarget): 
     nativeAgentSourceFiles(nativeAgentDir)
       .flatMap(::parseNativeAgentSourceFile)
       .map { source -> source.name }
-  return renderSubagentSpawnRuntimeNotes(target.skillName, specialists)
+  return renderSubagentSpawnRuntimeNotes(ListedSkillNames.publicName(target.skillName), specialists)
 }
 
 private fun nativeAgentSourceFiles(nativeAgentDir: Path): List<Path> =

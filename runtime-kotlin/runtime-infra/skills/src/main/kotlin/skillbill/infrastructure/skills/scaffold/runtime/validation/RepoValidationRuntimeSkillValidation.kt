@@ -42,8 +42,16 @@ internal data class ValidateInstallableSkillArgs(
 internal fun validateInstallableSkill(args: ValidateInstallableSkillArgs) {
   val text = Files.readString(args.contentFile)
   val frontmatter = parseFrontmatter(text)
-  if (frontmatter["name"] != ListedSkillNames.publicName(args.skillName)) {
-    args.issues += "${args.contentFile}: frontmatter name '${frontmatter["name"].orEmpty()}' does not match " +
+  val declaredName = frontmatter["name"].orEmpty()
+  val expectedPublicName = ListedSkillNames.publicName(args.skillName)
+  val nameMatches =
+    when (args.contentFile.fileName.toString()) {
+      "content.md" ->
+        ListedSkillNames.publicName(declaredName) == expectedPublicName
+      else -> declaredName == expectedPublicName
+    }
+  if (!nameMatches) {
+    args.issues += "${args.contentFile}: frontmatter name '$declaredName' does not match " +
       "directory '${args.skillName}'"
   }
   if (frontmatter["description"].isNullOrBlank()) {

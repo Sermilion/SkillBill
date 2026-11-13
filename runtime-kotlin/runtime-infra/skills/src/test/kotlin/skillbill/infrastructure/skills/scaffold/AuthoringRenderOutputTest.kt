@@ -6,6 +6,7 @@ import skillbill.infrastructure.skills.scaffold.authoring.renderAuthoringTarget
 import skillbill.infrastructure.skills.scaffold.authoring.renderWrapper
 import skillbill.infrastructure.skills.scaffold.authoring.resolveTarget
 import skillbill.infrastructure.skills.scaffold.authoring.selectedTargets
+import skillbill.infrastructure.skills.scaffold.authoring.validateTarget
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.loadPlatformManifest
 import skillbill.infrastructure.skills.scaffold.pointer.renderPointer
 import skillbill.testsupport.SnapshotAssertions
@@ -156,7 +157,14 @@ class AuthoringRenderOutputTest {
     )
     val historicalBytes = Files.readAllBytes(dispatcherDir.resolve("content.md"))
 
-    val legacyRendered = renderWrapper(resolveTarget(repoRoot, "skill-bill"))
+    val legacyTarget = resolveTarget(repoRoot, "skill-bill")
+    val sonaTarget = resolveTarget(repoRoot, "sona")
+    assertTrue(validateTarget(legacyTarget, repoRoot).isEmpty())
+    assertTrue(validateTarget(sonaTarget, repoRoot).isEmpty())
+    assertEquals("sona", AuthoringOperations.list(repoRoot, listOf("sona")).skills.single().skillName)
+    assertEquals("sona", AuthoringOperations.show(repoRoot, "sona", "none").skillName)
+
+    val legacyRendered = renderWrapper(legacyTarget)
     assertEquals(historicalBytes.toList(), Files.readAllBytes(dispatcherDir.resolve("content.md")).toList())
     Files.writeString(
       dispatcherDir.resolve("content.md"),
@@ -175,6 +183,20 @@ class AuthoringRenderOutputTest {
     assertContains(legacyRendered, "(`exact: skill-bill`)")
     assertContains(unrelatedRendered, "Keep mcp__skill-bill__update_check.")
     assertEquals(historicalSource.replace("name: skill-bill", "name: sona"), Files.readString(dispatcherDir.resolve("content.md")))
+  }
+
+  @Test
+  fun `renderAuthoringTarget exposes public dispatcher skill name for render payloads`() {
+    val repoRoot = tempRoot.resolve("dispatcher-render-skill-name-repo")
+    val dispatcherDir = repoRoot.resolve("skills/skill-bill")
+    Files.createDirectories(dispatcherDir)
+    Files.writeString(
+      dispatcherDir.resolve("content.md"),
+      "---\nname: skill-bill\ndescription: Legacy dispatcher.\n---\n\nRun work.\n",
+    )
+
+    assertEquals("sona", renderAuthoringTarget(repoRoot, "sona").skillName)
+    assertEquals("sona", renderAuthoringTarget(repoRoot, "skill-bill").skillName)
   }
 
   @Test
