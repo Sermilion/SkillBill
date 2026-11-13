@@ -70,7 +70,7 @@ internal fun VerifyFindingRow(
   leading: @Composable () -> Unit = {},
 ) {
   var open by rememberSaveable(finding.ref, finding.location) { mutableStateOf(false) }
-  val onToggle = remember { { open = !open } }
+  val onToggle = remember(finding.ref, finding.location) { { open = !open } }
   val colors = SkillBillTheme.colors
   Row(Modifier.fillMaxWidth().hairline(Edge.Top, colors.borderSubtle).padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
     if (selectable) Column(Modifier.width(22.dp)) { leading() }

@@ -13,7 +13,6 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -78,7 +77,7 @@ fun FindingRow(
     return
   }
   var open by rememberSaveable(title, location, meta, ref) { mutableStateOf(false) }
-  val toggle = remember(metaPresent) { if (metaPresent) ({ open = !open }) else null }
+  val toggle = if (metaPresent) ({ open = !open }) else null
   val titleStyle = SkillBillTheme.type.tSmMedium.copy(color = SkillBillTheme.colors.fg, lineHeight = 1.45.em)
   ExpandableResultRow(
     modifier = Modifier.drawBehind {

@@ -66,6 +66,12 @@ import dev.skillbill.desktop.core.domain.model.SubtaskPhaseResults
 import dev.skillbill.desktop.core.domain.model.SubtaskScopesState
 import dev.skillbill.desktop.core.domain.model.ValidationGateRun
 import dev.skillbill.desktop.core.domain.model.ValidationResult
+import dev.skillbill.desktop.core.domain.model.AuditCriterion
+import dev.skillbill.desktop.core.domain.model.AuditOutcome
+import dev.skillbill.desktop.core.domain.model.ReviewFindingStatus
+import dev.skillbill.desktop.core.domain.model.SubtaskAuditResult
+import dev.skillbill.desktop.core.domain.model.ReviewPass
+import dev.skillbill.desktop.core.domain.model.ReviewReportFinding
 import dev.skillbill.desktop.core.domain.model.WorkKind
 import dev.skillbill.desktop.core.domain.model.WorkSubtask
 import dev.skillbill.desktop.core.testing.workItem
@@ -78,6 +84,123 @@ import kotlin.test.assertTrue
 
 @OptIn(ExperimentalTestApi::class)
 class DetailPeekTest {
+  @Test
+  fun `inspector review finding disclosure follows the selected subtask`() = runComposeUiTest {
+    fun reviewFinding(ref: String, location: String, specialist: String, confidence: String) =
+      ReviewReportFinding(ref, "major", confidence, specialist, location, "Finding $ref", ReviewFindingStatus.Open)
+    val detail = emptyDetail.copy(
+      stepPipeline = listOf("review"),
+      subtasks = listOf(
+        WorkSubtask(1, "First subtask", "completed", null, null, emptyList()),
+        WorkSubtask(2, "Second subtask", "completed", null, null, emptyList()),
+      ),
+      phaseResults = listOf(
+        SubtaskPhaseResults(
+          1,
+          listOf(ReviewPass(1, "changes_requested", 0, listOf(reviewFinding("F-S1", "src/a/First.kt:1", "bill-kotlin-code-review-persistence", "high")), emptyList())),
+          null,
+          null,
+          phaseCards = listOf(finishCard("review")),
+        ),
+        SubtaskPhaseResults(
+          2,
+          listOf(ReviewPass(1, "changes_requested", 0, listOf(reviewFinding("F-S2", "src/b/Second.kt:2", "bill-kotlin-code-review-testing", "medium")), emptyList())),
+          null,
+          null,
+          phaseCards = listOf(finishCard("review")),
+        ),
+      ),
+    )
+    val state = mutableStateOf(
+      DetailUiState(
+        workItem("goal"), SectionsUi.Loaded(detail, null, emptyMap(), emptySet()), false, epoch,
+        subtaskChoice = SubtaskChoice(SubtaskKey.Subtask(1)),
+        phaseChoice = mapOf(
+          PhaseChoiceKey("goal", SubtaskKey.Subtask(1)) to PhaseDisclosure.Open("review"),
+          PhaseChoiceKey("goal", SubtaskKey.Subtask(2)) to PhaseDisclosure.Open("review"),
+        ),
+      ),
+    )
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        Box(Modifier.requiredSize(400.dp, 900.dp)) {
+          DetailsPane(state.value, remember { mutableStateOf(AssessmentOrder.Default) }, {}, { action ->
+            if (action is DetailAction.MoveSubtaskSelection) {
+              val keys = subtaskKeys(state.value.header, detail)
+              val current = keys.indexOf(state.value.subtaskChoice.key)
+              state.value = state.value.copy(subtaskChoice = SubtaskChoice(keys[(current + action.delta).coerceIn(0, keys.lastIndex)]))
+            }
+          })
+        }
+      }
+    }
+
+    onNodeWithText("Finding F-S1", substring = true).performClick()
+    onNodeWithText("First.kt").assertExists()
+    onNodeWithContentDescription("Next subject").performClick()
+    onNodeWithText("Finding F-S2", substring = true).performClick()
+    onNodeWithText("Second.kt").assertExists()
+    onNodeWithText("testing · medium confidence").assertExists()
+  }
+
+  @Test
+  fun `inspector audit criterion disclosure follows the selected subtask`() = runComposeUiTest {
+    val detail = emptyDetail.copy(
+      stepPipeline = listOf("audit"),
+      subtasks = listOf(
+        WorkSubtask(1, "First subtask", "completed", null, null, emptyList()),
+        WorkSubtask(2, "Second subtask", "completed", null, null, emptyList()),
+      ),
+      phaseResults = listOf(
+        SubtaskPhaseResults(
+          1,
+          emptyList(),
+          null,
+          null,
+          auditResult = SubtaskAuditResult(AuditOutcome.Passed, 1, 1, listOf(AuditCriterion("AC-001", "First criterion", true, 1)), emptyList(), 1),
+          phaseCards = listOf(finishCard("audit")),
+        ),
+        SubtaskPhaseResults(
+          2,
+          emptyList(),
+          null,
+          null,
+          auditResult = SubtaskAuditResult(AuditOutcome.Passed, 1, 1, listOf(AuditCriterion("AC-001", "Second criterion", true, 3)), emptyList(), 1),
+          phaseCards = listOf(finishCard("audit")),
+        ),
+      ),
+    )
+    val state = mutableStateOf(
+      DetailUiState(
+        workItem("goal"), SectionsUi.Loaded(detail, null, emptyMap(), emptySet()), false, epoch,
+        subtaskChoice = SubtaskChoice(SubtaskKey.Subtask(1)),
+        phaseChoice = mapOf(
+          PhaseChoiceKey("goal", SubtaskKey.Subtask(1)) to PhaseDisclosure.Open("audit"),
+          PhaseChoiceKey("goal", SubtaskKey.Subtask(2)) to PhaseDisclosure.Open("audit"),
+        ),
+      ),
+    )
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        Box(Modifier.requiredSize(400.dp, 900.dp)) {
+          DetailsPane(state.value, remember { mutableStateOf(AssessmentOrder.Default) }, {}, { action ->
+            if (action is DetailAction.MoveSubtaskSelection) {
+              val keys = subtaskKeys(state.value.header, detail)
+              val current = keys.indexOf(state.value.subtaskChoice.key)
+              state.value = state.value.copy(subtaskChoice = SubtaskChoice(keys[(current + action.delta).coerceIn(0, keys.lastIndex)]))
+            }
+          })
+        }
+      }
+    }
+
+    onNodeWithText("AC-001").performClick()
+    onNodeWithText("fixed in attempt 1").assertExists()
+    onNodeWithContentDescription("Next subject").performClick()
+    onNodeWithText("AC-001").performClick()
+    onNodeWithText("fixed in attempt 3").assertExists()
+  }
+
   @Test
   fun `subject header follows the index and disables navigation at both ends`() = runComposeUiTest {
     val detail = emptyDetail.copy(subtasks = listOf(

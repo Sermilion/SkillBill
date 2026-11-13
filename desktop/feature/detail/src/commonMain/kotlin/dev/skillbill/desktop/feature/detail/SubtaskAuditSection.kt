@@ -9,7 +9,6 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -192,7 +191,7 @@ private fun AuditCriterionRow(criterion: AuditCriterion, modifier: Modifier, sub
   ExpandableResultRow(
     modifier = modifier,
     open = open,
-    onToggle = remember(hasDisclosure) { if (hasDisclosure) ({ open = !open }) else null },
+    onToggle = if (hasDisclosure) ({ open = !open }) else null,
     toggleLabel = "Toggle ${criterion.ref}",
     ref = {
       BasicText(criterion.ref, style = SkillBillTheme.type.monoSm.copy(color = colors.fgMuted), maxLines = 1)

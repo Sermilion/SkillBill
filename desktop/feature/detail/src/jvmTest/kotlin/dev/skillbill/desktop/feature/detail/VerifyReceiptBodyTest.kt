@@ -2,9 +2,13 @@ package dev.skillbill.desktop.feature.detail
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertDoesNotExist
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -90,6 +94,28 @@ class VerifyReceiptBodyTest {
     onNodeWithText(raw).assertDoesNotExist()
     onNodeWithText("Original report").performClick()
     onNodeWithText(raw).assertExists()
+  }
+
+  @Test
+  fun `verify finding description toggle tracks finding identity`() = runComposeUiTest {
+    var finding by mutableStateOf(
+      VerifyReviewFinding("F-001", "minor", "high", "First.kt:1", "First expanded description text", emptyList(), emptyList()),
+    )
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        VerifyFindingRow(finding)
+      }
+    }
+
+    onNodeWithText("First expanded description text").assertDoesNotExist()
+    onNodeWithText("First expanded description text", substring = true).performClick()
+    onNodeWithText("First expanded description text").assertExists()
+    runOnIdle {
+      finding = VerifyReviewFinding("F-002", "minor", "high", "Second.kt:2", "Second expanded description text", emptyList(), emptyList())
+    }
+    onNodeWithText("First expanded description text").assertDoesNotExist()
+    onNodeWithText("Second expanded description text", substring = true).performClick()
+    onNodeWithText("Second expanded description text").assertExists()
   }
 
   @Test
