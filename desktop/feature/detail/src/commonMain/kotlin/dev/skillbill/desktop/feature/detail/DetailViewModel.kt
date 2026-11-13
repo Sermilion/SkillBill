@@ -261,7 +261,8 @@ class DetailViewModel(
       DetailAction.Retry -> observe()
       is DetailAction.Copy -> effectChannel.trySend(DetailEffect.CopyToClipboard(action.text))
       DetailAction.RevealFolder -> open(CHECKOUT_NOT_OPENED) { specs.revealFolder(state.value.header.repositoryRoot) }
-      DetailAction.OpenBranch -> state.value.header.branch?.let { branch ->
+      is DetailAction.OpenBranch -> {
+        val branch = action.branch.takeIf { it.isNotBlank() } ?: return
         open(BRANCH_NOT_OPENED) { webPages.openBranch(state.value.header.repositoryRoot, branch) }
       }
       is DetailAction.OpenSpecFile -> open(FILE_NOT_OPENED) { specs.openFile(action.path) }

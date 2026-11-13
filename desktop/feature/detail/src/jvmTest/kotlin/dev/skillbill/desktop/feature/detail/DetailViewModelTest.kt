@@ -49,6 +49,7 @@ import dev.skillbill.desktop.core.testing.FakeWorkBoardRepository
 import dev.skillbill.desktop.core.testing.FakeWorkControlRepository
 import dev.skillbill.desktop.core.testing.loadedBoard
 import dev.skillbill.desktop.core.testing.workItem
+import dev.skillbill.desktop.core.ui.feedback.ToastMessage
 import dev.skillbill.desktop.core.ui.feedback.ToastQueue
 import dev.skillbill.desktop.core.ui.feedback.ToastTone
 import dev.skillbill.desktop.core.ui.selection.SelectionHolder
@@ -108,8 +109,9 @@ class DetailViewModelTest {
     toastQueue: ToastQueue = ToastQueue(),
     specs: SpecRepository = NoSpecs,
     preview: QaPreviewRepository = qaPreview,
+    webPages: RepositoryWebPages = NoWebPages,
     selections: SubtaskSelections = SubtaskSelections(session),
-  ) = DetailViewModel(source, session, details, changes, scopes, activity, board, specs, NoWebPages, SelectionHolder(), selections, clock, workControls, toastQueue, settings, preview)
+  ) = DetailViewModel(source, session, details, changes, scopes, activity, board, specs, webPages, SelectionHolder(), selections, clock, workControls, toastQueue, settings, preview)
 
   @Test
   fun `goal preview follows selected subtask and pane visibility and clears frames when QA ends`() = runTest {
@@ -356,6 +358,50 @@ class DetailViewModelTest {
     assertTrue(!review.copy(control = review.control.copy(phaseId = "plan")).showsChanges)
     assertTrue(!review.copy(control = review.control.copy(phaseId = "implement")).showsChanges)
     assertTrue(review.copy(kind = WorkKind.Goal, standaloneExecution = false).showsChanges)
+  }
+
+  @Test
+  fun `recorded commit branch actions use the receipt branch instead of the header branch`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val web = RecordingWebPages()
+    val headerItem = item.copy(branch = "main")
+    val viewModel = viewModel(source = headerItem, webPages = web)
+    advanceUntilIdle()
+    details.flow.emit(DetailState(headerItem, DetailSections.Loaded(emptyDetail, null, emptyMap(), emptySet(), stale = false)))
+    advanceUntilIdle()
+    viewModel.onAction(DetailAction.OpenBranch("feature/receipt"))
+    runCurrent()
+    assertEquals(listOf(headerItem.repositoryRoot to "feature/receipt"), web.openedBranches)
+    viewModel.onAction(DetailAction.OpenBranch("main"))
+    runCurrent()
+    assertEquals(
+      listOf(headerItem.repositoryRoot to "feature/receipt", headerItem.repositoryRoot to "main"),
+      web.openedBranches,
+    )
+  }
+
+  @Test
+  fun `a rejected spec file open keeps the toast`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val specs = object : SpecRepository by NoSpecs {
+      override suspend fun openFile(path: String) = OpenOutcome.NotOpened
+    }
+    val viewModel = viewModel(specs = specs)
+    val effects = mutableListOf<DetailEffect>()
+    backgroundScope.launch { viewModel.effects.collect { effects += it } }
+    advanceUntilIdle()
+    details.flow.emit(DetailState(item, DetailSections.Loaded(emptyDetail, null, emptyMap(), emptySet(), stale = false)))
+    advanceUntilIdle()
+    viewModel.onAction(DetailAction.OpenSpecFile("/removed/agent/history.md"))
+    runCurrent()
+    assertEquals(
+      listOf<DetailEffect>(
+        DetailEffect.ShowToast(
+          ToastMessage(ToastTone.Problem, "Could not open the file. Check that it still exists."),
+        ),
+      ),
+      effects,
+    )
   }
 
   @Test
@@ -649,5 +695,14 @@ class DetailViewModelTest {
 
   private object NoWebPages : RepositoryWebPages {
     override suspend fun openBranch(repositoryRoot: String, branch: String) = OpenOutcome.Opened
+  }
+
+  private class RecordingWebPages : RepositoryWebPages {
+    val openedBranches = mutableListOf<Pair<String, String>>()
+
+    override suspend fun openBranch(repositoryRoot: String, branch: String): OpenOutcome {
+      openedBranches += repositoryRoot to branch
+      return OpenOutcome.Opened
+    }
   }
 }

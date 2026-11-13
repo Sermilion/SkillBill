@@ -57,7 +57,15 @@ import dev.skillbill.desktop.core.domain.model.QaChecklistStep
 import dev.skillbill.desktop.core.domain.model.QaRunAssertion
 import dev.skillbill.desktop.core.domain.model.QaRunDetails
 import dev.skillbill.desktop.core.domain.model.QaStepState
+import dev.skillbill.desktop.core.domain.model.ChangeScope
+import dev.skillbill.desktop.core.domain.model.PhaseCardEdit
+import dev.skillbill.desktop.core.domain.model.PhaseCardOutput
+import dev.skillbill.desktop.core.domain.model.ScopeSubtask
+import dev.skillbill.desktop.core.domain.model.ScopeSubtaskState
 import dev.skillbill.desktop.core.domain.model.SubtaskPhaseResults
+import dev.skillbill.desktop.core.domain.model.SubtaskScopesState
+import dev.skillbill.desktop.core.domain.model.ValidationGateRun
+import dev.skillbill.desktop.core.domain.model.ValidationResult
 import dev.skillbill.desktop.core.domain.model.WorkKind
 import dev.skillbill.desktop.core.domain.model.WorkSubtask
 import dev.skillbill.desktop.core.testing.workItem
@@ -276,10 +284,116 @@ class DetailPeekTest {
         phaseChoice = mapOf(PhaseChoiceKey("goal", SubtaskKey.Subtask(1)) to PhaseDisclosure.Open("preplan")),
       )
     }
-    onAllNodesWithText("Spec files").assertCountEquals(1)
+    onAllNodesWithText("Spec files").assertCountEquals(0)
     onNodeWithText("spec.md").assertExists()
-    onNode(hasText("spec_subtask_1.md") and hasAnyAncestor(hasText("Spec files"))).assertDoesNotExist()
     onNodeWithText("spec_subtask_1.md").assertExists()
+    onNodeWithText("Shared by every subtask in this goal.").assertExists()
+  }
+
+  @Test
+  fun `validate cards reveal extra checks without losing gate facts`() = runComposeUiTest {
+    val checks = (1..7).map { "check-$it" }
+    val gate = ValidationGateRun(1_000, "passed", "warm", 3, listOf("gate-check"), "./gradlew check", 0)
+    val receipt = ValidationResult("failed", checks, 1, listOf(gate))
+    val laterGate = ValidationGateRun(2_000, "failed", "cold", 1, listOf("later-gate"), "./gradlew later", 1)
+    val laterReceipt = ValidationResult("failed", (1..6).map { "later-$it" }, 1, listOf(laterGate))
+    val implement = finishCard("implement").copy(
+      edit = PhaseCardEdit(epoch, 2, 12, 1, emptyList()),
+    )
+    fun validateCard(result: ValidationResult) =
+      finishCard("validate").copy(output = PhaseCardOutput("failed", null, result, null, null, null, null, null, null))
+    val detail = emptyDetail.copy(
+      stepPipeline = listOf("implement", "validate"),
+      subtasks = listOf(WorkSubtask(1, "Build", "completed", null, null, emptyList())),
+      phaseResults = listOf(SubtaskPhaseResults(1, emptyList(), null, null, phaseCards = listOf(implement, validateCard(receipt)))),
+    )
+    val state = mutableStateOf(
+      DetailUiState(
+        workItem("goal"), SectionsUi.Loaded(detail, null, emptyMap(), emptySet()), false, epoch,
+        subtaskChoice = SubtaskChoice(SubtaskKey.Subtask(1)),
+        phaseChoice = mapOf(PhaseChoiceKey("goal", SubtaskKey.Subtask(1)) to PhaseDisclosure.Open("validate")),
+      ),
+    )
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        DetailsPane(state.value, remember { mutableStateOf(AssessmentOrder.Default) }, {}, {})
+      }
+    }
+    onNodeWithText("check-1").assertExists()
+    onNodeWithText("check-6").assertExists()
+    onNodeWithText("check-7").assertDoesNotExist()
+    onNodeWithText("Show 1 more checks").performClick()
+    onNodeWithText("check-7").assertExists()
+    onNodeWithText("Gate 1").assertExists()
+    onNodeWithText("Duration").assertExists()
+    onNodeWithText("Show fewer").performClick()
+    onNodeWithText("check-7").assertDoesNotExist()
+    onNodeWithText("Show 1 more checks").performClick()
+    onNodeWithText("check-7").assertExists()
+    runOnIdle {
+      val switched = detail.copy(
+        phaseResults = listOf(SubtaskPhaseResults(1, emptyList(), null, null, phaseCards = listOf(implement, validateCard(laterReceipt)))),
+      )
+      state.value = state.value.copy(sections = SectionsUi.Loaded(switched, null, emptyMap(), emptySet()))
+    }
+    onNodeWithText("check-7").assertDoesNotExist()
+    onNodeWithText("Show fewer").assertDoesNotExist()
+    onNodeWithText("Show 1 more checks").assertDoesNotExist()
+    onNodeWithText("later-1").assertExists()
+    onNodeWithText("later-6").assertExists()
+    onNodeWithText("Duration").assertExists()
+    onNodeWithText("Gate 1").assertExists()
+  }
+
+  @Test
+  fun `implement open changes stays disabled until subtask scopes list the subject`() = runComposeUiTest {
+    val implement = finishCard("implement").copy(
+      edit = PhaseCardEdit(epoch, 2, 12, 1, emptyList()),
+    )
+    val detail = emptyDetail.copy(
+      stepPipeline = listOf("implement"),
+      subtasks = listOf(WorkSubtask(1, "Build", "completed", null, null, emptyList())),
+      phaseResults = listOf(SubtaskPhaseResults(1, emptyList(), null, null, phaseCards = listOf(implement))),
+    )
+    val state = mutableStateOf(
+      DetailUiState(
+        workItem("goal"), SectionsUi.Loaded(detail, null, emptyMap(), emptySet()), false, epoch,
+        subtaskChoice = SubtaskChoice(SubtaskKey.Subtask(1)),
+        phaseChoice = mapOf(PhaseChoiceKey("goal", SubtaskKey.Subtask(1)) to PhaseDisclosure.Open("implement")),
+      ),
+    )
+    val opens = mutableListOf<DetailAction>()
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        DetailsPane(state.value, remember { mutableStateOf(AssessmentOrder.Default) }, {}, opens::add)
+      }
+    }
+    onNodeWithText("Open changes").assertDoesNotExist()
+    runOnIdle {
+      state.value = state.value.copy(
+        changes = ChangesUi(
+          subtasks = SubtaskScopesState.Listed(
+            "/repo", "main", true,
+            listOf(ScopeSubtask(1, "Build", ScopeSubtaskState.DONE, null, emptyList(), false, emptyList())),
+            emptyMap(),
+          ),
+        ),
+      )
+    }
+    onNodeWithText("Open changes").assertDoesNotExist()
+    runOnIdle {
+      state.value = state.value.copy(
+        changes = ChangesUi(
+          subtasks = SubtaskScopesState.Listed(
+            "/repo", "main", true,
+            listOf(ScopeSubtask(1, "Build", ScopeSubtaskState.DONE, "e1", listOf("e1"), false, emptyList())),
+            emptyMap(),
+          ),
+        ),
+      )
+    }
+    onNodeWithText("Open changes").performClick()
+    assertEquals(DetailAction.OpenChangesWindow(ChangeScope.Subtasks(1, 1)), opens.single())
   }
 
   @Test

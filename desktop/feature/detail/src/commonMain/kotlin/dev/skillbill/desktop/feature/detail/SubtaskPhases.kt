@@ -109,6 +109,7 @@ internal fun SubtaskPhasesSection(
   activity: ActivityResult,
   renderedAt: Instant,
   phaseResultsPagePending: Boolean,
+  changes: ChangesUi,
   onAction: (DetailAction) -> Unit,
 ) {
   val results = detail.phaseResults.firstOrNull { it.subtaskId == subtask.id }
@@ -148,7 +149,11 @@ internal fun SubtaskPhasesSection(
         BasicText("Select a phase to see what it did.", style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgMuted))
       }
       val card = selected?.let { id -> results?.phaseCards?.firstOrNull { it.phaseId == id } }
-      if (card != null) SubtaskPhaseCard(item, detail, subtask, card, results, readState, activity, renderedAt, onAction)
+      if (card != null) {
+        SubtaskPhaseCard(
+          item, detail, subtask, card, results, readState, changes, activity, renderedAt, onAction,
+        )
+      }
     }
   }
 }

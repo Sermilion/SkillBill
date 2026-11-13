@@ -277,6 +277,7 @@ private fun InspectorSection(state: DetailUiState, item: WorkItem, detail: Detai
           renderedAt = state.renderedAt,
           phaseResultsPagePending = (DetailList.Phases in (state.sections as? SectionsUi.Loaded)?.moreLists.orEmpty() ||
             state.listLoads[DetailList.Phases] is ListLoad.Loading) && detail.phaseResults.none { it.subtaskId == subtask.id },
+          changes = state.changes,
           onAction = onAction,
         )
     }

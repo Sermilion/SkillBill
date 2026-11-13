@@ -82,6 +82,7 @@ internal fun SubtaskInspector(
   activity: ActivityResult,
   renderedAt: kotlin.time.Instant,
   phaseResultsPagePending: Boolean,
+  changes: ChangesUi,
   onAction: (DetailAction) -> Unit,
 ) {
   Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(24.dp)) {
@@ -90,7 +91,7 @@ internal fun SubtaskInspector(
       ExpandableText(it, SkillBillTheme.type.tBase.copy(color = SkillBillTheme.colors.fgMuted), maxLines = 3)
     }
     SubtaskProperties(detail, subtask, onAction)
-    SubtaskPhasesSection(item, detail, subtask, phaseChoice, activity, renderedAt, phaseResultsPagePending, onAction)
+    SubtaskPhasesSection(item, detail, subtask, phaseChoice, activity, renderedAt, phaseResultsPagePending, changes, onAction)
   }
 }
 

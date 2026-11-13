@@ -73,7 +73,7 @@ class SubtaskInspectorResultsTest {
     setContent {
       SkillBillTheme(reducedMotion = true) {
         CompositionLocalProvider(LocalShellInput provides ShellInput()) {
-          SubtaskInspector(item, shown, subtask(status), choices.value, dev.skillbill.desktop.core.domain.model.ActivityResult.Loading, renderedAt = epoch, phaseResultsPagePending = false) { action ->
+          SubtaskInspector(item, shown, subtask(status), choices.value, dev.skillbill.desktop.core.domain.model.ActivityResult.Loading, renderedAt = epoch, phaseResultsPagePending = false, changes = ChangesUi()) { action ->
             if (action is DetailAction.SelectPhase) choices.value = choices.value + (PhaseChoiceKey(action.itemId, action.key) to PhaseDisclosure.Open(action.phaseId))
           }
         }
@@ -147,7 +147,7 @@ class SubtaskInspectorResultsTest {
       SkillBillTheme(reducedMotion = true) {
         CompositionLocalProvider(LocalShellInput provides ShellInput()) {
           key(goalId.value, selectedSubtask.value) {
-            SubtaskInspector(item.copy(id = goalId.value), detail, if (selectedSubtask.value == 1) first else second, choices.value, dev.skillbill.desktop.core.domain.model.ActivityResult.Loading, epoch, phaseResultsPagePending = false) { action ->
+            SubtaskInspector(item.copy(id = goalId.value), detail, if (selectedSubtask.value == 1) first else second, choices.value, dev.skillbill.desktop.core.domain.model.ActivityResult.Loading, epoch, phaseResultsPagePending = false, changes = ChangesUi()) { action ->
               if (action is DetailAction.SelectPhase) choices.value = choices.value + (PhaseChoiceKey(action.itemId, action.key) to PhaseDisclosure.Open(action.phaseId))
             }
           }

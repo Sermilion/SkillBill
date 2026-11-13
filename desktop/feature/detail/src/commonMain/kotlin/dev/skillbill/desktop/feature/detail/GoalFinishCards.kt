@@ -20,7 +20,7 @@ internal fun GoalFinishCard(item: WorkItem, detail: Detail, card: PhaseCard, sta
     "qa" -> GoalQaCard(item, detail, card, state, onAction)
     "qa_fix", "validate" -> SubtaskPhaseCard(
       item = item, detail = detail, subtask = null, card = card, results = null, resultState = null,
-      activity = state.activity, renderedAt = state.renderedAt, onAction = onAction,
+      changes = state.changes, activity = state.activity, renderedAt = state.renderedAt, onAction = onAction,
     )
     "pr" -> PullRequestCard(card, goalPullRequestUrl(detail))
     "monitor" -> MonitorCard(card, goalPullRequestUrl(detail), state.renderedAt)

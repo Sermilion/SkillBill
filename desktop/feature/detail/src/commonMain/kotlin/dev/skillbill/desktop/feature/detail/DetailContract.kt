@@ -151,7 +151,7 @@ sealed interface DetailAction {
   data object Retry : DetailAction
   data class Copy(val text: String) : DetailAction
   data object RevealFolder : DetailAction
-  data object OpenBranch : DetailAction
+  data class OpenBranch(val branch: String) : DetailAction
   data class OpenSpecFile(val path: String) : DetailAction
   data class Navigate(val route: AppRoute) : DetailAction
 
