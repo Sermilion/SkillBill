@@ -1,7 +1,10 @@
 package dev.skillbill.desktop.feature.detail
 
 import dev.skillbill.desktop.core.designsystem.status.StatusKind
+import dev.skillbill.desktop.core.domain.model.AuditCriterion
+import dev.skillbill.desktop.core.domain.model.AuditOutcome
 import dev.skillbill.desktop.core.domain.model.ReviewPass
+import dev.skillbill.desktop.core.domain.model.SubtaskAuditResult
 import dev.skillbill.desktop.core.domain.model.RunningReviewLane
 import dev.skillbill.desktop.core.domain.model.RunningReviewPass
 import dev.skillbill.desktop.core.domain.model.SubtaskPhaseResults
@@ -17,6 +20,15 @@ class SubtaskResultsStateTest {
     assertEquals(
       SubtaskResultsState.Unreadable("subtask_phase_results"),
       subtaskResultsState(StatusKind.Pending, empty.copy(degradedReadSource = "subtask_phase_results"), null),
+    )
+  }
+
+  @Test
+  fun `a pending subtask with recorded phase results still shows them`() {
+    val audit = SubtaskAuditResult(AuditOutcome.Passed, 1, 1, listOf(AuditCriterion("AC-001", "Criterion", true, null)), emptyList(), 1)
+    assertEquals(
+      SubtaskResultsState.Shown(SubtaskReviewState.Omitted),
+      subtaskResultsState(StatusKind.Pending, empty.copy(auditResult = audit), null),
     )
   }
 

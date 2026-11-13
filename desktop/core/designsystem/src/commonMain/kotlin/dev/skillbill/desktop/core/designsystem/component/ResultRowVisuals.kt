@@ -25,6 +25,9 @@ import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.designsystem.icon.SbIcon
 
+fun resultRowLocationLabel(location: String): String =
+  location.substringAfterLast('/').substringBefore(':')
+
 @Composable
 fun ResultRowBadge(text: String, color: Color) {
   Box(

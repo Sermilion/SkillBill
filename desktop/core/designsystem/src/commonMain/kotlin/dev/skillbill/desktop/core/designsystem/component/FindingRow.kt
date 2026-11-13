@@ -127,7 +127,7 @@ fun FindingRow(
 @Composable
 private fun FindingLocationAndMeta(location: String?, meta: String?) {
   Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-    location?.takeIf { it.isNotBlank() }?.let { ResultRowFileChip(it.substringAfterLast('/'), it) }
+    location?.takeIf { it.isNotBlank() }?.let { ResultRowFileChip(resultRowLocationLabel(it), it) }
     meta?.takeIf { it.isNotBlank() }?.let { text ->
       BasicText(
         text,

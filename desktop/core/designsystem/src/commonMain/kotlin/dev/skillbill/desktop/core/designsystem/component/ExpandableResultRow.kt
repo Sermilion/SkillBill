@@ -2,6 +2,7 @@ package dev.skillbill.desktop.core.designsystem.component
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -62,37 +63,25 @@ fun ExpandableResultRow(
       .fillMaxWidth()
       .then(if (topDivider) Modifier.hairline(Edge.Top, colors.borderSubtle) else Modifier),
   ) {
-    Row {
-      if (leadingOutside != null) {
-        Column(Modifier.width(30.dp).padding(start = 12.dp, top = 11.dp)) { leadingOutside() }
-      }
-      Row(
-        Modifier
-          .weight(1f)
-          .then(toggleModifier)
-          .padding(
-            start = if (leadingOutside != null) 2.dp else 12.dp,
-            end = 12.dp,
-            top = 9.dp,
-            bottom = 9.dp,
-          ),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.Top,
-      ) {
-        ref?.invoke()
-        Column(Modifier.weight(1f)) { title() }
-        Row(
-          Modifier.padding(top = 2.dp),
-          horizontalArrangement = Arrangement.spacedBy(6.dp),
-          verticalAlignment = Alignment.CenterVertically,
-        ) {
-          stateBadge?.invoke()
-          if (expandable) ResultRowChevron(open)
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+      val stackEndOutside = endOutside != null && maxWidth < 480.dp
+      if (stackEndOutside) {
+        Column(Modifier.fillMaxWidth()) {
+          resultHeader(
+            leadingOutside, Modifier, toggleModifier, ref, title, stateBadge, expandable, open,
+          )
+          endOutside?.invoke()
         }
-      }
-      if (endOutside != null) {
-        Column(Modifier.width(104.dp).padding(top = 8.dp, end = 10.dp), horizontalAlignment = Alignment.End) {
-          endOutside()
+      } else {
+        Row(Modifier.fillMaxWidth()) {
+          resultHeader(
+            leadingOutside, Modifier.weight(1f), toggleModifier, ref, title, stateBadge, expandable, open,
+          )
+          if (endOutside != null) {
+            Column(Modifier.width(104.dp).padding(top = 8.dp, end = 10.dp), horizontalAlignment = Alignment.End) {
+              endOutside()
+            }
+          }
         }
       }
     }
@@ -102,6 +91,48 @@ fun ExpandableResultRow(
         verticalArrangement = Arrangement.spacedBy(8.dp),
       ) {
         body()
+      }
+    }
+  }
+}
+
+@Composable
+private fun resultHeader(
+  leadingOutside: (@Composable () -> Unit)?,
+  rowWeight: Modifier,
+  toggleModifier: Modifier,
+  ref: (@Composable () -> Unit)?,
+  title: @Composable () -> Unit,
+  stateBadge: (@Composable () -> Unit)?,
+  expandable: Boolean,
+  open: Boolean,
+) {
+  Row(Modifier.fillMaxWidth().then(rowWeight)) {
+    if (leadingOutside != null) {
+      Column(Modifier.width(30.dp).padding(start = 12.dp, top = 11.dp)) { leadingOutside() }
+    }
+    Row(
+      Modifier
+        .weight(1f)
+        .then(toggleModifier)
+        .padding(
+          start = if (leadingOutside != null) 2.dp else 12.dp,
+          end = 12.dp,
+          top = 9.dp,
+          bottom = 9.dp,
+        ),
+      horizontalArrangement = Arrangement.spacedBy(8.dp),
+      verticalAlignment = Alignment.Top,
+    ) {
+      ref?.invoke()
+      Column(Modifier.weight(1f, fill = true)) { title() }
+      Row(
+        Modifier.padding(top = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+      ) {
+        stateBadge?.invoke()
+        if (expandable) ResultRowChevron(open)
       }
     }
   }

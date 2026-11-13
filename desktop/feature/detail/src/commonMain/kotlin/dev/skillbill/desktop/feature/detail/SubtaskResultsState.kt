@@ -41,7 +41,13 @@ internal fun subtaskResultsState(
       results.auditResult?.attempts?.any { it.unavailableReason != null } == true
     if (!unavailableHistory) return SubtaskResultsState.Unreadable(source)
   }
-  if (kind == StatusKind.Pending) return SubtaskResultsState.Upcoming
+  if (kind == StatusKind.Pending) {
+    val recorded = results?.let {
+      it.auditResult != null || it.audit != null || it.reviewPasses.isNotEmpty() ||
+        it.runningReviewPass != null || it.phaseCards.isNotEmpty()
+    } == true
+    if (!recorded) return SubtaskResultsState.Upcoming
+  }
   if (results == null && goalStatusSource != null) return SubtaskResultsState.Unreadable(goalStatusSource)
   if (results == null && (pagePending || kind != StatusKind.Skipped)) return SubtaskResultsState.Loading
   val upcoming = kind == StatusKind.Active || kind == StatusKind.Blocked

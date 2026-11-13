@@ -21,7 +21,11 @@ class DetailsPaneWidthTest {
   @Test
   fun `resize is immediate, stale settings cannot replace it, reset supersedes queued width, and close flushes`() = runTest {
     val settings = FakeAppSettingsRepository(AppSettings.DEFAULT.copy(detailsWidthDp = 600))
-    val width = DetailsPaneWidth(settings, RecordingDiagnostics(), WindowCoroutineScope(backgroundScope))
+    val writes = mutableListOf<Int?>()
+    val recording = object : AppSettingsRepository by settings {
+      override suspend fun setDetailsWidthDp(widthDp: Int?) = settings.setDetailsWidthDp(widthDp).also { writes += widthDp }
+    }
+    val width = DetailsPaneWidth(recording, RecordingDiagnostics(), WindowCoroutineScope(backgroundScope))
     runCurrent()
     assertEquals(600, width.widthDp.value)
 
@@ -31,9 +35,14 @@ class DetailsPaneWidthTest {
     assertEquals(720, width.widthDp.value)
     advanceTimeBy(200)
     width.reset()
-    advanceTimeBy(301)
+    runCurrent()
+    advanceTimeBy(100)
+    runCurrent()
+    assertEquals(emptyList(), writes)
+    advanceTimeBy(201)
     runCurrent()
     assertEquals(null, settings.settings.value.detailsWidthDp)
+    assertEquals(listOf<Int?>(null), writes)
 
     width.resizeTo(800)
     width.close()

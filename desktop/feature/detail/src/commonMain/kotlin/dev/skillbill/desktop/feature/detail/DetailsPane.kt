@@ -4,8 +4,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
@@ -15,7 +15,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.Composable
-import dev.skillbill.desktop.core.designsystem.detail.rememberSectionCollapse
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.remember
@@ -54,7 +53,6 @@ import dev.skillbill.desktop.core.ui.status.statusKind
  */
 @Composable
 internal fun DetailsPane(state: DetailUiState, assessmentOrder: MutableState<AssessmentOrder>, onClose: () -> Unit, onAction: (DetailAction) -> Unit) {
-  val collapse = rememberSectionCollapse()
   val item = state.header
   val detail = (state.sections as? SectionsUi.Loaded)?.detail
   val previewRun = detail?.let { selectedQaPreview(item, it, state.selectedQaRun, state.subtaskChoice.key) }
@@ -65,16 +63,33 @@ internal fun DetailsPane(state: DetailUiState, assessmentOrder: MutableState<Ass
     SubjectHeader(item, detail, selected, onClose) { onAction(DetailAction.MoveSubtaskSelection(it)) }
     scrollStates.SaveableStateProvider("${item.id}:${state.subtaskChoice.key}") {
       val listState = rememberLazyListState()
-      LazyColumn(Modifier.weight(1f), state = listState, contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 32.dp)) {
-        val sections = DetailSections(this, collapse, listState, assessmentOrder)
+      LazyColumn(
+        Modifier.weight(1f),
+        state = listState,
+        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 32.dp),
+      ) {
         if (detail != null) {
-          sections.item(key = "inspector") { InspectorSection(state, item, detail, selected, assessmentOrder, onAction) }
+          item(key = "inspector") {
+            when (selected) {
+              SubtaskKey.GoalFinish -> GoalFinishPhases(item, detail, state, assessmentOrder, onAction)
+              is SubtaskKey.Subtask -> {
+                val subtask = detail.subtasks.firstOrNull { it.id == selected.id }
+                if (subtask != null) {
+                  val phaseResultsPagePending = (DetailList.Phases in (state.sections as? SectionsUi.Loaded)?.moreLists.orEmpty() ||
+                    state.listLoads[DetailList.Phases] is ListLoad.Loading) && detail.phaseResults.none { it.subtaskId == subtask.id }
+                  SubtaskInspector(item, detail, subtask, state.phaseChoice, state.activity, state.renderedAt, phaseResultsPagePending, state.changes, onAction)
+                }
+              }
+              null -> Unit
+            }
+          }
           if (state.qaPreviewVisible && selected != SubtaskKey.GoalFinish) {
-            previewRun?.let { run -> sections.item(key = "qa-preview") { QaPreview(run.invocationId, state.qaPreview) } }
+            previewRun?.let { run ->
+              item(key = "qa-preview") { QaPreview(run.invocationId, state.qaPreview) }
+            }
           }
         }
-
-        sections.item(key = "execution") {
+        item(key = "execution") {
           Column(Modifier.padding(top = 24.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
             ExecutionSection(item, detail, selectedSubtaskId) { onAction(DetailAction.Copy(it)) }
             if (detail != null) {
@@ -256,30 +271,6 @@ private fun SpecFilesSection(detail: Detail, onAction: (DetailAction) -> Unit) {
         inPane = true,
         lead = { SbIcon(if (name.endsWith(".yaml") || name.endsWith(".yml")) LucideIcons.file else LucideIcons.fileText, SbIconSize.Sm) },
       )
-    }
-  }
-}
-
-/** The selected subtask, or the Goal finish steps; goals with a subtask index only. */
-@Composable
-private fun InspectorSection(state: DetailUiState, item: WorkItem, detail: Detail, chosen: SubtaskKey?, assessmentOrder: MutableState<AssessmentOrder>, onAction: (DetailAction) -> Unit) {
-  val key = chosen ?: return
-  when (key) {
-    SubtaskKey.GoalFinish -> GoalFinishPhases(item, detail, state, assessmentOrder, onAction)
-    is SubtaskKey.Subtask -> {
-      val subtask = detail.subtasks.firstOrNull { it.id == key.id } ?: return
-      SubtaskInspector(
-          item = item,
-          detail = detail,
-          subtask = subtask,
-          phaseChoice = state.phaseChoice,
-          activity = state.activity,
-          renderedAt = state.renderedAt,
-          phaseResultsPagePending = (DetailList.Phases in (state.sections as? SectionsUi.Loaded)?.moreLists.orEmpty() ||
-            state.listLoads[DetailList.Phases] is ListLoad.Loading) && detail.phaseResults.none { it.subtaskId == subtask.id },
-          changes = state.changes,
-          onAction = onAction,
-        )
     }
   }
 }

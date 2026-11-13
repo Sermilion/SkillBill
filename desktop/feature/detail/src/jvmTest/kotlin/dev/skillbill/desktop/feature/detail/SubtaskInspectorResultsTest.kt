@@ -111,7 +111,7 @@ class SubtaskInspectorResultsTest {
     onNodeWithText("Lanes").assertExists()
     onNodeWithText("F-001").assertExists()
     onNodeWithText("Finding F-001", substring = true).performClick()
-    onNodeWithText("File.kt:84").assertExists()
+    onNodeWithText("File.kt").assertExists()
     onNodeWithText("persistence · high confidence").assertExists()
   }
 
@@ -289,6 +289,9 @@ class SubtaskInspectorResultsTest {
     onNodeWithText("fixed in attempt 2").assertExists()
     onNodeWithText("Attempt 1 · Gaps found · 1 criterion uncovered → audit_plan_fix").assertExists()
     onNodeWithText("Attempt 2 · Passed").assertExists()
+    onAllNodesWithText("AC-001").assertCountEquals(1)
+    onAllNodesWithText("Retains the saved state").assertCountEquals(1)
+    onAllNodesWithText("fixed in attempt 2").assertCountEquals(1)
   }
 
   @Test

@@ -21,6 +21,10 @@ class SubtaskPhasesTest {
     )
     val tabs = phaseTabs(listOf("preplan", "plan", "implement", "validate", "review"), cards)
     assertEquals("implement", selectedPhase(tabs, cards, null))
+    val withoutRunning = cards.filterNot { it.state == PhaseCardState.Running }
+    assertEquals("preplan", selectedPhase(phaseTabs(tabs.map { it.id }, withoutRunning), withoutRunning, PhaseDisclosure.Auto))
+    val onlyFailed = withoutRunning.filterNot { it.state == PhaseCardState.Blocked }
+    assertEquals("plan", selectedPhase(phaseTabs(tabs.map { it.id }, onlyFailed), onlyFailed, PhaseDisclosure.Auto))
     assertEquals("preplan", selectedPhase(tabs, cards, PhaseDisclosure.Open("preplan")))
     assertEquals(null, selectedPhase(tabs, cards, PhaseDisclosure.Folded))
     assertEquals("4 of 5", phasesNote(tabs, running = true))

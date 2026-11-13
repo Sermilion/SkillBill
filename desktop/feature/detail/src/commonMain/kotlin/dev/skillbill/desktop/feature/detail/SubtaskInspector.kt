@@ -74,6 +74,21 @@ internal fun inspectorStatus(item: WorkItem, detail: Detail, key: SubtaskKey): P
 }
 
 @Composable
+internal fun SubtaskInspectorSummary(
+  detail: Detail,
+  subtask: WorkSubtask,
+  onAction: (DetailAction) -> Unit,
+) {
+  Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(24.dp)) {
+    BasicText(subtask.name, style = SkillBillTheme.type.tBaseMedium.copy(color = SkillBillTheme.colors.fg, lineHeight = 1.4.em))
+    subtask.blockedReason?.takeIf { it.isNotBlank() }?.let {
+      ExpandableText(it, SkillBillTheme.type.tBase.copy(color = SkillBillTheme.colors.fgMuted), maxLines = 3)
+    }
+    SubtaskProperties(detail, subtask, onAction)
+  }
+}
+
+@Composable
 internal fun SubtaskInspector(
   item: WorkItem,
   detail: Detail,
@@ -86,11 +101,7 @@ internal fun SubtaskInspector(
   onAction: (DetailAction) -> Unit,
 ) {
   Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(24.dp)) {
-    BasicText(subtask.name, style = SkillBillTheme.type.tBaseMedium.copy(color = SkillBillTheme.colors.fg, lineHeight = 1.4.em))
-    subtask.blockedReason?.takeIf { it.isNotBlank() }?.let {
-      ExpandableText(it, SkillBillTheme.type.tBase.copy(color = SkillBillTheme.colors.fgMuted), maxLines = 3)
-    }
-    SubtaskProperties(detail, subtask, onAction)
+    SubtaskInspectorSummary(detail, subtask, onAction)
     SubtaskPhasesSection(item, detail, subtask, phaseChoice, activity, renderedAt, phaseResultsPagePending, changes, onAction)
   }
 }

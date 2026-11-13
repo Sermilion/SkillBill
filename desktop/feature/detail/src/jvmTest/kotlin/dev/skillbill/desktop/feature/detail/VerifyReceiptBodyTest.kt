@@ -8,7 +8,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertCountEquals
-import androidx.compose.ui.test.assertDoesNotExist
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -107,14 +108,16 @@ class VerifyReceiptBodyTest {
       }
     }
 
-    onNodeWithText("First expanded description text").assertDoesNotExist()
-    onNodeWithText("First expanded description text", substring = true).performClick()
+    onNodeWithText("First expanded description text").assertExists()
+    onNode(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Collapsed")).performClick()
+    onNode(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Expanded")).assertExists()
     onNodeWithText("First expanded description text").assertExists()
     runOnIdle {
       finding = VerifyReviewFinding("F-002", "minor", "high", "Second.kt:2", "Second expanded description text", emptyList(), emptyList())
     }
     onNodeWithText("First expanded description text").assertDoesNotExist()
-    onNodeWithText("Second expanded description text", substring = true).performClick()
+    onNode(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Collapsed")).assertExists()
+    onNode(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Collapsed")).performClick()
     onNodeWithText("Second expanded description text").assertExists()
   }
 

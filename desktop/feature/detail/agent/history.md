@@ -1,3 +1,16 @@
+## [2026-11-13] SONA-16 redesign subtask details panel
+Areas: desktop/feature/detail, desktop/core/designsystem, desktop/core/ui, desktop/core/domain/settings, desktop/core/datastore, desktop/app
+- MEDIUM feature. Inline expansion is gone. Shared FloatingPane hosts details over an interactive document, above the terminal; goals default to 800 dp and other runs to 560 dp. The 70% cap applies only to unset requests. Restored widths use 272 dp min and body-minus-64 dp max; below 760 dp the pane fills without a grip and subject openers hide Specs. FloatingPane and configurable PaneResizeGrip are reusable.
+- Independent nullable details_width_dp, window-scoped DetailsPaneWidth, 300 ms debounced writes, explicit pending clears and a diagnosed quit flush. Rendering clamps never persist; reset removes only the details key.
+- One-line index rows including Goal finish. DetailScreen owns open, movement and close. The first hidden-panel arrow opens the effective subject; later arrows share the existing index. Close, Esc, view-header and Cmd/Ctrl+I return focus to a list target or the detail screen. Entry-keyed ShellInput detail controls are reusable.
+- At most one phase card open. Window-scoped Auto/Folded/Open survives refresh and paging and clears on database-session change. Auto-open prefers recorded Running, then Blocked, then Failed. Pending, loading and unreadable notices stay reachable with every card folded. Loaded audit and review bodies render only in the selected owning card. PhaseTabs onActivate/onNavigate are reusable.
+- ExpandableResultRow, ResultRowBadge, ResultRowChevron and ResultRowFileChip are reusable. Audit walks producer-order attempts and missing-first current grades; review keeps completed passes while a later pass runs. File chips show basename without a line suffix. Narrow rows stack end slots.
+- Phase cards render recorded preplan, plan, implement, simplify, build, validate, history and commit facts. RecordedReceiptPath is reusable and resolves relative links against Detail.goalWorktree only in Active or Retained state. Validate disclosure resets with item, subtask, phase, round, start and receipt.
+- QA repair: map the completed subtask wire token to Completed, and keep recorded audit, review or phase cards out of Upcoming so expandable rows remain composed at 400 dp. DetailsPane stays a LazyColumn. VerifyFindingRow uses ExpandableResultRow so the full description lives in disclosure.
+- Limits: planning digest, plan-record fields, simplify narrative, per-attempt audit snapshots, per-check names/timings and history/decision counts remain omitted. Runtime contracts unchanged. Validate changed code after QA settled, so the published tree differs from the tree QA tested.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
+
 ## [2026-11-08] SKILL-527 phase cards in details pane
 Areas: desktop/feature/detail, desktop/core/designsystem, desktop/core/domain, desktop/core/data; runtime phase-card and QA projections
 - MEDIUM feature. Subtask and Goal finish inspectors share phase tabs and selected cards in the 380px pane and expanded inline rows. Goal finish replaces the Assessment / QA switch with seven phase tabs.

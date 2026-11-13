@@ -1,5 +1,6 @@
 package dev.skillbill.desktop.feature.detail
 
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.text.BasicText
@@ -9,7 +10,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertCountEquals
-import androidx.compose.ui.test.assertDoesNotExist
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -124,22 +124,24 @@ class DetailPeekTest {
     )
     setContent {
       SkillBillTheme(reducedMotion = true) {
-        Box(Modifier.requiredSize(400.dp, 900.dp)) {
-          DetailsPane(state.value, remember { mutableStateOf(AssessmentOrder.Default) }, {}, { action ->
-            if (action is DetailAction.MoveSubtaskSelection) {
-              val keys = subtaskKeys(state.value.header, detail)
-              val current = keys.indexOf(state.value.subtaskChoice.key)
-              state.value = state.value.copy(subtaskChoice = SubtaskChoice(keys[(current + action.delta).coerceIn(0, keys.lastIndex)]))
-            }
-          })
+        CompositionLocalProvider(LocalShellInput provides ShellInput()) {
+          Box(Modifier.requiredSize(400.dp, 700.dp)) {
+            DetailsPane(state.value, remember { mutableStateOf(AssessmentOrder.Default) }, {}, { action ->
+              if (action is DetailAction.MoveSubtaskSelection) {
+                val keys = subtaskKeys(state.value.header, detail)
+                val current = keys.indexOf(state.value.subtaskChoice.key)
+                state.value = state.value.copy(subtaskChoice = SubtaskChoice(keys[(current + action.delta).coerceIn(0, keys.lastIndex)]))
+              }
+            })
+          }
         }
       }
     }
 
-    onNodeWithText("Finding F-S1", substring = true).performClick()
+    onNodeWithText("Finding F-S1", substring = true).performScrollTo().performClick()
     onNodeWithText("First.kt").assertExists()
     onNodeWithContentDescription("Next subject").performClick()
-    onNodeWithText("Finding F-S2", substring = true).performClick()
+    onNodeWithText("Finding F-S2", substring = true).performScrollTo().performClick()
     onNodeWithText("Second.kt").assertExists()
     onNodeWithText("testing · medium confidence").assertExists()
   }
@@ -183,22 +185,24 @@ class DetailPeekTest {
     )
     setContent {
       SkillBillTheme(reducedMotion = true) {
-        Box(Modifier.requiredSize(400.dp, 900.dp)) {
-          DetailsPane(state.value, remember { mutableStateOf(AssessmentOrder.Default) }, {}, { action ->
-            if (action is DetailAction.MoveSubtaskSelection) {
-              val keys = subtaskKeys(state.value.header, detail)
-              val current = keys.indexOf(state.value.subtaskChoice.key)
-              state.value = state.value.copy(subtaskChoice = SubtaskChoice(keys[(current + action.delta).coerceIn(0, keys.lastIndex)]))
-            }
-          })
+        CompositionLocalProvider(LocalShellInput provides ShellInput()) {
+          Box(Modifier.requiredSize(400.dp, 700.dp)) {
+            DetailsPane(state.value, remember { mutableStateOf(AssessmentOrder.Default) }, {}, { action ->
+              if (action is DetailAction.MoveSubtaskSelection) {
+                val keys = subtaskKeys(state.value.header, detail)
+                val current = keys.indexOf(state.value.subtaskChoice.key)
+                state.value = state.value.copy(subtaskChoice = SubtaskChoice(keys[(current + action.delta).coerceIn(0, keys.lastIndex)]))
+              }
+            })
+          }
         }
       }
     }
 
-    onNodeWithText("AC-001").performClick()
+    onNodeWithText("AC-001").performScrollTo().performClick()
     onNodeWithText("fixed in attempt 1").assertExists()
     onNodeWithContentDescription("Next subject").performClick()
-    onNodeWithText("AC-001").performClick()
+    onNodeWithText("AC-001").performScrollTo().performClick()
     onNodeWithText("fixed in attempt 3").assertExists()
     onNodeWithText("fixed in attempt 1").assertDoesNotExist()
   }
@@ -236,13 +240,15 @@ class DetailPeekTest {
     )
     setContent {
       SkillBillTheme(reducedMotion = true) {
-        Box(Modifier.requiredSize(400.dp, 900.dp)) {
-          DetailsPane(state.value, remember { mutableStateOf(AssessmentOrder.Default) }, {}, {})
+        CompositionLocalProvider(LocalShellInput provides ShellInput()) {
+          Box(Modifier.requiredSize(400.dp, 700.dp)) {
+            DetailsPane(state.value, remember { mutableStateOf(AssessmentOrder.Default) }, {}, {})
+          }
         }
       }
     }
 
-    onNodeWithText("AC-001").performClick()
+    onNodeWithText("AC-001").performScrollTo().performClick()
     onNodeWithText("fixed in attempt 1").assertExists()
     val refreshedAudit = initialAudit.copy(
       criteria = listOf(AuditCriterion("AC-002", "Second criterion", true, 2)),
@@ -262,7 +268,7 @@ class DetailPeekTest {
       )
       state.value = state.value.copy(sections = SectionsUi.Loaded(refreshed, null, emptyMap(), emptySet()))
     }
-    onNodeWithText("AC-002").performClick()
+    onNodeWithText("AC-002").performScrollTo().performClick()
     onNodeWithText("fixed in attempt 2").assertExists()
     onNodeWithText("fixed in attempt 1").assertDoesNotExist()
   }
@@ -327,13 +333,16 @@ class DetailPeekTest {
       SkillBillTheme(reducedMotion = true) {
         CompositionLocalProvider(LocalShellInput provides remember { ShellInput() }) {
           Box(Modifier.requiredSize(700.dp, 600.dp)) {
-            DetailPeek(true, false, 640, {}, {}, {}) { BasicText("Details content") }
+            DetailPeek(true, false, 640, {}, {}, {}) {
+              Box(Modifier.fillMaxSize().testTag("compact-content")) { BasicText("Details content") }
+            }
           }
         }
       }
     }
 
     onNodeWithContentDescription("Details panel resize separator").assertDoesNotExist()
+    onNodeWithTag("compact-content").assertWidthIsEqualTo(700.dp)
     onNodeWithText("Details content").assertIsDisplayed()
   }
 
@@ -485,7 +494,7 @@ class DetailPeekTest {
     val gate = ValidationGateRun(1_000, "passed", "warm", 3, listOf("gate-check"), "./gradlew check", 0)
     val receipt = ValidationResult("failed", checks, 1, listOf(gate))
     val laterGate = ValidationGateRun(2_000, "failed", "cold", 1, listOf("later-gate"), "./gradlew later", 1)
-    val laterReceipt = ValidationResult("failed", (1..6).map { "later-$it" }, 1, listOf(laterGate))
+    val laterReceipt = ValidationResult("failed", (1..8).map { "later-$it" }, 1, listOf(laterGate))
     val implement = finishCard("implement").copy(
       edit = PhaseCardEdit(epoch, 2, 12, 1, emptyList()),
     )
@@ -527,11 +536,44 @@ class DetailPeekTest {
     }
     onNodeWithText("check-7").assertDoesNotExist()
     onNodeWithText("Show fewer").assertDoesNotExist()
-    onNodeWithText("Show 1 more checks").assertDoesNotExist()
+    onNodeWithText("Show 2 more checks").assertExists()
+    onNodeWithText("later-7").assertDoesNotExist()
+    onNodeWithText("later-8").assertDoesNotExist()
+    onNodeWithText("Show 2 more checks").performClick()
+    onNodeWithText("later-8").assertExists()
+    runOnIdle {
+      val sixChecks = laterReceipt.copy(checks = laterReceipt.checks.take(6))
+      val switched = detail.copy(
+        phaseResults = listOf(SubtaskPhaseResults(1, emptyList(), null, null, phaseCards = listOf(implement, validateCard(sixChecks)))),
+      )
+      state.value = state.value.copy(sections = SectionsUi.Loaded(switched, null, emptyMap(), emptySet()))
+    }
+    onNodeWithText("Show fewer").assertDoesNotExist()
+    onNodeWithText("Show 2 more checks").assertDoesNotExist()
     onNodeWithText("later-1").assertExists()
     onNodeWithText("later-6").assertExists()
     onNodeWithText("Duration").assertExists()
     onNodeWithText("Gate 1").assertExists()
+  }
+
+  @Test
+  fun `commit push footer opens the recorded branch instead of the header branch`() = runComposeUiTest {
+    val card = finishCard("commit_push").copy(
+      output = PhaseCardOutput(null, null, null, null, null, null, null, null, null).copy(pushedBranch = "feature/receipt"),
+    )
+    val actions = mutableListOf<DetailAction>()
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        SubtaskPhaseCard(
+          workItem("goal").copy(branch = "feature/header"), emptyDetail,
+          WorkSubtask(1, "Build", "completed", null, null, emptyList()), card,
+          null, null, ChangesUi(), dev.skillbill.desktop.core.domain.model.ActivityResult.Loading,
+          epoch, actions::add,
+        )
+      }
+    }
+    onNodeWithText("Open branch").performClick()
+    assertEquals(listOf<DetailAction>(DetailAction.OpenBranch("feature/receipt")), actions)
   }
 
   @Test
