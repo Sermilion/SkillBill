@@ -26,6 +26,7 @@ import skillbill.goalrunner.model.quality.GoalQualityPreQaBuildOccurrence
 import skillbill.goalrunner.model.quality.GoalQualityPreQaBuildState
 import skillbill.goalrunner.model.quality.GoalQualityQaSourceWitness
 import skillbill.goalrunner.model.quality.GoalQualityReadiness
+import skillbill.goalrunner.model.quality.GoalQualityRetainedMatrix
 import skillbill.goalrunner.model.quality.GoalQualityValidationDisposition
 import skillbill.goalrunner.model.quality.GoalQualityValidationOccurrence
 import skillbill.install.model.SupportedAgent
@@ -72,7 +73,7 @@ internal fun GoalQualityExecutionInputs.toPersistenceWire(): Map<String, Any?> {
     keys.ACCEPTANCE_CRITERIA_READ_FAILURE to acceptanceCriteriaReadFailure,
     keys.BRANCH to branch,
     keys.MODEL_DIRECTIVES to modelDirectives.toSortedMap().mapValues { (_, value) -> value.toPersistenceWire() },
-    keys.MODEL_MATRIX to modelMatrix?.toPersistenceWire(),
+    keys.MODEL_MATRIX to (retainedModelMatrix?.toPersistenceWire() ?: modelMatrix?.toPersistenceWire()),
     keys.ADDONS to
       addons.map { addon ->
         mapOf(
@@ -144,8 +145,9 @@ internal fun decodeInputs(value: Any?): GoalQualityExecutionInputs? {
     acceptanceCriteriaReadFailure = raw[keys.ACCEPTANCE_CRITERIA_READ_FAILURE] as String?,
     branch = raw[keys.BRANCH] as String,
     modelDirectives = directives,
-    modelMatrix = matrix,
+    modelMatrix = matrix?.executionProjection(),
     addons = addons,
+    retainedModelMatrix = matrix,
   )
 }
 
@@ -155,31 +157,73 @@ private fun decodeDirective(value: Any?): PhaseModelDirective {
   return PhaseModelDirective(raw[keys.MODEL] as String, raw[keys.EFFORT] as String?)
 }
 
-private fun decodeMatrix(value: Map<*, *>): ExecutionMatrix {
+private fun decodeMatrix(value: Map<*, *>): GoalQualityRetainedMatrix {
   val keys = GoalQualityExecutionPayloadKeys
   val tiers =
     (value[keys.PHASE_TIERS] as? Map<*, *>)?.entries?.associate { (phase, tier) ->
       (phase as String) to ExecutionTier.valueOf(tier as String)
     }.orEmpty()
-  val agents =
+  val retainedAgents =
     (value[keys.AGENTS] as? Map<*, *>)?.entries?.associate { (agent, rawTiers) ->
-      val supported = SupportedAgent.entries.single { it.id == agent }
       val directives =
         (rawTiers as Map<*, *>).entries.associate { (tier, directive) ->
           ExecutionTier.valueOf(tier as String) to decodeDirective(directive)
         }
-      supported to directives
+      (agent as String) to directives
     }.orEmpty()
-  val overrides =
+  val retainedOverrides =
     (value[keys.AGENT_PHASE_OVERRIDES] as? Map<*, *>)?.entries?.associate { (agent, rawOverrides) ->
-      val supported = SupportedAgent.entries.single { it.id == agent }
       val directives =
         (rawOverrides as Map<*, *>).entries.associate { (phase, directive) ->
           (phase as String) to decodeDirective(directive)
         }
-      supported to directives
+      (agent as String) to directives
     }.orEmpty()
-  return ExecutionMatrix(tiers, agents, overrides)
+  return GoalQualityRetainedMatrix(tiers, retainedAgents, retainedOverrides)
+}
+
+internal fun GoalQualityRetainedMatrix.executionProjection(): ExecutionMatrix =
+  ExecutionMatrix(
+    phaseTiers = phaseTiers,
+    agents =
+      agents.entries.mapNotNull { (id, directives) ->
+        SupportedAgent.entries.firstOrNull { it.id == id }?.let { it to directives }
+      }.toMap(),
+    agentPhaseOverrides =
+      agentPhaseOverrides.entries.mapNotNull { (id, overrides) ->
+        SupportedAgent.entries.firstOrNull { it.id == id }?.let { it to overrides }
+      }.toMap(),
+  )
+
+internal fun GoalQualityExecutionInputs.retainExecutionMatrix(): GoalQualityExecutionInputs {
+  if (retainedModelMatrix != null) return this
+  val matrix = modelMatrix ?: return this
+  return copy(
+    retainedModelMatrix =
+      GoalQualityRetainedMatrix(
+        phaseTiers = matrix.phaseTiers,
+        agents = matrix.agents.entries.associate { (agent, directives) -> agent.id to directives },
+        agentPhaseOverrides =
+          matrix.agentPhaseOverrides.entries.associate { (agent, overrides) -> agent.id to overrides },
+      ),
+  )
+}
+
+private fun GoalQualityRetainedMatrix.toPersistenceWire(): Map<String, Any?> {
+  val keys = GoalQualityExecutionPayloadKeys
+  return mapOf(
+    keys.PHASE_TIERS to phaseTiers.toSortedMap().mapValues { it.value.name },
+    keys.AGENTS to
+      agents.toSortedMap().mapValues { (_, tiers) ->
+        tiers.entries.sortedBy { it.key.name }.associate { (tier, directive) ->
+          tier.name to directive.toPersistenceWire()
+        }
+      },
+    keys.AGENT_PHASE_OVERRIDES to
+      agentPhaseOverrides.toSortedMap().mapValues { (_, overrides) ->
+        overrides.toSortedMap().mapValues { (_, directive) -> directive.toPersistenceWire() }
+      },
+  )
 }
 
 private fun GoalQualityExecution.toPersistenceWire(): Map<String, Any?> =

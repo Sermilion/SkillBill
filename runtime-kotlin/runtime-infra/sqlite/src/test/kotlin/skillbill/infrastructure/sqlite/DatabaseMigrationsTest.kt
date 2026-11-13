@@ -31,6 +31,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 private val GOAL_OUT_OF_BAND_ACCEPTANCE_ARTIFACT_KEY =
@@ -39,6 +40,47 @@ private val GOAL_REVIEW_POLICY_ARTIFACT_KEY =
   DurableWorkflowArtifactFamily.GOAL_REVIEW_POLICY.label()
 
 class DatabaseMigrationsTest {
+  @Test
+  fun `migration 127 rewrites only unsupported standalone launch agents and is repeatable`() {
+    DriverManager.getConnection("jdbc:sqlite::memory:").use { connection ->
+      connection.createStatement().use { statement ->
+        statement.execute(
+          "CREATE TABLE standalone_phase_status (phase_id TEXT PRIMARY KEY, launch_agent_id TEXT)",
+        )
+        statement.executeUpdate(
+          "INSERT INTO standalone_phase_status VALUES " +
+            "('supported', 'claude'), ('missing', NULL), ('retired', 'retired-agent')",
+        )
+        statement.execute("CREATE TABLE operation_launch_contexts (selected_agent TEXT)")
+        statement.execute("INSERT INTO operation_launch_contexts VALUES ('retired-agent')")
+      }
+      val migration = databaseMigrations.single { it.version == 127 }
+      migration.apply(connection, SqliteTestDiagnostics)
+      migration.apply(connection, SqliteTestDiagnostics)
+
+      connection.createStatement().use { statement ->
+        statement.executeQuery(
+          "SELECT phase_id, launch_agent_id FROM standalone_phase_status ORDER BY phase_id",
+        ).use { result ->
+          assertTrue(result.next())
+          assertEquals("missing", result.getString(1))
+          assertNull(result.getString(2))
+          assertTrue(result.next())
+          assertEquals("retired", result.getString(1))
+          assertEquals("unavailable", result.getString(2))
+          assertTrue(result.next())
+          assertEquals("supported", result.getString(1))
+          assertEquals("claude", result.getString(2))
+          assertFalse(result.next())
+        }
+        statement.executeQuery("SELECT selected_agent FROM operation_launch_contexts").use { result ->
+          assertTrue(result.next())
+          assertEquals("retired-agent", result.getString(1))
+        }
+      }
+    }
+  }
+
   @Test
   fun `work board read model migration creates indexed tables in the incomplete state`() {
     val dbPath = Files.createTempDirectory("runtime-kotlin-work-board-read-model").resolve("runtime.db")
@@ -2440,6 +2482,7 @@ private val expectedMigrationDefinitions =
     124 to "record-goal-planning-git-worktree-identity",
     125 to "track-legacy-plan-bundle-transfer",
     126 to "fence-goal-planning-checkout-recovery",
+    127 to "retire-unsupported-agent-ids",
   )
 
 private object NoopMigrationDiagnostics : RuntimeDiagnostics {

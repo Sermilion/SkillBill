@@ -24,7 +24,9 @@ import skillbill.goalrunner.model.quality.GoalQualityPhaseProgress
 import skillbill.goalrunner.model.quality.GoalQualityPreQaBuildState
 import skillbill.goalrunner.model.quality.GoalQualityReadiness
 import skillbill.goalrunner.model.quality.GoalQualityReadiness.CLEAN_UNSTARTED
+import skillbill.install.model.SupportedAgent
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.process.IdentifierGeneratorPort
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
@@ -53,6 +55,7 @@ public class WorkflowGoalRunnerQualityExecutionStore
     private val artifactValidator: FeatureTaskRuntimeWireArtifactValidator,
     private val identifiers: IdentifierGeneratorPort,
     private val historyEvidence: GoalChildHistoryEvidenceStore,
+    private val diagnostics: RuntimeDiagnostics,
   ) : GoalRunnerQualityExecutionStore {
     private val engine = WorkflowEngine()
 
@@ -539,12 +542,17 @@ public class WorkflowGoalRunnerQualityExecutionStore
       if (sourceVersion == GOAL_QUALITY_EXECUTION_CONTRACT_VERSION) {
         val record = GoalQualityExecutionRecord.fromPersistenceWire(map)
         validateCurrentRecord(record)
+        record.execution?.governingInputs?.let { recordMatrixNormalization(it, diagnostics) }
         return GoalQualityExecutionRead.Current(record)
       }
       if (sourceVersion !in setOf("0.1", "0.2", "0.3", "0.4", "0.5", "0.6")) {
         invalid("Stored goal quality execution uses unsupported contract version '$sourceVersion'.")
       }
-      return decodeLegacyQualityRead(map, sourceVersion)
+      return decodeLegacyQualityRead(map, sourceVersion).also { retained ->
+        (retained as? GoalQualityExecutionRead.Historical)?.governingInputs?.let {
+          recordMatrixNormalization(it, diagnostics)
+        }
+      }
     }
 
     private fun validateCurrentRecord(record: GoalQualityExecutionRecord) {
@@ -828,13 +836,14 @@ public class WorkflowGoalRunnerQualityExecutionStore
       admission: GoalQualityAdmissionRequest,
     ): GoalQualityExecutionRecord {
       val parent = parent(unitOfWork, parentWorkflowId)
+      val canonicalAdmission = admission.copy(governingInputs = admission.governingInputs.retainExecutionMatrix())
       val storedPayload = DurableWorkflowArtifactFamily.GOAL_QUALITY_EXECUTION.value(parent.artifacts)
       val retained = storedPayload?.let(::readRetained)
-      if (admission.expectedRetainedRead != null && retained != admission.expectedRetainedRead) {
+      if (canonicalAdmission.expectedRetainedRead != null && retained != canonicalAdmission.expectedRetainedRead) {
         invalid("Stored goal quality evidence changed before transactional adoption; reload the retained execution.")
       }
-      val adopted = retainedQualityRecord(unitOfWork, parent, parentWorkflowId, retained, admission)
-      return finishAdmittedQuality(unitOfWork, parent, retained, adopted, admission)
+      val adopted = retainedQualityRecord(unitOfWork, parent, parentWorkflowId, retained, canonicalAdmission)
+      return finishAdmittedQuality(unitOfWork, parent, retained, adopted, canonicalAdmission)
     }
 
     private fun retainedQualityRecord(
@@ -1091,3 +1100,18 @@ private fun sameOuterSnapshot(
     expected.copy(
       execution = expected.execution?.copy(progress = null),
     )
+
+private fun recordMatrixNormalization(
+  inputs: GoalQualityExecutionInputs,
+  diagnostics: RuntimeDiagnostics,
+) {
+  val retained = inputs.retainedModelMatrix ?: return
+  val removed =
+    (retained.agents.keys + retained.agentPhaseOverrides.keys).count { it !in SupportedAgent.supportedIds }
+  if (removed > 0) {
+    diagnostics.info(
+      "seam=goal_quality_execution_decode record_kind=normalization " +
+        "unsupported_key_count=$removed result=supported_only_execution_matrix",
+    )
+  }
+}

@@ -20,11 +20,14 @@ import java.nio.file.NoSuchFileException
 import java.nio.file.NotLinkException
 import java.nio.file.Path
 import java.nio.file.attribute.BasicFileAttributes
+import java.util.logging.Logger
 import kotlin.coroutines.cancellation.CancellationException
 
 internal data class InventoryValidation(val mapper: ObjectMapper, val schema: JsonSchema)
 
 internal object NativeAgentLinkInventoryDecode {
+  private val logger = Logger.getLogger(NativeAgentLinkInventoryDecode::class.java.name)
+
   fun decode(
     path: Path,
     home: Path,
@@ -239,11 +242,36 @@ internal object NativeAgentLinkInventoryDecode {
     }
     val root = mapper.readTree(path.toFile()) ?: invalid(path, "<root> must be an object")
     if (!root.isObject) invalid(path, "<root> must be an object")
+    val entries = root.path(InventoryKeys.ENTRIES)
+    if (entries.isArray) {
+      val originalSize = entries.size()
+      val iterator = entries.elements()
+      while (iterator.hasNext()) {
+        val provider = iterator.next().get(InventoryKeys.PROVIDER)
+        if (provider?.isTextual == true && provider.textValue() !in NativeAgentLinkInventoryLimits.PROVIDERS) {
+          iterator.remove()
+        }
+      }
+      val removed = originalSize - entries.size()
+      if (removed > 0) {
+        logger.info(
+          "seam=native_agent_inventory_decode record_kind=normalization " +
+            "value_expected=${NativeAgentLinkInventoryLimits.PROVIDERS.sorted().joinToString(",")} " +
+            "value_used=retained_supported_entries " +
+            "removed_count=$removed cause=unsupported_provider",
+        )
+      }
+    }
     val schemaErrors = schema.validate(root)
     if (schemaErrors.isNotEmpty()) {
       invalid(path, schemaErrors.joinToString("; ") { it.message })
     }
     return root
+  }
+
+  private object InventoryKeys {
+    const val ENTRIES = "entries"
+    const val PROVIDER = "provider"
   }
 
   private fun decodeEntries(

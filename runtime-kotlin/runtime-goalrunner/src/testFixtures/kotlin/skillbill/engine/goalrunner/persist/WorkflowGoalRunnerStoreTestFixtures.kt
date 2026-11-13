@@ -273,6 +273,7 @@ fun testWorkflowGoalRunnerQualityExecutionStore(
       FeatureTaskRuntimeExecutionPlanSchemaValidator(),
       SqliteWorkflowArtifactWireEncoder(),
     ),
+    NoopRuntimeDiagnostics,
   )
 }
 

@@ -510,6 +510,11 @@ internal fun validateRetainedAdmission(
 }
 
 internal fun governingInputFingerprint(inputs: GoalQualityExecutionInputs): String {
+  inputs.retainedModelMatrix?.let { retained ->
+    if (retained.executionProjection() != inputs.modelMatrix) {
+      invalid("Stored quality execution matrix differs from its retained governing inputs.")
+    }
+  }
   val json = JsonCodec.mapToJsonString(inputs.toPersistenceWire())
   return MessageDigest.getInstance("SHA-256")
     .digest(json.toByteArray(Charsets.UTF_8))

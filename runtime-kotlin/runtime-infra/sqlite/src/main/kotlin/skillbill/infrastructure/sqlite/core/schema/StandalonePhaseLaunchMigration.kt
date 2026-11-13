@@ -2,6 +2,7 @@ package skillbill.infrastructure.sqlite.core.schema
 
 import skillbill.error.shellcontent.invalidIdeStatusSchemaError
 import skillbill.idestatus.model.IdeStatusLaunchScope
+import skillbill.install.model.SupportedAgent
 import java.sql.Connection
 import java.sql.ResultSet
 
@@ -47,4 +48,16 @@ internal fun ResultSet.readLaunchScope(sourceLabel: String): IdeStatusLaunchScop
   val raw = getString(LAUNCH_SCOPE_COLUMN)
   return raw?.let(IdeStatusLaunchScope::fromWire)
     ?: throw invalidIdeStatusSchemaError(sourceLabel, LAUNCH_SCOPE_COLUMN, "Invalid launch scope '$raw'.")
+}
+
+internal fun retireUnsupportedLaunchAgents(connection: Connection) {
+  val supportedIds = SupportedAgent.supportedIds.sorted()
+  val placeholders = supportedIds.joinToString(", ") { "?" }
+  connection.prepareStatement(
+    "UPDATE standalone_phase_status SET launch_agent_id = 'unavailable' " +
+      "WHERE launch_agent_id IS NOT NULL AND launch_agent_id NOT IN ($placeholders)",
+  ).use { statement ->
+    supportedIds.forEachIndexed { index, id -> statement.setString(index + 1, id) }
+    statement.executeUpdate()
+  }
 }
