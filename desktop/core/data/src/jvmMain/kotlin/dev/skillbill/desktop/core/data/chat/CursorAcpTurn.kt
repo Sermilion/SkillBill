@@ -34,6 +34,7 @@ import skillbill.infrastructure.launcher.process.cursor.CursorAcpImage
 import skillbill.infrastructure.launcher.process.cursor.CursorAcpLaunch
 import skillbill.infrastructure.launcher.process.cursor.CursorAcpMcpDependency
 import skillbill.infrastructure.launcher.process.cursor.CursorAcpSession
+import skillbill.infrastructure.launcher.process.cursor.commandCarriesModel
 import skillbill.infrastructure.launcher.process.cursor.cursorAcpDependencyRefusal
 import skillbill.ports.approval.ApprovalOwnerEffects
 import skillbill.ports.approval.model.ApprovalDeliveryState
@@ -116,9 +117,9 @@ internal class CursorChatGeneration(
 }
 
 /** The provider's own launcher executables with its ACP arguments. */
-internal fun acpCommand(provider: AcpProvider, shell: String?): List<String> {
+internal fun acpCommand(provider: AcpProvider, shell: String?, model: String?): List<String> {
   val aliases = AGENT_LAUNCHER_CLIS[SupportedAgent.fromWire(provider.id)]?.executables.orEmpty()
-  return agentCommand(aliases, provider.acpArguments, shell)
+  return agentCommand(aliases, provider.launchArguments(model), shell)
 }
 
 internal fun cursorAcpTurn(
@@ -156,7 +157,7 @@ internal fun cursorAcpTurn(
   val outputs = Channel<ChatProcessOutput>(Channel.UNLIMITED)
   val events = Channel<ChatEvent>(Channel.UNLIMITED)
   val readerRef = AtomicReference<kotlinx.coroutines.Job?>()
-  val command = ChatCommand(acpCommand(provider, shell), request.scope.repositoryRoot, environment, "")
+  val command = ChatCommand(acpCommand(provider, shell, request.agent.model), request.scope.repositoryRoot, environment, "")
   // ACP streams text chunks without message ids, so a text run after a tool call starts a new message.
   var textOpen = false
   val protocol = CursorAcpSession(
@@ -171,6 +172,7 @@ internal fun cursorAcpTurn(
       images = request.images.map { CursorAcpImage(Base64.getEncoder().encodeToString(it.bytes), it.mediaType) },
       mcpDependency = dependency,
       provider = provider,
+      modelOnCommandLine = commandCarriesModel(command.argv, request.agent.model),
     ),
     Clock.systemUTC(),
     writeLine = { inputs.writeAndAwaitBlocking(it) },

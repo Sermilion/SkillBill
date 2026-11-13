@@ -81,7 +81,14 @@ class CursorAcpSessionTest {
     assertContains(requireNotNull(exact.session.outcome()?.failure), "swe-2-high")
     assertTrue(exact.frames.none { it.text(CursorAcpKeys.METHOD) == "session/prompt" })
 
-    val absent = Harness(model = "swe-2-high", provider = AcpProvider.Devin)
+    val unconfirmed = Harness(model = "swe-2-high", provider = AcpProvider.Devin)
+    unconfirmed.session.start()
+    unconfirmed.respond("""{"protocolVersion":1,"agentCapabilities":{}}""")
+    unconfirmed.respond("""{"sessionId":"s"}""")
+    assertContains(requireNotNull(unconfirmed.session.outcome()?.failure), "swe-2-high")
+    assertTrue(unconfirmed.frames.none { it.text(CursorAcpKeys.METHOD) == "session/prompt" })
+
+    val absent = Harness(model = "swe-2-high", provider = AcpProvider.Devin, modelOnCommandLine = true)
     absent.session.start()
     absent.respond("""{"protocolVersion":1,"agentCapabilities":{}}""")
     absent.respond("""{"sessionId":"s"}""")
@@ -493,6 +500,7 @@ class CursorAcpSessionTest {
     bindOwner: Boolean = true,
     mcpServers: List<AcpStdioMcpServer> = emptyList(),
     roots: List<String> = emptyList(),
+    modelOnCommandLine: Boolean = false,
   ) {
     val frames = mutableListOf<JsonObject>()
     val events = mutableListOf<CursorAcpEvent>()
@@ -511,6 +519,7 @@ class CursorAcpSessionTest {
           provider = provider,
           mcpServers = mcpServers,
           additionalDirectories = roots,
+          modelOnCommandLine = modelOnCommandLine,
         ),
         Clock.fixed(Instant.EPOCH, ZoneOffset.UTC),
         {

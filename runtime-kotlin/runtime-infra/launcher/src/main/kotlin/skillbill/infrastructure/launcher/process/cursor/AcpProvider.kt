@@ -13,6 +13,10 @@ data class AcpProvider(
 ) {
   val seam: String get() = "${id}_acp"
 
+  /** ACP argv; exact-model providers also carry the selected model UID as `--model`. */
+  fun launchArguments(model: String?): List<String> =
+    acpArguments + if (exactModels && model != null) listOf("--model", model) else emptyList()
+
   companion object {
     val Cursor =
       AcpProvider(

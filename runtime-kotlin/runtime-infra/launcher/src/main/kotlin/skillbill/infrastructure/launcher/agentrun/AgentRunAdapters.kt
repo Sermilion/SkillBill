@@ -16,6 +16,7 @@ import skillbill.infrastructure.launcher.process.cursor.AcpProvider
 import skillbill.infrastructure.launcher.process.cursor.CursorAcpLaunch
 import skillbill.infrastructure.launcher.process.cursor.CursorAcpMcpDependency
 import skillbill.infrastructure.launcher.process.cursor.CursorSessionChannel
+import skillbill.infrastructure.launcher.process.cursor.commandCarriesModel
 import skillbill.infrastructure.launcher.process.cursor.cursorAcpDependencyRefusal
 import skillbill.infrastructure.launcher.process.interaction.AgentRunApprovalChannelOpening
 import skillbill.infrastructure.launcher.process.interaction.AgentRunApprovalOpenResult
@@ -502,6 +503,7 @@ internal class ProcessAgentRunAdapter(
         mcpServers = command.acpMcpServers,
         additionalDirectories =
           if (devin) request.additionalWritableDirectories.map(::absolutePath).distinct() else emptyList(),
+        modelOnCommandLine = commandCarriesModel(command.command, command.sessionModel),
       )
     val deadline = approvalEnclosingDeadline(clock, request.timeout)
     val result =

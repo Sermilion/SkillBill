@@ -30,6 +30,7 @@ data class CursorAcpLaunch(
   val provider: AcpProvider = AcpProvider.Cursor,
   val mcpServers: List<AcpStdioMcpServer> = emptyList(),
   val additionalDirectories: List<String> = emptyList(),
+  val modelOnCommandLine: Boolean = false,
 ) {
   constructor(
     cwd: String,
@@ -40,6 +41,10 @@ data class CursorAcpLaunch(
     images: List<CursorAcpImage>,
   ) : this(cwd, prompt, model, mode, savedSession, images, CursorAcpMcpDependency.ProjectUserOnly)
 }
+
+/** True when [command] passes [model] as `--model <model>`. */
+fun commandCarriesModel(command: List<String>, model: String?): Boolean =
+  model != null && command.windowed(2).any { it == listOf("--model", model) }
 
 enum class CursorAcpMcpDependency { ProjectUserOnly, TeamDashboardRequired }
 
@@ -278,6 +283,13 @@ class CursorAcpSession(
       return selectMode()
     }
     if (config == null && launch.provider.exactModels && setup.obj(K.MODELS) == null) {
+      if (!launch.modelOnCommandLine) {
+        record("seam=$seam outcome=model_metadata_absent_unconfirmed")
+        return stop(
+          "$providerName did not report its models, so the selected model '$requested' could not be confirmed; " +
+            "no prompt was sent.",
+        )
+      }
       record("seam=$seam outcome=model_metadata_absent reported_identity=unavailable")
       return selectMode()
     }

@@ -53,11 +53,7 @@ internal class DevinAgentRunCommandBuilder(
       command =
         buildList {
           add(SupportedAgent.DEVIN.wireValue)
-          addAll(AcpProvider.Devin.acpArguments)
-          request.modelOverride?.let { model ->
-            add("--model")
-            add(model)
-          }
+          addAll(AcpProvider.Devin.launchArguments(request.modelOverride))
         },
       workingDirectory = request.repoRoot,
       timeout = request.timeout,
