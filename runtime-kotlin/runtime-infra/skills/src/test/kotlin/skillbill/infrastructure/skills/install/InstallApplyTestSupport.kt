@@ -1,6 +1,9 @@
 package skillbill.infrastructure.skills.install
 
 import org.junit.jupiter.api.Assumptions
+import skillbill.infrastructure.skills.install.identity.SKILL_CONTENT_IDENTITY_FILENAME
+import skillbill.infrastructure.skills.install.identity.SkillContentIdentity
+import skillbill.infrastructure.skills.install.identity.installedSkillSlug
 import skillbill.install.model.InstallAgentSelection
 import skillbill.install.model.InstallAgentSelectionMode
 import skillbill.install.model.InstallAgentTarget
@@ -18,9 +21,6 @@ import skillbill.install.model.SupportedAgent
 import skillbill.install.model.WindowsSymlinkDecision
 import skillbill.install.model.WindowsSymlinkPreflight
 import skillbill.install.model.WindowsSymlinkPreflightState
-import skillbill.infrastructure.skills.install.identity.SKILL_CONTENT_IDENTITY_FILENAME
-import skillbill.infrastructure.skills.install.identity.SkillContentIdentity
-import skillbill.infrastructure.skills.install.identity.installedSkillSlug
 import skillbill.ports.repository.toFileLocation
 import skillbill.testing.seedConformingPlatformPack
 import java.io.File
@@ -173,7 +173,10 @@ open class InstallApplyTestSupport {
     Files.createDirectories(cacheRoot)
     val staging = cacheRoot.resolve("${installedSkillSlug(sourceDir)}-deadbeefdeadbeef")
     Files.createDirectories(staging)
-    Files.writeString(staging.resolve(SKILL_CONTENT_IDENTITY_FILENAME), SkillContentIdentity.fromSource(sourceDir).compact())
+    Files.writeString(
+      staging.resolve(SKILL_CONTENT_IDENTITY_FILENAME),
+      SkillContentIdentity.fromSource(sourceDir).compact(),
+    )
     authoredFiles.forEach { file ->
       val rel = sourceDir.relativize(file)
       val dest = staging.resolve(rel.toString())

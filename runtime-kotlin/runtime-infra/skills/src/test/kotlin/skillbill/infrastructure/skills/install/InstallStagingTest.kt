@@ -160,6 +160,12 @@ class InstallStagingTest {
         "Use `skill-bill phase review SONA-5` and keep local guidance.\n" +
         "Call mcp__skill-bill__update_check first.\n"
     Files.writeString(skillDir.resolve("content.md"), authored)
+    supportingFileTargets(repoRoot).values
+      .filter { target -> target.startsWith(repoRoot.resolve("orchestration")) }
+      .forEach { target ->
+        Files.createDirectories(target.parent)
+        Files.writeString(target, "supporting target\n")
+      }
     val sourceBytes = Files.readAllBytes(skillDir.resolve("content.md"))
 
     val first = stageInstalledSkill(repoRoot, skillDir, home)

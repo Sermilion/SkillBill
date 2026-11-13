@@ -62,11 +62,6 @@ internal enum class ReconcileSourceSide {
 
 private fun ReconcileSourceSide.enforcesPlatformPackContractVersion(): Boolean = this == ReconcileSourceSide.UPSTREAM
 
-/**
- * [hash] is the composite hash (authored files, pointer targets, internal children, addons) and
- * drives Unchanged detection and the composite baseline entry. [sourceHash] covers only
- * [authoredFiles], the files reconciliation replaces, and decides whether a local edit is preserved.
- */
 internal data class ReconcileSkillEntry(
   val hash: String,
   val sourceDir: Path,
@@ -95,17 +90,27 @@ internal data class ReconcileApplyOutput(
   val prunedPaths: List<String>,
 )
 
+internal data class ReconcileInvocation(
+  val upstream: ReconcileSourceRoots,
+  val local: ReconcileSourceRoots,
+  val home: Path,
+)
+
+internal data class ReconcileContext(
+  val baseline: BaselineManifest,
+  val environment: Map<String, String> = emptyMap(),
+  val publishedSource: PublishedSourceReader = PublishedSourceReader.NONE,
+)
+
 internal fun computeReconciliationPlan(
-  upstream: ReconcileSourceRoots,
-  local: ReconcileSourceRoots,
-  home: Path,
-  baseline: BaselineManifest,
-  environment: Map<String, String> = emptyMap(),
-  publishedSource: PublishedSourceReader = PublishedSourceReader.NONE,
+  invocation: ReconcileInvocation,
+  context: ReconcileContext,
 ): ReconciliationPlan {
-  val upstreamSkills = enumerateSkills(upstream, home, ReconcileSourceSide.UPSTREAM, environment)
-  val localSkills = enumerateSkills(local, home, ReconcileSourceSide.LOCAL, environment)
-  return classifyReconciliation(upstreamSkills, localSkills, baseline, publishedSource)
+  val upstreamSkills =
+    enumerateSkills(invocation.upstream, invocation.home, ReconcileSourceSide.UPSTREAM, context.environment)
+  val localSkills =
+    enumerateSkills(invocation.local, invocation.home, ReconcileSourceSide.LOCAL, context.environment)
+  return classifyReconciliation(upstreamSkills, localSkills, context.baseline, context.publishedSource)
 }
 
 internal fun classifyReconciliation(
@@ -130,11 +135,6 @@ internal fun classifyReconciliation(
   return ReconciliationPlan(outcomes = outcomes)
 }
 
-/**
- * The source hash the last install recorded for this skill. Baselines written before source
- * hashes existed fall back to the composite entry, then to the published staging copy. With no
- * evidence the local copy is unedited this returns null, so the copy is preserved.
- */
 private fun baselineSourceHash(
   skillRelativePath: String,
   local: ReconcileSkillEntry,

@@ -2,20 +2,22 @@ package skillbill.infrastructure.skills.install
 
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.InstallFailureCode
+import skillbill.infrastructure.skills.install.reconcile.PublishedSourceReader
+import skillbill.infrastructure.skills.install.reconcile.ReconcileContext
+import skillbill.infrastructure.skills.install.reconcile.ReconcileInvocation
 import skillbill.infrastructure.skills.install.reconcile.ReconcileSourceRoots
 import skillbill.infrastructure.skills.install.reconcile.computeReconciliationPlan
-import skillbill.infrastructure.skills.install.reconcile.PublishedSourceReader
 import skillbill.infrastructure.skills.install.reconcile.installedStagingSourceReader
 import skillbill.infrastructure.skills.install.reconcile.skillRelativePath
-import skillbill.testing.seedConformingPlatformPack
-import skillbill.install.model.BaselineManifest.Companion.sourceKeyFor
 import skillbill.infrastructure.skills.scaffold.platformpack.manifest.platformPackSchemaLog
 import skillbill.infrastructure.skills.scaffold.runtime.service.contract.SHELL_CONTRACT_VERSION
 import skillbill.install.model.BaselineManifest
+import skillbill.install.model.BaselineManifest.Companion.sourceKeyFor
 import skillbill.install.model.ReconciliationPlan
 import skillbill.install.model.SkillReconciliationOutcome
 import skillbill.ports.install.baseline.model.ReadBaselineManifestRequest
 import skillbill.ports.install.baseline.model.WriteBaselineManifestRequest
+import skillbill.testing.seedConformingPlatformPack
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.logging.Handler
@@ -54,14 +56,13 @@ class InstallReconcileTest : InstallApplyTestSupport() {
     home: Path,
     baseline: BaselineManifest,
     publishedStaging: Boolean = false,
-  ) =
-    computeReconciliationPlan(
-      roots(upstream),
-      roots(local),
-      home,
+  ) = computeReconciliationPlan(
+    ReconcileInvocation(roots(upstream), roots(local), home),
+    ReconcileContext(
       baseline,
       publishedSource = if (publishedStaging) installedStagingSourceReader(home) else PublishedSourceReader.NONE,
-    )
+    ),
+  )
 
   private fun outcomeFor(
     plan: ReconciliationPlan,
@@ -264,7 +265,10 @@ class InstallReconcileTest : InstallApplyTestSupport() {
     val legacyBaseline =
       BaselineManifest.of(
         BaselineManifest.CONTRACT_VERSION,
-        planWith(upstream, local, home, BaselineManifest.empty()).baselineOverlay.filterKeys { key -> !key.endsWith("#source") },
+        planWith(upstream, local, home, BaselineManifest.empty()).baselineOverlay.filterKeys {
+            key ->
+          !key.endsWith("#source")
+        },
       )
 
     val specialistPath = "platform-packs/generic/code-review/bill-generic-code-review-security"

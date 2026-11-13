@@ -4,7 +4,7 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 task_dir="$(mktemp -d)"
 trap 'rm -rf "$task_dir"' EXIT
-for function_name in desktop_app_target_path desktop_app_executable_path desktop_quoted_exec_path check_desktop_app_launcher_ownership prepare_desktop_app_launcher discard_desktop_app_launcher_stage install_desktop_app_launcher linux_legacy_desktop_is_owned migrate_kde_desktop_pin cleanup_linux_legacy_desktop activate_staged_desktop_app; do
+for function_name in desktop_app_target_path desktop_app_executable_path desktop_quoted_exec_path check_desktop_app_target_ownership check_desktop_app_launcher_ownership prepare_desktop_app_launcher discard_desktop_app_launcher_stage install_desktop_app_launcher linux_legacy_desktop_is_owned migrate_kde_desktop_pin cleanup_linux_legacy_desktop activate_staged_desktop_app; do
   sed -n "/^$function_name() {/,/^}/p" "$repo_root/install.sh" >> "$task_dir/functions.sh"
 done
 sed -n '/^install_skill_bill_launcher() {/,/^install_runtime_launchers() {/p' "$repo_root/install.sh" | sed '$d' >> "$task_dir/functions.sh"

@@ -18,6 +18,7 @@ import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class AuthoringRenderOutputTest {
   private val tempRoot: Path = Files.createTempDirectory("skillbill-authoring-render-")
@@ -182,7 +183,10 @@ class AuthoringRenderOutputTest {
     assertContains(legacyRendered, "Call mcp__sona__update_check through the `sona` CLI.")
     assertContains(legacyRendered, "(`exact: skill-bill`)")
     assertContains(unrelatedRendered, "Keep mcp__skill-bill__update_check.")
-    assertEquals(historicalSource.replace("name: skill-bill", "name: sona"), Files.readString(dispatcherDir.resolve("content.md")))
+    assertEquals(
+      historicalSource.replace("name: skill-bill", "name: sona"),
+      Files.readString(dispatcherDir.resolve("content.md")),
+    )
   }
 
   @Test

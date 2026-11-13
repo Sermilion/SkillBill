@@ -114,6 +114,9 @@ class InstallerShellReconcileTest {
     val editedPack = stateDir.resolve("platform-packs/kotlin/code-review/bill-kotlin-code-review/content.md")
     val editedAddon = stateDir.resolve("agent-addons/review-helper/content.md")
     val baseline = stateDir.resolve("baseline-manifest.json")
+    Files.createDirectories(editedSkill.parent)
+    Files.createDirectories(editedPack.parent)
+    Files.createDirectories(editedAddon.parent)
     Files.writeString(editedSkill, "USER SKILL EDIT\n")
     Files.writeString(editedPack, "USER PACK EDIT\n")
     Files.writeString(editedAddon, "USER ADDON EDIT\n")
@@ -131,11 +134,18 @@ class InstallerShellReconcileTest {
       assertTrue(failed.exitCode != 0, failed.output)
       assertContains(failed.output, "copied source and baseline were preserved")
       assertFalse(failed.output.contains("retrying once"))
-      assertTrue(sourceBytes.indices.all { sourceBytes[it].contentEquals(Files.readAllBytes(listOf(editedSkill, editedPack, editedAddon)[it])) })
+      assertTrue(
+        sourceBytes.indices.all {
+          sourceBytes[it].contentEquals(Files.readAllBytes(listOf(editedSkill, editedPack, editedAddon)[it]))
+        },
+      )
       assertTrue(baselineBytes.contentEquals(Files.readAllBytes(baseline)))
       assertFalse(Files.exists(stateDir.resolve(".candidate-source")))
       assertTrue(
-        parseRuntimeCalls(failed.runtimeLog).none { args -> args.drop(2).take(2) == listOf("install", "reconcile") && "--apply" in args },
+        parseRuntimeCalls(failed.runtimeLog).none {
+            args ->
+          args.drop(2).take(2) == listOf("install", "reconcile") && "--apply" in args
+        },
         "compute failure must not apply a reconciliation plan",
       )
       previous = failed

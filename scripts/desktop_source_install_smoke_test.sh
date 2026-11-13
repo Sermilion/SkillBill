@@ -109,7 +109,7 @@ kill -0 "$unrelated_app"
 # The installer runs inside the desktop app's terminal: the app is its parent. Stopping
 # the app there would end the installer, so the restart waits until the installer exits.
 declare -f > "$task_dir/hosted-functions.sh"
-declare -p task_dir RUNTIME_KOTLIN_DIR INSTALL_SOURCE DESKTOP_APP_INSTALL_RESULT BUILT_DESKTOP_APP_SOURCE RUNTIME_LAUNCHER_BIN_DIR RUNTIME_CLI_BIN RUNTIME_MCP_BIN RECOVERY_DESKTOP_APP_PATH > "$task_dir/hosted-vars.sh"
+declare -p task_dir RUNTIME_KOTLIN_DIR INSTALL_SOURCE DESKTOP_APP_INSTALL_RESULT BUILT_DESKTOP_APP_SOURCE RUNTIME_LAUNCHER_BIN_DIR RUNTIME_CLI_BIN RUNTIME_MCP_BIN RECOVERY_DESKTOP_APP_PATH TEST_DESKTOP_OS TEST_DESKTOP_ROOT > "$task_dir/hosted-vars.sh"
 cat > "$task_dir/hosted-install.sh" <<'HOSTED'
 set -euo pipefail
 source "$1/hosted-vars.sh"

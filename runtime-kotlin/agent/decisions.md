@@ -1,3 +1,8 @@
+## [2026-11-13] Convert fresh runtime commands while preserving stored records
+Context: SONA-5 stages the public command rename across dependent subtasks. Runtime command producers convert after public executables, namespace and skill alias exist.
+Decision: Change newly constructed guidance and its prefix-dependent consumers together. Retain stored prose, identities, checkpoints and storage paths.
+Reason: Preserving saved records keeps existing runs and their completed work available during the rename. Prefix-dependent consumers such as archive export must change with the producers they parse.
+
 ## [2026-11-12] Operator retry opens a fresh feasibility cycle from a blocked one
 Context: A feasibility safety block (for example, repository paths changed outside the admitted authority because the operator edited the same checkout) settles the launch and sets feasibility mode to `blocked`. `retry-blocked --phase plan_subtasks` reopened only the phase record, so the next attempt read the blocked state and blocked again with the same reason. The workflow could not recover.
 Decision: `retry-blocked` passes a phase-owned artifact hook into the retry transaction. For `plan_subtasks` with a blocked feasibility state and no active launch, the engine archives the current cycle into `cycleHistory`, resets the launch counters, and opens cycle `<workflow>:plan_subtasks:retry-<ledger sequence>` in review mode with an `operator-blocked-retry` reopening. A blocked state that still has an active launch refuses the retry, because launch recovery must settle that launch first. Other phases and non-blocked states are unchanged.

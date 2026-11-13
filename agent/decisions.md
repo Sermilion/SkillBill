@@ -1,3 +1,13 @@
+## [2026-11-13] Separate public Sona names from canonical identities
+Context: SONA-5 changes public commands while existing source contracts and persisted records retain skill-bill identities.
+Decision: Use sona and /sona in live guidance and public links. ListedSkillNames maps canonical skill-bill to that public name. Retain canonical sources, internal-for tokens, raw operations, telemetry values, state paths and historical evidence.
+Reason: The spec requires the new entry points without relabeling durable data or breaking manifest-driven discovery. Renaming the source tree or parent tokens would change those identities and could lose class-selected ceremony. This change introduces no persisted-data migration.
+
+## [2026-11-13] Keep the retired CLI notice independent of the runtime
+Context: SONA-5 retires skill-bill after earlier subtasks convert executable callers and remaining guidance.
+Decision: Keep the managed-launcher marker and generate a constant notice with exit status 0 for every argument list. Do not inspect the runtime or forward arguments. Remove the obsolete MCP link only for the exact owned target.
+Reason: The spec requires old invocations to perform no action even when the runtime is missing, while preserving uninstall recognition and unrelated user files.
+
 ## [2026-11-07] Default all provider launches to native permission bypass
 Context: The operator explicitly restored the previous global bypass behavior after testing SKILL-453, and requested it as the default for every agent and launch surface.
 Decision: Claude skips permission checks; Codex requests never approvals and full access on thread start, resume and turns; Cursor uses force, trust, MCP approval and a disabled sandbox; Junie ACP enables Brave mode before prompting. Existing headless Junie review execution remains autonomous.

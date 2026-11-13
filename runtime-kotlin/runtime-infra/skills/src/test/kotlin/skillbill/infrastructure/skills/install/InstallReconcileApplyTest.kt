@@ -2,13 +2,15 @@ package skillbill.infrastructure.skills.install
 
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.InstallFailureCode
+import skillbill.infrastructure.skills.install.reconcile.ReconcileContext
+import skillbill.infrastructure.skills.install.reconcile.ReconcileInvocation
 import skillbill.infrastructure.skills.install.reconcile.ReconcileSourceRoots
 import skillbill.infrastructure.skills.install.reconcile.applyReconciliation
 import skillbill.infrastructure.skills.install.reconcile.computeReconciliationPlan
 import skillbill.infrastructure.skills.install.reconcile.installedStagingSourceReader
+import skillbill.install.model.BaselineManifest
 import skillbill.install.model.BaselineManifest.Companion.sourceKeyFor
 import skillbill.install.model.SkillReconciliationOutcome
-import skillbill.install.model.BaselineManifest
 import skillbill.testing.seedConformingPlatformPack
 import java.io.IOException
 import java.nio.file.Files
@@ -47,7 +49,10 @@ class InstallReconcileApplyTest : InstallApplyTestSupport() {
   ): BaselineManifest =
     BaselineManifest.of(
       BaselineManifest.CONTRACT_VERSION,
-      computeReconciliationPlan(roots(upstream), roots(upstream), home, BaselineManifest.empty()).baselineOverlay,
+      computeReconciliationPlan(
+        ReconcileInvocation(roots(upstream), roots(upstream), home),
+        ReconcileContext(BaselineManifest.empty()),
+      ).baselineOverlay,
     )
 
   private fun reviewContent(repoRoot: Path): Path = repoRoot.resolve("skills/bill-code-review/content.md")
@@ -69,7 +74,11 @@ class InstallReconcileApplyTest : InstallApplyTestSupport() {
       upstreamCheckBytes,
     )
 
-    val output = applyReconciliation(roots(upstream), roots(local), home, baseline)
+    val output =
+      applyReconciliation(
+        ReconcileInvocation(roots(upstream), roots(local), home),
+        ReconcileContext(baseline),
+      )
 
     assertEquals(localReviewBytes, Files.readString(reviewContent(local)))
     assertEquals(upstreamCheckBytes, Files.readString(local.resolve("skills/bill-code-check/content.md")))
@@ -89,30 +98,30 @@ class InstallReconcileApplyTest : InstallApplyTestSupport() {
     val home = home()
     val baseline = baselineFromUpstream(upstream, home)
     val oldBytes = Files.readString(reviewContent(local))
+    Files.writeString(reviewContent(upstream), oldBytes + "\nUPSTREAM CHANGE\n")
 
-    val failure = assertFailsWith<SkillBillRuntimeException> {
-      applyReconciliation(
-        roots(upstream),
-        roots(local),
-        home,
-        baseline,
-        moveDirectory = { source, target ->
-          if (source.parent.fileName.toString().startsWith(".reconcile-stage-") ||
-            source.fileName.toString().startsWith(".reconcile-backup-")
-          ) {
-            throw IOException("synthetic move failure")
-          }
-          Files.move(source, target, StandardCopyOption.REPLACE_EXISTING)
-        },
-      )
-    }
+    val failure =
+      assertFailsWith<SkillBillRuntimeException> {
+        applyReconciliation(
+          ReconcileInvocation(roots(upstream), roots(local), home),
+          ReconcileContext(baseline),
+          moveDirectory = { source, target ->
+            if (source.parent.fileName.toString().startsWith(".reconcile-stage-") ||
+              source.fileName.toString().startsWith(".reconcile-backup-")
+            ) {
+              throw IOException("synthetic move failure")
+            }
+            Files.move(source, target, StandardCopyOption.REPLACE_EXISTING)
+          },
+        )
+      }
 
     assertEquals(InstallFailureCode.RECONCILIATION_CONFLICT, failure.code)
     assertContains(failure.message.orEmpty(), "publication and restoration failed")
     val backupPath = failure.message.orEmpty().substringAfter("previous source remains at '").substringBefore("'.")
     val backup = Path.of(backupPath)
-    assertTrue(Files.isRegularFile(backup.resolve("bill-code-review/content.md")))
-    assertEquals(oldBytes, Files.readString(backup.resolve("bill-code-review/content.md")))
+    assertTrue(Files.isRegularFile(backup.resolve("content.md")))
+    assertEquals(oldBytes, Files.readString(backup.resolve("content.md")))
     assertEquals(1, failure.suppressed.size)
     assertContains(failure.cause?.message.orEmpty(), "synthetic move failure")
     assertContains(failure.suppressed.single().message.orEmpty(), "synthetic move failure")
@@ -128,7 +137,10 @@ class InstallReconcileApplyTest : InstallApplyTestSupport() {
     val legacyBaseline =
       BaselineManifest.of(
         BaselineManifest.CONTRACT_VERSION,
-        computeReconciliationPlan(roots(upstream), roots(upstream), home, BaselineManifest.empty()).baselineOverlay
+        computeReconciliationPlan(
+          ReconcileInvocation(roots(upstream), roots(upstream), home),
+          ReconcileContext(BaselineManifest.empty()),
+        ).baselineOverlay
           .filterKeys { key -> !key.endsWith("#source") },
       )
     val specialist = local.resolve("platform-packs/generic/code-review/bill-generic-code-review-security/content.md")
@@ -140,11 +152,8 @@ class InstallReconcileApplyTest : InstallApplyTestSupport() {
 
     val output =
       applyReconciliation(
-        roots(upstream),
-        roots(local),
-        home,
-        legacyBaseline,
-        publishedSource = installedStagingSourceReader(home),
+        ReconcileInvocation(roots(upstream), roots(local), home),
+        ReconcileContext(legacyBaseline, publishedSource = installedStagingSourceReader(home)),
       )
 
     assertTrue(output.installedPaths.contains("skills/skill-bill"))
@@ -165,7 +174,11 @@ class InstallReconcileApplyTest : InstallApplyTestSupport() {
     val locallyAuthored = Files.readString(dispatcher) + "\nUse the team's local launch checklist.\n"
     Files.writeString(dispatcher, locallyAuthored)
 
-    val output = applyReconciliation(roots(upstream), roots(local), home, baseline)
+    val output =
+      applyReconciliation(
+        ReconcileInvocation(roots(upstream), roots(local), home),
+        ReconcileContext(baseline),
+      )
 
     assertEquals(locallyAuthored, Files.readString(dispatcher))
     assertFalse(output.installedPaths.contains("skills/skill-bill"))
@@ -183,7 +196,11 @@ class InstallReconcileApplyTest : InstallApplyTestSupport() {
       stream.sorted(Comparator.reverseOrder()).forEach(Files::deleteIfExists)
     }
 
-    val output = applyReconciliation(roots(upstream), roots(local), home, baseline)
+    val output =
+      applyReconciliation(
+        ReconcileInvocation(roots(upstream), roots(local), home),
+        ReconcileContext(baseline),
+      )
 
     assertFalse(
       Files.exists(local.resolve("skills/bill-local-only")),
@@ -202,7 +219,10 @@ class InstallReconcileApplyTest : InstallApplyTestSupport() {
     val liveBytes = Files.readString(reviewContent(local))
 
     assertFailsWith<SkillBillRuntimeException> {
-      applyReconciliation(roots(upstream), roots(local), home, BaselineManifest.empty())
+      applyReconciliation(
+        ReconcileInvocation(roots(upstream), roots(local), home),
+        ReconcileContext(BaselineManifest.empty()),
+      )
     }.also { assertEquals(InstallFailureCode.RECONCILIATION_CONFLICT, it.code) }
     assertEquals(liveBytes, Files.readString(reviewContent(local)), "a refused prune must change nothing")
   }
@@ -218,7 +238,11 @@ class InstallReconcileApplyTest : InstallApplyTestSupport() {
     Files.writeString(local.resolve("agent-addons/review-helper/content.md"), "LOCAL EDIT\n")
     seedAgentAddon(local, "local-helper", "LOCAL ONLY\n")
 
-    val output = applyReconciliation(roots(upstream), roots(local), home, baseline)
+    val output =
+      applyReconciliation(
+        ReconcileInvocation(roots(upstream), roots(local), home),
+        ReconcileContext(baseline),
+      )
 
     assertEquals("LOCAL EDIT\n", Files.readString(local.resolve("agent-addons/review-helper/content.md")))
     assertEquals("LOCAL ONLY\n", Files.readString(local.resolve("agent-addons/local-helper/content.md")))
@@ -255,7 +279,11 @@ class InstallReconcileApplyTest : InstallApplyTestSupport() {
     val localRepo = Files.createTempDirectory("apply-local-empty").also(tempDirs::add)
     val home = home()
 
-    val output = applyReconciliation(roots(upstream), roots(localRepo), home, BaselineManifest.empty())
+    val output =
+      applyReconciliation(
+        ReconcileInvocation(roots(upstream), roots(localRepo), home),
+        ReconcileContext(BaselineManifest.empty()),
+      )
 
     assertTrue(Files.isRegularFile(reviewContent(localRepo)), "first install must materialize the skill")
     assertEquals(content("bill-code-review"), Files.readString(reviewContent(localRepo)))
@@ -274,7 +302,11 @@ class InstallReconcileApplyTest : InstallApplyTestSupport() {
       stream.sorted(Comparator.reverseOrder()).forEach(Files::deleteIfExists)
     }
 
-    val output = applyReconciliation(roots(upstream), roots(local), home, baseline)
+    val output =
+      applyReconciliation(
+        ReconcileInvocation(roots(upstream), roots(local), home),
+        ReconcileContext(baseline),
+      )
 
     assertTrue(Files.isRegularFile(reviewContent(local)), "missing live skill must be restored from upstream")
     assertEquals(content("bill-code-review"), Files.readString(reviewContent(local)))
@@ -296,7 +328,11 @@ class InstallReconcileApplyTest : InstallApplyTestSupport() {
     Files.writeString(local.resolve("platform-packs/kotlin/ADDON.md"), "# old addon\n")
     Files.writeString(upstream.resolve("platform-packs/kotlin/ADDON.md"), "# upstream addon\n")
 
-    val output = applyReconciliation(roots(upstream), roots(local), home, baseline)
+    val output =
+      applyReconciliation(
+        ReconcileInvocation(roots(upstream), roots(local), home),
+        ReconcileContext(baseline),
+      )
 
     assertEquals(upstreamBytes + "\nUSER PACK EDIT\n", Files.readString(packSkill))
     assertFalse(output.installedPaths.contains("platform-packs/kotlin/code-review/bill-kotlin-code-review"))
@@ -309,12 +345,20 @@ class InstallReconcileApplyTest : InstallApplyTestSupport() {
     val local = Files.createTempDirectory("apply-local-fresh").also(tempDirs::add)
     Files.createDirectories(local.resolve("platform-packs"))
     val home = home()
-    val first = applyReconciliation(roots(upstream), roots(local), home, BaselineManifest.empty())
+    val first =
+      applyReconciliation(
+        ReconcileInvocation(roots(upstream), roots(local), home),
+        ReconcileContext(BaselineManifest.empty()),
+      )
     assertTrue(first.installedPaths.isNotEmpty())
     val refreshed = BaselineManifest.of(BaselineManifest.CONTRACT_VERSION, first.plan.baselineOverlay)
     val reviewBytesAfterFirst = Files.readString(reviewContent(local))
 
-    val second = applyReconciliation(roots(upstream), roots(local), home, refreshed)
+    val second =
+      applyReconciliation(
+        ReconcileInvocation(roots(upstream), roots(local), home),
+        ReconcileContext(refreshed),
+      )
 
     assertTrue(second.installedPaths.isEmpty(), "idempotent apply must perform zero replacements")
     assertEquals(refreshed.entries, refreshed.withEntries(second.plan.baselineOverlay).entries)

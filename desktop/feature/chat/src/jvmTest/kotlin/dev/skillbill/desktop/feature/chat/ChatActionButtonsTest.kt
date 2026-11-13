@@ -79,4 +79,22 @@ class ChatActionButtonsTest {
     onNodeWithText("Commits and pushes changes, opens or updates a pull request, and monitors CI.").assertExists()
     onNodeWithText("Proposes a feature flag, then adds it after confirmation.").assertExists()
   }
+
+  @Test
+  fun `update-check suggestion hint uses the public product name`() = runComposeUiTest {
+    val updateCheck = ChatSuggestedAction(
+      "run operation:update-check",
+      "Check for updates.",
+      ChatPermissionMode.ReadOnly,
+    )
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        ChatActionButtons(listOf(updateCheck), true, ChatPermissionMode.ReadOnly) {}
+      }
+    }
+
+    onNodeWithText("run operation:update-check").assertExists()
+    onNodeWithText("Checks for Sona updates.").assertExists()
+    onNodeWithText("Checks for skill-bill updates.").assertDoesNotExist()
+  }
 }

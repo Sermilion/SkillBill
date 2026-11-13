@@ -71,6 +71,7 @@ internal fun sectionHeadingLabel(sectionName: String): String =
 internal fun inferFamily(skillName: String): String {
   val slug = skillName.removePrefix("bill-")
   return when {
+    skillName == ListedSkillNames.DISPATCHER -> ListedSkillNames.PUBLIC_DISPATCHER
     "-code-review-" in skillName || slug.endsWith("code-review") -> "code-review"
     slug.endsWith("quality-check") -> "quality-check"
     slug.endsWith("feature-task") -> "feature-task"

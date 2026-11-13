@@ -13,11 +13,6 @@ import java.nio.file.Path
 
 private const val CONTENT_FILENAME = "content.md"
 
-/**
- * Compares a local skill's authored files with the staging copy the last install published under
- * `~/.skill-bill/installed-skills`. Any missing, unreadable, or ambiguous staging reads as edited,
- * so the caller keeps the local copy.
- */
 internal fun installedStagingSourceReader(home: Path): PublishedSourceReader =
   PublishedSourceReader { sourceDir, authoredFiles ->
     catchingNonCancellation {
@@ -26,8 +21,6 @@ internal fun installedStagingSourceReader(home: Path): PublishedSourceReader =
     }.getOrDefault(false)
   }
 
-// shortcut: picks the newest staging published from this source dir instead of resolving the
-// agent link that targets it; resolve through the owned link if several installs share a source.
 private fun latestPublishedStaging(
   home: Path,
   sourceDir: Path,

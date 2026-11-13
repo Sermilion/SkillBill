@@ -50,7 +50,6 @@ data class ReconciliationPlan(
   val prunedPaths: List<String>
     get() = outcomes.filterIsInstance<SkillReconciliationOutcome.Prune>().map { it.skillRelativePath }
 
-  /** Baseline keys to drop for pruned skills: the composite entry and its source-hash entry. */
   val prunedBaselineKeys: List<String>
     get() = prunedPaths.flatMap { path -> listOf(path, BaselineManifest.sourceKeyFor(path)) }
 
@@ -84,7 +83,6 @@ data class BaselineManifest(
 ) {
   fun hashFor(skillRelativePath: String): String? = entries[skillRelativePath]
 
-  /** Source-only hash of the files reconciliation replaces; absent in baselines written before it existed. */
   fun sourceHashFor(skillRelativePath: String): String? = entries[sourceKeyFor(skillRelativePath)]
 
   fun withEntries(updated: Map<String, String>): BaselineManifest = copy(entries = (entries + updated).toSortedMap())

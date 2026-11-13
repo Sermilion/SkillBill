@@ -163,10 +163,6 @@ private fun updateAgentAddonHash(
   }
 }
 
-/**
- * Hashes only the authored files reconciliation replaces in a skill directory: no pointer targets,
- * internal children, agent addons, or renderer revision.
- */
 internal fun computeReconciliationSourceHash(
   sourceSkillDir: Path,
   authored: List<Path>,
