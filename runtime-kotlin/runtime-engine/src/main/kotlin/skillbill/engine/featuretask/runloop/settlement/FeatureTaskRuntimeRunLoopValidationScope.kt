@@ -44,6 +44,16 @@ internal object FeatureTaskRuntimeRunLoopValidationScope {
     }
   }
 
+  internal fun legacyValidationLaunchTransport(
+    initialCommands: List<ProjectCheckCommand>,
+    postRepairCommands: List<ProjectCheckCommand>,
+  ): ValidationCommandLaunchTransport.LegacyCommands =
+    ValidationCommandLaunchTransport.LegacyCommands(
+      initialCommands,
+      postRepairCommands,
+      renderSavedCommands(initialCommands),
+    )
+
   internal fun admittedValidationSnapshot(run: PhaseRun): ProjectCheckCommandSnapshot? =
     run.request.acceptedGoalQualityExecutionPlan?.projectCheckCommands?.takeIf { it.validationCommands != null }
       ?: run.request.admittedExecution?.plan?.projectCheckCommands?.takeIf { it.validationCommands != null }

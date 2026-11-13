@@ -42,12 +42,13 @@ internal object FeatureTaskRuntimeBuildGateProjectConfig {
   fun runSavedCommands(
     runner: ValidationGateRunner,
     repoRoot: Path,
-    snapshot: ProjectCheckCommandSnapshot,
+    snapshot: ProjectCheckCommandSnapshot?,
     commands: List<ProjectCheckCommand>,
     cyclePhase: ValidationGateCyclePhase,
+    legacyDeclaration: ValidationGateDeclaration? = null,
   ): SavedProjectConfigRun {
     val cacheMode = cacheModeFor(cyclePhase)
-    val runDeclaration = ProjectCheckSnapshotParser.parserDeclaration(snapshot)
+    val runDeclaration = snapshot?.let(ProjectCheckSnapshotParser::parserDeclaration) ?: legacyDeclaration
     val listIdentity = FeatureTaskRuntimeBuildGatePolicy.commandListIdentity(commands)
     var merged = emptyMergedResult(cacheMode, listIdentity)
     commands.forEach { command ->

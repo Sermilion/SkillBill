@@ -4,6 +4,7 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.config.projectchecks.ProjectCheckCommand
 import skillbill.engine.featuretask.lifecycle.branch.baseBranchOrDefault
 import skillbill.engine.featuretask.model.execution.ValidationGateCyclePhase
+import skillbill.engine.featuretask.model.phase.ValidationCommandLaunchTransport
 import skillbill.engine.featuretask.slot.PhaseStepOutputCheck
 import skillbill.engine.featuretask.slot.qualitygate.QualityGateCommandRendering
 import skillbill.engine.featuretask.validation.FeatureTaskRuntimeBuildGateProjectConfig
@@ -34,7 +35,7 @@ public sealed interface MonitorRepairPublicationVerdict {
 /**
  * Verifies a settled monitor repair in [request.repoRoot] before publication: no unresolved conflict-marker block in
  * the files the branch changed since its merge base with [request.recordedBaseBranch] (or the default branch), and a
- * passing saved validation command list from [request.validationSnapshot].
+ * passing commands from [request.validationTransport].
  */
 public fun interface MonitorRepairPublicationGate {
   public fun verify(request: MonitorRepairPublicationGateRequest): MonitorRepairPublicationVerdict
@@ -66,16 +67,28 @@ public class RuntimeMonitorRepairPublicationGate(
     }
 
   private fun savedValidationVerdict(request: MonitorRepairPublicationGateRequest): MonitorRepairPublicationVerdict {
-    val snapshot = request.validationSnapshot
+    val transport = request.validationTransport
+    val snapshot = when (transport) {
+      is ValidationCommandLaunchTransport.Commands -> transport.snapshot
+      is ValidationCommandLaunchTransport.KnownEmpty -> transport.snapshot
+      is ValidationCommandLaunchTransport.LegacyCommands, null -> null
+    }
+    val commands = when (transport) {
+      is ValidationCommandLaunchTransport.Commands -> transport.snapshot.validationCommandList
+      is ValidationCommandLaunchTransport.KnownEmpty -> emptyList()
+      is ValidationCommandLaunchTransport.LegacyCommands -> transport.postRepairCommands
+      null -> emptyList()
+    }
     val category = snapshot?.validationCommands
     return when {
-      snapshot == null ->
+      transport == null ->
         refused(
-          "Monitor repair publication requires an accepted validation command snapshot for this repair cycle.",
+          "Monitor repair publication requires an accepted validation command source for this repair cycle.",
         )
-      category == null ->
+      (transport is ValidationCommandLaunchTransport.Commands ||
+        transport is ValidationCommandLaunchTransport.KnownEmpty) && category == null ->
         refused("Required validation commands were not frozen for this repair or validation launch.")
-      category.commands.isEmpty() -> {
+      transport is ValidationCommandLaunchTransport.KnownEmpty || commands.isEmpty() -> {
         diagnostics.warning(
           "seam=monitor_repair_full_gate value_expected=saved_validation_commands value_actual=known_empty " +
             "cause=explicit_empty_validation repo_root=${request.repoRoot}",
@@ -88,13 +101,14 @@ public class RuntimeMonitorRepairPublicationGate(
             runner,
             request.repoRoot,
             snapshot,
-            category.commands,
+            commands,
             ValidationGateCyclePhase.POST_REPAIR_VERIFY,
+            null,
           )
         }.fold(
           onSuccess = { result ->
             when (result) {
-              is SavedProjectConfigRun.Completed -> aggregateVerdict(result.result, category.commands)
+              is SavedProjectConfigRun.Completed -> aggregateVerdict(result.result, commands)
               is SavedProjectConfigRun.LaunchBlocked ->
                 refused(launchBlockedReason(result.failure, result.findings))
             }

@@ -37,6 +37,12 @@ internal fun savedValidationAgentDirective(
         }
       directive to false
     }
+    is ValidationCommandLaunchTransport.LegacyCommands -> {
+      val directive =
+        if (triage) validateGateTriagePhaseTask(transport.rendered)
+        else runtimeOwnedValidateAgentPhaseTask(transport.rendered)
+      directive to false
+    }
     null -> {
       val directive =
         if (triage) {
@@ -72,15 +78,15 @@ internal fun runtimeOwnedValidateAgentPhaseTask(packValidationCommand: String?):
   val gateLine =
     when {
       packValidationCommand.isNullOrBlank() ->
-        "Run only the admitted saved validation command list and its project-relative working directories. " +
+        "Run only the admitted validation command list and its recorded working directories. " +
           rediscoveryPolicy
       else ->
-        "Run only the admitted saved validation command records below, in listed order and from each " +
-          "project-relative working directory:\n${QualityGateCommandRendering.markdownCodeBlock(packValidationCommand)} " +
+        "Run only the admitted validation command records below, in listed order and from each " +
+          "recorded working directory:\n${QualityGateCommandRendering.markdownCodeBlock(packValidationCommand)} " +
           rediscoveryPolicy
     }
   return "You are the validation agent for this step — do not spawn delegated subagents. $gateLine " +
-    "Do not run commands outside the admitted saved validation command list. Every runnable command in that list " +
+    "Do not run commands outside the admitted validation command list. Every runnable command in that list " +
     "is allowed, regardless of executable. " +
     MACHINE_BUILD_SETTINGS_DIRECTIVE +
     "Never reuse another worktree's mutable state; the machine's shared tool caches are not worktree state. " +

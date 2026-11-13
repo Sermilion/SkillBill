@@ -335,7 +335,7 @@ internal object PhaseLaunchPreparation {
   private fun freezeLaunchValidationSnapshot(
     context: PhaseAttemptLaunchPreparationContext,
     args: DeclaredLaunchArgs,
-  ): Pair<RequiredPhaseWrite?, ProjectCheckCommandSnapshot?> {
+  ): Pair<RequiredPhaseWrite?, ValidationCommandLaunchTransport?> {
     if (!context.stepHooks(args.run).carriesValidationCommand) {
       return null to null
     }
@@ -355,7 +355,7 @@ internal object PhaseLaunchPreparation {
     handoff: FeatureTaskRuntimePhaseHandoff,
     briefing: FeatureTaskRuntimePhaseLaunchBriefing,
     projectInstructions: List<PhaseProjectInstructionsResolution.Injected>,
-    launchValidationSnapshot: ProjectCheckCommandSnapshot?,
+    launchValidationSnapshot: ValidationCommandLaunchTransport?,
   ): FeatureTaskRuntimePhasePromptComposeInputs {
     val composed =
       composeLaunchPromptInputs(args, handoff, briefing)
@@ -662,14 +662,14 @@ internal object PhaseLaunchPreparation {
     (run.request as? FeatureTaskRuntimeRunRequest)?.acceptanceCriterionRepair?.currentCriterionContext
 
   private fun FeatureTaskRuntimePhasePromptComposeInputs.withAcceptedValidationLaunchSnapshot(
-    snapshot: ProjectCheckCommandSnapshot,
+    transport: ValidationCommandLaunchTransport,
   ): FeatureTaskRuntimePhasePromptComposeInputs {
-    val transport = FeatureTaskRuntimeRunLoopValidationScope.validationLaunchTransport(snapshot)
     return copy(
       packValidationCommand =
         when (transport) {
           is ValidationCommandLaunchTransport.Commands -> transport.rendered
           is ValidationCommandLaunchTransport.KnownEmpty -> null
+          is ValidationCommandLaunchTransport.LegacyCommands -> transport.rendered
         },
       validationLaunchTransport = transport,
     )

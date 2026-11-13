@@ -4,6 +4,7 @@ import skillbill.application.telemetry.model.PrDescriptionGeneratedRequest
 import skillbill.contracts.config.projectchecks.ProjectCheckCommandSnapshot
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBriefing
+import skillbill.engine.featuretask.model.phase.ValidationCommandLaunchTransport
 import skillbill.engine.featuretask.phaserun.monitor.StandaloneMonitorLedger
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
@@ -119,7 +120,7 @@ public interface PhaseQualityGateStepBinding : PhaseAcceptedStepExecution {
     call: PhaseStepCall,
   ): PhaseOutcome
 
-  public fun prepareValidationSnapshotForLaunch(run: PhaseRun): Pair<RequiredPhaseWrite, ProjectCheckCommandSnapshot?>
+  public fun prepareValidationSnapshotForLaunch(run: PhaseRun): Pair<RequiredPhaseWrite, ValidationCommandLaunchTransport?>
 }
 
 public interface PhaseCommitStepBinding : PhaseAcceptedStepExecution {
@@ -133,9 +134,11 @@ public interface PhaseMonitorStepBinding :
 
   public fun repairValidationSnapshot(): ProjectCheckCommandSnapshot?
 
+  public fun repairValidationLaunchTransport(): ValidationCommandLaunchTransport?
+
   public fun prepareRepairValidationSnapshotForLaunch(
     run: PhaseRun,
-  ): Pair<RequiredPhaseWrite, ProjectCheckCommandSnapshot?>
+  ): Pair<RequiredPhaseWrite, ValidationCommandLaunchTransport?>
 
   public fun publishRepair(
     run: PhaseRun,
@@ -179,9 +182,11 @@ public interface PhaseStandaloneMonitorStepBinding :
 
   public fun repairValidationSnapshot(): ProjectCheckCommandSnapshot?
 
+  public fun repairValidationLaunchTransport(): ValidationCommandLaunchTransport?
+
   public fun prepareRepairValidationSnapshotForLaunch(
     run: PhaseRun,
-  ): Pair<RequiredPhaseWrite, ProjectCheckCommandSnapshot?>
+  ): Pair<RequiredPhaseWrite, ValidationCommandLaunchTransport?>
 
   public fun runStandaloneMonitor(
     run: PhaseRun,

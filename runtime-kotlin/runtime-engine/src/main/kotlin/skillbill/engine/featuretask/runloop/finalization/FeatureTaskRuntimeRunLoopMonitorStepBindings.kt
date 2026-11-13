@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.runloop.finalization
 
 import skillbill.contracts.config.projectchecks.ProjectCheckCommandSnapshot
+import skillbill.engine.featuretask.model.phase.ValidationCommandLaunchTransport
 import skillbill.engine.featuretask.phaserun.monitor.StandaloneMonitorLedger
 import skillbill.engine.featuretask.phaserun.monitor.StandaloneMonitorRunRecords
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
@@ -46,9 +47,15 @@ internal class FeatureTaskRuntimeRunLoopMonitorStepBinding(
     return environment.validationCommandLaunch.load(repairSnapshotIdentity())
   }
 
+  override fun repairValidationLaunchTransport(): ValidationCommandLaunchTransport? {
+    requireAcceptedStep(run, acceptedOwner.strategyId)
+    val attempt = environment.progress.phase(run.phaseId).record?.attemptCount ?: 1
+    return environment.validationCommandLaunch.prepareMonitorRepair(run, repairSnapshotIdentity(), attempt).second
+  }
+
   override fun prepareRepairValidationSnapshotForLaunch(
     run: PhaseRun,
-  ): Pair<RequiredPhaseWrite, ProjectCheckCommandSnapshot?> {
+  ): Pair<RequiredPhaseWrite, ValidationCommandLaunchTransport?> {
     requireAcceptedStep(run, acceptedOwner.strategyId)
     val attempt = environment.progress.phase(run.phaseId).record?.attemptCount ?: 1
     return environment.validationCommandLaunch.prepareMonitorRepair(run, repairSnapshotIdentity(), attempt)
@@ -121,9 +128,15 @@ internal class FeatureTaskRuntimeRunLoopStandaloneMonitorStepBinding(
     return environment.validationCommandLaunch.load(repairSnapshotIdentity())
   }
 
+  override fun repairValidationLaunchTransport(): ValidationCommandLaunchTransport? {
+    requireAcceptedStep(run, acceptedOwner.strategyId)
+    val attempt = environment.progress.phase(run.phaseId).record?.attemptCount ?: 1
+    return environment.validationCommandLaunch.prepareMonitorRepair(run, repairSnapshotIdentity(), attempt).second
+  }
+
   override fun prepareRepairValidationSnapshotForLaunch(
     run: PhaseRun,
-  ): Pair<RequiredPhaseWrite, ProjectCheckCommandSnapshot?> {
+  ): Pair<RequiredPhaseWrite, ValidationCommandLaunchTransport?> {
     requireAcceptedStep(run, acceptedOwner.strategyId)
     val attempt = environment.progress.phase(run.phaseId).record?.attemptCount ?: 1
     return environment.validationCommandLaunch.prepareMonitorRepair(run, repairSnapshotIdentity(), attempt)

@@ -117,7 +117,7 @@ public class MonitorStrategy(
         context: PhaseAttemptLaunchHookContext,
         state: PhaseMonitorStepBinding,
       ): String? {
-        if (state.repairValidationSnapshot() == null) {
+        if (state.repairValidationLaunchTransport() == null) {
           return "Monitor repair launched without the accepted validation command snapshot."
         }
         return null
@@ -142,7 +142,7 @@ public class MonitorStrategy(
               MonitorRepairPublicationGateRequest(
                 run.request.repoRoot,
                 state.resolvedBranch()?.baseBranch,
-                state.repairValidationSnapshot(),
+                state.repairValidationLaunchTransport(),
               ),
             )
             .publicationBlockingCheck()

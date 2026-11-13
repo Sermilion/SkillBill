@@ -7,6 +7,7 @@ import skillbill.engine.featuretask.lifecycle.checkpoint.FeatureTaskRuntimeCheck
 import skillbill.engine.featuretask.lifecycle.continuation.GoalReviewPassCompletionRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBriefing
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
+import skillbill.engine.featuretask.model.phase.ValidationCommandLaunchTransport
 import skillbill.engine.featuretask.model.review.GoalSubtaskReviewInputPreparation
 import skillbill.engine.featuretask.model.review.GoalSubtaskReviewPassReservation
 import skillbill.engine.featuretask.model.review.ReviewTarget
@@ -403,7 +404,7 @@ private class FeatureTaskRuntimeRunLoopQualityGateStepBinding(
 
   override fun prepareValidationSnapshotForLaunch(
     run: PhaseRun,
-  ): Pair<RequiredPhaseWrite, ProjectCheckCommandSnapshot?> {
+  ): Pair<RequiredPhaseWrite, ValidationCommandLaunchTransport?> {
     requireAcceptedStep(run, acceptedOwner.strategyId)
     if (operation != PhaseQualityGateOperation.AgentValidation) {
       return RequiredPhaseWrite.Acknowledged to null

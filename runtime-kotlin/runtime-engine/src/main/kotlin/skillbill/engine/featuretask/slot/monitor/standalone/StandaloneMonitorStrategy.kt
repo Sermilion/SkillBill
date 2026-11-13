@@ -106,7 +106,7 @@ public class StandaloneMonitorStrategy(
         state: PhaseStandaloneMonitorStepBinding,
       ): String? {
         state.guardStandaloneRepairLaunch(run, service.operations)?.let { return it }
-        if (state.repairValidationSnapshot() == null) {
+        if (state.repairValidationLaunchTransport() == null) {
           return "Monitor repair launched without the accepted validation command snapshot."
         }
         return null
@@ -125,7 +125,7 @@ public class StandaloneMonitorStrategy(
               MonitorRepairPublicationGateRequest(
                 run.request.repoRoot,
                 state.resolvedBranch()?.baseBranch,
-                state.repairValidationSnapshot(),
+                state.repairValidationLaunchTransport(),
               ),
             )
             .publicationBlockingCheck()
