@@ -15,6 +15,8 @@ class ExecutionMatrixModelsTest {
         parseExecutionMatrix(
           mapOf(
             "phase_tiers" to mapOf("plan" to "implementation"),
+            ExecutionMatrixFieldKeys.TIER_AGENTS to mapOf("reasoning" to "codex"),
+            ExecutionMatrixFieldKeys.PHASE_AGENTS to mapOf("plan" to "claude"),
             "agents" to
               mapOf(
                 "claude" to
@@ -29,6 +31,8 @@ class ExecutionMatrixModelsTest {
       )
 
     assertEquals(ExecutionTier.IMPLEMENTATION, parsed.matrix.tierOf("plan"))
+    assertEquals(SupportedAgent.CODEX, parsed.matrix.tierAgents[ExecutionTier.REASONING])
+    assertEquals(SupportedAgent.CLAUDE, parsed.matrix.phaseAgents["plan"])
     assertEquals(
       PhaseModelDirective("claude-sonnet"),
       parsed.matrix.directiveFor("claude", "plan"),
@@ -37,6 +41,72 @@ class ExecutionMatrixModelsTest {
       PhaseModelDirective("gpt-reasoning", "xhigh"),
       parsed.matrix.directiveFor("codex", "review"),
     )
+  }
+
+  @Test
+  fun `routing-only matrices parse without model directives and empty maps mean inheritance`() {
+    val parsed =
+      assertIs<ExecutionMatrixParse.Valid>(
+        parseExecutionMatrix(
+          mapOf(
+            ExecutionMatrixFieldKeys.TIER_AGENTS to emptyMap<String, Any?>(),
+            ExecutionMatrixFieldKeys.PHASE_AGENTS to emptyMap<String, Any?>(),
+          ),
+        ),
+      )
+
+    assertEquals(emptyMap(), parsed.matrix.agents)
+    assertEquals(emptyMap(), parsed.matrix.agentPhaseOverrides)
+    assertEquals(emptyMap(), parsed.matrix.tierAgents)
+    assertEquals(emptyMap(), parsed.matrix.phaseAgents)
+
+    val explicitEmptyModels =
+      assertIs<ExecutionMatrixParse.Valid>(
+        parseExecutionMatrix(
+          mapOf(
+            "agents" to emptyMap<String, Any?>(),
+          ),
+        ),
+      )
+    assertEquals(emptyMap(), explicitEmptyModels.matrix.agents)
+  }
+
+  @Test
+  fun `rejects malformed routing fields with their dotted key paths`() {
+    val cases =
+      listOf(
+        Pair(mapOf(ExecutionMatrixFieldKeys.TIER_AGENTS to null), "execution_matrix.tier_agents"),
+        Pair(mapOf(ExecutionMatrixFieldKeys.PHASE_AGENTS to "claude"), "execution_matrix.phase_agents"),
+        Pair(
+          mapOf(ExecutionMatrixFieldKeys.TIER_AGENTS to mapOf(1 to "claude")),
+          "execution_matrix.tier_agents.1",
+        ),
+        Pair(
+          mapOf(ExecutionMatrixFieldKeys.TIER_AGENTS to mapOf("unknown" to "claude")),
+          "execution_matrix.tier_agents.unknown",
+        ),
+        Pair(
+          mapOf(ExecutionMatrixFieldKeys.TIER_AGENTS to mapOf("reasoning" to "")),
+          "execution_matrix.tier_agents.reasoning",
+        ),
+        Pair(
+          mapOf(ExecutionMatrixFieldKeys.PHASE_AGENTS to mapOf("unknown" to "claude")),
+          "execution_matrix.phase_agents.unknown",
+        ),
+        Pair(
+          mapOf(ExecutionMatrixFieldKeys.PHASE_AGENTS to mapOf("plan" to "provider")),
+          "execution_matrix.phase_agents.plan",
+        ),
+        Pair(
+          mapOf(ExecutionMatrixFieldKeys.PHASE_AGENTS to mapOf("plan" to null)),
+          "execution_matrix.phase_agents.plan",
+        ),
+      )
+
+    cases.forEach { (raw, path) ->
+      val invalid = assertIs<ExecutionMatrixParse.Invalid>(parseExecutionMatrix(raw))
+      assertEquals(path, invalid.keyPath)
+    }
   }
 
   @Test

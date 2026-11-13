@@ -394,6 +394,32 @@ select prompts or execution behavior. `commit_push` stays the runtime commit
 strategy and launches no agent. Details:
 [Model-independent phase execution](model-specific-phase-strategies.md).
 
+## Provider routing at first admission
+
+`execution_matrix.tier_agents` and `execution_matrix.phase_agents` choose a provider
+for a workflow phase. They are separate from the `agents` model and effort entries.
+The first admission chooses in this order: run-wide `--agent-override`, CLI
+`--phase-agent` for that phase, `execution_matrix.phase_agents`,
+`execution_matrix.tier_agents` for the phase's `phase_tiers` value or default tier,
+then the invoking provider. `--agent` identifies the provider that invoked the
+runtime. A run-wide override wins over phase choices. When a phase is repeated,
+the last `--phase-agent` value wins.
+
+For example, a matrix can route reasoning phases to Claude and implementation
+phases to Cursor, with `review` routed to Codex by `phase_agents`. This describes
+provider selection only; it does not promise that any provider executable is
+available. Model selection still uses the selected provider's phase model before
+its tier model, while an explicit phase model retains priority. Reasoning-model
+escalation stays with that provider, and deterministic git or build actions do not
+start an agent by themselves.
+
+Subtask 2 activates frozen-run routing at admission, and subtasks 3 and 4 adopt it
+for goal and final-quality runs. Once admitted, ordinary configuration drift does
+not retarget a frozen run. A matching explicit override leaves its admitted choices
+alone; a conflicting explicit override is refused. Legacy records keep their
+compatibility behavior and do not imply historical provider settings that were
+never stored. This subtask adds no frozen-run retarget command.
+
 
 ## Desktop new-task start
 

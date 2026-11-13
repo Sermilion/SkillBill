@@ -4,15 +4,22 @@ import org.junit.jupiter.api.io.TempDir
 import skillbill.application.config.RuntimeConfigEditService
 import skillbill.application.config.model.ConfigDocumentRead
 import skillbill.application.config.model.ConfigWriteResult
+import skillbill.application.config.model.ExecutionMatrixEditIntent
+import skillbill.application.config.model.ExecutionMatrixPhaseAgentEdit
+import skillbill.application.config.model.ExecutionMatrixTierAgentEdit
 import skillbill.application.config.model.MachineConfigEdit
 import skillbill.application.config.model.MachineConfigValues
 import skillbill.application.config.model.ProjectConfigEdit
 import skillbill.application.config.model.ProjectConfigValues
+import skillbill.config.model.ExecutionMatrix
+import skillbill.config.model.ExecutionMatrixFieldKeys
+import skillbill.config.model.ExecutionTier
 import skillbill.config.model.SpecType
 import skillbill.contracts.JsonCodec
 import skillbill.infrastructure.host.FileTelemetryConfigStore
 import skillbill.infrastructure.host.system.FileConfigDocumentFiles
 import skillbill.infrastructure.host.system.FileConfigDocumentLocks
+import skillbill.install.model.SupportedAgent
 import skillbill.model.EnvironmentContext
 import skillbill.ports.config.ConfigDocumentFiles
 import skillbill.ports.config.MachineConfigMigrationPort
@@ -41,6 +48,106 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class RuntimeConfigEditServiceTest {
+  @Test
+  fun `routing intent edits selected entries and retains models tiers and unknown settings`(
+    @TempDir tempDir: Path,
+  ) {
+    val configPath = tempDir.resolve("config.json")
+    Files.writeString(
+      configPath,
+      """
+      {
+        "custom": {"kept": true},
+        "execution_matrix": {
+          "phase_tiers": {"review": "reasoning"},
+          "agents": {"claude": {"reasoning": {"model": "opus", "effort": "high"}, "review": {"model": "review-model"}}},
+          "tier_agents": {"reasoning": "claude"},
+          "phase_agents": {"review": "claude"}
+        }
+      }
+      """.trimIndent(),
+    )
+    val service = service(tempDir, configPath)
+    val snapshot = assertIs<ConfigDocumentRead.Present<*>>(service.readMachineConfigSnapshot().document)
+    val edit =
+      MachineConfigEdit.SetExecutionMatrix(
+        section = mapOf(ExecutionMatrixFieldKeys.TIER_AGENTS to mapOf("reasoning" to "codex")),
+        editIntent =
+          ExecutionMatrixEditIntent(
+            tierAgents = listOf(ExecutionMatrixTierAgentEdit(ExecutionTier.REASONING)),
+          ),
+      )
+
+    assertIs<ConfigWriteResult.Written>(service.writeMachineConfig(listOf(edit), snapshot.fingerprint))
+    val routed =
+      assertIs<ConfigDocumentRead.Present<MachineConfigValues>>(service.readMachineConfigSnapshot().document)
+    val routedMatrix = assertIs<ExecutionMatrix>(routed.values.executionMatrix)
+
+    assertEquals(mapOf(ExecutionTier.REASONING to SupportedAgent.CODEX), routedMatrix.tierAgents)
+    assertEquals(mapOf("review" to SupportedAgent.CLAUDE), routedMatrix.phaseAgents)
+    val claudeModels = routedMatrix.agents.getValue(SupportedAgent.CLAUDE)
+    assertEquals("opus", claudeModels.getValue(ExecutionTier.REASONING).model)
+    assertEquals("high", claudeModels.getValue(ExecutionTier.REASONING).effort)
+    assertEquals(
+      "review-model",
+      routedMatrix.agentPhaseOverrides.getValue(SupportedAgent.CLAUDE).getValue("review").model,
+    )
+
+    val removal =
+      MachineConfigEdit.SetExecutionMatrix(
+        section = mapOf(ExecutionMatrixFieldKeys.PHASE_AGENTS to emptyMap<String, String>()),
+        editIntent = ExecutionMatrixEditIntent(phaseAgents = listOf(ExecutionMatrixPhaseAgentEdit("review"))),
+      )
+    assertIs<ConfigWriteResult.Written>(
+      service.writeMachineConfig(listOf(removal), routed.fingerprint),
+    )
+    val updated =
+      assertIs<ConfigDocumentRead.Present<MachineConfigValues>>(service.readMachineConfigSnapshot().document)
+    val matrix = assertIs<ExecutionMatrix>(updated.values.executionMatrix)
+    assertEquals(mapOf(ExecutionTier.REASONING to SupportedAgent.CODEX), matrix.tierAgents)
+    assertEquals(emptyMap(), matrix.phaseAgents)
+    assertEquals("review-model", matrix.agentPhaseOverrides.getValue(SupportedAgent.CLAUDE).getValue("review").model)
+    val document =
+      JsonCodec.anyToStringAnyMap(
+        JsonCodec.jsonElementToValue(JsonCodec.parseObjectOrNull(Files.readString(configPath))!!),
+      )!!
+    assertEquals(mapOf("kept" to true), document["custom"])
+    assertEquals(mapOf("review" to "reasoning"), (document["execution_matrix"] as Map<*, *>)["phase_tiers"])
+  }
+
+  @Test
+  fun `malformed routing edits return their field path without changing source bytes`(
+    @TempDir tempDir: Path,
+  ) {
+    val configPath = tempDir.resolve("config.json")
+    val original = """{"execution_matrix":{"tier_agents":{"reasoning":"claude"}}}"""
+    Files.writeString(configPath, original)
+    val service = service(tempDir, configPath)
+    val snapshot = assertIs<ConfigDocumentRead.Present<*>>(service.readMachineConfigSnapshot().document)
+    val malformed =
+      listOf(
+        MachineConfigEdit.SetExecutionMatrix(
+          mapOf(ExecutionMatrixFieldKeys.PHASE_AGENTS to mapOf("review" to "unknown")),
+        ),
+        MachineConfigEdit.SetExecutionMatrix(
+          section = mapOf(ExecutionMatrixFieldKeys.TIER_AGENTS to null),
+          editIntent =
+            ExecutionMatrixEditIntent(
+              tierAgents = listOf(ExecutionMatrixTierAgentEdit(ExecutionTier.REASONING)),
+            ),
+        ),
+      )
+    val expectedPaths = listOf("execution_matrix.phase_agents.review", "execution_matrix.tier_agents")
+
+    malformed.zip(expectedPaths).forEach { (edit, expectedPath) ->
+      assertEquals(
+        expectedPath,
+        assertIs<ConfigWriteResult.Invalid>(service.writeMachineConfig(listOf(edit), snapshot.fingerprint)).keyPath,
+      )
+      assertEquals(original, Files.readString(configPath))
+    }
+  }
+
   @Test
   fun `machine edits reject invalid values and preserve unknown keys`(
     @TempDir tempDir: Path,

@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.lifecycle.core
 
+import skillbill.config.model.resolvePhaseAgent
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeAgentAssignment
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeResolvedPhaseAgent
 
@@ -17,10 +18,20 @@ public object FeatureTaskRuntimeAgentResolver {
     val resolvedInvoked =
       assignment.perPhaseAgentIds[phaseId]?.takeIf(String::isNotBlank)
         ?: invokedAgentId
+    val selection =
+      resolvePhaseAgent(
+        phaseId = phaseId,
+        invokedAgentId = invokedAgentId,
+        perPhaseAgentIds = assignment.perPhaseAgentIds,
+        runOverride = assignment.override,
+        matrix = assignment.matrix,
+      )
     return FeatureTaskRuntimeResolvedPhaseAgent(
       phaseId = phaseId,
       invokedAgentId = resolvedInvoked,
       configuredAgentOverrideId = assignment.override?.takeIf(String::isNotBlank),
+      routingSource = selection.source,
+      selectedProviderId = selection.providerId,
     )
   }
 }

@@ -68,6 +68,8 @@ data class ExecutionMatrixEditIntent(
   val agentTierDirectives: List<ExecutionMatrixAgentTierDirectiveEdit> = emptyList(),
   val phaseTiers: List<ExecutionMatrixPhaseTierEdit> = emptyList(),
   val agentPhaseOverrides: List<ExecutionMatrixAgentPhaseOverrideEdit> = emptyList(),
+  val tierAgents: List<ExecutionMatrixTierAgentEdit> = emptyList(),
+  val phaseAgents: List<ExecutionMatrixPhaseAgentEdit> = emptyList(),
 )
 
 data class ExecutionMatrixAgentTierDirectiveEdit(
@@ -81,6 +83,14 @@ data class ExecutionMatrixPhaseTierEdit(
 
 data class ExecutionMatrixAgentPhaseOverrideEdit(
   val agentId: String,
+  val phaseId: String,
+)
+
+data class ExecutionMatrixTierAgentEdit(
+  val tier: ExecutionTier,
+)
+
+data class ExecutionMatrixPhaseAgentEdit(
   val phaseId: String,
 )
 

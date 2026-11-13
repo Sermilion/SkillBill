@@ -8,6 +8,8 @@ const val EXECUTION_MATRIX_KEY: String = "execution_matrix"
 object ExecutionMatrixFieldKeys {
   const val PHASE_TIERS: String = "phase_tiers"
   const val AGENTS: String = "agents"
+  const val TIER_AGENTS: String = "tier_agents"
+  const val PHASE_AGENTS: String = "phase_agents"
   const val MODEL: String = "model"
   const val EFFORT: String = "effort"
 }
@@ -66,6 +68,8 @@ data class ExecutionMatrix(
   val phaseTiers: Map<String, ExecutionTier> = emptyMap(),
   val agents: Map<SupportedAgent, Map<ExecutionTier, PhaseModelDirective>> = emptyMap(),
   val agentPhaseOverrides: Map<SupportedAgent, Map<String, PhaseModelDirective>> = emptyMap(),
+  val tierAgents: Map<ExecutionTier, SupportedAgent> = emptyMap(),
+  val phaseAgents: Map<String, SupportedAgent> = emptyMap(),
 ) {
   fun tierOf(phaseId: String): ExecutionTier = phaseTiers[phaseId] ?: DEFAULT_PHASE_TIERS.getValue(phaseId)
 
@@ -86,6 +90,11 @@ data class ExecutionMatrix(
   }
 }
 
+internal data class ExecutionMatrixAgentRouting(
+  val tierAgents: Map<ExecutionTier, SupportedAgent>,
+  val phaseAgents: Map<String, SupportedAgent>,
+)
+
 sealed interface ExecutionMatrixParse {
   data class Valid(val matrix: ExecutionMatrix) : ExecutionMatrixParse
 
@@ -103,17 +112,21 @@ private fun executionMatrixInvalid(raw: Any?): ExecutionMatrixParse.Invalid? {
   val matrix = raw as? Map<*, *> ?: return invalidExecutionMatrix(EXECUTION_MATRIX_KEY, raw, "must be a mapping.")
   val fields = fieldsOf(matrix)
   val unsupported = fields.entries.firstOrNull { (key, _) -> key !in EXECUTION_MATRIX_FIELDS }
-  return when {
-    unsupported != null ->
-      invalidExecutionMatrix(
-        "$EXECUTION_MATRIX_KEY.${unsupported.key}",
-        unsupported.value,
-        "is not a supported execution_matrix field.",
-      )
-
-    PHASE_TIERS_KEY in fields -> phaseTiersInvalid(fields[PHASE_TIERS_KEY]) ?: agentsInvalid(fields[AGENTS_KEY])
-    else -> agentsInvalid(fields[AGENTS_KEY])
+  if (unsupported != null) {
+    return invalidExecutionMatrix(
+      "$EXECUTION_MATRIX_KEY.${unsupported.key}",
+      unsupported.value,
+      "is not a supported execution_matrix field.",
+    )
   }
+  if (PHASE_TIERS_KEY in fields) {
+    phaseTiersInvalid(fields[PHASE_TIERS_KEY])?.let { return it }
+  }
+  return validateExecutionMatrixRouting(fields) ?: agentsInvalid(
+    fields[AGENTS_KEY],
+    AGENTS_KEY in fields,
+    TIER_AGENTS_KEY in fields || PHASE_AGENTS_KEY in fields,
+  )
 }
 
 private fun fieldsOf(map: Map<*, *>): Map<String, Any?> =
@@ -122,11 +135,14 @@ private fun fieldsOf(map: Map<*, *>): Map<String, Any?> =
 private fun buildExecutionMatrix(raw: Any?): ExecutionMatrix {
   val fields = fieldsOf(checkNotNull(raw as? Map<*, *>) { "validated execution matrix must be a mapping." })
   val phaseTiers = if (PHASE_TIERS_KEY in fields) buildPhaseTiers(fields[PHASE_TIERS_KEY]) else emptyMap()
-  val agents = buildAgents(fields[AGENTS_KEY])
+  val agents = if (AGENTS_KEY in fields) buildAgents(fields[AGENTS_KEY]) else emptyMap()
+  val routing = buildExecutionMatrixRouting(fields)
   return ExecutionMatrix(
     phaseTiers = phaseTiers,
     agents = agents.mapValues { (_, directives) -> directives.tiers },
     agentPhaseOverrides = agents.mapValues { (_, directives) -> directives.phases }.filterValues { it.isNotEmpty() },
+    tierAgents = routing.tierAgents,
+    phaseAgents = routing.phaseAgents,
   )
 }
 
@@ -169,7 +185,22 @@ private class AgentDirectives(
   val phases: Map<String, PhaseModelDirective>,
 )
 
-private fun agentsInvalid(raw: Any?): ExecutionMatrixParse.Invalid? {
+private fun agentsInvalid(
+  raw: Any?,
+  present: Boolean,
+  routingPresent: Boolean,
+): ExecutionMatrixParse.Invalid? {
+  if (!present) {
+    return if (routingPresent) {
+      null
+    } else {
+      invalidExecutionMatrix(
+        "$EXECUTION_MATRIX_KEY.$AGENTS_KEY",
+        null,
+        "must be a mapping.",
+      )
+    }
+  }
   val agents =
     raw as? Map<*, *> ?: return invalidExecutionMatrix(
       "$EXECUTION_MATRIX_KEY.$AGENTS_KEY",
@@ -268,7 +299,7 @@ private fun buildDirective(raw: Any?): PhaseModelDirective {
   return PhaseModelDirective(model = model, effort = fields[EFFORT_KEY] as? String)
 }
 
-private fun invalidExecutionMatrix(
+internal fun invalidExecutionMatrix(
   keyPath: String,
   value: Any?,
   reason: String,
@@ -279,5 +310,7 @@ private const val PHASE_TIERS_KEY: String = ExecutionMatrixFieldKeys.PHASE_TIERS
 private const val AGENTS_KEY: String = ExecutionMatrixFieldKeys.AGENTS
 private const val MODEL_KEY: String = ExecutionMatrixFieldKeys.MODEL
 private const val EFFORT_KEY: String = ExecutionMatrixFieldKeys.EFFORT
-private val EXECUTION_MATRIX_FIELDS: Set<String> = setOf(PHASE_TIERS_KEY, AGENTS_KEY)
+private const val TIER_AGENTS_KEY: String = ExecutionMatrixFieldKeys.TIER_AGENTS
+private const val PHASE_AGENTS_KEY: String = ExecutionMatrixFieldKeys.PHASE_AGENTS
+private val EXECUTION_MATRIX_FIELDS: Set<String> = setOf(PHASE_TIERS_KEY, AGENTS_KEY, TIER_AGENTS_KEY, PHASE_AGENTS_KEY)
 private val DIRECTIVE_FIELDS: Set<String> = setOf(MODEL_KEY, EFFORT_KEY)

@@ -23,7 +23,12 @@ internal fun mergeExecutionMatrixSection(
     return MachineConfigTreeResult.Invalid(EXECUTION_MATRIX_KEY, "must be a mapping.")
   }
   val matrix = (originalValue as? Map<*, *>)?.stringMap() ?: linkedMapOf()
-  (mergeMatrixTiers(matrix, requested, intent) ?: mergeMatrixAgents(matrix, requested, intent))?.let { return it }
+  (
+    validateRequestedRouting(requested)
+      ?: mergeMatrixTiers(matrix, requested, intent)
+      ?: mergeMatrixRouting(matrix, requested, intent)
+      ?: mergeMatrixAgents(matrix, requested, intent)
+  )?.let { return it }
 
   if (sectionUnchanged(
       original,
@@ -38,6 +43,64 @@ internal fun mergeExecutionMatrixSection(
     is ExecutionMatrixParse.Invalid -> MachineConfigTreeResult.Invalid(parsed.keyPath, parsed.reason)
     is ExecutionMatrixParse.Valid -> MachineConfigTreeResult.Valid(original.with(EXECUTION_MATRIX_KEY, matrix))
   }
+}
+
+private fun validateRequestedRouting(requested: Map<String, Any?>): MachineConfigTreeResult.Invalid? {
+  listOf(ExecutionMatrixFieldKeys.TIER_AGENTS, ExecutionMatrixFieldKeys.PHASE_AGENTS).forEach { key ->
+    if (!requested.containsKey(key)) return@forEach
+    when (val parsed = parseExecutionMatrix(mapOf(key to requested[key]))) {
+      is ExecutionMatrixParse.Invalid -> return MachineConfigTreeResult.Invalid(parsed.keyPath, parsed.reason)
+      is ExecutionMatrixParse.Valid -> Unit
+    }
+  }
+  return null
+}
+
+private fun mergeMatrixRouting(
+  matrix: MutableMap<String, Any?>,
+  requested: Map<String, Any?>,
+  intent: ExecutionMatrixEditIntent,
+): MachineConfigTreeResult.Invalid? {
+  mergeRoutingEntries(
+    matrix,
+    requested,
+    ExecutionMatrixFieldKeys.TIER_AGENTS,
+    intent.tierAgents,
+    { it.tier.id },
+  )?.let { return it }
+  return mergeRoutingEntries(
+    matrix,
+    requested,
+    ExecutionMatrixFieldKeys.PHASE_AGENTS,
+    intent.phaseAgents,
+    { it.phaseId },
+  )
+}
+
+private fun <E> mergeRoutingEntries(
+  matrix: MutableMap<String, Any?>,
+  requested: Map<String, Any?>,
+  field: String,
+  edits: List<E>,
+  selector: (E) -> String,
+): MachineConfigTreeResult.Invalid? {
+  val hadField = matrix.containsKey(field)
+  val currentValue = matrix[field]
+  if (hadField && currentValue !is Map<*, *>) {
+    return MachineConfigTreeResult.Invalid("$EXECUTION_MATRIX_KEY.$field", "must be a mapping.")
+  }
+  val current = (currentValue as? Map<*, *>)?.stringMap() ?: linkedMapOf()
+  val requestedEntries = requested[field] as? Map<*, *>
+  edits.forEach { edit ->
+    val entry = selector(edit)
+    if (requestedEntries?.containsKey(entry) == true) {
+      current[entry] = requestedEntries[entry]
+    } else {
+      current.remove(entry)
+    }
+  }
+  if (hadField || current.isNotEmpty()) matrix[field] = current
+  return null
 }
 
 private fun mergeMatrixTiers(
@@ -91,7 +154,11 @@ private fun mergeMatrixAgents(
   for (agentId in selectedAgentIds) {
     mergeAgentDirectives(agents, requestedAgents, intent, agentId)?.let { return it }
   }
-  if (hadAgents || agents.isNotEmpty() || matrix.containsKey(ExecutionMatrixFieldKeys.PHASE_TIERS)) {
+  val hasRouting =
+    matrix.containsKey(ExecutionMatrixFieldKeys.TIER_AGENTS) ||
+      matrix.containsKey(ExecutionMatrixFieldKeys.PHASE_AGENTS)
+  val needsModelMap = matrix.containsKey(ExecutionMatrixFieldKeys.PHASE_TIERS) && !hasRouting
+  if (hadAgents || agents.isNotEmpty() || needsModelMap) {
     matrix[ExecutionMatrixFieldKeys.AGENTS] = agents
   }
 
