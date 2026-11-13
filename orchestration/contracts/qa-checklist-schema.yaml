@@ -1,7 +1,7 @@
 # QA checklist schema (canonical source of truth).
 #
 # The top level is the stored value of standalone_phase_status.qa_checklist: live, display-only progress of one
-# standalone QA invocation. $defs/plan is the plan file the QA agent passes to `skill-bill qa plan --file`.
+# standalone QA invocation. $defs/plan is the plan file the QA agent passes to `sona qa plan --file`.
 #
 # Versioning rule:
 #

@@ -125,7 +125,7 @@
       },
       "utf8_bytes": 506
     },
-    "read_only_full_state_command": "skill-bill --db '<DB_PATH>' verify-workflow show '<WORKFLOW_ID>' --format json",
+    "read_only_full_state_command": "sona --db '<DB_PATH>' verify-workflow show '<WORKFLOW_ID>' --format json",
     "db_path": "<DB_PATH>"
   },
   "list": {
@@ -534,7 +534,7 @@
       "rollout_relevant": false,
       "spec_summary": ""
     },
-    "read_only_full_state_command": "skill-bill --db '<DB_PATH>' verify-workflow show '<WORKFLOW_ID>' --format json",
+    "read_only_full_state_command": "sona --db '<DB_PATH>' verify-workflow show '<WORKFLOW_ID>' --format json",
     "db_path": "<DB_PATH>",
     "status": "ok"
   }
