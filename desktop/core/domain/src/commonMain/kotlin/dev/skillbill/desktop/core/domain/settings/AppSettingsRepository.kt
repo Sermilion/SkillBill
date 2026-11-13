@@ -35,6 +35,9 @@ interface AppSettingsRepository {
   /** Clamps to [AppSettings.CHAT_WIDTH_MIN_DP]..[AppSettings.CHAT_WIDTH_MAX_DP]. */
   suspend fun setChatWidthDp(widthDp: Int): Outcome<Unit, SettingsRejection>
 
+  /** Stores the deliberate details pane width, or clears its override. */
+  suspend fun setDetailsWidthDp(widthDp: Int?): Outcome<Unit, SettingsRejection>
+
   suspend fun setTrayLastTab(tab: TrayTab): Outcome<Unit, SettingsRejection>
 
   suspend fun setNewTaskChatLayout(layout: NewTaskChatLayout): Outcome<Unit, SettingsRejection>
@@ -63,4 +66,6 @@ sealed interface SettingsRejection {
   data object WriteFailed : SettingsRejection
 
   data object InvalidQaDevice : SettingsRejection
+
+  data object InvalidDetailsWidth : SettingsRejection
 }

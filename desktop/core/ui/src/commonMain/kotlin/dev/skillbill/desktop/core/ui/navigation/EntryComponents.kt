@@ -8,7 +8,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 
 /** The content key of the navigation entry being composed; screen-key registrations are filed under it. */
-val LocalEntryKey = staticCompositionLocalOf<String> { error("LocalEntryKey is provided by the shell's navigation host.") }
+val LocalEntryKey = staticCompositionLocalOf { "direct-render" }
 
 /**
  * Holds the generated component one entry builds its ViewModels from. It lives in the entry's ViewModelStore, so the component

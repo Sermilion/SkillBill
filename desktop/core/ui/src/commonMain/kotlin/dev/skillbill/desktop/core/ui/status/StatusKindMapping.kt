@@ -23,7 +23,7 @@ fun statusKind(lifecycle: Lifecycle, planningPrepared: Boolean, stalledSince: In
 fun WorkItem.statusKind(): StatusKind = statusKind(lifecycle, kind != WorkKind.Goal || planningPrepared, stalledSince)
 
 fun subtaskStatusKind(status: String): StatusKind = when (status) {
-  SubtaskStatusKeys.COMPLETE -> StatusKind.Completed
+  SubtaskStatusKeys.COMPLETE, SubtaskStatusKeys.COMPLETED -> StatusKind.Completed
   SubtaskStatusKeys.COMPLETED_NO_CHANGE -> StatusKind.CompletedNoChange
   SubtaskStatusKeys.IN_PROGRESS -> StatusKind.Active
   SubtaskStatusKeys.PENDING -> StatusKind.Pending
@@ -34,6 +34,7 @@ fun subtaskStatusKind(status: String): StatusKind = when (status) {
 
 private object SubtaskStatusKeys {
   const val COMPLETE = "complete"
+  const val COMPLETED = "completed"
   const val COMPLETED_NO_CHANGE = "completed_no_change"
   const val IN_PROGRESS = "in_progress"
   const val PENDING = "pending"

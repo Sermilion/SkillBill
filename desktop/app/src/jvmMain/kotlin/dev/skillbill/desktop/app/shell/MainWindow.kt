@@ -131,11 +131,15 @@ fun ApplicationScope.MainWindow(
         window.specsPane.state.value.selectedPath != null,
       )
       if (listNavigation && press?.key == ShellKey.Escape) {
-        window.specsPane.onAction(dev.skillbill.desktop.feature.specs.SpecsAction.Deselect)
-        true
+        press?.let { keyPress ->
+          keyboard.onKey(keyPress) {
+            window.specsPane.onAction(dev.skillbill.desktop.feature.specs.SpecsAction.Deselect)
+            true
+          }
+        } ?: false
       } else if (listNavigation)
         false
-      else press?.let(keyboard::onKey) ?: false
+      else press?.let { keyboard.onKey(it) } ?: false
     },
   ) {
     val awtWindow = this.window
@@ -176,11 +180,10 @@ fun ApplicationScope.MainWindow(
         SideEffect { keyboard.clearFocus = { focusManager.clearFocus() } }
         CompositionLocalProvider(LocalShellInput provides window.input) {
           BoxWithConstraints(Modifier.fillMaxSize()) {
-            val narrow = maxWidth < NARROW_WIDTH
             val drawerMode = maxWidth < DRAWER_WIDTH
             SideEffect { keyboard.drawerMode = drawerMode }
             val panes = window.panes
-            val layout = ShellLayout(showDetailsPane = panes.detailsPaneOpen && !panes.specsOpen && !panes.chatOpen && !narrow, drawerMode = drawerMode)
+            val layout = ShellLayout(drawerMode = drawerMode)
             // Below the drawer breakpoint every view header leads with the sidebar toggle, as `.sb-side-toggle`.
             val sidebarToggle: (() -> Unit)? = remember(drawerMode, panes) { if (drawerMode) ({ panes.drawerOpen = !panes.drawerOpen }) else null }
             CompositionLocalProvider(LocalShellLayout provides layout, LocalSidebarToggle provides sidebarToggle) {

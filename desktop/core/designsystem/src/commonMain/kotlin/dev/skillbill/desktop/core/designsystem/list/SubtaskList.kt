@@ -5,15 +5,15 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -49,7 +49,7 @@ internal val LocalSubtaskRowOpen = staticCompositionLocalOf<(() -> Unit)?> { nul
  * `.sb-sublist`: the Subtasks index, a box that takes keyboard focus. While it has focus ↑ and ↓ call [onMove] with -1 or 1 and
  * Enter calls [onOpen]. A press inside focuses the clicked row without the ring; the 2 px `accent-ring` outline shows only for keyboard focus,
  * as `:focus-visible` does. [onFocusChange] reports focus so the shell can hand it the arrow keys. [requestFocus] takes keyboard
- * focus once the list shows, as main.js does when J or K pages away from a focused list.
+ * focus once the list shows and reports whether the request completed through [onFocusRequestComplete].
  */
 @Composable
 fun SubtaskList(
@@ -59,6 +59,7 @@ fun SubtaskList(
   modifier: Modifier = Modifier,
   onFocusChange: (Boolean) -> Unit = {},
   requestFocus: Boolean = false,
+  onFocusRequestComplete: (focused: Boolean) -> Unit = {},
   content: @Composable ColumnScope.() -> Unit,
 ) {
   val requester = remember { FocusRequester() }
@@ -66,10 +67,23 @@ fun SubtaskList(
   var pointerFocus by remember { mutableStateOf(false) }
   val move by rememberUpdatedState(onMove)
   val open by rememberUpdatedState(onOpen)
+  val completeFocusRequest by rememberUpdatedState(onFocusRequestComplete)
+  var focusRequestCompleted by remember { mutableStateOf(false) }
   LaunchedEffect(requestFocus) {
-    if (requestFocus) {
-      withFrameNanos { }
-      requester.requestFocus()
+    if (!requestFocus) {
+      focusRequestCompleted = false
+      return@LaunchedEffect
+    }
+    focusRequestCompleted = false
+    withFrameNanos { }
+    if (focused || requester.requestFocus()) {
+      if (!focusRequestCompleted) {
+        focusRequestCompleted = true
+        completeFocusRequest(true)
+      }
+    } else if (!focusRequestCompleted) {
+      focusRequestCompleted = true
+      completeFocusRequest(false)
     }
   }
   val ring = SkillBillTheme.colors.accentRing
@@ -102,6 +116,10 @@ fun SubtaskList(
       .onFocusChanged {
         focused = it.hasFocus
         if (!it.hasFocus) pointerFocus = false
+        if (it.hasFocus && requestFocus && !focusRequestCompleted) {
+          focusRequestCompleted = true
+          completeFocusRequest(true)
+        }
         onFocusChange(it.hasFocus)
       }
       .onKeyEvent { event ->

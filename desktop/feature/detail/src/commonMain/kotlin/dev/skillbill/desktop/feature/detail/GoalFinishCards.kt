@@ -18,7 +18,10 @@ internal fun GoalFinishCard(item: WorkItem, detail: Detail, card: PhaseCard, sta
   when (card.phaseId) {
     "goal_assessment" -> GoalAssessmentCard(card, detail.goalAssessment, order, onAction)
     "qa" -> GoalQaCard(item, detail, card, state, onAction)
-    "qa_fix", "validate" -> SubtaskPhaseCard(item, detail, null, card, null, state.activity, state.renderedAt, onAction)
+    "qa_fix", "validate" -> SubtaskPhaseCard(
+      item = item, detail = detail, subtask = null, card = card, results = null, resultState = null,
+      changes = state.changes, activity = state.activity, renderedAt = state.renderedAt, onAction = onAction,
+    )
     "pr" -> PullRequestCard(card, goalPullRequestUrl(detail))
     "monitor" -> MonitorCard(card, goalPullRequestUrl(detail), state.renderedAt)
     "monitor_fix" -> MonitorFixCard(card)

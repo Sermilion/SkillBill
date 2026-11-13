@@ -1,5 +1,7 @@
 package dev.skillbill.desktop.feature.detail
 
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
@@ -14,6 +16,8 @@ import dev.skillbill.desktop.core.domain.model.StandalonePlanProgress
 import dev.skillbill.desktop.core.domain.model.StandalonePlanUnit
 import dev.skillbill.desktop.core.domain.model.WorkKind
 import dev.skillbill.desktop.core.testing.workItem
+import dev.skillbill.desktop.core.ui.input.LocalShellInput
+import dev.skillbill.desktop.core.ui.input.ShellInput
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -54,7 +58,9 @@ class PlanProgressTest {
     val item = base.copy(standaloneExecution = true, control = base.control.copy(phaseId = "plan", invocationId = "plan"))
     val actions = mutableListOf<DetailAction>()
     setContent { SkillBillTheme(reducedMotion = true) {
-      DetailScreen(DetailUiState(item, SectionsUi.Loaded(detail, null, emptyMap(), emptySet()), false, epoch), DetailScreenHost(false, "Ctrl I", {}), actions::add)
+      CompositionLocalProvider(LocalShellInput provides remember { ShellInput() }) {
+        DetailScreen(DetailUiState(item, SectionsUi.Loaded(detail, null, emptyMap(), emptySet()), false, epoch), DetailScreenHost(false, "Ctrl I", {}, {}), actions::add)
+      }
     } }
 
     val shown = "[subtask 3] Bash(./gradlew :desktop:check)"

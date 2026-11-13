@@ -261,16 +261,22 @@ class DetailViewModel(
       DetailAction.Retry -> observe()
       is DetailAction.Copy -> effectChannel.trySend(DetailEffect.CopyToClipboard(action.text))
       DetailAction.RevealFolder -> open(CHECKOUT_NOT_OPENED) { specs.revealFolder(state.value.header.repositoryRoot) }
-      DetailAction.OpenBranch -> state.value.header.branch?.let { branch ->
+      is DetailAction.OpenBranch -> {
+        val branch = action.branch.takeIf { it.isNotBlank() } ?: return
         open(BRANCH_NOT_OPENED) { webPages.openBranch(state.value.header.repositoryRoot, branch) }
       }
       is DetailAction.OpenSpecFile -> open(FILE_NOT_OPENED) { specs.openFile(action.path) }
       is DetailAction.Navigate -> effectChannel.trySend(DetailEffect.OpenRoute(action.route))
-      is DetailAction.SelectSubtask -> selectSubtask(action.key, action.inline)
+      is DetailAction.SelectSubtask -> selectSubtask(action.key)
       is DetailAction.SelectPhase -> selectPhase(action)
       is DetailAction.MoveSubtaskSelection -> moveSubtaskSelection(action.delta)
       DetailAction.OpenSelectedSubtaskSpec -> openSelectedSubtaskSpec()
+      DetailAction.FocusSubtaskList -> mutableState.update { it.copy(focusSubtaskList = true) }
+      is DetailAction.SubtaskListTargetChanged -> mutableState.update { current ->
+        current.copy(subtaskListTargetAvailable = action.available)
+      }
       DetailAction.SubtaskListFocused -> if (state.value.focusSubtaskList) mutableState.update { it.copy(focusSubtaskList = false) }
+      DetailAction.SubtaskListFocusUnavailable -> Unit
       is DetailAction.OpenChangesWindow -> openChangesWindow(action.scope)
       is DetailAction.SetVerifyCriteriaFilter -> mutableState.update { it.copy(verifyCriteriaFilter = action.filter) }
       is DetailAction.OpenNewerVerifyRun -> openNewerVerifyRun(action.workflowId)
@@ -319,6 +325,9 @@ class DetailViewModel(
       detailState.header.control.sessionId != openSessionId
     ) return null
     val preview = selectedQaPreview(detailState.header, detail, detailState.selectedQaRun, detailState.subtaskChoice.key) ?: return null
+    val goalFinishOwned = detailState.header.kind == WorkKind.Goal && !isStandaloneQa(detailState.header) && detail.goalQaPreview?.subtaskId == null
+    val finishChoice = detailState.phaseChoice[PhaseChoiceKey(detailState.header.id, SubtaskKey.GoalFinish)]
+    if (goalFinishOwned && selectedPhase(goalFinishTabs(detail), detail.goalFinishCards, finishChoice) != "qa") return null
     return QaPreviewRequest(
       sessionId = openSessionId,
       workId = detailState.header.id,
@@ -363,20 +372,24 @@ class DetailViewModel(
     updatePreviewInputs { it.copy(subtaskChoice = choice) }
   }
 
-  /** Inline, selecting the selected row again folds or unfolds its inspector; any other selection opens it. */
-  private fun selectSubtask(key: SubtaskKey, inline: Boolean) {
+  private fun selectSubtask(key: SubtaskKey) {
     // A chip can name a dependency the index does not list; selecting it would store a choice that falls back to the default.
     val detail = loadedDetail() ?: return
     if (key !in subtaskKeys(state.value.header, detail)) return
-    val choice = state.value.subtaskChoice
-    if (inline && key == effectiveSubtask()) chooseSubtask(choice.copy(key = key, expanded = !choice.expanded)) else chooseSubtask(SubtaskChoice(key, expanded = true))
+    chooseSubtask(SubtaskChoice(key))
   }
 
   private fun selectPhase(action: DetailAction.SelectPhase) {
     if (action.itemId != item.id) return
     val key = PhaseChoiceKey(action.itemId, action.key)
-    subtaskSelections.setPhase(key, action.phaseId)
-    mutableState.update { it.copy(phaseChoice = it.phaseChoice + (key to action.phaseId)) }
+    val detail = loadedDetail() ?: return
+    val cards = subjectPhaseCards(detail, action.key)
+    val tabs = subjectPhaseTabs(detail, action.key)
+    if (tabs.none { it.id == action.phaseId && it.openable }) return
+    val open = selectedPhase(tabs, cards, state.value.phaseChoice[key])
+    val choice = if (action.intent == PhaseSelectionIntent.Activate && open == action.phaseId) PhaseDisclosure.Folded else PhaseDisclosure.Open(action.phaseId)
+    subtaskSelections.setPhase(key, choice)
+    updatePreviewInputs { it.copy(phaseChoice = it.phaseChoice + (key to choice)) }
   }
 
   private fun moveSubtaskSelection(delta: Int) {
@@ -384,7 +397,7 @@ class DetailViewModel(
     val keys = subtaskKeys(state.value.header, detail)
     if (keys.isEmpty()) return
     val index = keys.indexOf(effectiveSubtask()).coerceAtLeast(0)
-    chooseSubtask(SubtaskChoice(keys[(index + delta).coerceIn(0, keys.lastIndex)], expanded = true))
+    chooseSubtask(SubtaskChoice(keys[(index + delta).coerceIn(0, keys.lastIndex)]))
   }
 
   private fun openSelectedSubtaskSpec() {

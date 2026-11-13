@@ -63,6 +63,7 @@ fun main() {
       quitting = appScope.launch {
         try {
           if (window.chat.closeChatsSafely()) {
+            window.detailsPaneWidth.close()
             component.providerUsageRepository.closeUsage()
             exitApplication()
           } else {

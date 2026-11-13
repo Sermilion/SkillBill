@@ -48,7 +48,9 @@ class PlanActionsTest {
   fun `goal detail keeps its existing document instead of selecting the plan document`() = runComposeUiTest {
     val item = workItem("goal-1").copy(planningPrepared = false)
     setContent { SkillBillTheme(reducedMotion = true) {
-      DetailScreen(DetailUiState(item, SectionsUi.Loaded(emptyDetail, null, emptyMap(), emptySet()), false, epoch), DetailScreenHost(false, "Ctrl I", {})) {}
+      CompositionLocalProvider(LocalShellInput provides remember { ShellInput() }) {
+        DetailScreen(DetailUiState(item, SectionsUi.Loaded(emptyDetail, null, emptyMap(), emptySet()), false, epoch), DetailScreenHost(false, "Ctrl I", {}, {})) {}
+      }
     } }
 
     onNodeWithText("Goal stage").assertExists()
@@ -64,7 +66,9 @@ class PlanActionsTest {
       control = base.control.copy(phaseId = "plan", invocationId = "plan-invocation"))
     val actions = mutableListOf<DetailAction>()
     setContent { SkillBillTheme(reducedMotion = true) {
-      DetailScreen(DetailUiState(item, SectionsUi.Loaded(detail, null, emptyMap(), emptySet()), false, epoch), DetailScreenHost(false, "Ctrl I", {}), actions::add)
+      CompositionLocalProvider(LocalShellInput provides remember { ShellInput() }) {
+        DetailScreen(DetailUiState(item, SectionsUi.Loaded(detail, null, emptyMap(), emptySet()), false, epoch), DetailScreenHost(false, "Ctrl I", {}, {}), actions::add)
+      }
     } }
 
     onAllNodes(hasScrollAction()).onFirst().performScrollToNode(hasText("Detail view"))
@@ -88,7 +92,7 @@ class PlanActionsTest {
       control = base.control.copy(phaseId = "plan", invocationId = "plan-invocation"))
     setContent { SkillBillTheme(reducedMotion = true) {
       CompositionLocalProvider(LocalShellInput provides ShellInput()) {
-        DetailScreen(DetailUiState(item, SectionsUi.Loaded(detail, null, emptyMap(), emptySet()), false, epoch), DetailScreenHost(false, "Ctrl I", {})) {}
+        DetailScreen(DetailUiState(item, SectionsUi.Loaded(detail, null, emptyMap(), emptySet()), false, epoch), DetailScreenHost(false, "Ctrl I", {}, {})) {}
       }
     } }
 
@@ -120,7 +124,9 @@ class PlanActionsTest {
       control = base.control.copy(phaseId = "plan", invocationId = "plan-invocation"))
     val actions = mutableListOf<DetailAction>()
     setContent { SkillBillTheme(reducedMotion = true) {
-      DetailScreen(DetailUiState(item, SectionsUi.Loaded(detail, null, emptyMap(), emptySet()), false, epoch), DetailScreenHost(false, "Ctrl I", {}), actions::add)
+      CompositionLocalProvider(LocalShellInput provides remember { ShellInput() }) {
+        DetailScreen(DetailUiState(item, SectionsUi.Loaded(detail, null, emptyMap(), emptySet()), false, epoch), DetailScreenHost(false, "Ctrl I", {}, {}), actions::add)
+      }
     } }
 
     onNodeWithText("Retry subtask 1").assertIsEnabled().performClick()
@@ -149,7 +155,9 @@ class PlanActionsTest {
     val detail = emptyDetail.copy(executionHistory = listOf(planExecution(report)), standalonePlan = plan)
     val state = DetailUiState(item, SectionsUi.Loaded(detail, null, emptyMap(), emptySet()), false, epoch)
     setContent { SkillBillTheme(reducedMotion = true) {
-      DetailScreen(state, DetailScreenHost(false, "Ctrl I", {})) {}
+      CompositionLocalProvider(LocalShellInput provides remember { ShellInput() }) {
+        DetailScreen(state, DetailScreenHost(false, "Ctrl I", {}, {})) {}
+      }
     } }
 
     onAllNodesWithText("Reading the repo").assertCountEquals(2)
@@ -320,7 +328,9 @@ class PlanActionsTest {
     )
     val actions = mutableListOf<DetailAction>()
     setContent { SkillBillTheme(reducedMotion = true) {
-      DetailScreen(DetailUiState(item, SectionsUi.Loaded(detail, null, emptyMap(), emptySet()), false, epoch), DetailScreenHost(false, "Ctrl I", {}), actions::add)
+      CompositionLocalProvider(LocalShellInput provides remember { ShellInput() }) {
+        DetailScreen(DetailUiState(item, SectionsUi.Loaded(detail, null, emptyMap(), emptySet()), false, epoch), DetailScreenHost(false, "Ctrl I", {}, {}), actions::add)
+      }
     } }
 
     onAllNodes(hasScrollAction()).onFirst().performScrollToNode(hasText("decomposition-manifest.yaml"))

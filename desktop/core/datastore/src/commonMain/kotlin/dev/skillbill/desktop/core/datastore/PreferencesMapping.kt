@@ -23,6 +23,9 @@ internal fun Preferences.toAppSettings(onUnsupported: (String) -> Unit): AppSett
   val storedChatWidth = this[AppPreferenceKeys.CHAT_WIDTH_DP]
   val chatWidth = storedChatWidth?.coerceIn(AppSettings.CHAT_WIDTH_MIN_DP, AppSettings.CHAT_WIDTH_MAX_DP)
   if (chatWidth != storedChatWidth) onUnsupported("${AppPreferenceKeys.CHAT_WIDTH_DP.name}=$storedChatWidth")
+  val storedDetailsWidth = this[AppPreferenceKeys.DETAILS_WIDTH_DP]
+  val detailsWidth = storedDetailsWidth?.takeIf { it >= AppSettings.DETAILS_WIDTH_MIN_DP }
+  if (storedDetailsWidth != null && detailsWidth == null) onUnsupported("${AppPreferenceKeys.DETAILS_WIDTH_DP.name}=$storedDetailsWidth")
   val favoriteWork = this[AppPreferenceKeys.FAVORITE_WORK].orEmpty().mapNotNull { encoded ->
     FavoriteWorkKeyEncoding.decode(encoded).also { if (it == null) onUnsupported("${AppPreferenceKeys.FAVORITE_WORK.name}=$encoded") }
   }.toSet()
@@ -40,6 +43,7 @@ internal fun Preferences.toAppSettings(onUnsupported: (String) -> Unit): AppSett
     startAtLogin = this[AppPreferenceKeys.START_AT_LOGIN] ?: false,
     terminalHeightDp = height ?: AppSettings.TERMINAL_HEIGHT_DEFAULT_DP,
     chatWidthDp = chatWidth ?: AppSettings.CHAT_WIDTH_DEFAULT_DP,
+    detailsWidthDp = detailsWidth,
     trayLastTab = decode(AppPreferenceKeys.TRAY_LAST_TAB, TrayTab.DEFAULT) { raw -> TrayTab.entries.firstOrNull { it.wireValue == raw } },
     favoriteWork = favoriteWork,
     favoriteSpecs = favoriteSpecs,
