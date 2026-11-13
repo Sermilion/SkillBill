@@ -45,7 +45,7 @@ class AgentRunGoalContinuationCommandTest {
     val request = runner.requests.single()
     assertEquals(
       listOf(
-        "skill-bill",
+        "sona",
         "--db",
         "/tmp/skillbill-agent-run/metrics.db",
         "feature-task",
@@ -92,7 +92,7 @@ class AgentRunGoalContinuationCommandTest {
     val request = runner.requests.single()
     assertEquals(
       listOf(
-        "skill-bill",
+        "sona",
         "--db",
         "/tmp/skillbill-agent-run/metrics.db",
         "feature-task",
@@ -137,7 +137,7 @@ class AgentRunGoalContinuationCommandTest {
   }
 
   @Test
-  fun `every agent goal-continuation child spawns skill-bill feature-task and never the skill`() {
+  fun `every agent goal-continuation child spawns sona feature-task and never the skill`() {
     val runner = RecordingAgentRunProcessRunner()
 
     listOf(
@@ -153,7 +153,7 @@ class AgentRunGoalContinuationCommandTest {
     assertEquals(5, runner.requests.size)
     runner.requests.forEach { request ->
       assertEquals(
-        listOf("skill-bill", "--db", "/tmp/skillbill-agent-run/metrics.db", "feature-task"),
+        listOf("sona", "--db", "/tmp/skillbill-agent-run/metrics.db", "feature-task"),
         request.launch.command.take(4),
       )
       assertContains(request.launch.command, "resume")
@@ -245,7 +245,7 @@ class AgentRunGoalContinuationCommandTest {
     val request = runner.requests.single()
     assertEquals(
       listOf(
-        "skill-bill",
+        "sona",
         "--db",
         "/tmp/skillbill-agent-run/metrics.db",
         "feature-task",
@@ -290,7 +290,7 @@ class AgentRunGoalContinuationCommandTest {
     val request = runner.requests.single()
     assertEquals(
       listOf(
-        "skill-bill",
+        "sona",
         "--db",
         "/tmp/skillbill-agent-run/metrics.db",
         "feature-task",

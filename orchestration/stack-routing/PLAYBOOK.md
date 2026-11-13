@@ -25,7 +25,7 @@ Every router, reviewer, and validator agrees on the following procedure:
 
 1. Enumerate every immediate subdirectory of `platform-packs/`, resolved from
    the skill-adjacent `platform-packs` link installed next to this skill (or
-   from the skill-bill install root `platform-packs` tree / the install-published review catalog).
+   from the sona install root `platform-packs` tree / the install-published review catalog).
    Do **not** treat the reviewed repository root's `platform-packs/` as the
    discovery root unless that repository is itself the Skill Bill source tree.
 2. For each candidate slug, load

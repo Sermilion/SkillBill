@@ -87,7 +87,7 @@ Reason: One detection surface keeps pause copy and classification aligned with c
 Alternatives considered: Local stderr parsing in GoalAssessmentRoundRun.
 
 ## [2026-11-03] Occupying lookup skips completed and abandoned parents
-Context: skill-bill goal and desktop preflight treated a completed or cancelled key as occupying, including when isActiveGoalRuntime stayed true for an abandoned manifest.
+Context: sona goal and desktop preflight treated a completed or cancelled key as occupying, including when isActiveGoalRuntime stayed true for an abandoned manifest.
 Decision: Occupancy is parent workflowStatus not completed or abandoned. Run admission and preflight use a dedicated occupying lookup. Shared discovery, loadDurableByIssueKey, purge listing, and status newest-fallback still return completed parents.
 Reason: Emptying the shared lookup would hide preserved history from status, reset, repair, and purge. FAILED stays occupying even when goal continuation is null so preflight cannot report NEW_WORK.
 Alternatives considered: Changing findDecomposedParentWorkflow or loadDurableByIssueKey globally.
@@ -413,7 +413,7 @@ Reason: A linked completed plan with untouched subtasks proves that no final qua
 
 Context: The quality gate blocks a parent marked `historical_ambiguity` and asks the operator to provide original evidence or choose a fresh quality execution. Nothing recorded that choice. Intake text never reaches the gate, `goal repair` and `goal resume` do not touch it, and `work recover` excludes operator decisions. 0AC-85 stayed blocked with no supported way forward.
 
-Decision: `skill-bill goal fresh-quality <issue-key> --reason <why>` moves the parent's quality record from `historical_ambiguity` to `clean_unstarted` in one transaction. It refuses while the parent execution lease is live and when the record holds no ambiguity. It is a separate command, not a `goal repair` wedge, because `goal resume` applies repair clears automatically and this choice discards history only an operator can judge.
+Decision: `sona goal fresh-quality <issue-key> --reason <why>` moves the parent's quality record from `historical_ambiguity` to `clean_unstarted` in one transaction. It refuses while the parent execution lease is live and when the record holds no ambiguity. It is a separate command, not a `goal repair` wedge, because `goal resume` applies repair clears automatically and this choice discards history only an operator can judge.
 
 Reason: The ambiguity guard exists so the runtime never guesses. The guess belongs to the operator, and the runtime needs a durable way to record it. A CLI test drives the recovered-database block, the choice, a refused repeat and a run that no longer blocks.
 

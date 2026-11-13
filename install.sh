@@ -28,6 +28,7 @@ INSTALL_SOURCE="auto"
 RELEASE_TAG="${SKILL_BILL_RELEASE_TAG:-}"
 REUSE_LAST_SELECTION=0
 CLEAN_INSTALL=0
+KEEP_RUNNING=0
 DESKTOP_APP_INSTALL_RESULT="not installed"
 RECOVERY_DESKTOP_APP_PATH=""
 RECOVERY_RUNTIME_ROOT=""
@@ -113,6 +114,8 @@ Options:
   --reuse-last-selection   Reuse the latest successful agent, telemetry,
                            and MCP choices from ~/.skill-bill. All platform
                            packs are installed on every run.
+  --keep-running           Leave running desktop and runtime processes alone.
+                           Retain their previous app and runtime files.
   --clean                  Wipe ~/.skill-bill/skills/, ~/.skill-bill/platform-packs/,
                            and ~/.skill-bill/orchestration/ before staging the
                            candidate tree. Useful for a clean-slate install.
@@ -140,6 +143,10 @@ parse_args() {
       --no-desktop-app)
         err "Desktop installation is required; --no-desktop-app is no longer supported."
         exit 1
+        ;;
+      --keep-running)
+        KEEP_RUNNING=1
+        shift
         ;;
       --clean)
         CLEAN_INSTALL=1
@@ -174,6 +181,10 @@ parse_args() {
         ;;
     esac
   done
+  if [[ "$KEEP_RUNNING" -eq 1 && "$CLEAN_INSTALL" -eq 1 ]]; then
+    err "--keep-running cannot be combined with --clean."
+    exit 1
+  fi
 }
 
 local_source_checkout_available() {
@@ -944,6 +955,10 @@ cleanup_retired_ide_plugins() {
 #
 # Tests and dev iteration can opt out with SKILL_BILL_SKIP_PREINSTALL_UNINSTALL=1.
 run_pre_install_uninstall() {
+  if [[ "${KEEP_RUNNING:-0}" -eq 1 ]]; then
+    info "Keeping generated install files available to running sessions; skipping pre-install uninstall."
+    return 0
+  fi
   if [[ "${SKILL_BILL_SKIP_PREINSTALL_UNINSTALL:-}" == "1" ]]; then
     warn "Skipping pre-install uninstall because SKILL_BILL_SKIP_PREINSTALL_UNINSTALL=1."
     return 0
@@ -1166,6 +1181,7 @@ replace_live_runtime_tree() {
 }
 
 prune_retired_runtime_trees() {
+  [[ "${KEEP_RUNNING:-0}" -eq 0 ]] || return 0
   local retired_root
   retired_root="$(dirname "$RUNTIME_CLI_INSTALL_DIR")/retired"
   [[ -d "$retired_root" ]] || return 0
@@ -2758,12 +2774,14 @@ activate_staged_desktop_app() {
   elif [[ -e "$obsolete_mcp" || -L "$obsolete_mcp" ]]; then
     warn "Preserving unrelated launcher at $obsolete_mcp"
   fi
-  if [[ "$os" == "linux" ]]; then
+  if [[ "$os" == "linux" && "${KEEP_RUNNING:-0}" -eq 0 ]]; then
     cleanup_linux_legacy_desktop "$install_root"
   fi
   ok "Desktop app installed at $app_target"
   DESKTOP_APP_INSTALL_RESULT="installed at $app_target"
-  if [[ ${#running_pids[@]} -gt 0 ]] && desktop_app_hosts_installer "${running_pids[@]}"; then
+  if [[ "${KEEP_RUNNING:-0}" -eq 1 ]]; then
+    info "Leaving running desktop and runtime processes alone. Open the new desktop build after current runs finish."
+  elif [[ ${#running_pids[@]} -gt 0 ]] && desktop_app_hosts_installer "${running_pids[@]}"; then
     schedule_desktop_app_restart "$os" "$app_target" "$executable" "${running_pids[@]}"
     ok "The desktop app runs this installer, so it restarts with the new build when the installer exits."
   elif [[ ${#running_pids[@]} -gt 0 ]]; then
@@ -2776,7 +2794,9 @@ activate_staged_desktop_app() {
       return 1
     fi
   fi
-  if [[ "$previous_app_moved" -eq 1 && ( -e "$backup_app" || -L "$backup_app" ) ]]; then
+  if [[ "${KEEP_RUNNING:-0}" -eq 1 && "$previous_app_moved" -eq 1 ]]; then
+    info "Retained previous desktop files for running sessions: $backup_app"
+  elif [[ "$previous_app_moved" -eq 1 && ( -e "$backup_app" || -L "$backup_app" ) ]]; then
     if ! rm -rf "$backup_app"; then warn "Retained previous desktop app for recovery: $backup_app"; fi
   fi
   if [[ -n "$RECOVERY_DESKTOP_APP_PATH" ]]; then

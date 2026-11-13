@@ -260,7 +260,7 @@ class AuthoringRenderOutputTest {
   }
 
   @Test
-  fun `skill-bill render includes agent addon pointers while its sidecars render none`() {
+  fun `sona render includes agent addon pointers while its sidecars render none`() {
     val repoRoot = tempRoot.resolve("skill-bill-addon-render-repo")
     val parentDir = repoRoot.resolve("skills/skill-bill")
     val sidecarDir = repoRoot.resolve("skills/skill-bill-review-helper")

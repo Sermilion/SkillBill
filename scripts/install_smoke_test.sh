@@ -129,7 +129,7 @@ case "$cmd" in
     fi
     ;;
   "version")
-    echo "skill-bill version 0.0.0-smoke"
+    echo "sona version 0.0.0-smoke"
     ;;
 
   "install"|"install --help")
@@ -748,7 +748,7 @@ mv "$LEGACY_RUNTIME_BACKUP" "$LEGACY_RUNTIME"
 pass "legacy launcher prints a fixed notice and exits 0 without runtime calls or argument effects"
 
 LAUNCHER_VERSION="$(HOME="$FAKE_HOME" "$LAUNCHER" --home "$FAKE_HOME" version 2>/dev/null || true)"
-if [[ "$LAUNCHER_VERSION" == *"skill-bill"* ]]; then
+if [[ "$LAUNCHER_VERSION" == "sona version 0.0.0-smoke" ]]; then
   pass "sona version succeeds"
 else
   fail "sona version output unexpected: '$LAUNCHER_VERSION'"

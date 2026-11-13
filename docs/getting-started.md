@@ -39,6 +39,16 @@ cd ~/Development/skill-bill
 
 The default `./install.sh` is the **prebuilt** path: it downloads and checksum-verifies the prebuilt release runtime images for your host, so it needs no JDK and no Gradle build. Supported prebuilt hosts are `macos-arm64`, `macos-x64`, `windows-x64`, and `linux-x64`; any other host auto-falls back to a from-source build.
 
+To update from a checkout while runs are active, use:
+
+```bash
+./install.sh --from-source --reuse-last-selection --keep-running
+```
+
+This leaves desktop and runtime processes running and retains their previous app
+and runtime files. It skips the pre-install uninstall. Open the new desktop build
+after the current runs finish.
+
 ### Build prerequisites
 
 A from-source build needs a **JDK 21+**. The runtime targets Java 21 and

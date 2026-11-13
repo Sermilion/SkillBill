@@ -212,9 +212,6 @@ class ReviewOperationPolicy(
         listOf("./gradlew", "gradle", "npm test", "npm run", "cargo test", "cargo build", "pytest", "go test")
           to "build_test_fact_discovery",
         listOf(
-          "skill-bill validate",
-          "skill-bill show",
-          "skill-bill explain",
           "sona validate",
           "sona show",
           "sona explain",

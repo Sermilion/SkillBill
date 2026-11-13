@@ -33,7 +33,7 @@ class UninstallCommand(
   override fun run() {
     if (inputs.environment[GOAL_CONTINUATION_ENV] == "1") {
       val message =
-        "Refusing to run skill-bill uninstall during skill-bill goal-continuation.\n" +
+        "Refusing to run sona uninstall during skill-bill goal-continuation.\n" +
           "Goal workers must preserve the active workflow store; uninstall after the goal completes."
       state.completeText(
         message,

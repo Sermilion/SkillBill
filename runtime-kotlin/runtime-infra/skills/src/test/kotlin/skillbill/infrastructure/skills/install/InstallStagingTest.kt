@@ -157,7 +157,7 @@ class InstallStagingTest {
     SkillClassFixtures.seedShippedSkillClasses(repoRoot)
     val authored =
       "---\nname: skill-bill\ndescription: Legacy dispatcher.\n---\n\n" +
-        "Use `skill-bill phase review SONA-5` and keep local guidance.\n" +
+        "Use `sona phase review SONA-5` and keep local guidance.\n" +
         "Call mcp__skill-bill__update_check first.\n"
     Files.writeString(skillDir.resolve("content.md"), authored)
     supportingFileTargets(repoRoot).values

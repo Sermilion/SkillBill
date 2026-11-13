@@ -158,7 +158,7 @@ Capability and guard evidence is in `/home/sermilion/StudioProjects/skill-bill`,
 on `feature/SKILL-384-workflow-skeleton-execution-contracts`.
 Read-only copies of settled audit and repair reports are in
 `/tmp/SKILL-384-audit-investigation`. The current blocking reason is available
-through `skill-bill goal status SKILL-384 --repo-root /home/sermilion/StudioProjects/skill-bill`.
+through `sona goal status SKILL-384 --repo-root /home/sermilion/StudioProjects/skill-bill`.
 
 ## Runtime correction
 

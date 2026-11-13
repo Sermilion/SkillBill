@@ -158,7 +158,7 @@ note([("  state saved → ", MUTED, False), ("wfta-7f3a", AMBER, False),
       (" · resume anytime, nothing lost", MUTED, False)], hold=900)
 
 # resume
-type_cmd("skill-bill feature-task status wfta-7f3a")
+type_cmd("sona feature-task status wfta-7f3a")
 note([("↻ ", BLUE, True), ("resuming from durable state · step: ", MUTED, False),
       ("implement", BLUE, False)], hold=620)
 run_step("implement", frames_n=6, detail="resumed · diff applied")

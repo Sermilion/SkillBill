@@ -284,7 +284,7 @@ class CliInstallPlanApplyRuntimeTest {
       )
 
     assertEquals(64, result.exitCode, result.stdout)
-    assertContains(result.stdout, "Refusing to run skill-bill install apply during skill-bill goal-continuation.")
+    assertContains(result.stdout, "Refusing to run sona install apply during skill-bill goal-continuation.")
     assertFalse(Files.exists(installSelectionPath(fixture.home)))
     assertFalse(Files.exists(fixture.home.resolve("manual-targets/codex/bill-code-review")))
   }

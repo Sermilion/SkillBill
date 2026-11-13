@@ -289,7 +289,7 @@
   /* A no-change pause waits for an operator decision. The app only explains it: the operator settles it in chat or runs the
    * command, then resumes the goal. */
   function operatorDecision(st, it) {
-    const cmd = `skill-bill goal operator-decision ${it.id} --subtask ${it.current} --decision retry_fix|accept_and_advance|abandon_subtask`;
+    const cmd = `sona goal operator-decision ${it.id} --subtask ${it.current} --decision retry_fix|accept_and_advance|abandon_subtask`;
     return `<div class="l-col g-2">
       ${S.Hint({ tone: 'info', text: `Subtask ${it.current} finished with no code changes and is waiting for your decision. Settle it in chat, or run this command and then resume the goal. Pass --instructions with retry_fix.` })}
       <div class="l-row g-2"><span class="mono t-muted t-sm l-grow">${esc(cmd)}</span>${S.IconButton({ icon: 'copy', label: 'Copy decision command', act: 'copy', arg: cmd, size: 'sm' })}</div>

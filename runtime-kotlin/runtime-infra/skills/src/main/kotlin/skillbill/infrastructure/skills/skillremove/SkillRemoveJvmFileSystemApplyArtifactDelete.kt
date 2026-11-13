@@ -173,6 +173,6 @@ internal fun SkillRemoveJvmFileSystemApply.handleApplyCascadeFailure(
 
 internal fun SkillRemoveJvmFileSystemApply.logApplyCascadeFailure(error: Throwable) {
   SkillRemoveJvmFileSystemApply.log.info(
-    "skill-bill remove failed: exceptionName=${error.failureCodeLabel() ?: error::class.simpleName.orEmpty()}",
+    "sona remove failed: exceptionName=${error.failureCodeLabel() ?: error::class.simpleName.orEmpty()}",
   )
 }

@@ -29,7 +29,7 @@ import skillbill.engine.operation.updatecheck.updateCheckContract
 class VersionCommand(
   private val service: SystemService,
   private val state: CliRunState,
-) : DocumentedCliCommand("version", "Show the installed skill-bill version.") {
+) : DocumentedCliCommand("version", "Show the installed sona version.") {
   private val format by formatOption()
 
   override fun run() {

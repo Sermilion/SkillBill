@@ -61,7 +61,7 @@ class CliUninstallRuntimeTest {
       )
 
     assertEquals(64, result.exitCode, result.stdout)
-    assertContains(result.stdout, "Refusing to run skill-bill uninstall during skill-bill goal-continuation.")
+    assertContains(result.stdout, "Refusing to run sona uninstall during skill-bill goal-continuation.")
   }
 
   @Test

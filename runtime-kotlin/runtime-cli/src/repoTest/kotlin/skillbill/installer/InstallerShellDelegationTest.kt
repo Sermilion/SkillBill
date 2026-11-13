@@ -9,6 +9,41 @@ import kotlin.test.assertTrue
 
 class InstallerShellDelegationTest {
   @Test
+  fun `keep-running reinstall retains old app files and every retired runtime tree`() {
+    val first = runPrebuiltInstaller(releaseValid = true)
+    assertEquals(0, first.exitCode, first.output)
+    val desktopRoot = first.home.resolve("desktop-apps")
+    val previousApp =
+      Files.list(desktopRoot).use {
+          entries ->
+        entries.filter { Files.isDirectory(it) }.findFirst().orElseThrow()
+      }
+    Files.writeString(previousApp.resolve("running-app-marker"), "original app")
+    val retired = first.home.resolve(".skill-bill/runtime/retired")
+    val originals =
+      listOf("runtime-cli.20000101", "runtime-mcp.20000101")
+        .map { name -> Files.createDirectories(retired.resolve(name)).resolve("running.jar") }
+    originals.forEach { Files.writeString(it, "original runtime") }
+
+    val second =
+      runPrebuiltInstaller(
+        releaseValid = true,
+        extraArgs = listOf("--keep-running"),
+        reuse = PrebuiltReuse(first.home, first.binDir),
+        options = PrebuiltOptions(skipPreinstallUninstall = false),
+      )
+
+    assertEquals(0, second.exitCode, second.output)
+    originals.forEach { assertEquals("original runtime", Files.readString(it)) }
+    val retainedApp =
+      Files.list(desktopRoot).use { entries ->
+        entries.filter { it.fileName.toString().startsWith(".Sona.previous.") }.findFirst().orElseThrow()
+      }
+    assertEquals("original app", Files.readString(retainedApp.resolve("running-app-marker")))
+    assertContains(second.output, "Leaving running desktop and runtime processes alone.")
+  }
+
+  @Test
   fun `uninstaller removes desktop app install and launcher`() {
     val run = runUninstallerShellWithDesktopInstall()
 

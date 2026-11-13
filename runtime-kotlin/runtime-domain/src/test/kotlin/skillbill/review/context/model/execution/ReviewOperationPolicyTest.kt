@@ -40,7 +40,7 @@ class ReviewOperationPolicyTest {
   }
 
   @Test fun `both public command names retain authoring discovery prohibition`() {
-    listOf("skill-bill validate", "sona validate").forEach { command ->
+    listOf("sona validate", "sona show", "sona explain").forEach { command ->
       assertEquals("platform_pack_and_addon_resolution", category(ReviewOperationKind.SHELL_COMMAND, command))
     }
   }

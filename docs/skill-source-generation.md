@@ -23,7 +23,7 @@ The repository should be easy to review and hard to drift:
 
 The canonical `skill-bill` dispatcher keeps its authored source when an
 installation contains local guidance. `renderWrapper` maps its public
-frontmatter name to `sona` and adapts legacy `/skill-bill` and executable
+frontmatter name to `sona` and adapts legacy `/sona` and executable
 `skill-bill` command references in the rendered execution body. It preserves
 arguments and other authored guidance, and logs when it changes a body. The
 same renderer serves authoring previews and installation, so both paths show

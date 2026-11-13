@@ -38,7 +38,7 @@ internal class SkillRemoveJvmFileSystemApply(
     val rollbackStash = mutableListOf<RollbackEntry>()
     val nativeJournal = ProviderMutationJournal()
     log.info(
-      "skill-bill remove begin: target=${describeTargetForLog(request.target)} " +
+      "sona remove begin: target=${describeTargetForLog(request.target)} " +
         "cascadedSkills=${preview.cascadedSkillNames.size} " +
         "filesystemPaths=${preview.filesystemPaths.size}",
     )
@@ -48,7 +48,7 @@ internal class SkillRemoveJvmFileSystemApply(
       }.fold(
         onSuccess = { applied ->
           log.info(
-            "skill-bill remove success: removedPaths=${applied.removedPaths.size} " +
+            "sona remove success: removedPaths=${applied.removedPaths.size} " +
               "editedManifests=${applied.editedManifests.size} " +
               "unlinkedSymlinks=${applied.unlinkedSymlinks.size}",
           )
@@ -114,7 +114,7 @@ internal class SkillRemoveJvmFileSystemApply(
         throw cancellation
       } catch (error: IOException) {
         log.warning(
-          "skill-bill remove unlink failed for ${provider.name}: ${error::class.simpleName.orEmpty()}",
+          "sona remove unlink failed for ${provider.name}: ${error::class.simpleName.orEmpty()}",
         )
         failures += UnlinkFailure(provider = provider, message = error.message.orEmpty())
       }

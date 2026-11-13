@@ -1,7 +1,7 @@
-You are executing exactly one phase of the EXPERIMENTAL skill-bill feature-task-runtime
+You are executing exactly one phase of the EXPERIMENTAL sona feature-task-runtime
 loop (preplan -> plan -> plan_subtasks -> implement -> simplify -> audit -> qa -> review -> verify_findings -> validate -> write_history -> commit_push -> pr -> monitor)
 for issue SKILL-65. The runtime owns the loop; do not run other phases, do not open
-or continue any other skill-bill workflow, and do not call `sona workflow continue`.
+or continue any other sona workflow, and do not call `sona workflow continue`.
 Execute this supplied phase briefing with the current installed runtime.
 The initial user-facing goal invocation owns update checks and launch confirmation.
 Do not call `mcp__sona__update_check`, ask whether to update, or repeat dispatcher

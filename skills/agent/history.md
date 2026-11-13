@@ -1,6 +1,6 @@
 ## [2026-09-27] SKILL-380 subtask 12 — skill-bill dispatcher for the full run and phases
 Areas: skills/skill-bill (new), orchestration/{skill-classes,contracts}, agent-addons/execution-budget, runtime-kotlin/runtime-domain/{install/model,agentaddon/model}, runtime-kotlin/runtime-infra/skills/{install,scaffold}, runtime-kotlin/runtime-cli (repoTest, test), README.md, AGENTS.md, runtime-kotlin/ARCHITECTURE.md
-- New `/skill-bill` entry skill. With no `phase:` it runs the full skeleton behind one confirmation gate, and a missing spec goes to `skill-bill phase plan`, not `bill-feature-spec`. `phase:<name>` routes to `skill-bill phase <name>` for plan/implement/review/validation/pr. `code-review:` and `mode:` tokens pass through unchanged. `phase:` with `operation:` is a dispatcher usage error.
+- New `/sona` entry skill. With no `phase:` it runs the full skeleton behind one confirmation gate, and a missing spec goes to `sona phase plan`, not `bill-feature-spec`. `phase:<name>` routes to `sona phase <name>` for plan/implement/review/validation/pr. `code-review:` and `mode:` tokens pass through unchanged. `phase:` with `operation:` is a dispatcher usage error.
 - `ListedSkillNames` (runtime-domain, `bill-` prefix plus the `skill-bill` dispatcher) is now the single owner of the "listed skill" rule. Install discovery, platform-from-path, README-row regexes and skill-reference regexes all use it. Add any new non-`bill-` listed skill there. reusable
 - `skill-bill` uses the `feature-launch-warning` class (`exact: skill-bill`), so it stages the same sidecars as `bill-feature`. `AgentAddonConsumer.SKILL_BILL` is added, and execution-budget consumers are `[bill-feature, skill-bill]`. Addon schema contract_version stays 1.0, and persisted `bill-feature` selections still verify.
 - `bill-feature` and every old listed skill are unchanged. The dispatcher sits beside them rather than replacing them. Uninstall is unchanged and removes the `skill-bill` link.
@@ -43,7 +43,7 @@ Acceptance criteria: 10/10 implemented
 
 ## [2026-08-20] Validate runs only the pack collect-all command
 Areas: skills/bill-feature-task-runtime
-- Feature-task validate uses only the pack-declared collect-all command. Repo-root `skill-bill validate` / agnix / validate_agent_configs stay off that phase.
+- Feature-task validate uses only the pack-declared collect-all command. Repo-root `sona validate` / agnix / validate_agent_configs stay off that phase.
 - Pattern: pack gate owns validate; maintainer lists do not. reusable
 Feature flag: N/A
 Acceptance criteria: 1/1 implemented
@@ -65,7 +65,7 @@ Acceptance criteria: 6/6 implemented
 
 ## [2026-08-10] SKILL-178 subtask 4 — Governed content and parity-lock sweep
 Areas: skills/bill-feature-goal, skills/bill-feature-task-runtime, skills/bill-code-review, orchestration/review-orchestrator, runtime-kotlin/agent, runtime-kotlin content-lock tests
-- Aligned governed remediation prose so a remediation round is handed all findings and both Blocker and Major reopen `implement_fix` / block advance; Minor and Nit stay ledger-only via `skill-bill goal findings`
+- Aligned governed remediation prose so a remediation round is handed all findings and both Blocker and Major reopen `implement_fix` / block advance; Minor and Nit stay ledger-only via `sona goal findings`
 - Remediation-delta scope is all findings addressed in that round unioned with the pre-fix-to-post-fix diff; evidenced dispositions required for every addressed finding (PLAYBOOK + bill-code-review)
 - Non-convergence wording is the unresolved Blocker-or-Major set with a human-resumable uncapped pause; no live Blocker-only reopen statements remain in skills or playbooks
 - Content-lock/parity tests retargeted to the new rule (none deleted); boundary decision recorded under `runtime-kotlin/agent/decisions.md`; durable wire key `blocker_dispositions` left named as-is
@@ -86,7 +86,7 @@ Acceptance criteria: 7/7 implemented
 
 ## [2026-08-05] SKILL-160 subtask 3 — scoped-replan operator guidance
 Areas: skills/bill-feature-goal, skills/bill-feature
-- Documented `skill-bill goal replan <key> --subtask <id>` as first-choice for mid-goal subtask-spec amendments; default preserves sibling plans, shared preplan, and runtime rows; `--include-shared-preplan` discards sibling plan rows for provenance safety.
+- Documented `sona goal replan <key> --subtask <id>` as first-choice for mid-goal subtask-spec amendments; default preserves sibling plans, shared preplan, and runtime rows; `--include-shared-preplan` discards sibling plan rows for provenance safety.
 - Named idle-goal and terminal-subtask refusals (reopen terminal via `reset`); kept hard/soft reset accurate for goal-wide invalidation. reusable PATTERN: when shipping a scoped operator command, update both goal planning prose and parent continuation rules in the same pass so agents do not keep the lossy workaround.
 - Explicit anti-workaround: do not hard-reset then compensate with `accept --restore-after-hard-reset` to replan one subtask.
 - Content-only subtask; quotes match ST1/ST2 shipped CLI/flags/refusal messages; no runtime/persistence edits.
