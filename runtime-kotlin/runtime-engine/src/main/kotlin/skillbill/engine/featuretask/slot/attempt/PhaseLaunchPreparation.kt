@@ -57,6 +57,8 @@ import skillbill.error.core.rethrowUnless
 import skillbill.error.featuretask.InvalidFeatureTaskRuntimeHandoffProjectionContext
 import skillbill.error.shellcontent.invalidFeatureTaskRuntimeHandoffProjection
 import skillbill.error.shellcontent.isInvalidWorkflowStateFailure
+import skillbill.ports.taskruntime.model.PreplanEvidenceWriteResult
+import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.handoff.FeatureTaskRuntimeHandoffContract
@@ -64,6 +66,7 @@ import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionGapStatus
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeRepositoryCheckpoint
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
+import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionDeclaration
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimeHandoffAssemblyRequest
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseHandoff
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffSourceRef
@@ -200,7 +203,12 @@ internal object PhaseLaunchPreparation {
     context: PhaseAttemptLaunchPreparationContext,
     args: DeclaredLaunchArgs,
   ): LaunchPreparation {
-    val selectedArgs = args.copy(run = args.run.forLaunchHandoff(args.boundStep))
+    val preplanEvidence = context.preplanEvidenceFor(args.run, args.boundStep)
+    val selectedArgs =
+      args.copy(
+        run = args.run.forLaunchHandoff(args.boundStep, preplanEvidence != null),
+        preplanEvidence = preplanEvidence,
+      )
     with(context) {
       val run = selectedArgs.run
       val state = selectedArgs.state
@@ -291,6 +299,7 @@ internal object PhaseLaunchPreparation {
           FeatureTaskRuntimeBriefingScope(
             sharedEvidence?.reference,
             briefingInvariantFields(run.phaseId),
+            args.preplanEvidence,
           ),
         )
       if (assembly is FeatureTaskRuntimePhaseBriefingAssemblyResult.Rejected) {
@@ -328,14 +337,40 @@ internal object PhaseLaunchPreparation {
     }
   }
 
-  private fun PhaseRun.forLaunchHandoff(boundStep: PhaseAcceptedStepExecution): PhaseRun {
-    if (boundStep.boundHooks.launchHandoffSelection != PhaseLaunchHandoffSelection.BUNDLE_FEASIBILITY) return this
-    val declarations =
-      declaration.projectionDeclarations.filterNot { projection ->
-        (projection.sourceRef as? FeatureTaskRuntimeHandoffSourceRef.UpstreamPhaseOutput)?.producingPhaseId ==
-          FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PREPLAN
-      }
+  private fun PhaseRun.forLaunchHandoff(
+    boundStep: PhaseAcceptedStepExecution,
+    preplanEvidenceWritten: Boolean,
+  ): PhaseRun {
+    val bundleFeasibility =
+      boundStep.boundHooks.launchHandoffSelection == PhaseLaunchHandoffSelection.BUNDLE_FEASIBILITY
+    if (!bundleFeasibility && !preplanEvidenceWritten) return this
+    val declarations = declaration.projectionDeclarations.filterNot(::isPreplanProjection)
     return copy(declaration = declaration.copy(projectionDeclarations = declarations))
+  }
+
+  private fun isPreplanProjection(projection: PhaseHandoffProjectionDeclaration): Boolean =
+    (projection.sourceRef as? FeatureTaskRuntimeHandoffSourceRef.UpstreamPhaseOutput)?.producingPhaseId ==
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PREPLAN
+
+  private fun PhaseAttemptLaunchPreparationContext.preplanEvidenceFor(
+    run: PhaseRun,
+    boundStep: PhaseAcceptedStepExecution,
+  ): PreplanEvidenceWriteResult.Written? {
+    val readsPreplan =
+      boundStep.boundHooks.launchHandoffSelection != PhaseLaunchHandoffSelection.BUNDLE_FEASIBILITY &&
+        run.declaration.projectionDeclarations.any(::isPreplanProjection) &&
+        run.request.workflowId.isNotBlank()
+    val digest =
+      auditProseValue(
+        progress.phase(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PREPLAN).output?.normalizedOutput
+          ?.envelopeWireMap(),
+      )?.takeIf { readsPreplan } ?: return null
+    val head =
+      (gitOperations.headCommitSha(run.request.repoRoot) as? WorkflowGitOperationResult.Ok)
+        ?.value
+        ?.trim()
+        ?.takeIf(String::isNotBlank)
+    return decompositionPlanner.writePreplanEvidence(run.request.repoRoot, run.request.workflowId, head, digest)
   }
 
   private fun resolveProjectInstructions(

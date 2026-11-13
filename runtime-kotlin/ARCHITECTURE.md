@@ -2035,6 +2035,12 @@ the same ownership test, so the run's own evidence never enters the durable
 `workflow_owned_paths` inventory the goal review pathspec and the checkpoint
 fingerprint are built from, whichever producer writes that inventory.
 
+**Preplan evidence.** The same `run-evidence/<workflowId>/` directory holds
+`preplan-evidence.md`, which `FeatureTaskRuntimePreplanEvidenceStore` writes when plan
+or a plan_subtasks unit launches: the preplan digest plus the checkout ranges its
+`EVIDENCE` references name. The briefing carries the file path in place of the
+`preplan_prose` projection. Every failure degrades to the pasted digest; none blocks.
+
 Finalization path inventories come from the checkpoint's runtime-resolved
 base/head and scoped owned-path comparison. Implementation receipt paths are
 claims only: validation scope, boundary candidates, commit inclusions and

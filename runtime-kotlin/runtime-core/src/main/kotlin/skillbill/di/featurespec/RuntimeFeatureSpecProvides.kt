@@ -1,12 +1,14 @@
 package skillbill.di.featurespec
 
 import me.tatarka.inject.annotations.Provides
+import skillbill.infrastructure.workflow.featuretask.FileSystemFeatureTaskRuntimePreplanEvidenceStore
 import skillbill.infrastructure.workflow.filesystem.FileSystemChildFailureOutputStore
 import skillbill.infrastructure.workflow.filesystem.FileSystemFeatureSpecPathResolver
 import skillbill.infrastructure.workflow.filesystem.FileSystemGoalRuntimeStateFileStore
 import skillbill.infrastructure.workflow.filesystem.FileSystemSpecScratchStore
 import skillbill.ports.diagnostics.ChildFailureOutputStore
 import skillbill.ports.featurespec.FeatureSpecPathResolverPort
+import skillbill.ports.taskruntime.FeatureTaskRuntimePreplanEvidenceStore
 import skillbill.ports.workflow.goalstate.GoalRuntimeStateFileStore
 import skillbill.ports.workflow.specscratch.SpecScratchStore
 
@@ -22,4 +24,9 @@ internal interface RuntimeFeatureSpecProvides {
 
   @Provides
   fun featureSpecPathResolverPort(adapter: FileSystemFeatureSpecPathResolver): FeatureSpecPathResolverPort = adapter
+
+  @Provides
+  fun preplanEvidenceStore(
+    adapter: FileSystemFeatureTaskRuntimePreplanEvidenceStore,
+  ): FeatureTaskRuntimePreplanEvidenceStore = adapter
 }

@@ -12,7 +12,9 @@ internal val planningCapabilityClosureDirective: String by lazy {
 }
 
 internal const val PREPLAN_DIGEST_AUTHORITY: String =
-  "Use the preplan digest as the starting evidence; do not repeat completed discovery. " +
+  "Use the preplan digest as the starting evidence; do not repeat completed discovery. When the briefing " +
+    "names a preplan evidence file, read that file first: it holds the full digest and the checkout source " +
+    "it cites, verbatim with line numbers. Do not reopen a source range the file already holds. " +
     "When a missing or contradictory fact determines implementability, perform only the targeted " +
     "read-only source or authoritative contract lookup needed to resolve it and record the evidence. " +
     "Do not search unrelated files or other spec bundles. Never replace a missing external capability " +

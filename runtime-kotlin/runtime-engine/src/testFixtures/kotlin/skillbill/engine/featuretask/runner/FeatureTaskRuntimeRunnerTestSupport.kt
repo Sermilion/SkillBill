@@ -123,6 +123,7 @@ import skillbill.goalrunner.model.history.GoalChildHistoryDraft
 import skillbill.goalrunner.model.history.GoalChildHistoryDraftSaveResult
 import skillbill.idestatus.model.AgentActivityStamp
 import skillbill.infrastructure.workflow.featuretask.FileSystemFeatureTaskImplementationChecklistStore
+import skillbill.infrastructure.workflow.featuretask.FileSystemFeatureTaskRuntimePreplanEvidenceStore
 import skillbill.infrastructure.workflow.filesystem.FileSystemFeatureSpecPathResolver
 import skillbill.infrastructure.workflow.goalplanning.FileSystemGoalPlanningBoundaryBodyResolver
 import skillbill.infrastructure.workflow.goalplanning.FileSystemGoalPlanningContextDiscovery
@@ -183,6 +184,7 @@ import skillbill.ports.review.ReviewContextEnvelopeValidator
 import skillbill.ports.review.repository.ReviewRepository
 import skillbill.ports.taskruntime.DERIVING_SHARED_EVIDENCE_RESOLVER
 import skillbill.ports.taskruntime.FeatureTaskImplementationChecklistStore
+import skillbill.ports.taskruntime.FeatureTaskRuntimePreplanEvidenceStore
 import skillbill.ports.taskruntime.FeatureTaskRuntimeSharedEvidenceResolverPort
 import skillbill.ports.taskruntime.FeatureTaskRuntimeSpecStatusWriter
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
@@ -1677,6 +1679,7 @@ fun testDecompositionPlanner(): FeatureTaskRuntimeDecompositionPlanner =
     specPathResolver = FileSystemFeatureSpecPathResolver(RUNNER_TEST_PROJECT_STORE),
     projectStore = RUNNER_TEST_PROJECT_STORE,
     fileStore = TestDecompositionManifestStore,
+    preplanEvidenceStore = testPreplanEvidenceStore(),
   )
 
 fun facts(stdout: String): AgentRunLaunchOutcome =
@@ -2847,3 +2850,8 @@ fun FeatureTaskRuntimeRunLoopContext.withRunState(state: PhaseRunState): Feature
     diffResolver,
     phaseRunFactory,
   )
+
+fun testPreplanEvidenceStore(
+  projectStore: ProjectStorePort = RUNNER_TEST_PROJECT_STORE,
+): FeatureTaskRuntimePreplanEvidenceStore =
+  FileSystemFeatureTaskRuntimePreplanEvidenceStore(NoopRuntimeDiagnostics, projectStore)

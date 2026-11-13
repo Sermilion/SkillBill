@@ -827,6 +827,13 @@ decomposition preserves usable intermediate states. Missing assigned code is imp
 work and does not by itself justify a block. Planners reconcile this inventory against
 the final tasks before declaring them ready. This adds no output schema or runtime gate.
 
+Preplan ends its digest with an `EVIDENCE` list of `path:A-B` references. When plan or
+a plan_subtasks unit launches, the runtime writes the digest and those checkout ranges,
+verbatim with line numbers, to the workflow's `preplan-evidence.md` in the project store.
+The briefing names that file instead of pasting the digest, and planners read it before
+the source. A reference the runtime cannot read is listed and skipped; a store it cannot
+write keeps the pasted digest. Neither blocks the run.
+
 The digest is the starting evidence, not a prohibition on resolving a critical gap.
 Planning may use targeted read-only lookups for a missing or contradictory fact that
 determines implementability. It does not repeat discovery or widen file-write
