@@ -502,33 +502,29 @@
       fold('rec', 'Plan record', p.repaired ? `order ${s.id - 1} · repaired` : `order ${s.id - 1}`, S.KeyValues(facts)),
     ])}</div>`;
   }
-  /* Audit, laid out like Review: the verdict and summary, then one block per attempt, oldest first. Each block has its line
-   * ("Attempt 2 · Gaps found · 2 of 3 criteria uncovered → audit_implement_fix") and the criteria as that attempt graded
-   * them, in the audit's CriterionRows. A criterion counts as met from the attempt that fixed it (`fixedIn`); one without
-   * `fixedIn` was met from the first attempt, unless it is still missing. A running audit ends with "Attempt N · Auditing". */
+  /* Audit history stays compact above the current criteria. Every criterion expands in place. */
   function auditBody(st, it, s, a) {
-    if (a.outcome === 'upcoming') return S.Note({ text: 'Runs after implementation', small: true });
+    if (a.outcome === 'upcoming') return S.AuditResult({ verdict: S.Note({ text: 'Runs after implementation', small: true }) });
     const atts = a.attempts || [], run = a.outcome === 'running', crit = a.criteria || [];
     const counts = a.total != null ? ` · ${a.met} of ${a.total} criteria met` : '';
-    const verdict = { passed: ['Passed' + counts, 'var(--st-done)'], failed: ['Failed' + counts, 'var(--st-failed)'], running: [`Attempt ${atts.length + 1} · Auditing`, 'var(--st-active)'] }[a.outcome] || [a.verdict || 'Unknown', 'var(--fg-faint)'];
-    const metAt = (c, n) => (c.fixedIn ? n >= c.fixedIn : c.met);
-    const parts = [S.Label({ text: verdict[0], color: verdict[1] })];
-    if (!run && a.summary) parts.push(S.ExpandableText({ text: a.summary, cls: 'sb-insp-note' }));
-    const blocks = atts.map((x) => {
-      const graded = crit.map((c) => ({ c, met: metAt(c, x.n) })).sort((p, q) => (p.met === q.met ? 0 : p.met ? 1 : -1));
-      const gaps = crit.length ? graded.filter((g) => !g.met).length : x.uncovered;
-      const result = x.unavailable ? 'Historical result unavailable' : (x.passed || (crit.length && !gaps)) ? 'Passed' : `Gaps found · ${crit.length ? `${gaps} of ${crit.length}` : gaps} ${gaps === 1 && !crit.length ? 'criterion' : 'criteria'} uncovered`;
-      const line = S.InspectorLine({ lead: `Attempt ${x.n}`, parts: [result, x.next ? { html: `→ <span class="mono">${esc(x.next)}</span>` } : null] });
-      const rows = graded.length && !x.unavailable ? S.VerifyDoc([S.Box(graded.map(({ c, met }) => {
-        const key = `${it.id}|${s.id}|${x.n}|${c.ref}`;
-        return S.CriterionRow({ n: c.ref, html: esc(c.text), badge: met ? { text: 'Met', tone: 'done' } : { text: 'Missing', tone: 'failed' }, hint: c.fixedIn === x.n ? 'Fixed in this attempt' : '', act: 'audit-met', arg: key, open: st.auditMet.has(key),
-          body: S.FieldText({ label: met ? 'Covered by' : "What's missing", html: esc(met ? `the change in subtask ${pad(s.id)}${c.fixedIn ? `, from attempt ${c.fixedIn}` : ''}.` : x.next ? `Not covered yet; ${x.next} runs next to address it.` : 'No change in this subtask covers it.') }) });
-      }))]) : '';
-      return `<div class="l-col g-2">${line}${rows}</div>`;
-    });
-    if (run) blocks.push(`<div class="l-col g-2">${S.Label({ text: `Attempt ${atts.length + 1} · Auditing`, color: 'var(--st-active)' })}</div>`);
-    if (!atts.length && crit.length) blocks.push(S.VerifyDoc([S.Box(crit.map((c) => S.CriterionRow({ n: c.ref, html: esc(c.text), badge: c.met ? { text: 'Met', tone: 'done' } : { text: 'Missing', tone: 'failed' } })))]));
-    return `<div class="l-col g-2">${parts.join('')}<div class="l-col g-4">${blocks.join('')}</div></div>`;
+    const verdict = { passed: ['Passed' + counts, 'var(--st-done)'], failed: ['Failed' + counts, 'var(--st-failed)'], running: ['Auditing' + counts, 'var(--st-active)'] }[a.outcome] || [a.verdict || 'Unknown', 'var(--fg-faint)'];
+    const body = [];
+    if (!run && a.summary) body.push(S.ExpandableText({ text: a.summary, cls: 'sb-insp-note' }));
+    body.push(`<div class="l-col g-1">${atts.map((x) => {
+      const result = x.unavailable ? 'Historical result unavailable' : x.passed ? 'Passed' : `Gaps found · ${x.uncovered} ${x.uncovered === 1 ? 'criterion' : 'criteria'} uncovered`;
+      return S.Label({ text: `Attempt ${x.n} · ${result}${x.next ? ` → ${x.next}` : ''}`, color: 'var(--fg-muted)' });
+    }).join('')}</div>`);
+    const row = (c) => {
+      const key = `${it.id}|${s.id}|criterion|${c.ref}`;
+      return S.CriterionRow({ n: c.ref, html: esc(c.text), audit: true,
+        badge: c.met ? { text: 'Met', tone: 'done' } : { text: 'Missing', tone: 'failed' },
+        act: 'audit-met', arg: key, open: st.auditMet.has(key),
+        body: c.fixedIn ? esc(`fixed in attempt ${c.fixedIn}`) : '' });
+    };
+    const ordered = crit.filter((c) => !c.met).concat(crit.filter((c) => c.met));
+    if (ordered.length) body.push(S.Box(ordered.map(row)));
+    if (run) body.push(S.Label({ text: `Attempt ${atts.length + 1} · Auditing`, color: 'var(--st-active)' }));
+    return S.AuditResult({ verdict: S.Label({ text: verdict[0], color: verdict[1] }), end: auditEnd(a), body });
   }
   const auditEnd = (a) => (a.outcome === 'running' ? `attempt ${(a.attempts || []).length + 1} running` : a.attemptTotal ? plural(a.attemptTotal, 'attempt', 'attempts') : '');
   /* Review findings use the audit's CriterionRow: the ref, the severity Badge and text, the status as the row Badge; open,
@@ -735,7 +731,7 @@
     const end = sortable ? (it.assessment && it.assessment.findings.length > 1 ? S.Segmented({ act: 'assess-order', value: st.assessOrder || 'default', items: [{ id: 'default', label: 'Default' }, { id: 'priority', label: 'Priority' }, { id: 'status', label: 'Status' }] }) : '') : c.madeEnd ? esc(c.madeEnd) : '';
     const parts = [
       c.now && ['now', 'wait'].includes(state) ? S.PeekPart({ title: c.nowTitle || (state === 'wait' ? 'Waiting on' : 'Now'), live: state === 'now', body: blocks(c.now) }) : '',
-      c.made && c.made.length ? S.PeekPart({ title: c.madeTitle || 'Produced', end, control: !!(sortable && end), body: blocks(c.made) }) : '',
+      c.made && c.made.length ? (id === 'audit' ? blocks(c.made) : S.PeekPart({ title: c.madeTitle || 'Produced', end, control: !!(sortable && end), body: blocks(c.made) })) : '',
       c.results ? S.PeekPart({ title: c.resultsTitle || 'Results', end: c.resultsEnd ? esc(c.resultsEnd) : '', body: blocks(c.results) }) : '',
     ];
     const ag = c.agent ? agentOf(c.agent) : null;

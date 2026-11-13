@@ -432,6 +432,11 @@ private fun GoalRunnerPhaseCardEdit.toDomain(): PhaseCardEdit = PhaseCardEdit(
 )
 
 private fun GoalRunnerPhaseCardOutput.toDomain(): PhaseCardOutput = PhaseCardOutput(
+  summary = summary,
+  text = text,
+  planRecord = planRecord?.let {
+    dev.skillbill.desktop.core.domain.model.PhaseCardPlanRecord(it.manifestOrder, it.specPath, it.specHash, it.payloadHash, it.repair)
+  },
   verdict = verdict,
   buildReceipt = buildReceipt?.toDomain(),
   validationReceipt = validationReceipt?.toDomain(),

@@ -43,8 +43,8 @@ fun ExpandableResultRow(
   val colors = SkillBillTheme.colors
   val currentToggle = rememberUpdatedState(onToggle)
   val body = disclosure
-  val expandable = onToggle != null && body != null
-  val toggleModifier = if (onToggle != null && body != null) {
+  val expandable = onToggle != null
+  val toggleModifier = if (expandable) {
     Modifier
       .clickable(
         role = Role.Button,

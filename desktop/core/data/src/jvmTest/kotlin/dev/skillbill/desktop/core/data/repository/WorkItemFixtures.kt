@@ -58,6 +58,8 @@ internal fun phaseCardRuntimeFixture(nullFacts: Boolean = false): GoalRunnerPhas
     activityAt = at.takeUnless { nullFacts }, output = if (nullFacts) null else GoalRunnerPhaseCardOutput(
       "passed", null, null, GoalRunnerHistoryReceipt(listOf("src/Example.kt"), true, false),
       "abc123", "feature/527", true, "https://example.test/pr/7", 7,
+      summary = "Read the project context", text = "## Validation strategy\nRun module checks.",
+      planRecord = skillbill.goalrunner.model.GoalRunnerPlanRecord(0, "spec_subtask_1.md", "spec-hash", "payload-hash", "json repair"),
     ), pullRequestUrl = "https://example.test/pr/7".takeUnless { nullFacts }, pullRequestNumber = 7.takeUnless { nullFacts },
     ciCycles = if (nullFacts) emptyList() else listOf(GoalRunnerCiCycle(1, at, at, at, "passed", "abc123", listOf(GoalRunnerCiCheck("check", "pass", null, at, at, 0)))),
     repairedChecks = emptyList(), conflictBaseBranch = null, fixCommitSha = null,

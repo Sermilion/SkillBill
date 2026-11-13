@@ -344,6 +344,8 @@ internal fun phaseCardOutput(
       null
     }
   return GoalRunnerPhaseCardOutput(
+    summary = knownString(envelope[SharedPayloadKeys.SUMMARY]),
+    text = knownString(produced[SharedPayloadKeys.VALUE]),
     verdict = knownString(envelope[SharedPayloadKeys.VERDICT]),
     buildReceipt = gate(ValidationEvidencePayloadKeys.BUILD_RECEIPT),
     validationReceipt = gate(ValidationEvidencePayloadKeys.VALIDATION_RESULT),

@@ -115,15 +115,16 @@ private fun produced(
   onAction: (DetailAction) -> Unit,
 ) {
   when (card.phaseId) {
-    "preplan" -> PreplanRecordedOutput(detail, onAction)
-    "plan" -> PlanRecordedOutput(path, onAction)
-    "implement", "simplify" -> EditRecordedOutput(card.edit)
+    "preplan" -> PreplanRecordedOutput(detail, card.output, onAction)
+    "plan_subtasks" -> PlanningRecordedOutput(card.output, card.files)
+    "plan" -> PlanRecordedOutput(path, card.output, results?.auditResult?.criteria.orEmpty(), onAction)
+    "implement", "simplify" -> EditRecordedOutput(card.edit, card.output, card.phaseId == "simplify")
     "qa_fix" -> {
       val edit = card.edit
-      if (edit != null) EditRecordedOutput(edit)
+      if (edit != null) EditRecordedOutput(edit, card.output)
       else if (card.files.isNotEmpty()) {
         PeekPart("Produced") { card.files.forEach { PeekOutput(LucideIcons.file, it, tooltip = it) } }
-      }
+      } else EditRecordedOutput(null, card.output)
     }
     "build" -> BuildRecordedOutput(card.output?.buildReceipt)
     "audit" -> if (subtask != null && resultState is SubtaskResultsState.Shown) {
@@ -135,23 +136,30 @@ private fun produced(
         SubtaskReviewState.RunsAfterAudit -> PeekPart("Review") {
           BasicText("Runs after audit", style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgMuted))
         }
-        SubtaskReviewState.Omitted -> Unit
+        SubtaskReviewState.Omitted -> PeekPart("Findings") {
+          BasicText("No review result was retained for this phase.", style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgMuted))
+        }
       }
     }
-    "validate" -> card.output?.let { output ->
-      ValidateRecordedOutput(output, subtask?.id, detail, checksExpanded, onToggleChecks)
-    }
-    "write_history" -> card.output?.historyReceipt?.let { receipt ->
-      HistoryRecordedOutput(receipt, detail, item, onAction)
+    "validate" -> ValidateRecordedOutput(card.output, subtask?.id, detail, checksExpanded, onToggleChecks)
+    "write_history" -> {
+      val receipt = card.output?.historyReceipt
+      if (receipt == null) PeekPart("History") {
+        BasicText(card.output?.summary ?: "The history receipt was not retained for this run.", style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgMuted))
+      } else HistoryRecordedOutput(receipt, detail, item, onAction)
     }
     "commit_push" -> card.output?.let { CommitRecordedOutput(it) }
+    else -> RecordedPhaseReport(card)
+  }
+  if (card.phaseId in setOf("implement", "simplify", "qa_fix", "build", "validate", "write_history", "commit_push")) {
+    RecordedPhaseDetails(card.output)
   }
 }
 
-private fun activityRows(activity: ActivityResult, subtaskId: Int?, card: PhaseCard): List<PeekTimelineRow> {
-  val listed = activity as? ActivityResult.Listed ?: return emptyList()
-  val group = listed.groups.firstOrNull { it.subtaskId == subtaskId } ?: return emptyList()
-  return group.phaseEvents.filter { it.phaseId == card.phaseId }.takeLast(5).map {
+internal fun activityRows(activity: ActivityResult, subtaskId: Int?, card: PhaseCard): List<PeekTimelineRow> {
+  val listed = activity as? ActivityResult.Listed
+  val group = listed?.groups?.firstOrNull { it.subtaskId == subtaskId }
+  return group?.phaseEvents.orEmpty().filter { it.phaseId == card.phaseId }.takeLast(5).map {
     PeekTimelineRow(formatInstant(it.at, "HH:mm"), it.label, if (it.blocked) PeekState.Wait else null)
-  }
+  }.ifEmpty { phaseCardTimeline(card) }
 }

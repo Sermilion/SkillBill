@@ -1,5 +1,6 @@
 package dev.skillbill.desktop.core.designsystem.component
 
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -41,9 +42,10 @@ fun FindingRow(
   refContent: (@Composable () -> Unit)? = null,
   stacked: Boolean = false,
   severityColor: Color? = null,
+  evidence: (@Composable () -> Unit)? = null,
 ) {
   val dividerColor = SkillBillTheme.colors.borderSubtle
-  val metaPresent = !location.isNullOrBlank() || !meta.isNullOrBlank()
+  val metaPresent = !location.isNullOrBlank() || !meta.isNullOrBlank() || evidence != null
   if (stacked) {
     Column(
       Modifier.drawBehind {
@@ -72,6 +74,7 @@ fun FindingRow(
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
           ExpandableText(title, SkillBillTheme.type.tSmMedium.copy(color = SkillBillTheme.colors.fg, lineHeight = 1.45.em))
           if (metaPresent) FindingLocationAndMeta(location, meta)
+          evidence?.invoke()
         }
       }
     }
@@ -80,6 +83,8 @@ fun FindingRow(
   var open by rememberSaveable(title, location, meta, ref) { mutableStateOf(false) }
   val toggle = if (metaPresent) remember(title, location, meta, ref, metaPresent) { { open = !open } } else null
   val titleStyle = SkillBillTheme.type.tSmMedium.copy(color = SkillBillTheme.colors.fg, lineHeight = 1.45.em)
+  BoxWithConstraints {
+  val narrow = maxWidth < 400.dp
   ExpandableResultRow(
     modifier = Modifier.drawBehind {
       if (showDivider) {
@@ -91,7 +96,10 @@ fun FindingRow(
     onToggle = toggle,
     toggleLabel = "Toggle finding",
     ref = {
-      Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top) {
+      if (narrow) Column(Modifier.width(FINDING_SEVERITY_WIDTH), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        severity?.let { SeverityText(it, FINDING_SEVERITY_WIDTH, severityColor) }
+        if (refContent != null) refContent() else ref?.let { IdTag(it) }
+      } else Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top) {
         severity?.let { SeverityText(it, FINDING_SEVERITY_WIDTH, severityColor) }
         if (refContent != null) refContent() else ref?.let { IdTag(it, Modifier.padding(top = 2.dp)) }
       }
@@ -118,10 +126,12 @@ fun FindingRow(
     disclosure = if (metaPresent) {
       {
         FindingLocationAndMeta(location, meta)
+        evidence?.invoke()
       }
     } else null,
     disclosureInsetStart = (if (severity != null) FINDING_SEVERITY_WIDTH + 10.dp else 0.dp) + 12.dp,
   )
+  }
 }
 
 @Composable

@@ -18,7 +18,7 @@ import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.SbLabel
 import dev.skillbill.desktop.core.designsystem.component.SbLabelStyle
-import dev.skillbill.desktop.core.designsystem.detail.PaneSection
+import dev.skillbill.desktop.core.designsystem.detail.PeekPart
 import dev.skillbill.desktop.core.designsystem.status.StatusDot
 import dev.skillbill.desktop.core.domain.model.ReviewPass
 import dev.skillbill.desktop.core.domain.model.RunningReviewPass
@@ -30,15 +30,7 @@ internal fun SubtaskReviewSection(
   runningReviewPass: RunningReviewPass? = null,
 ) {
   val count = if (passes.size == 1) "1 pass" else "${passes.size} passes"
-  PaneSection(
-    title = "Review",
-    end = {
-      BasicText(
-        runningReviewPass?.let { "pass ${it.passNumber} running" } ?: count,
-        style = SkillBillTheme.type.tXs.copy(color = SkillBillTheme.colors.fgMuted),
-      )
-    },
-  ) {
+  PeekPart("Findings", end = runningReviewPass?.let { "pass ${it.passNumber} running" } ?: count) {
     passes.forEachIndexed { index, pass ->
       PassBlock(pass, Modifier.padding(top = if (index > 0) 14.dp else 0.dp))
     }

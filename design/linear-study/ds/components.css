@@ -2272,3 +2272,12 @@ button.sb-mon-rh:focus-visible { outline-offset: -2px; }
 .t-xs { font-size: var(--t-xs); } .t-sm { font-size: var(--t-sm); } .t-md { font-size: var(--t-md); } .t-strong { font-weight: 500; color: var(--fg-2); }
 .l-fill { width: 100%; }
 .sb-tip.is-shown { position: static; }
+
+/* Audit results share the phase card's inset and keep every row toggle in the same column. */
+.sb-audit-result { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 10px; border-top: 1px solid var(--border-subtle); }
+.sb-audit-verdict { display: flex; align-items: center; gap: 8px; }
+.sb-audit-verdict > :first-child { flex: 1; min-width: 0; }
+.sb-audit-verdict > .end { font-size: var(--t-xs); color: var(--fg-muted); }
+.sb-crit.is-audit > .hd { grid-template-columns: 52px minmax(0, 1fr) auto; }
+.sb-crit.is-audit > .bd { padding-left: 72px; }
+.sb-crit.is-audit .ti { overflow-wrap: anywhere; }

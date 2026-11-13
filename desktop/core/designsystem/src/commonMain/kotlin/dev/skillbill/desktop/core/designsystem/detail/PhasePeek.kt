@@ -61,9 +61,11 @@ fun PhasePeek(
     Row(Modifier.fillMaxWidth().drawBehind { val x = if (layoutDirection == LayoutDirection.Ltr) 0f else size.width - 2.dp.toPx(); drawRect(toneColor, Offset(x, 0f), Size(2.dp.toPx(), size.height)) }.padding(start = 10.dp, end = 10.dp, top = 9.dp, bottom = 8.dp), verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
       StatusIcon(peekStatus(state), null)
       Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-          Box(Modifier.weight(1f)) { dev.skillbill.desktop.core.designsystem.component.SbTooltip(title) { BasicText(title, Modifier.fillMaxWidth(), style = SkillBillTheme.type.tSmMedium.copy(color = colors.fg), maxLines = 1, overflow = TextOverflow.Ellipsis) } }
-          dev.skillbill.desktop.core.designsystem.component.SbTooltip(phaseId) { BasicText(phaseId, style = SkillBillTheme.type.monoSm.copy(color = colors.fgFaint), maxLines = 1, overflow = TextOverflow.Ellipsis) }
+        FlowRow(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+          dev.skillbill.desktop.core.designsystem.component.SbTooltip(title) {
+            BasicText(title, style = SkillBillTheme.type.tSmMedium.copy(color = colors.fg), maxLines = 1, overflow = TextOverflow.Ellipsis)
+          }
+          BasicText(phaseId, style = SkillBillTheme.type.monoSm.copy(color = colors.fgFaint), maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         FlowRow(verticalArrangement = Arrangement.spacedBy(2.dp), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
           agentId?.let { Avatar(it, small = true) }

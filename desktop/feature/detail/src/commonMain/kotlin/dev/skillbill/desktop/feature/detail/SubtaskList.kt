@@ -97,9 +97,10 @@ internal fun BoxedFindingRow(
   state: String? = null,
   stateColor: Color? = null,
   refContent: (@Composable () -> Unit)? = null,
+  evidence: (@Composable () -> Unit)? = null,
 ) {
   Box(Modifier.fillMaxWidth().sbBoxSegment(index, count)) {
-    FindingRow(title, severity, ref, location, meta, state, stateColor, showDivider = index > 0, refContent = refContent)
+    FindingRow(title, severity, ref, location, meta, state, stateColor, showDivider = index > 0, refContent = refContent, evidence = evidence)
   }
 }
 

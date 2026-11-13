@@ -176,7 +176,7 @@ private fun parseSetup(lines: List<String>): PlanRunSetup? {
   return PlanRunSetup(specPath, featureSize, ceremony, mandates, criteria)
 }
 
-private fun digestSections(value: String): List<PlanDigestSection> {
+internal fun digestSections(value: String): List<PlanDigestSection> {
   val lines = value.lines().filter(String::isNotBlank)
   val sections = mutableListOf<PlanDigestSection>()
   var title: String? = null

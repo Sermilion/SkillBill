@@ -1,10 +1,12 @@
 package dev.skillbill.desktop.feature.detail
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -20,6 +22,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.composite.Edge
+import dev.skillbill.desktop.core.designsystem.composite.hairline
 import dev.skillbill.desktop.core.designsystem.component.ExpandableResultRow
 import dev.skillbill.desktop.core.designsystem.component.ExpandableText
 import dev.skillbill.desktop.core.designsystem.component.FeedbackTone
@@ -27,7 +31,6 @@ import dev.skillbill.desktop.core.designsystem.component.Hint
 import dev.skillbill.desktop.core.designsystem.component.ResultRowBadge
 import dev.skillbill.desktop.core.designsystem.component.SbButton
 import dev.skillbill.desktop.core.designsystem.component.SbButtonVariant
-import dev.skillbill.desktop.core.designsystem.detail.PaneSection
 import dev.skillbill.desktop.core.designsystem.detail.sbBoxSegment
 import dev.skillbill.desktop.core.designsystem.status.StatusDot
 import dev.skillbill.desktop.core.designsystem.status.StatusKind
@@ -55,19 +58,14 @@ internal fun SubtaskAuditSection(
     attemptTotal != null && attemptTotal > 0 -> if (attemptTotal == 1) "1 attempt" else "$attemptTotal attempts"
     else -> null
   }
-  PaneSection(
-    title = "Audit",
-    end = end?.let { label ->
-      { BasicText(label, style = SkillBillTheme.type.tXs.copy(color = SkillBillTheme.colors.fgMuted)) }
-    },
-  ) {
+  Column(Modifier.fillMaxWidth().hairline(Edge.Top, SkillBillTheme.colors.borderSubtle).padding(10.dp)) {
     if (audit == null) {
       BasicText(
         "Runs after implementation",
         style = SkillBillTheme.type.tBase.copy(color = SkillBillTheme.colors.fgMuted),
       )
     } else {
-      AuditResult(audit, results.audit?.verdict, results.audit?.summary ?: results.audit?.detail, subtaskId, currentAttemptNumber)
+      AuditResult(audit, results.audit?.verdict, results.audit?.summary ?: results.audit?.detail, subtaskId, currentAttemptNumber, end)
     }
   }
 }
@@ -79,23 +77,28 @@ private fun AuditResult(
   summary: String?,
   subtaskId: Int,
   currentAttemptNumber: Int?,
+  attemptLabel: String?,
 ) {
   Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
     if (audit.attempts.any { it.unavailableReason != null }) {
       Hint("Some historical audit results are unavailable because their discovery scope was not retained.", FeedbackTone.Warn)
     }
     when (audit.outcome) {
-      AuditOutcome.Passed -> VerdictLine("Passed", audit.countsText(), SkillBillTheme.colors.stDone)
-      AuditOutcome.Failed -> VerdictLine("Failed", audit.countsText(), SkillBillTheme.colors.stFailed)
-      AuditOutcome.Running -> VerdictLine("Auditing", audit.countsText(), SkillBillTheme.colors.stActive)
-      AuditOutcome.Unknown -> VerdictLine(resultsVerdict(verdict), null, SkillBillTheme.colors.fgFaint)
+      AuditOutcome.Passed -> VerdictLine("Passed", audit.countsText(), SkillBillTheme.colors.stDone, attemptLabel)
+      AuditOutcome.Failed -> VerdictLine("Failed", audit.countsText(), SkillBillTheme.colors.stFailed, attemptLabel)
+      AuditOutcome.Running -> VerdictLine("Auditing", audit.countsText(), SkillBillTheme.colors.stActive, attemptLabel)
+      AuditOutcome.Unknown -> VerdictLine(resultsVerdict(verdict), null, SkillBillTheme.colors.fgFaint, attemptLabel)
     }
     if (audit.outcome != AuditOutcome.Running) {
       summary?.takeIf { it.isNotBlank() }?.let {
         ExpandableText(it, SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgMuted, lineHeight = 1.45.em))
       }
     }
-    audit.attempts.forEach { AuditAttemptLine(it) }
+    if (audit.attempts.isNotEmpty()) {
+      Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        audit.attempts.forEach { AuditAttemptLine(it) }
+      }
+    }
     when (audit.outcome) {
       AuditOutcome.Passed, AuditOutcome.Running ->
         if (audit.criteria.isNotEmpty()) CurrentCriteriaBox(audit.criteria, subtaskId)
@@ -197,31 +200,29 @@ private fun AuditCriterionRow(criterion: AuditCriterion, modifier: Modifier, sub
   val colors = SkillBillTheme.colors
   val badgeLabel = if (criterion.met) "Met" else "Missing"
   val badgeColor = if (criterion.met) colors.stDone else colors.stFailed
-  val hasDisclosure = criterion.fixedInAttempt != null
-  val onToggle = if (hasDisclosure) remember(subtaskId, criterion.ref) { { open = !open } } else null
+  val onToggle = remember(subtaskId, criterion.ref) { { open = !open } }
   ExpandableResultRow(
     modifier = modifier,
     open = open,
     onToggle = onToggle,
     toggleLabel = "Toggle ${criterion.ref}",
     ref = {
-      BasicText(criterion.ref, style = SkillBillTheme.type.monoSm.copy(color = colors.fgMuted), maxLines = 1)
+      Box(Modifier.width(52.dp)) {
+        BasicText(criterion.ref, style = SkillBillTheme.type.monoSm.copy(color = colors.fgMuted), maxLines = 1)
+      }
     },
     title = {
       val titleStyle = SkillBillTheme.type.tSm.copy(color = colors.fg2, lineHeight = 1.45.em)
-      if (hasDisclosure) {
-        BasicText(
-          criterion.text,
-          style = titleStyle,
-          maxLines = if (open) Int.MAX_VALUE else 2,
-          overflow = TextOverflow.Ellipsis,
-        )
-      } else {
-        ExpandableText(criterion.text, titleStyle, maxLines = 2)
-      }
+      BasicText(
+        criterion.text,
+        style = titleStyle,
+        maxLines = if (open) Int.MAX_VALUE else 2,
+        overflow = TextOverflow.Ellipsis,
+      )
     },
     stateBadge = { ResultRowBadge(badgeLabel, badgeColor) },
-    disclosure = if (hasDisclosure) {
+    disclosureInsetStart = 72.dp,
+    disclosure = if (criterion.fixedInAttempt != null) {
       {
         BasicText(
           "fixed in attempt ${criterion.fixedInAttempt}",
@@ -233,7 +234,7 @@ private fun AuditCriterionRow(criterion: AuditCriterion, modifier: Modifier, sub
 }
 
 @Composable
-private fun VerdictLine(label: String, detail: String?, color: Color) {
+private fun VerdictLine(label: String, detail: String?, color: Color, attemptLabel: String?) {
   Row(
     Modifier.fillMaxWidth(),
     verticalAlignment = Alignment.CenterVertically,
@@ -242,8 +243,12 @@ private fun VerdictLine(label: String, detail: String?, color: Color) {
     StatusDot(color)
     BasicText(
       listOfNotNull(label, detail).joinToString(" · "),
+      Modifier.weight(1f),
       style = SkillBillTheme.type.tSmMedium.copy(color = color),
     )
+    attemptLabel?.let {
+      BasicText(it, style = SkillBillTheme.type.tXs.copy(color = SkillBillTheme.colors.fgMuted))
+    }
   }
 }
 
@@ -262,7 +267,7 @@ private fun AuditAttemptLine(attempt: AuditAttempt) {
   val next = attempt.nextPhaseId?.let { " → $it" }.orEmpty()
   Row(
     Modifier.fillMaxWidth(),
-    verticalAlignment = Alignment.CenterVertically,
+    verticalAlignment = Alignment.Top,
     horizontalArrangement = Arrangement.spacedBy(8.dp),
   ) {
     StatusDot(
@@ -271,9 +276,11 @@ private fun AuditAttemptLine(attempt: AuditAttempt) {
         attempt.passed == false -> SkillBillTheme.colors.stFailed
         else -> SkillBillTheme.colors.fgMuted
       },
+      modifier = Modifier.padding(top = 4.dp),
     )
     BasicText(
       "Attempt ${attempt.number} · $status$next",
+      Modifier.weight(1f),
       style = SkillBillTheme.type.tXs.copy(color = SkillBillTheme.colors.fgMuted),
     )
   }

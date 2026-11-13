@@ -9,14 +9,13 @@ import dev.skillbill.desktop.core.designsystem.component.SegmentedOption
 import dev.skillbill.desktop.core.designsystem.component.ShortId
 import dev.skillbill.desktop.core.designsystem.detail.PeekFacts
 import dev.skillbill.desktop.core.designsystem.detail.PeekPart
-import dev.skillbill.desktop.core.designsystem.detail.PhasePeek
 import dev.skillbill.desktop.core.domain.model.GoalAssessmentFindingState
 import dev.skillbill.desktop.core.domain.model.GoalAssessmentResult
 import dev.skillbill.desktop.core.domain.model.PhaseCard
 
 @Composable
 internal fun GoalAssessmentCard(card: PhaseCard, assessment: GoalAssessmentResult?, order: MutableState<AssessmentOrder>, onAction: (DetailAction) -> Unit) {
-  PhasePeek(
+  RecordedPhasePeek(card,
     title = "Goal assessment", phaseId = card.phaseId, state = card.state.toPeekState(),
     word = assessment?.let { "${it.state.word()} · round ${it.round}" },
     why = card.blockedReason,
@@ -39,6 +38,7 @@ internal fun GoalAssessmentCard(card: PhaseCard, assessment: GoalAssessmentResul
               GoalAssessmentFindingState.Open -> "Open"
             },
             stateColor = if (finding.state == GoalAssessmentFindingState.Fixed) SkillBillTheme.colors.stDone else SkillBillTheme.colors.fgFaint,
+            evidence = finding.evidence.takeIf(String::isNotBlank)?.let { text -> { ReportText(text) } },
           )
         }
       }

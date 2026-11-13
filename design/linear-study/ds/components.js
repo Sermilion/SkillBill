@@ -584,6 +584,10 @@
     const foot = o.foot ? `<div class="sb-pk-ft"><button type="button" class="sb-pk-btn"${act(o.foot.act, o.foot.arg)}>${esc(o.foot.label)}${Icon(o.foot.external ? 'external' : 'arrowRight', 'xs')}</button></div>` : '';
     return `<div class="sb-pk" role="tabpanel" aria-label="${esc(o.title)}">${head}${why}${join(o.parts)}${o.activity && o.activity.length ? PeekPart({ title: 'Activity', body: EventLines(o.activity.map(([t, html, tone]) => [t, html, PEEK_TONE[tone] || 'var(--border-strong)'])) }) : ''}${foot}</div>`;
   }
+  function AuditResult(o) {
+    track('AuditResult');
+    return `<div class="sb-audit-result"><div class="sb-audit-verdict">${o.verdict}${o.end ? `<span class="end">${esc(o.end)}</span>` : ''}</div>${join(o.body)}</div>`;
+  }
   /* One part of a PhasePeek: a small caps title with an `end` slot (text or a control), then `body`. `live` tints it for Now. */
   function PeekPart(o) {
     track('PeekPart');
@@ -1565,7 +1569,7 @@
     track('CriterionRow');
     if (o.empty) return `<div class="sb-crit"><div class="hd is-empty"><span></span><span class="t-muted">${esc(o.empty)}</span></div></div>`;
     const head = `<button type="button" class="hd" aria-expanded="${!!o.open}"${act(o.act, o.arg)}><span class="num">${esc(o.n)}</span><span class="ti">${o.html}</span><span class="sd">${o.badge ? Badge(o.badge) : ''}${o.act ? Icon('chevronRight', 'xs') : ''}</span>${overlap(o.hint)}</button>`;
-    return `<div class="${cx('sb-crit', o.select && 'is-sel')}"${o.id ? ` id="${esc(o.id)}"` : ''}>${o.select ? `<div class="lead">${o.lead || ''}</div>` : ''}${head}${o.select ? `<div class="end">${o.end || ''}</div>` : ''}${o.open ? `<div class="bd">${o.body || ''}</div>` : ''}</div>`;
+    return `<div class="${cx('sb-crit', o.select && 'is-sel', o.audit && 'is-audit')}"${o.id ? ` id="${esc(o.id)}"` : ''}>${o.select ? `<div class="lead">${o.lead || ''}</div>` : ''}${head}${o.select ? `<div class="end">${o.end || ''}</div>` : ''}${o.open && (!o.audit || o.body) ? `<div class="bd">${o.body || ''}</div>` : ''}</div>`;
   }
   /* A faint 11.5px label over its text (`html`) or its FileChips (`chips`): Evidence, What's missing, Not found, Expected,
    * Steps. */
@@ -1855,7 +1859,7 @@
     Toast, ToastStack, Callout, Hint, EmptyState, SidebarItem, SidebarSection, RepoIcon, Sidebar, WorkspaceSwitcher, UsageWindow, UsageCard, UsagePanel,
     ViewHeader, Pager, GroupHeader, ListRow, SidePane, ReasonBlock, ExpandableText, foldButton, Checklist, FindingRow, EvidenceRow, EvidenceToggle, TerminalPane,
     DocHeader, Section, Box, MetricStrip, SubtaskRow, SubtaskList, SubtaskChip, SubtaskInspector, PhasePipeline,
-    PhasePeek, PeekPart, PeekSignal, PeekCmd, PeekCells, PeekStats, PeekOutput, PeekCheck, PeekFacts,
+    PhasePeek, AuditResult, PeekPart, PeekSignal, PeekCmd, PeekCells, PeekStats, PeekOutput, PeekCheck, PeekFacts,
     PaneSection, DetailsPanel, MenuHead, QaFrame, Counts, LiveText, Dot, Note, InspectorSection, InspectorLine, PhaseBlock, PickerButton, Range, ShellPrompt, AppShell, WorkArea, ScrollArea, DetailSplit, ChangeStrip, ChangesFrame, DiffView, InlineComposer, CommentThread, KeyHints, WindowSheet, Breakdown, TreeRow, SettingsHeader, SettingsGroup, SettingRow, TierBadge,
     ConfigRow, TrayPopover,
     ChatStatusMark, ChatTabs, SuggestionChip, ChatMessage, ChatTranscript, ChatPill, Composer, StepLine, NewTaskHome,

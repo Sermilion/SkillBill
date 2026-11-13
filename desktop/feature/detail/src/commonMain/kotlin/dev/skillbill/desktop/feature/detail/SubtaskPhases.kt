@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.SpanStyle
@@ -34,7 +35,7 @@ import kotlin.time.Instant
 
 internal fun phaseTabs(order: List<String>, cards: List<PhaseCard>): List<PhaseTab> = (order + cards.map { it.phaseId }).distinct().map { id ->
   val card = cards.firstOrNull { it.phaseId == id }
-  PhaseTab(id, phaseTitle(id), card?.state?.toPipelineState() ?: PipelineStepState.Pending, card != null)
+  PhaseTab(id, id, card?.state?.toPipelineState() ?: PipelineStepState.Pending, card != null)
 }
 
 /** The recorded cards of one subject; the view model and both renderers resolve disclosure against these. */
@@ -88,8 +89,15 @@ internal fun phaseTitle(id: String): String = when (id) {
   "qa_fix" -> "QA fix"
   "monitor_fix" -> "Monitor fix"
   "preplan" -> "Preplan"
+  "plan_subtasks" -> "Plan subtasks"
   "plan" -> "Plan"
   "implement" -> "Implement"
+  "simplify" -> "Simplify"
+  "build" -> "Build"
+  "audit_plan_fix" -> "Plan audit fixes"
+  "audit_implement_fix" -> "Implement audit fixes"
+  "verify_findings" -> "Verify findings"
+  "implement_fix" -> "Fix review findings"
   "audit" -> "Audit"
   "review" -> "Review"
   "validate" -> "Validate"
@@ -149,7 +157,7 @@ internal fun SubtaskPhasesSection(
         BasicText("Select a phase to see what it did.", style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgMuted))
       }
       val card = selected?.let { id -> results?.phaseCards?.firstOrNull { it.phaseId == id } }
-      if (card != null) {
+      if (card != null) key(card.phaseId) {
         SubtaskPhaseCard(
           item, detail, subtask, card, results, readState, changes, activity, renderedAt, onAction,
         )

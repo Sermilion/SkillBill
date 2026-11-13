@@ -11,7 +11,6 @@ import dev.skillbill.desktop.core.designsystem.detail.PeekFooter
 import dev.skillbill.desktop.core.designsystem.detail.PeekPart
 import dev.skillbill.desktop.core.designsystem.detail.PeekTimeline
 import dev.skillbill.desktop.core.designsystem.detail.PeekTimelineRow
-import dev.skillbill.desktop.core.designsystem.detail.PhasePeek
 import dev.skillbill.desktop.core.designsystem.detail.relativeAge
 import dev.skillbill.desktop.core.domain.model.CiCheck
 import dev.skillbill.desktop.core.domain.model.PhaseCard
@@ -48,14 +47,18 @@ internal fun LinkedCiCheck(check: CiCheck) {
 internal fun MonitorCard(card: PhaseCard, url: String?, now: Instant) {
   val uri = LocalUriHandler.current
   val latest = card.ciCycles.lastOrNull()
-  PhasePeek(
+  RecordedPhasePeek(card,
     title = "Monitor", phaseId = card.phaseId, state = card.state.toPeekState(), why = card.blockedReason,
+    activity = emptyList(),
     footer = url?.let { PeekFooter("Open checks on GitHub", true) { uri.openUri("${it.trimEnd('/')}/checks") } },
   ) {
     PeekPart(
       card.pullRequestNumber?.let { "CI on #$it" } ?: "CI checks",
       end = latest?.takeIf { it.finishedAt == null }?.let { lastPollLabel(it.observedAt, now) },
-    ) { latest?.checks?.forEach { LinkedCiCheck(it) } }
+    ) {
+      if (latest == null) androidx.compose.foundation.text.BasicText("No CI checks were retained for this phase.", style = dev.skillbill.desktop.core.designsystem.SkillBillTheme.type.tSm.copy(color = dev.skillbill.desktop.core.designsystem.SkillBillTheme.colors.fgMuted))
+      else latest.checks.forEach { LinkedCiCheck(it) }
+    }
     val earlier = card.ciCycles.dropLast(1).takeLast(5)
     val currentResult = latest?.let {
       PeekTimelineRow(formatInstant(it.finishedAt ?: it.observedAt, "HH:mm"), "Cycle ${it.cycle} · ${it.outcome?.let { outcome -> capitalized(humanized(outcome)) } ?: "Running"}", null)

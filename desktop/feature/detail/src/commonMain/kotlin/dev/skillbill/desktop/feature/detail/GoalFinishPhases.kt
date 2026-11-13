@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.runtime.MutableState
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
@@ -33,7 +34,7 @@ internal fun GoalFinishPhases(item: WorkItem, detail: Detail, state: DetailUiSta
     val card = detail.goalFinishCards.firstOrNull { it.phaseId == selected }
     when {
       detail.goalFinishCards.isNotEmpty() && selected == null -> BasicText("Select a phase to see what it did.", style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgMuted))
-      card != null -> GoalFinishCard(item, detail, card, state, order, onAction)
+      card != null -> key(card.phaseId) { GoalFinishCard(item, detail, card, state, order, onAction) }
       detail.goalAssessment != null || detail.goalQa != null -> BasicText("Phase results are available, but no phase card was recorded.", style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgMuted))
       detail.degradedGoalStatusSource != null -> Unit
       else -> BasicText("No phase has run yet.", style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgMuted))

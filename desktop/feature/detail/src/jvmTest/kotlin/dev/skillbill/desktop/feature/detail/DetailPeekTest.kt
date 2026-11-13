@@ -483,6 +483,7 @@ class DetailPeekTest {
       )
     }
     onAllNodesWithText("Spec files").assertCountEquals(0)
+    onNode(hasText("Goal spec") and hasClickAction()).performClick()
     onNodeWithText("spec.md").assertExists()
     onNodeWithText("spec_subtask_1.md").assertExists()
     onNodeWithText("Shared by every subtask in this goal.").assertExists()
@@ -680,7 +681,7 @@ class DetailPeekTest {
     assertEquals(bounds.top, subtask.fetchSemanticsNode().boundsInRoot.top)
     onNodeWithContentDescription("Close details").performClick()
     onNodeWithText("Goal finish").performScrollTo().performClick()
-    onNode(hasText("Goal assessment") and isSelectable()).performClick()
+    onNode(hasText("goal_assessment") and isSelectable()).performClick()
     onNodeWithText("Priority").performClick()
     onNodeWithText("Priority").assertIsSelected()
     fun assertOrder(vararg titles: String) {
@@ -694,12 +695,12 @@ class DetailPeekTest {
     runOnIdle { state.value = state.value.copy(header = workItem("next-goal")) }
     runOnIdle { state.value = state.value.copy(header = workItem("goal")) }
     onNodeWithText("Priority").assertIsSelected()
-    onNode(hasText("QA") and isSelectable()).performClick()
+    onNode(hasText("qa") and isSelectable()).performClick()
     onNodeWithText("Coverage").assertDoesNotExist()
     onNodeWithText("Full report").performClick()
     onNodeWithText("Coverage").assertExists()
     onNodeWithText("## Coverage").assertDoesNotExist()
-    onNode(hasText("Goal assessment") and isSelectable()).performClick()
+    onNode(hasText("goal_assessment") and isSelectable()).performClick()
     onNodeWithText("Priority").assertIsSelected()
     onNodeWithContentDescription("Close details").performClick()
     onNodeWithText("An action has no label").assertDoesNotExist()

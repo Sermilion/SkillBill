@@ -1,12 +1,7 @@
 package dev.skillbill.desktop.feature.detail
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.SbButton
 import dev.skillbill.desktop.core.designsystem.component.SbControlSize
@@ -30,49 +25,35 @@ import dev.skillbill.desktop.core.domain.model.selectableSubtaskIds
 private const val FOLDED_VALIDATION_CHECKS = 6
 
 @Composable
-internal fun PreplanRecordedOutput(detail: Detail, onAction: (DetailAction) -> Unit) {
-  val files = goalSpecFiles(detail)
-  if (files.isEmpty()) return
-  PeekPart("Goal spec") {
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-      files.forEach { file ->
-        PeekOutput(LucideIcons.fileText, fileName(file), onClick = { onAction(DetailAction.OpenSpecFile(file)) }, tooltip = file)
+internal fun EditRecordedOutput(edit: PhaseCardEdit?, output: PhaseCardOutput? = null, simplified: Boolean = false) {
+  if (edit != null || !output?.summary.isNullOrBlank()) {
+    PeekPart(if (simplified) "Simplified" else "Produced") {
+      output?.summary?.takeIf(String::isNotBlank)?.let {
+        BasicText(it, style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fg2))
       }
-      BasicText(
-        "Shared by every subtask in this goal.",
-        style = SkillBillTheme.type.tXs.copy(color = SkillBillTheme.colors.fgFaint),
-      )
+      edit?.let {
+        PeekStats(
+          listOf(
+            PeekStat(it.fileCount.toString(), "files"),
+            PeekStat("+${it.insertions}", "added", PeekStatTone.Good),
+            PeekStat("−${it.deletions}", "removed", PeekStatTone.Bad),
+          ),
+        )
+      }
     }
-  }
-}
-
-@Composable
-internal fun PlanRecordedOutput(specPath: String?, onAction: (DetailAction) -> Unit) {
-  specPath?.let {
-    PeekPart("Produced") {
-      PeekOutput(LucideIcons.fileText, fileName(it), onClick = { onAction(DetailAction.OpenSpecFile(it)) }, tooltip = it)
-    }
-  }
-}
-
-@Composable
-internal fun EditRecordedOutput(edit: PhaseCardEdit?) {
-  edit?.let {
-    PeekPart("Produced") {
-      PeekStats(
-        listOf(
-          PeekStat(it.fileCount.toString(), "files"),
-          PeekStat("+${it.insertions}", "added", PeekStatTone.Good),
-          PeekStat("−${it.deletions}", "removed", PeekStatTone.Bad),
-        ),
-      )
+  } else {
+    PeekPart(if (simplified) "Simplified" else "Produced") {
+      BasicText("No change summary was retained for this phase.", style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgMuted))
     }
   }
 }
 
 @Composable
 internal fun BuildRecordedOutput(receipt: ValidationResult?) {
-  receipt ?: return
+  if (receipt == null) {
+    PeekPart("Build") { BasicText("The build receipt was not retained for this run.", style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgMuted)) }
+    return
+  }
   PeekPart("Build", end = receipt.status) {
     receipt.gates.firstOrNull()?.command?.let { PeekCmd(it) }
     PeekFacts(
@@ -81,24 +62,28 @@ internal fun BuildRecordedOutput(receipt: ValidationResult?) {
         receipt.gateRunCount?.let { "Gate runs" to it.toString() },
       ),
     )
-    ValidationGateRuns(receipt)
+    PlanningFold("Gate details", "${receipt.gates.size} recorded") { ValidationGateRuns(receipt) }
   }
 }
 
 @Composable
 internal fun ValidateRecordedOutput(
-  output: PhaseCardOutput,
+  output: PhaseCardOutput?,
   subtaskId: Int?,
   detail: Detail,
   checksExpanded: Boolean,
   onToggleChecks: () -> Unit,
 ) {
-  val receipt = output.validationReceipt ?: return
+  val receipt = output?.validationReceipt
+  if (receipt == null) {
+    PeekPart("Validation") { BasicText("The validation receipt was not retained for this run.", style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgMuted)) }
+    return
+  }
   val verdict = output.verdict ?: receipt.status
   val evidence =
     subtaskId?.let { id -> detail.validation.firstOrNull { it.subtaskId == id }?.evidence }.orEmpty()
   PeekPart("Validation", end = receipt.status) {
-    PeekFacts(listOf("Verdict" to verdict))
+    PeekFacts(listOf("Verdict" to verdict, "Checks" to receipt.checks.size.toString()))
     ValidationChecks(receipt, checksExpanded, onToggleChecks)
     receipt.gateRunCount?.let { PeekFacts(listOf("Gate runs" to it.toString())) }
     ValidationGateRuns(receipt)
@@ -118,7 +103,15 @@ private fun ValidationChecks(receipt: ValidationResult, expanded: Boolean, onTog
   val checks = receipt.checks
   if (checks.isEmpty()) return
   val visible = if (expanded) checks else checks.take(FOLDED_VALIDATION_CHECKS)
-  visible.forEach { PeekOutput(LucideIcons.terminal, it, tooltip = it) }
+  visible.forEach { name ->
+    val gate = receipt.gates.firstOrNull { name in it.executedChecks }
+    dev.skillbill.desktop.core.designsystem.detail.PeekCheck(
+      name,
+      if (gate?.exitCode == 0 || gate?.outcome == "passed") dev.skillbill.desktop.core.designsystem.detail.PeekCheckState.Ok
+      else if (gate?.exitCode != null) dev.skillbill.desktop.core.designsystem.detail.PeekCheckState.Bad
+      else dev.skillbill.desktop.core.designsystem.detail.PeekCheckState.Waiting,
+    )
+  }
   if (checks.size > FOLDED_VALIDATION_CHECKS) {
     val remaining = checks.size - FOLDED_VALIDATION_CHECKS
     SbButton(
@@ -142,7 +135,7 @@ private fun ValidationGateRuns(receipt: ValidationResult) {
           gate.exitCode?.let { "Exit code" to it.toString() },
         ),
       )
-      gate.executedChecks.forEach { PeekOutput(LucideIcons.check, it, tooltip = it) }
+      gate.executedChecks.filterNot { it in receipt.checks }.forEach { PeekOutput(LucideIcons.check, it, tooltip = it) }
       gate.command?.let { PeekCmd(it) }
     }
   }
@@ -153,16 +146,16 @@ internal fun HistoryRecordedOutput(receipt: PhaseCardHistoryReceipt, detail: Det
   PeekPart("History") {
     PeekFacts(
       listOfNotNull(
-        receipt.historyWritten?.let { "History written" to if (it) "yes" else "no" },
-        receipt.decisionsRecorded?.let { "Decisions recorded" to if (it) "decisions recorded" else "unchanged" },
+        receipt.historyWritten?.let { "History" to if (it) "written" else "unchanged" },
+        receipt.decisionsRecorded?.let { "Decisions" to if (it) "recorded" else "unchanged" },
       ),
     )
     receipt.changedPaths?.forEach { path ->
       val resolved = resolveRecordedReceiptPath(path, detail, item)
       if (resolved?.openable == true) {
-        PeekOutput(LucideIcons.file, fileName(path), onClick = { onAction(DetailAction.OpenSpecFile(resolved.absolute)) }, tooltip = resolved.absolute)
+        PeekOutput(LucideIcons.file, path, onClick = { onAction(DetailAction.OpenSpecFile(resolved.absolute)) }, tooltip = resolved.absolute)
       } else {
-        PeekOutput(LucideIcons.file, fileName(path), tooltip = path)
+        PeekOutput(LucideIcons.file, path, tooltip = path)
       }
     }
   }
@@ -172,6 +165,9 @@ internal fun HistoryRecordedOutput(receipt: PhaseCardHistoryReceipt, detail: Det
 internal fun CommitRecordedOutput(output: PhaseCardOutput) {
   PeekPart("Commit") {
     PeekFacts(listOfNotNull(output.commitSha?.let { "Commit" to it.take(8) }, output.pushedBranch?.let { "Branch" to it }))
+    if (output.commitSha == null && output.pushedBranch == null) {
+      BasicText("No commit receipt was retained for this phase.", style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgMuted))
+    }
   }
 }
 

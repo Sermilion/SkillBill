@@ -101,7 +101,7 @@ fun PeekStats(items: List<PeekStat>) {
 fun PeekOutput(icon: ImageVector, text: String, end: String? = null, onClick: (() -> Unit)? = null, external: Boolean = false, tooltip: String? = null, endSlot: (@Composable () -> Unit)? = null) {
   val colors = SkillBillTheme.colors
   val row: @Composable () -> Unit = {
-    Row(Modifier.fillMaxWidth().background(colors.bgHover.copy(alpha = if (onClick == null) 0f else .45f), RoundedCornerShape(SkillBillRadius.xs))
+    Row(Modifier.fillMaxWidth().background(if (onClick == null) Color.Transparent else colors.bgHover, RoundedCornerShape(SkillBillRadius.xs))
       .then(if (onClick == null) Modifier else Modifier.clickable(role = Role.Button, onClick = onClick).semantics { contentDescription = tooltip ?: text })
       .padding(horizontal = 7.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
       CompositionLocalProvider(LocalContentColor provides colors.fgMuted) { SbIcon(icon, 13.dp) }

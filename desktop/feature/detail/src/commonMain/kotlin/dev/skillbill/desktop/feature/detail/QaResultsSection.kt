@@ -126,10 +126,8 @@ internal fun QaResultsContent(
 ) {
   val base = "qa-results:${view.runKey}"
   Column(Modifier.fillMaxWidth()) {
-    if (showVerdictMark) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-      QaVerdictMark(view)
-      BasicText(view.sentence, style = SkillBillTheme.type.tMd.copy(color = SkillBillTheme.colors.fg))
-    } else BasicText(view.sentence, style = SkillBillTheme.type.tMd.copy(color = SkillBillTheme.colors.fg))
+    if (showVerdictMark) Row(Modifier.padding(bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) { QaVerdictMark(view) }
+    BasicText(view.sentence, style = SkillBillTheme.type.tMd.copy(color = SkillBillTheme.colors.fg))
     if (view.open.isNotEmpty()) {
       GroupLabel(view.openLabel, count = view.open.size.toString(), modifier = Modifier.padding(top = 16.dp, bottom = 6.dp))
       val head = selection?.head
@@ -407,6 +405,11 @@ private fun QaListFoldItem(fold: QaListFold, state: SectionCollapse, part: Strin
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
           BasicText(rememberRuntimeText(row.title), style = SkillBillTheme.type.tSmMedium.copy(color = colors.fg2))
           if (row.detail.isNotBlank()) BasicText(rememberRuntimeText(row.detail), style = SkillBillTheme.type.tSm.copy(color = colors.fgMuted))
+          row.expected?.takeIf(String::isNotBlank)?.let { QaField("Expected", it) }
+          row.steps?.takeIf(String::isNotBlank)?.let { steps ->
+            QaField("Steps", steps)
+            SbTag("Copy steps", icon = LucideIcons.copy, onClick = { onAction(DetailAction.Copy(steps.replace("`", ""))) })
+          }
           if (row.evidencePaths.isNotEmpty() && (row.evidenceDirectory != null || mode == QaEvidenceMode.VerifyNamesOnly)) QaEvidenceChips(row.evidencePaths, row.evidenceDirectory, onAction, mode)
         }
       }

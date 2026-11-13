@@ -38,6 +38,7 @@ import dev.skillbill.desktop.core.domain.model.WorkControlIdentity
 import dev.skillbill.desktop.core.ui.input.LocalShellInput
 import dev.skillbill.desktop.core.ui.input.ShellInput
 import kotlin.test.Test
+import kotlin.test.assertEquals
 
 @OptIn(ExperimentalTestApi::class)
 class SubtaskInspectorResultsTest {
@@ -154,16 +155,16 @@ class SubtaskInspectorResultsTest {
         }
       }
     }
-    onNode(hasText("Validate") and hasClickAction()).performClick()
-    onNode(hasText("Review") and hasClickAction()).performClick()
+    onNode(hasText("validate") and hasClickAction()).performClick()
+    onNode(hasText("review") and hasClickAction()).performClick()
     onAllNodesWithText("Pass 1").assertCountEquals(1)
     onNode(hasText("Pass 1") and hasAnyAncestor(hasContentDescription("Review"))).assertExists()
     runOnIdle { selectedSubtask.value = 2 }
-    onNode(hasText("Review") and hasClickAction()).assertIsSelected()
+    onNode(hasText("review") and hasClickAction()).assertIsSelected()
     onNodeWithText("pass 2 running").assertExists()
     runOnIdle { goalId.value = "another-goal" }
     runOnIdle { goalId.value = item.id; selectedSubtask.value = 1 }
-    onNode(hasText("Review") and hasClickAction()).assertIsSelected()
+    onNode(hasText("review") and hasClickAction()).assertIsSelected()
     onAllNodesWithText("Pass 1").assertCountEquals(1)
     onNode(hasText("Pass 1") and hasAnyAncestor(hasContentDescription("Review"))).assertExists()
   }
@@ -188,8 +189,8 @@ class SubtaskInspectorResultsTest {
 
     onNodeWithText("Runs after implementation").assertExists()
     onNodeWithText("No phase has run yet.").assertDoesNotExist()
-    onNodeWithText("Implement").assertIsNotEnabled()
-    onNodeWithText("Review").assertIsNotEnabled()
+    onNodeWithText("implement").assertIsNotEnabled()
+    onNodeWithText("review").assertIsNotEnabled()
   }
 
   @Test
@@ -224,8 +225,8 @@ class SubtaskInspectorResultsTest {
     onNodeWithText("Refresh").assertExists()
     onNodeWithText("· audit_verdict").assertDoesNotExist()
     onNodeWithText("No phase has run yet.").assertDoesNotExist()
-    onNodeWithText("Implement").assertIsNotEnabled()
-    onNodeWithText("Review").assertIsNotEnabled()
+    onNodeWithText("implement").assertIsNotEnabled()
+    onNodeWithText("review").assertIsNotEnabled()
     onNodeWithText("Audit").assertDoesNotExist()
   }
 
@@ -261,7 +262,7 @@ class SubtaskInspectorResultsTest {
     onNodeWithText("Attempt 1 · Historical result unavailable").assertExists()
     onNodeWithText("Some historical audit results are unavailable because their discovery scope was not retained.").assertExists()
     onNodeWithText("Review and audit ran, but their results could not be read.", substring = true).assertDoesNotExist()
-    onNode(hasText("Review") and hasClickAction()).performClick()
+    onNode(hasText("review") and hasClickAction()).performClick()
     onNodeWithText("Pass 1").assertExists()
     onNodeWithText("Retains the saved state").assertDoesNotExist()
   }
@@ -292,6 +293,28 @@ class SubtaskInspectorResultsTest {
     onAllNodesWithText("AC-001").assertCountEquals(1)
     onAllNodesWithText("Retains the saved state").assertCountEquals(1)
     onAllNodesWithText("fixed in attempt 2").assertCountEquals(1)
+  }
+
+  @Test
+  fun `criteria fixed later and criteria met initially share one badge column and row toggle`() = runComposeUiTest {
+    val audit = SubtaskAuditResult(
+      AuditOutcome.Passed, 2, 2,
+      listOf(
+        AuditCriterion("AC-001", "Retains the saved state", true, 2),
+        AuditCriterion("AC-002", "Rejects expired sessions", true, null),
+      ),
+      emptyList(), 2,
+    )
+    show("complete", emptyDetail.copy(phaseResults = listOf(results().copy(auditResult = audit))))
+
+    val badges = onAllNodesWithText("MET", useUnmergedTree = true).fetchSemanticsNodes()
+    assertEquals(2, badges.size)
+    assertEquals(badges[0].boundsInRoot.right, badges[1].boundsInRoot.right)
+    onNodeWithText("Show more").assertDoesNotExist()
+    onNodeWithText("Rejects expired sessions").performClick()
+    onNode(hasText("Rejects expired sessions") and hasClickAction()).assertExists()
+    onNodeWithText("Retains the saved state").performClick()
+    onNodeWithText("fixed in attempt 2").assertExists()
   }
 
   @Test
