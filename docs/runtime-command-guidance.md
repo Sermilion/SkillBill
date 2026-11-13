@@ -82,10 +82,31 @@ Chat replies, issue keys and requests to implement do not authorize a CLI or MCP
 launch. The app owns the start action and issue-key entry. An explicit request for
 direct implementation stays in chat without creating a goal.
 
-A new-task goal or plan requires an explicitly accepted complete issue key. Chat
-proposes the next available key from the selected project's local inventory, or
-extracts a proposal from an operator-supplied Linear issue URL. Proposals never
-reserve keys or authorize a launch. Sentence mentions, including sentence-leading
+A new-task goal or plan requires an explicitly accepted complete issue key. Before
+proposing a new key, chat inspects the project's instructions and MCP configuration.
+When the project has Linear MCP configured and no existing ticket was supplied,
+chat asks whether to create a Linear ticket from the agreed scope. It uses an
+ordinary question, not a tool permission escalation, and honors existing approval
+for ticket creation without asking again.
+
+Chat uses the project's configured connection, verifies its workspace and team,
+and asks when the team is ambiguous. After approval, it checks for a matching
+issue before creating a duplicate. A new ticket records the agreed outcome, scope,
+acceptance criteria and constraints. Linear assigns the key. Chat shows the ticket
+link and returned key, never predicting a Linear key from local specs or issue
+numbers. A supplied existing ticket does not require creating another one.
+
+Missing tools or failed access are reported without switching connections or
+substituting a local key. If the operator declines creation, chat asks for an
+existing ticket or an explicit local-key choice where project instructions allow
+it. Without Linear MCP setup, chat may propose the next available local key where
+project instructions allow it. It never reserves a local key during preparation.
+
+Creating a ticket during preparation does not launch a run or accept its key.
+Chat proposes the returned key, or extracts a proposal from an operator-supplied
+Linear issue URL, and waits for explicit acceptance. It retains an earlier explicit
+acceptance of the same complete key for the same work. Proposals never authorize a
+launch. Sentence mentions, including sentence-leading
 keys, and URLs do not count as acceptance. A message containing only the key or
 a clicked "Use <key>" action accepts it. The latest explicit selection wins.
 The app shows the accepted key on the start action. Without one, Start opens a
