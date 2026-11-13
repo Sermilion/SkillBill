@@ -490,7 +490,7 @@ const NAV = [
   ['newtask', I.pencil, 'New task'],
   ['work', I.target, 'Work'],
   ['history', I.history, 'History'],
-  ['specs', I.file, 'Specs'],
+  ['specs', I.file, 'Plans'],
   ['settings', I.sliders, 'Settings'],
 ];
 $('#side').innerHTML = `
@@ -794,7 +794,7 @@ function renderFinish() {
 }
 
 /* Command menu */
-const CMDS = [['Go to New task', 'G N'], ['Go to Work', 'G W'], ['Go to History', 'G H'], ['Open specs pane', 'G S'], ['Toggle terminal', '⌃ `'], ['Pause after subtask', 'P'], ['Pause now', '⇧ P'], ['Resume', 'R'], ['Show tour', '']];
+const CMDS = [['Go to New task', 'G N'], ['Go to Work', 'G W'], ['Go to History', 'G H'], ['Open plans pane', 'G S'], ['Toggle terminal', '⌃ `'], ['Pause after subtask', 'P'], ['Pause now', '⇧ P'], ['Resume', 'R'], ['Show tour', '']];
 function renderCmd() {
   scene('cmd').innerHTML = renderWork(true) + `
     <div class="scrim" id="scrim"></div>
@@ -819,14 +819,14 @@ const BEATS = [
   { id: 'welcome' },
   {
     scene: 'newtask', nav: 'newtask', t: 'One sidebar, five places',
-    b: 'New task is where work starts. Work shows everything that is running. History, Specs and Settings cover the rest. Each one has a two-key shortcut.',
+    b: 'New task is where work starts. Work shows everything that is running. History, Plans and Settings cover the rest. Each one has a two-key shortcut.',
     render: renderNewTask,
     enter() {
       const items = [
         ['newtask', '<b>New task</b>Chat with your agent to shape the next piece of work.', 'G N'],
         ['work', '<b>Work</b>Every running goal, phase and operation, grouped by what it needs.', 'G W'],
         ['history', '<b>History</b>Finished runs, with their full record.', 'G H'],
-        ['specs', '<b>Specs</b>The plans Sona writes, stored as files in your repo.', 'G S'],
+        ['specs', '<b>Plans</b>The plans Sona writes, stored as files in your repo.', 'G S'],
         ['settings', '<b>Settings</b>Notifications, models, agents and paths.', 'G ,'],
       ];
       items.forEach(([n, tip, k], i) => at(1100 + i * 1700, () => {

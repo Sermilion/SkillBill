@@ -137,7 +137,7 @@
         })) }),
       ],
       footer: [
-        S.SidebarItem({ icon: 'fileText', label: 'Specs', act: 'specs-toggle', on: st.specsOpen, tip: 'Specs pane', kbd: 'G S' }),
+        S.SidebarItem({ icon: 'fileText', label: 'Plans', act: 'specs-toggle', on: st.specsOpen, tip: 'Plans pane', kbd: 'G S' }),
         S.SidebarItem({ icon: 'terminal', label: 'Terminal', act: 'term-toggle', on: st.termOpen, tip: 'Terminal', kbd: '⌃ `' }),
         S.SidebarItem({ icon: 'sliders', label: 'Settings', act: 'nav', arg: 'settings', tip: 'Settings', kbd: 'G ,' }),
         S.SidebarItem({ icon: 'keyboard', label: 'Keyboard shortcuts', act: 'shortcuts', tip: 'Keyboard shortcuts', kbd: '?' }),
@@ -217,7 +217,7 @@
   function paneToggles(st) {
     return [
       S.IconButton({ icon: 'refresh', label: 'Refresh', act: 'refresh' }),
-      S.IconButton({ icon: 'fileText', label: st.specsOpen ? 'Close specs pane' : 'Specs', kbd: 'G S', act: 'specs-toggle', on: st.specsOpen }),
+      S.IconButton({ icon: 'fileText', label: st.specsOpen ? 'Close plans pane' : 'Plans', kbd: 'G S', act: 'specs-toggle', on: st.specsOpen }),
       S.IconButton({ icon: 'terminal', label: st.termOpen ? 'Close terminal' : 'Terminal', kbd: '⌃ `', act: 'term-toggle', on: st.termOpen }),
     ];
   }
@@ -2424,10 +2424,10 @@
     const danger = [
       v.canCancel && { icon: 'x', label: 'Cancel goal…', danger: true, act: 'spec-cancel', arg: sp.key },
       v.purgeVisible && { icon: 'rerun', label: 'Purge run history…', danger: true, act: 'spec-purge', arg: sp.key, disabled: !v.canPurge, sub: v.canPurge ? null : 'Pause or cancel the goal first' },
-      { icon: 'trash', label: 'Delete spec files…', danger: true, act: 'spec-delete', arg: sp.key, disabled: !v.canDelete, sub: v.canDelete ? null : 'Pause or cancel the goal first' },
+      { icon: 'trash', label: 'Delete plan files…', danger: true, act: 'spec-delete', arg: sp.key, disabled: !v.canDelete, sub: v.canDelete ? null : 'Pause or cancel the goal first' },
     ].filter(Boolean);
     return [
-      { icon: 'fileText', label: 'Open spec', kbd: '↵', act: 'spec-open', arg: sp.key },
+      { icon: 'fileText', label: 'Open plan', kbd: '↵', act: 'spec-open', arg: sp.key },
       { icon: 'folder', label: 'Reveal folder', act: 'spec-reveal', arg: sp.key },
       { icon: 'copy', label: 'Copy key', act: 'copy', arg: sp.key },
       { icon: 'star', label: sp.fav ? 'Remove favorite' : 'Add favorite', kbd: 'F', key: 'f', act: 'spec-fav', arg: sp.key },
@@ -2439,7 +2439,7 @@
     const pr = specProject(st);
     return [
       { icon: 'chevronsUpDown', label: 'Collapse all', act: 'spec-collapse' },
-      { icon: 'folder', label: 'Reveal specs folder', act: 'spec-reveal-store', sub: pr.store },
+      { icon: 'folder', label: 'Reveal plans folder', act: 'spec-reveal-store', sub: pr.store },
       { icon: 'file', label: 'Import work…', act: 'spec-import', disabled: !pr.checkout, sub: pr.checkout ? null : 'This project has no checkout on this machine.' },
     ];
   }
@@ -2508,18 +2508,18 @@
       : `${S.ViewTabs({ act: 'spec-status', value: st.specStatus, items: SPEC_FILTERS.map(([id, label]) => ({ id, label, count: count(id) })) })}<span class="l-grow"></span>${S.IconButton({ icon: 'search', label: 'Filter by key, title or file', kbd: '/', act: 'spec-search', on: !!st.specQuery })}`;
     let body;
     if (!project.checkout) body = S.EmptyState({ icon: 'folder', title: 'This project has no checkout on this machine.' });
-    else if (project.problem) body = S.EmptyState({ icon: 'alert', title: 'Specs unavailable', body: esc(project.problem), actions: [S.Button({ label: 'Retry', act: 'spec-retry' })] });
-    else if (!mine.length) { specRows = []; body = S.EmptyState({ icon: 'fileText', title: 'No specs yet', body: 'Plan a feature with <span class="mono">/skill-bill phase:plan</span> and its bundle shows up here.' }); }
+    else if (project.problem) body = S.EmptyState({ icon: 'alert', title: 'Plans unavailable', body: esc(project.problem), actions: [S.Button({ label: 'Retry', act: 'spec-retry' })] });
+    else if (!mine.length) { specRows = []; body = S.EmptyState({ icon: 'fileText', title: 'No plans yet', body: 'Plan a feature with <span class="mono">/skill-bill phase:plan</span> and its bundle shows up here.' }); }
     else {
       const tree = specTree(st, project);
-      body = tree || S.EmptyState({ icon: 'search', title: 'No specs match', body: 'Nothing in this project matches the filter and status.', actions: [S.Button({ label: 'Clear filters', act: 'spec-clear' })] });
+      body = tree || S.EmptyState({ icon: 'search', title: 'No plans match', body: 'Nothing in this project matches the filter and status.', actions: [S.Button({ label: 'Clear filters', act: 'spec-clear' })] });
     }
     const sp = project.checkout && !project.problem ? specOf(st.specSel) : null;
     return S.SidePane({
-      title: 'Specs',
+      title: 'Plans',
       head: S.PickerButton({ lead: S.RepoIcon(repoOf(project.name)), label: project.name, act: 'project-menu' }),
-      actions: [S.IconButton({ icon: 'more', label: 'Panel actions', act: 'spec-panel-menu', size: 'sm' }), S.IconButton({ icon: 'x', label: 'Close specs pane', kbd: 'G S', act: 'specs-toggle', size: 'sm' })],
-      bar: filters, body: S.ScrollArea({ id: 'specs', zone: 'specs', tabIndex: 0, role: 'tree', label: 'Specs', body }) + (sp ? specBar(st, sp) : ''),
+      actions: [S.IconButton({ icon: 'more', label: 'Panel actions', act: 'spec-panel-menu', size: 'sm' }), S.IconButton({ icon: 'x', label: 'Close plans pane', kbd: 'G S', act: 'specs-toggle', size: 'sm' })],
+      bar: filters, body: S.ScrollArea({ id: 'specs', zone: 'specs', tabIndex: 0, role: 'tree', label: 'Plans', body }) + (sp ? specBar(st, sp) : ''),
     });
   }
 

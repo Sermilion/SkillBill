@@ -66,7 +66,7 @@ class SpecsSearchInputTest {
     runOnIdle { state = state.copy(filterText = edits.last()) }
     onNodeWithContentDescription("Clear filters").performClick()
     input.assertDoesNotExist()
-    onNodeWithContentDescription("Search specs").performClick()
+    onNodeWithContentDescription("Search plans").performClick()
     input.assert(SemanticsMatcher.expectValue(SemanticsProperties.EditableText, AnnotatedString("")))
     input.performTextInput("SONA")
     input.assertTextEquals("SONA")

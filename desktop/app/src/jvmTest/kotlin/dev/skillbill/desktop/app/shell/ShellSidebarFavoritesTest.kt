@@ -130,7 +130,7 @@ class ShellSidebarFavoritesTest {
               Box(
                 Modifier.align(Alignment.BottomEnd).size(80.dp).clickable { clickedBehindDrawer = true }.testTag("specs-pane-action"),
               )
-              BasicText("Specs pane")
+              BasicText("Plans pane")
             }
           }
         }
@@ -139,7 +139,7 @@ class ShellSidebarFavoritesTest {
 
     onNodeWithContentDescription("Drawer regression, SKILL-478").performClick()
     onNodeWithContentDescription("Drawer regression, SKILL-478").assertDoesNotExist()
-    onNodeWithText("Specs pane").assertIsDisplayed()
+    onNodeWithText("Plans pane").assertIsDisplayed()
     onNodeWithTag("specs-pane-action").performClick()
     runOnIdle {
       assertEquals(true, opened)

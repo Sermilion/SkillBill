@@ -108,7 +108,7 @@ internal fun SpecsPane(state: SpecsUiState, onAction: (SpecsAction) -> Unit, onC
       else -> false
     }
     },
-    title = "Specs",
+    title = "Plans",
     head = {
       Box {
         val dismiss = { onAction(SpecsAction.DismissProjectMenu) }
@@ -145,14 +145,14 @@ internal fun SpecsPane(state: SpecsUiState, onAction: (SpecsAction) -> Unit, onC
     },
     actions = {
       Box {
-        SbIconButton(LucideIcons.more, "Specs actions", { onAction(SpecsAction.OpenPanelMenu) }, size = SbControlSize.Small)
+        SbIconButton(LucideIcons.more, "Plans actions", { onAction(SpecsAction.OpenPanelMenu) }, size = SbControlSize.Small)
         if (state.panelMenuOpen) {
           val dismiss = { onAction(SpecsAction.DismissPanelMenu) }
           ShellLayer(dismiss)
           SbPopover(expanded = true, onDismissRequest = dismiss) {
             SbMenu(listOf(
               SbMenuEntry.Item(COLLAPSE_ALL, { onAction(SpecsAction.CollapseAll); dismiss() }, icon = LucideIcons.chevronUp),
-              SbMenuEntry.Item("Reveal specs folder", { onAction(SpecsAction.Reveal); dismiss() }, icon = LucideIcons.folder, detail = state.storePath),
+              SbMenuEntry.Item("Reveal plans folder", { onAction(SpecsAction.Reveal); dismiss() }, icon = LucideIcons.folder, detail = state.storePath),
               SbMenuEntry.Item("Import work…", { onAction(SpecsAction.RequestImport); dismiss() }, icon = LucideIcons.file, enabled = !project?.repoRoot.isNullOrBlank(), reason = if (project?.repoRoot.isNullOrBlank()) NO_CHECKOUT else null),
             ))
           }
@@ -174,7 +174,7 @@ internal fun SpecsPane(state: SpecsUiState, onAction: (SpecsAction) -> Unit, onC
           SbIconButton(LucideIcons.x, "Clear filters", { onAction(SpecsAction.ClearFilters) }, size = SbControlSize.Small)
         } else {
           Spacer(Modifier.weight(1f))
-          SbIconButton(LucideIcons.search, "Search specs", { onAction(SpecsAction.OpenSearch) }, size = SbControlSize.Small)
+          SbIconButton(LucideIcons.search, "Search plans", { onAction(SpecsAction.OpenSearch) }, size = SbControlSize.Small)
         }
       }
       val counts = ((state.tree as? SpecTreeState.Loaded)?.tree?.counts)
@@ -236,7 +236,7 @@ internal fun SpecsPane(state: SpecsUiState, onAction: (SpecsAction) -> Unit, onC
   }
 }
 
-/** "No specs yet" body with the plan command in mono, as screens.js renders it. */
+/** "No plans yet" body with the plan command in mono, as screens.js renders it. */
 @Composable
 private fun noSpecsBody(): AnnotatedString {
   val command = "/sona phase:plan"

@@ -229,7 +229,7 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
         // paneToggles(st), then the details toggle.
         SbIconButton(LucideIcons.refresh, "Refresh", { onAction(DetailAction.Retry) })
         qaView?.reportPath?.let { path -> SbIconButton(LucideIcons.file, "Open report", { onAction(DetailAction.OpenQaReport(path)) }) }
-        SbIconButton(LucideIcons.fileText, if (host.specsOpen) "Close specs pane" else "Specs", host.onToggleSpecs, shortcut = "G S", selected = host.specsOpen)
+        SbIconButton(LucideIcons.fileText, if (host.specsOpen) "Close plans pane" else "Plans", host.onToggleSpecs, shortcut = "G S", selected = host.specsOpen)
         SbIconButton(LucideIcons.terminal, if (host.terminalOpen) "Close terminal" else if (qaRow) "Open terminal" else "Terminal", host.onToggleTerminal, shortcut = "⌃ `", selected = host.terminalOpen)
         SbIconButton(LucideIcons.bot, if (host.chatOpen) "Close chat" else "Chat", host.onToggleChat, shortcut = host.chatShortcut, selected = host.chatOpen)
         SbIconButton(LucideIcons.panelRight, "Toggle details", toggleDetails, shortcut = host.detailsShortcut, selected = host.detailsPaneOpen)

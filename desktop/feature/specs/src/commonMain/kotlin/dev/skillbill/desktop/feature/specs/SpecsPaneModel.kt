@@ -863,12 +863,12 @@ class SpecsPaneModel(
 
   private fun reveal() {
     val path = local.value.storePath ?: return
-    scope.launch { if (specs.revealFolder(path) == OpenOutcome.NotOpened) problem("Couldn't reveal the specs folder.") }
+    scope.launch { if (specs.revealFolder(path) == OpenOutcome.NotOpened) problem("Couldn't reveal the plans folder.") }
   }
 
   private fun revealBundle() {
     val bundle = selectedBundle() ?: return
-    scope.launch { if (specs.revealFolder(bundle.absolutePath) == OpenOutcome.NotOpened) problem("Couldn't reveal the spec folder.") }
+    scope.launch { if (specs.revealFolder(bundle.absolutePath) == OpenOutcome.NotOpened) problem("Couldn't reveal the plan folder.") }
   }
 
   private fun bundleTarget(path: String): SpecNode.Bundle? = when (val node = findNode(roots(), path)) {
