@@ -18,8 +18,8 @@ internal data class ControlButton(val label: String, val enabled: Boolean, val t
 
 /**
  * What the run actions, the prerequisite checklist and the decision block show, derived from one detail state. A null button is
- * absent. [agentId] is the chosen agent, else the run options' default. [checklist] is null when the prerequisites render as
- * plain rows. [decision] is null when no decision is awaited.
+ * absent. [agentId] is a supported choice or recorded agent, with the configured default available for a new goal. [checklist]
+ * is null when the prerequisites render as plain rows. [decision] is null when no decision is awaited.
  */
 internal data class RunActionsView(
   val usable: Boolean,
@@ -65,15 +65,17 @@ internal fun runActionsView(state: DetailUiState): RunActionsView {
   val resumable = item.lifecycle != Lifecycle.Active &&
     (item.lifecycle != Lifecycle.Terminal || isStandaloneValidation(item))
   val launchable = ready && options?.canLaunch == true && (item.issueKey ?: item.id) !in controls.reservations
-  val agentId = controls.chosenAgent ?: options?.agentId ?: state.defaultAgentId?.takeIf { options != null && it in options.agentChoices }
-  val launch = ControlButton(label(InFlightControl.Launch, options?.launchLabel?.ifBlank { null } ?: "Resume"), launchable).takeIf { resumable }
-
   val goalStarted = controls.implementationStarted || options?.goalStarted == true
   val implement = ControlButton(
     label(InFlightControl.Launch, "Implement"),
     ready && !goalStarted && loaded != null && planImplementationEnabled(item, loaded.detail) && item.issueKey !in controls.reservations,
     tooltip = GOAL_STARTED.takeIf { goalStarted },
   ).takeIf { item.offersPlanImplementation() }
+  val agentId = controls.chosenAgent?.takeIf { it in options?.agentChoices.orEmpty() }
+    ?: options?.agentId?.takeIf { it in options.agentChoices }
+    ?: state.defaultAgentId?.takeIf { implement != null && it in options?.agentChoices.orEmpty() }
+  val launch = ControlButton(label(InFlightControl.Launch, options?.launchLabel?.ifBlank { null } ?: "Resume"), launchable).takeIf { resumable }
+
   val agentLabel = agentId?.let { "Agent: ${agentDisplayName(it)}" } ?: "Choose agent"
   val agent = when {
     resumable -> ControlButton(agentLabel, launchable)
