@@ -4,6 +4,7 @@ import skillbill.ports.approval.ApprovalStore
 import skillbill.ports.blockincident.BlockIncidentRecoveryRepository
 import skillbill.ports.blockincident.BlockIncidentRepository
 import skillbill.ports.blockincident.ProductReportRepository
+import skillbill.ports.config.projectchecks.ProjectCheckConfigRepository
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticPermissions
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticRepository
 import skillbill.ports.featuretask.FeatureTaskPhaseSettlementRepository
@@ -67,6 +68,7 @@ interface UnitOfWork : GoalRunnerPersistenceSession {
   val blockIncidentRecoveries: BlockIncidentRecoveryRepository
   val productReports: ProductReportRepository
   val diffComments: DiffCommentStore
+  val projectCheckConfigs: ProjectCheckConfigRepository
 
   fun purgeDecomposedGoal(target: GoalPurgeTarget): GoalPurgeTableCounts
 

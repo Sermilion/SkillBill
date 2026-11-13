@@ -1786,6 +1786,14 @@ without classifying model names or adding model-dependent instructions.
 
 ## Runtime Contract And Schema Seams
 
+- Project check configuration uses the canonical
+  `orchestration/contracts/project-check-config-schema.yaml` contract and its
+  `ProjectCheckConfigKeys` owner in `runtime-contracts`. The strict validator lives in
+  `runtime-infra/contracts`; SQLite stores five nullable category documents in the
+  `project_config` table. A null category remains undiscovered, while an empty command
+  array records completed discovery with no command. `ProjectCheckConfigAccess`
+  establishes database readiness before resolving the current project association or
+  reading a stored row.
 - Runtime contract schemas live in `orchestration/contracts/`. The
   `*_CONTRACT_VERSION` constants stay in `runtime-contracts`; the `*SchemaPaths`
   locators that name the staged copies live in

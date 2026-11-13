@@ -25,6 +25,28 @@ internal data class ProjectStoreRecord(
   val sharedCommonDirs: List<String> = emptyList(),
 ) {
   val checkoutCommonDirs: List<String> get() = listOf(commonDir) + sharedCommonDirs
+
+  fun withCheckout(checkoutCommonDir: String): ProjectStoreRecord =
+    if (checkoutCommonDir in checkoutCommonDirs) this else copy(sharedCommonDirs = sharedCommonDirs + checkoutCommonDir)
+
+  fun withLinkedCheckout(checkoutCommonDir: String): ProjectStoreRecord =
+    if (linkedTo == null) {
+      withCheckout(checkoutCommonDir)
+    } else {
+      copy(commonDir = checkoutCommonDir, sharedCommonDirs = emptyList(), linkedTo = null)
+    }
+
+  fun withoutCheckout(
+    checkoutCommonDir: String,
+    targetProjectId: String,
+  ): ProjectStoreRecord {
+    val remaining = sharedCommonDirs.filterNot { it == checkoutCommonDir }
+    return when {
+      commonDir != checkoutCommonDir -> copy(sharedCommonDirs = remaining)
+      remaining.isEmpty() -> copy(linkedTo = targetProjectId)
+      else -> copy(commonDir = remaining.first(), sharedCommonDirs = remaining.drop(1))
+    }
+  }
 }
 
 internal data class StoredProject(

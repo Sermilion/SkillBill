@@ -66,6 +66,7 @@ import skillbill.engine.featuretask.phaserun.PhaseRunEntry
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeRunEntry
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeStatusService
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
+import skillbill.engine.featuretask.validation.projectchecks.ProjectCheckConfigAccess
 import skillbill.engine.goalrunner.GoalOperatorDecisionService
 import skillbill.engine.goalrunner.GoalRunner
 import skillbill.engine.goalrunner.findings.UnaddressedFindingsLedgerService
@@ -291,6 +292,7 @@ abstract class RuntimeComponent(
       workflowSnapshotValidator,
       runtimeVersion().value,
       blockIncidentContractValidator,
+      projectCheckConfigValidator(),
     )
 
   @Provides
@@ -356,6 +358,7 @@ abstract class RuntimeComponent(
   abstract val featureTaskRuntimeCrashReconciler: FeatureTaskRuntimeCrashReconciler
   abstract val blockedPhaseRetryArtifacts: BlockedPhaseRetryArtifacts
   abstract val featureTaskRuntimeExecutionPlanResolver: FeatureTaskRuntimeExecutionPlanResolver
+  abstract val projectCheckConfigAccess: ProjectCheckConfigAccess
   abstract val featureTaskRuntimeStatusService: FeatureTaskRuntimeStatusService
   abstract val featureTaskRuntimeWorkerCoordinator: FeatureTaskRuntimeWorkerCoordinator
   abstract val featureTaskRuntimeRunInvariantsSource: FeatureTaskRuntimeRunInvariantsSource

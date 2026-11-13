@@ -51,6 +51,7 @@ internal object DatabaseSchema {
       "producer_output_evidence",
       "agent_activity_stamps",
       "worktree_edit_journal",
+      "project_config",
     )
 
   val indexNames: Set<String> =

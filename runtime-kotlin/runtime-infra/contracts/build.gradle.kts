@@ -128,6 +128,12 @@ governedResources {
     "SKILL-435: canonical block-incident schema",
   )
   copy(
+    "copyProjectCheckConfigSchema",
+    "project-check-config-schema.yaml",
+    "SONA-17: canonical project-check configuration schema",
+    "skillbill/contracts",
+  )
+  copy(
     "copyProducerOutputEvidenceSchema",
     "producer-output-evidence-schema.yaml",
     "SKILL-152: canonical producer output evidence schema",

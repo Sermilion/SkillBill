@@ -18,6 +18,8 @@ import skillbill.ports.blockincident.InMemoryBlockIncidentRecoveryRepository
 import skillbill.ports.blockincident.InMemoryBlockIncidentRepository
 import skillbill.ports.blockincident.InMemoryProductReportRepository
 import skillbill.ports.blockincident.ProductReportRepository
+import skillbill.ports.config.projectchecks.ProjectCheckConfigRepository
+import skillbill.ports.config.projectchecks.UnavailableProjectCheckConfigRepository
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticPermissions
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticRepository
 import skillbill.ports.diagnostics.UnavailableRejectedOutputDiagnosticPermissions
@@ -75,6 +77,7 @@ import skillbill.ports.review.diffcomment.UnavailableDiffCommentStore
 import java.time.Instant
 
 abstract class UnitOfWorkDefaults : UnitOfWork {
+  open override val projectCheckConfigs: ProjectCheckConfigRepository = UnavailableProjectCheckConfigRepository
   open override val goalPlanningOwnership: GoalPlanningOwnershipRepository = EmptyGoalPlanningOwnershipRepository
   open override val databaseFileObservation: DatabaseFileObservation? = null
   open override val workBoardReadModel: WorkBoardReadModelRepository = EmptyBoardReadModel()

@@ -127,16 +127,22 @@ class ProjectStoreResolverTest {
   }
 
   @Test
-  fun `a no-commit repository is re-keyed to its lineage after the first commit`() {
+  fun `a no-commit repository keeps its assigned id when promoted to lineage`() {
     val repo = gitCheckout("fresh")
-    val noCommits = resolver().resolve(repo)
+    val storeResolver = resolver()
+    val noCommits = storeResolver.resolve(repo)
     assertTrue(noCommits.projectId.startsWith("p-"))
 
     lineages.set(repo, LINEAGE_A)
-    val committed = resolver().resolve(repo)
+    val committed = storeResolver.resolveCurrent(repo)
+    val record = ProjectStoreRecordCodec.parse(Files.readString(noCommits.root.resolve("project.json")))
 
-    assertEquals(lineageProjectId(LINEAGE_A), committed.projectId)
-    assertEquals(listOf(committed.projectId), storeNames())
+    assertEquals(noCommits.projectId, committed.projectId)
+    assertEquals(listOf(noCommits.projectId), storeNames())
+    assertEquals(noCommits.projectId, record.projectId)
+    assertEquals(ProjectKeyKind.LINEAGE, record.keyKind)
+    assertEquals(LINEAGE_A.rootCommits, record.rootCommits)
+    assertEquals(LINEAGE_A.remoteUrl, record.remoteUrl)
   }
 
   @Test
@@ -207,6 +213,19 @@ class ProjectStoreResolverTest {
     assertEquals(target.projectId, resolver().resolve(original).projectId)
     val oldRecord = ProjectStoreRecordCodec.parse(Files.readString(cloneStore.root.resolve("project.json")))
     assertEquals(target.projectId, oldRecord.linkedTo)
+  }
+
+  @Test
+  fun `fresh resolution observes a link written by another resolver`() {
+    val original = gitCheckout("original").also { lineages.set(it, LINEAGE_A) }
+    val clone = gitCheckout("clone").also { lineages.set(it, LINEAGE_A_FORK) }
+    val target = resolver().resolve(original)
+    val staleResolver = resolver()
+    staleResolver.resolve(clone)
+
+    resolver().link(clone, target.projectId)
+
+    assertEquals(target.projectId, staleResolver.resolveCurrent(clone).projectId)
   }
 
   @Test

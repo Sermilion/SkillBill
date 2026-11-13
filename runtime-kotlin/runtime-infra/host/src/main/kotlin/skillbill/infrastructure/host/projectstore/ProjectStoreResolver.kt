@@ -23,7 +23,6 @@ import skillbill.ports.repository.RepositoryEnclosingRootPort
 import java.io.IOException
 import java.net.URI
 import java.nio.file.Files
-import java.nio.file.NoSuchFileException
 import java.nio.file.Path
 import java.time.Clock
 import java.time.Instant
@@ -44,14 +43,21 @@ class ProjectStoreResolver(
   private val cache = ConcurrentHashMap<Path, ProjectStoreLocation>()
   private val lock = Any()
 
-  override fun resolve(workingDirectory: Path): ProjectStoreLocation {
+  override fun resolve(workingDirectory: Path): ProjectStoreLocation = resolve(workingDirectory, false)
+
+  override fun resolveCurrent(workingDirectory: Path): ProjectStoreLocation = resolve(workingDirectory, true)
+
+  private fun resolve(
+    workingDirectory: Path,
+    refresh: Boolean,
+  ): ProjectStoreLocation {
     val checkout =
       catchingNonCancellation { locate(workingDirectory) }.getOrElse { failure ->
         return gitUnavailable(workingDirectory, failure)
       }
-    cache[checkout.commonDir]?.let { return it }
+    if (!refresh) cache[checkout.commonDir]?.let { return it }
     return synchronized(lock) {
-      cache[checkout.commonDir] ?: catchingNonCancellation {
+      (if (refresh) null else cache[checkout.commonDir]) ?: catchingNonCancellation {
         bind(checkout).also {
           noteLegacyState(checkout, it)
           cache[checkout.commonDir] = it
@@ -69,9 +75,9 @@ class ProjectStoreResolver(
       val targetDir = storeParent.resolve(projectId)
       val target = readTarget(projectId, targetDir)
       val commonDir = checkout.commonDir.toString()
-      scan().filter { it.id != projectId && it.record.commonDir == commonDir && it.record.linkedTo != projectId }
-        .forEach { writeRecord(it.dir, it.record.copy(linkedTo = projectId)) }
-      writeRecord(targetDir, target.withCheckout(commonDir).copy(lastSeen = now()))
+      scan().filter { it.id != projectId && commonDir in it.record.checkoutCommonDirs }
+        .forEach { writeRecord(it.dir, it.record.withoutCheckout(commonDir, projectId)) }
+      writeRecord(targetDir, target.withLinkedCheckout(commonDir).copy(lastSeen = now()))
       cache.clear()
       location(projectId)
     }
@@ -140,13 +146,11 @@ class ProjectStoreResolver(
     }
 
   private fun bindNonGitOutsideState(checkout: Checkout): ProjectStoreLocation =
-    if (checkout.commonDir.startsWith(canonicalStateDir())) {
+    if (checkout.commonDir.startsWith(canonicalOrNormalized(stateDir))) {
       location(nonGitProjectId(checkout.commonDir))
     } else {
       bindNonGit(checkout, NON_GIT_OUTCOME)
     }
-
-  private fun canonicalStateDir(): Path = canonicalOrNormalized(stateDir)
 
   private fun canonicalOrNormalized(path: Path): Path =
     catchingNonCancellation { repositories.canonicalPath(path) }.getOrElse { failure ->
@@ -176,12 +180,16 @@ class ProjectStoreResolver(
   ): ProjectStoreLocation {
     val candidates = lineageCandidates(stores, lineage)
     val baseId = lineageProjectId(lineage)
-    val only = candidates.singleOrNull()
+    val candidate =
+      candidates.singleOrNull()
+        ?: candidates.filter { isSameRepository(it, lineage) }.singleOrNull()
     return when {
       candidates.isEmpty() -> createStore(null, baseId, checkout, lineage)
-      only != null && only.liveCheckouts().isEmpty() -> adopt(only, checkout, lineage)
-      only != null && isSameRepository(only, lineage) -> share(only, checkout)
-      only != null -> createStore("$SECOND_CLONE_OUTCOME matched=${only.id}", baseId, checkout, lineage)
+      candidate != null && candidate.liveCheckouts().isEmpty() && hasRemoteConflict(candidate, lineage) ->
+        createStore("$SECOND_CLONE_OUTCOME matched=${candidate.id}", baseId, checkout, lineage)
+      candidate != null && candidate.liveCheckouts().isEmpty() -> adopt(candidate, checkout, lineage)
+      candidate != null && isSameRepository(candidate, lineage) -> share(candidate, checkout)
+      candidate != null -> createStore("$SECOND_CLONE_OUTCOME matched=${candidate.id}", baseId, checkout, lineage)
       else ->
         createStore(
           "$MULTIPLE_CANDIDATES_OUTCOME candidates=${candidates.joinToString(",") { it.id }} hint=$LINK_HINT",
@@ -201,6 +209,11 @@ class ProjectStoreResolver(
     val local = localRemoteCommonDir(remote) ?: return false
     return local in candidate.record.checkoutCommonDirs
   }
+
+  private fun hasRemoteConflict(
+    candidate: StoredProject,
+    lineage: RepositoryLineage,
+  ): Boolean = candidate.record.remoteUrl != null && lineage.remoteUrl != null && !isSameRepository(candidate, lineage)
 
   private fun localRemoteCommonDir(remote: String): String? =
     catchingNonCancellation {
@@ -249,46 +262,23 @@ class ProjectStoreResolver(
   private fun StoredProject.liveCheckouts(): List<String> =
     record.checkoutCommonDirs.filter { Files.exists(Path.of(it)) }
 
-  private fun ProjectStoreRecord.withCheckout(commonDir: String): ProjectStoreRecord =
-    if (commonDir in checkoutCommonDirs) this else copy(sharedCommonDirs = sharedCommonDirs + commonDir)
-
   private fun touchOrRekey(
     exact: StoredProject,
     lineage: RepositoryLineage?,
   ): ProjectStoreLocation {
     if (lineage == null) return touch(exact)
-    val baseId = lineageProjectId(lineage)
-    val derivedId = noCommitsProjectId(Path.of(exact.record.commonDir))
-    val isDerivedId = exact.id == derivedId || exact.id.startsWith("$derivedId-")
-    val newId = if (isDerivedId) freeId(baseId) else exact.id
-    if (newId != exact.id) {
-      try {
-        atomicMoveReplacing(exact.dir, storeParent.resolve(newId))
-      } catch (_: NoSuchFileException) {
-        val rekeyed =
-          scan().firstOrNull { it.isRekeyedMatchOf(exact) } ?: throw NoSuchFileException(exact.dir.toString())
-        return touch(rekeyed)
-      }
-    }
     writeRecord(
-      storeParent.resolve(newId),
+      exact.dir,
       exact.record.copy(
-        projectId = newId,
         keyKind = ProjectKeyKind.LINEAGE,
         rootCommits = lineage.rootCommits,
         remoteUrl = lineage.remoteUrl,
         lastSeen = now(),
       ),
     )
-    identityWarning(REKEYED_OUTCOME)
-    return location(newId)
+    identityWarning(STABLE_LINEAGE_PROMOTION_OUTCOME)
+    return location(exact.id)
   }
-
-  private fun StoredProject.isRekeyedMatchOf(previous: StoredProject): Boolean =
-    id != previous.id &&
-      record.commonDir == previous.record.commonDir &&
-      record.linkedTo == null &&
-      record.keyKind != ProjectKeyKind.NO_COMMITS_PATH
 
   private fun touch(store: StoredProject): ProjectStoreLocation {
     writeRecord(store.dir, store.record.copy(lastSeen = now()))
@@ -302,7 +292,12 @@ class ProjectStoreResolver(
     lineage: RepositoryLineage?,
   ): ProjectStoreLocation {
     val id = freeId(baseId)
-    val keyKind = keyKindFor(checkout, lineage)
+    val keyKind =
+      when {
+        checkout.gitRoot == null -> ProjectKeyKind.NON_GIT_PATH
+        lineage == null -> ProjectKeyKind.NO_COMMITS_PATH
+        else -> ProjectKeyKind.LINEAGE
+      }
     val root = storeParent.resolve(id)
     val existedBefore = Files.exists(root)
     var written = false
@@ -357,16 +352,6 @@ class ProjectStoreResolver(
       )
     }
   }
-
-  private fun keyKindFor(
-    checkout: Checkout,
-    lineage: RepositoryLineage?,
-  ): ProjectKeyKind =
-    when {
-      checkout.gitRoot == null -> ProjectKeyKind.NON_GIT_PATH
-      lineage == null -> ProjectKeyKind.NO_COMMITS_PATH
-      else -> ProjectKeyKind.LINEAGE
-    }
 
   private fun gitUnavailable(
     workingDirectory: Path,
@@ -492,7 +477,7 @@ class ProjectStoreResolver(
     const val NON_GIT_OUTCOME = "non_git_path_hash"
     const val NO_COMMITS_OUTCOME = "no_commits_path_key"
     const val ADOPTED_OUTCOME = "lineage_adopted"
-    const val REKEYED_OUTCOME = "rekeyed_to_lineage"
+    const val STABLE_LINEAGE_PROMOTION_OUTCOME = "stable_lineage_promotion"
     const val SECOND_CLONE_OUTCOME = "second_clone"
     const val SHARED_CLONE_OUTCOME = "lineage_shared"
     const val MULTIPLE_CANDIDATES_OUTCOME = "multiple_candidates"

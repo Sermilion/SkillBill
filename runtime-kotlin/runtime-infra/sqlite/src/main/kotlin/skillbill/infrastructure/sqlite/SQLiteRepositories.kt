@@ -6,6 +6,7 @@ import skillbill.infrastructure.sqlite.approval.SqliteApprovalStore
 import skillbill.infrastructure.sqlite.blockincident.SqliteBlockIncidentRecoveryRepository
 import skillbill.infrastructure.sqlite.blockincident.SqliteBlockIncidentRepository
 import skillbill.infrastructure.sqlite.blockincident.SqliteProductReportRepository
+import skillbill.infrastructure.sqlite.config.projectchecks.SqliteProjectCheckConfigStore
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.buildrun.SqliteAgentBuildRunStore
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.validationcheck.VALIDATION_CHECK_EVENTS_TABLE
 import skillbill.infrastructure.sqlite.core.ops.bindAll
@@ -51,6 +52,7 @@ import skillbill.ports.blockincident.BlockIncidentContractValidator
 import skillbill.ports.blockincident.BlockIncidentRecoveryRepository
 import skillbill.ports.blockincident.BlockIncidentRepository
 import skillbill.ports.blockincident.ProductReportRepository
+import skillbill.ports.config.projectchecks.ProjectCheckConfigValidator
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticPermissions
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticRepository
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -118,9 +120,11 @@ internal class SQLiteUnitOfWork(
   private val workflowSnapshotValidator: WorkflowSnapshotValidator,
   private val runtimeVersion: String,
   private val blockIncidentContractValidator: BlockIncidentContractValidator,
+  private val projectCheckConfigValidator: ProjectCheckConfigValidator,
   transactionActive: Boolean = false,
   override val databaseFileObservation: DatabaseFileObservation? = null,
 ) : UnitOfWork {
+  override val projectCheckConfigs = SqliteProjectCheckConfigStore(connection, dbPath, projectCheckConfigValidator)
   override val featureTaskPhaseSettlements: FeatureTaskPhaseSettlementRepository =
     SqliteFeatureTaskPhaseSettlementStore(connection, clock, diagnostics)
   override val featureTaskQaOutcomes: FeatureTaskQaOutcomeRepository = SqliteFeatureTaskQaOutcomeStore(connection)
