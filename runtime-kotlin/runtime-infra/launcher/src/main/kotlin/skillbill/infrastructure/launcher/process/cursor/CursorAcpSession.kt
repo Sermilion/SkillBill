@@ -42,9 +42,10 @@ data class CursorAcpLaunch(
   ) : this(cwd, prompt, model, mode, savedSession, images, CursorAcpMcpDependency.ProjectUserOnly)
 }
 
-/** True when [command] passes [model] as `--model <model>`. */
-fun commandCarriesModel(command: List<String>, model: String?): Boolean =
-  model != null && command.windowed(2).any { it == listOf("--model", model) }
+fun commandCarriesModel(
+  command: List<String>,
+  model: String?,
+): Boolean = model != null && command.windowed(2).any { it == listOf("--model", model) }
 
 enum class CursorAcpMcpDependency { ProjectUserOnly, TeamDashboardRequired }
 

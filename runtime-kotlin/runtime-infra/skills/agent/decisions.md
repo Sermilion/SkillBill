@@ -1,5 +1,23 @@
 # Boundary decisions
 
+## [2026-11-12] Refuse to guess the Devin root on Windows
+Context: Devin keeps skills, agents and MCP config under one root, `%APPDATA%\devin` on Windows. A missing or relative APPDATA would otherwise resolve under the home directory or the working directory.
+Decision: devinConfigRoot needs a nonblank absolute APPDATA on Windows, or it throws AGENT_DISCOVERY_FAILED with recovery guidance before any write. An explicit environment map that lacks APPDATA fails instead of reading the ambient environment. Only an empty map falls back to the host environment.
+Reason: Splitting skills, agents and MCP across a guessed root leaves an installation the provider cannot load and cannot cleanly remove. Real Windows hosts set APPDATA, so the refusal shows up only for broken environments and test stubs.
+Alternatives considered: Falling back to home/AppData/Roaming guesses a layout. Skipping Devin silently hides a requested target and makes all-provider removal incomplete.
+
+## [2026-11-12] Fail typed on malformed MCP JSON for every JSON provider
+Context: McpJsonConfig read configs through readJsonObject, which threw IllegalArgumentException for malformed documents and replaced an `mcpServers` member that was not an object. Devin's dedicated config holds operator settings that must survive.
+Decision: register and unregister parse through a private reader that throws MALFORMED_MCP_CONFIG before any write when the document is not a JSON object or a present `mcpServers` is not an object. The shared readJsonObject used by GovernedReviewMcpConfigWriter is unchanged.
+Reason: One code path keeps Claude, Junie, Cursor and Devin consistent, and the original bytes stay put while the user gets a handled diagnostic.
+Alternatives considered: A Devin-only reader would leave other providers silently replacing operator settings. Changing readJsonObject would widen scope to the launcher's review MCP writer.
+
+## [2026-11-12] Pass host facts as function parameters, not on link requests
+Context: Devin's native agents directory depends on the OS and APPDATA. NativeAgentLinkRequest and the inventory paths carry no host facts, and the architecture rules forbid ports inside DTOs.
+Decision: NativeAgentProvider.homeAgentDirs, inventoryHomeAgentDirs, activeHomeAgentDirs and devinConfigRoot take a HostPlatformPort parameter defaulting to JdkHostPlatformPort, following resolveEnvironmentMap. Adapters that already hold an injected port pass it explicitly: planning facts, agent targets and paths, agentDirectory, and MCP registration.
+Reason: Request DTOs stay free of ports, and tests can inject a Windows host where an adapter owns one, without changing any port signature.
+Alternatives considered: Host fields on NativeAgentLinkRequest break the DTO rule. A required parameter at every call site changes unrelated callers that have no injected port.
+
 ## [2026-10-09] Stage optional code-quality idioms only from review baselines
 Context: The Kotlin idioms sidecar must live beside its code-review baseline, whose content stays unchanged, while authored companions normally require an explicit content link.
 Decision: Exempt only code-quality-idioms.md in a code-review baseline directory from the content-link requirement. Preserve path, symlink, count, reserved-name and collision checks for staging.
