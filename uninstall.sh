@@ -793,7 +793,6 @@ remove_from_codex_skill_roots() {
 }
 remove_from_codex_skill_roots
 remove_from_agent_dir "codex" "$HOME/.agents/skills"
-remove_from_agent_dir "junie" "$HOME/.junie/skills"
 remove_from_agent_dir "cursor" "$HOME/.cursor/skills"
 
 remove_codex_agents_tomls() {
@@ -847,31 +846,6 @@ remove_claude_agent_mds
 info "Removing Codex subagent TOML installs."
 remove_codex_agents_tomls
 
-remove_junie_agent_mds() {
-  # Uninstall Junie native subagent markdown symlinks from ~/.junie/agents.
-  # The source discovery walks governed platform-pack and skill junie-agents/*.md
-  # definitions and is independent from other agent setup choices.
-  local output=""
-  if ! output="$(run_runtime_cli install unlink-junie-agents \
-    --platform-packs "$PLATFORM_PACKS_DIR" \
-    --skills "$SKILLS_DIR")"; then
-    warn "  Junie subagent cleanup failed; continuing uninstall so reinstall can recover."
-    return 0
-  fi
-  if [[ -z "$output" ]]; then
-    info "  nothing to remove"
-    return 0
-  fi
-  while IFS= read -r link_path; do
-    [[ -n "$link_path" ]] || continue
-    REMOVED_TARGETS+=("$link_path")
-    ok "  removed $(basename "$link_path")"
-  done <<< "$output"
-}
-
-info "Removing Junie subagent markdown installs."
-remove_junie_agent_mds
-
 remove_cursor_agent_mds() {
   # Uninstall Cursor native subagent markdown symlinks from ~/.cursor/agents.
   # The source discovery walks governed platform-pack and skill cursor-agents/*.md
@@ -898,7 +872,7 @@ info "Removing Cursor subagent markdown installs."
 remove_cursor_agent_mds
 
 info "Removing MCP server registrations."
-for agent in claude codex junie cursor; do
+for agent in claude codex cursor; do
   if mcp_output="$(run_runtime_cli install unregister-mcp "$agent" 2>/dev/null)"; then
     ok "  removed skill-bill MCP server ($agent)"
     while IFS= read -r profile_path; do
