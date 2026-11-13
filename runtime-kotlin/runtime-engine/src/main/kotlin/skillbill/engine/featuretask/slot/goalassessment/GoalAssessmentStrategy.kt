@@ -59,12 +59,11 @@ public class GoalAssessmentStrategy : PhaseStrategy() {
         "commit range only to locate what it changed, because a later subtask can break or repair an earlier " +
         "one. Nothing else tells you what was reviewed, audited, validated, or accepted before you. " +
         "Report only a defect you can state as a concrete failure scenario: an input or state, the code path " +
-        "that mishandles it, and the wrong result. Skip style, preference, and speculation. Answer with " +
+        "that mishandles it, and the wrong result. Do not assess test value, test quality, or test coverage. " +
+        "Skip style, preference, and speculation. Answer with " +
         "plain lines in the grammar the role focus names, one record per line, and nothing else. " +
         "Findings: `Finding: <Blocker|Major|Minor> <path>:<line> scenario <failure scenario>`, or " +
         "`Finding: none` when you found no defect. " +
-        "Tests that guard nothing: `Test value: <test path>:<line> guards <path>:<line> reason <why the test " +
-        "would still pass if the guarded behavior broke>`. " +
         "Declared scenarios: `Scenario <IS-NNN>: <holds|broken> evidence <path:line citations>`. " +
         "Declared regressions: `Regression <TR-NNN>: <restored|not_restored> evidence <path:line citations>`. " +
         "Verification: `Verify <GA-NNN>: <confirmed|refuted> evidence <path:line citations>`, or " +

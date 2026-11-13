@@ -1,3 +1,8 @@
+## [2026-11-13] Exclude test value from goal assessment
+Context: Goal assessment produced test-value findings that remained open as report-only notes. The operator chose to remove this assessment scope.
+Decision: Remove test-value instructions and candidate parsing from new goal assessments. Keep the stored finding kind, schema and codecs so historical findings retain their evidence and status. Diagnose obsolete test-value output through the existing rejected-line warnings.
+Reason: Goal assessment checks production defects and declared outcomes. Test quality and coverage remain outside its scope. This supersedes the test-value scope in the goalrunner decision dated 2026-11-04, "Verify test-value findings before focused repair".
+
 ## [2026-11-13] Record work done after a finished verify run beside the run
 Context: A completed verify workflow refuses every write, so its frozen grades and review register stayed FAIL or open after the operator fixed the gaps, and nothing recorded the follow-up.
 Decision: Migration 128 adds `verify_criterion_resolutions`, written by `verify-workflow resolve-criterion` for a criterion the run graded PARTIAL or FAIL. The verify detail overlays those resolutions and the stored status of each finding in the review run imported under the verify session id. Feedback and finding-action triggers also signal that verify workflow.
