@@ -77,9 +77,10 @@ if [[ "${SKILL_BILL_GOAL_CONTINUATION:-}" == "1" ]]; then
   exit 64
 fi
 
-declare -a SUPPORTED_AGENTS=(claude codex cursor devin)
+declare -a SUPPORTED_AGENTS=(claude codex cursor)
 declare -a AGENT_NAMES=()
 declare -a AGENT_PATHS=()
+AGENT_TARGETS_EXPLICIT=0
 declare -a RUNTIME_INSTALL_ARGS=()
 
 AGENT_SELECTION_MODE="manual"
@@ -2441,26 +2442,51 @@ add_agent_selection() {
   fi
 }
 
-apply_default_agent_selection() {
-  local detected_output
+is_supported_agent() {
+  local agent="$1"
   local supported_agent
 
+  for supported_agent in "${SUPPORTED_AGENTS[@]}"; do
+    [[ "$agent" == "$supported_agent" ]] && return 0
+  done
+  return 1
+}
+
+apply_detected_agent_selection() {
+  local fallback_to_all="$1"
+  local detected_output
+  local agent
+  local path
+  local extra
+
   detected_output="$(run_runtime_cli install detect-agents 2>/dev/null || true)"
-  if [[ -n "$(trim_string "$detected_output")" ]]; then
-    AGENT_SELECTION_MODE="detected"
-    AGENT_NAMES=()
-    AGENT_PATHS=()
+  AGENT_NAMES=()
+  AGENT_PATHS=()
+  while IFS=$'\t' read -r agent path extra; do
+    [[ -n "${agent:-}" && -n "${path:-}" && -z "${extra:-}" ]] || continue
+    if is_supported_agent "$agent"; then
+      AGENT_NAMES+=("$agent")
+      AGENT_PATHS+=("$path")
+    fi
+  done <<< "$detected_output"
+
+  AGENT_SELECTION_MODE="manual"
+  AGENT_TARGETS_EXPLICIT=1
+  if [[ ${#AGENT_NAMES[@]} -eq 0 && "$fallback_to_all" -eq 1 ]]; then
+    info "No supported agents detected; defaulting to every supported agent."
+    AGENT_TARGETS_EXPLICIT=0
+    for agent in "${SUPPORTED_AGENTS[@]}"; do
+      add_agent_selection "$agent"
+    done
+  fi
+}
+
+apply_default_agent_selection() {
+  apply_detected_agent_selection 1
+  if [[ ${#AGENT_NAMES[@]} -gt 0 && "$AGENT_TARGETS_EXPLICIT" -eq 1 ]]; then
     info "No agents entered; using detected configured agents."
     return 0
   fi
-
-  info "No configured agents detected; defaulting to every supported agent."
-  AGENT_SELECTION_MODE="manual"
-  AGENT_NAMES=()
-  AGENT_PATHS=()
-  for supported_agent in "${SUPPORTED_AGENTS[@]:-}"; do
-    add_agent_selection "$supported_agent"
-  done
 }
 
 resolve_agent_selection() {
@@ -2542,6 +2568,7 @@ prompt_for_agent_mode() {
         AGENT_SELECTION_MODE="detected"
         AGENT_NAMES=()
         AGENT_PATHS=()
+        AGENT_TARGETS_EXPLICIT=0
         return 0
         ;;
       *)
@@ -2620,6 +2647,8 @@ prompt_for_agent_selection() {
   prompt_for_agent_mode
   if [[ "$AGENT_SELECTION_MODE" == "manual" ]]; then
     prompt_for_manual_agent_selection
+  else
+    apply_detected_agent_selection 0
   fi
 }
 
@@ -2701,6 +2730,11 @@ replay_last_install_selection() {
           err "Cannot reuse saved install selections: malformed replay agent entry."
           exit 1
         fi
+        if ! is_supported_agent "$value"; then
+          err "Cannot reuse saved install selections: saved agent '$value' is not supported by this installer."
+          err "Run ./install.sh without --reuse-last-selection to choose install options again."
+          exit 1
+        fi
         AGENT_NAMES+=("$value")
         AGENT_PATHS+=("$extra")
         ;;
@@ -2768,6 +2802,7 @@ replay_last_install_selection() {
     err "Run ./install.sh without --reuse-last-selection to choose install options again."
     exit 1
   fi
+  AGENT_TARGETS_EXPLICIT=1
   info "Installing all platform packs, regardless of saved platform choices."
   ok "Reusing latest successful install selections from $SKILL_BILL_STATE_DIR/install-selection.json"
 }
@@ -2795,12 +2830,11 @@ build_runtime_install_args() {
     --runtime-mcp-bin "$RUNTIME_MCP_BIN"
   )
 
-  if [[ "$AGENT_SELECTION_MODE" == "manual" && ${#AGENT_NAMES[@]} -gt 0 ]]; then
+  if [[ ${#AGENT_NAMES[@]} -gt 0 ]]; then
     for i in "${!AGENT_NAMES[@]}"; do
       RUNTIME_INSTALL_ARGS+=(--agent "${AGENT_NAMES[$i]}")
-      # claude pins no single --agent-target so the runtime fans skills across every discovered
-      # config root (~/.claude plus ~/.claude-<name> profiles); other agents keep their single path.
-      if [[ "${AGENT_NAMES[$i]}" != "claude" ]]; then
+      # Manual Claude selection lets the runtime fan out; detected and replayed targets keep their paths.
+      if [[ "$AGENT_TARGETS_EXPLICIT" -eq 1 || "${AGENT_NAMES[$i]}" != "claude" ]]; then
         RUNTIME_INSTALL_ARGS+=(--agent-target "${AGENT_NAMES[$i]}=${AGENT_PATHS[$i]}")
       fi
     done
@@ -2880,16 +2914,18 @@ print_postinstall_path_warning() {
 }
 
 print_postinstall_agent_warning() {
-  [[ "$AGENT_SELECTION_MODE" != "detected" ]] && return 0
-  local detected
-  detected="$(run_runtime_cli install detect-agents 2>/dev/null)" || return 0
-  [[ -n "$detected" ]] && return 0
+  [[ "$AGENT_SELECTION_MODE" != "detected" && "$AGENT_TARGETS_EXPLICIT" -ne 1 ]] && return 0
+  [[ ${#AGENT_NAMES[@]} -gt 0 ]] && return 0
   warn "No supported agents were detected — skills are not linked to any agent."
-  warn "  Install a supported agent (claude, codex, cursor, or devin),"
+  warn "  Install a supported agent (claude, codex, or cursor),"
   warn "  then re-run ./install.sh. Choose 'manual' to select your agent explicitly."
 }
 
 selected_agent_label() {
+  if [[ "$AGENT_TARGETS_EXPLICIT" -eq 1 && ${#AGENT_NAMES[@]} -eq 0 ]]; then
+    printf 'no supported agents detected'
+    return 0
+  fi
   if [[ "$AGENT_SELECTION_MODE" == "detected" ]]; then
     printf 'runtime detection'
     return 0
@@ -2940,7 +2976,7 @@ run_full_install() {
   echo ""
   printf "${CYAN}━━━ Skill Bill Installer ━━━${NC}\n"
   echo ""
-  info "Supported agents: claude, codex, cursor, devin"
+  info "Supported agents: claude, codex, or cursor"
   if [[ "$REUSE_LAST_SELECTION" -eq 1 ]]; then
     info "Install behavior: reuse saved choices, then delegate planning and apply to the Kotlin runtime."
   else
