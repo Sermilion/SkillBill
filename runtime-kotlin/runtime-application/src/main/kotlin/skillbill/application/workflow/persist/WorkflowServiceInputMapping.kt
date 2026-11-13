@@ -8,12 +8,9 @@ import skillbill.application.workflow.model.WorkflowOpenResult
 import skillbill.application.workflow.model.WorkflowServiceOpenArgs
 import skillbill.application.workflow.model.WorkflowUpdateRequest
 import skillbill.application.workflow.model.WorkflowUpdateResult
-import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
-import skillbill.contracts.issuekey.normalizeIssueKey
 import skillbill.contracts.workflow.goal.GOAL_QUALITY_EXECUTION_CONTRACT_VERSION
 import skillbill.contracts.workflow.goal.GoalQualityExecutionPayloadKeys
-import skillbill.error.featuretask.MissingFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.goalrunner.GoalObservabilityArtifacts
 import skillbill.goalrunner.model.GoalObservabilityProgressInput
@@ -23,10 +20,8 @@ import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationStatus
 import skillbill.ports.workflow.model.WorkflowFamily
-import skillbill.ports.workflow.toRecord
 import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
-import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.engine.model.WorkflowArtifactPatch
 import skillbill.workflow.engine.model.WorkflowContinueDecision
 import skillbill.workflow.engine.model.WorkflowDefinition
@@ -74,74 +69,6 @@ internal fun incompleteFeatureTaskIdentityError(args: WorkflowServiceOpenArgs): 
     null
   }
 }
-
-internal fun persistOpenedWorkflow(args: PersistOpenedWorkflowArgs): WorkflowOpenResult =
-  args.database.transaction { unitOfWork ->
-    val engine = args.engine
-    val family = args.family
-    val workflowId = args.workflowId
-    val stepId = args.stepId
-    if (family == WorkflowFamily.TASK_RUNTIME && args.executionIdentity != null && args.executionPlan == null) {
-      throw MissingFeatureTaskRuntimeExecutionPlanError()
-    }
-    val record =
-      engine.openRecord(
-        family.definition,
-        workflowId,
-        args.effectiveSessionId,
-        stepId,
-      )
-    val planArtifacts =
-      args.executionPlan?.let { descriptor ->
-        mapOf(
-          DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.entry(
-            JsonCodec.parseValue(descriptor.encoded().toString(Charsets.UTF_8)),
-          ),
-        )
-      }.orEmpty()
-    val goalQualityReadiness = initialGoalQualityReadiness(args)
-    val withExecutionPlan =
-      if (planArtifacts.isEmpty() && args.initialArtifacts.isEmpty() && goalQualityReadiness.isEmpty()) {
-        record
-      } else {
-        record.copy(
-          artifacts =
-            DurableWorkflowArtifacts.fromMap(
-              record.artifacts + planArtifacts + args.initialArtifacts + goalQualityReadiness,
-            ),
-        )
-      }
-    args.workflowSnapshotValidator.validate(withExecutionPlan, family.definition.workflowName)
-    unitOfWork.workflowStates.saveRecord(
-      family,
-      withExecutionPlan.toRecord().copy(
-        startedAt = null,
-        issueKey = normalizeIssueKey(args.issueKey),
-      ),
-    )
-    args.executionIdentity?.let(unitOfWork.workflowStates::saveFeatureTaskExecutionIdentity)
-    val saved = unitOfWork.workflowStates.get(family, workflowId) ?: withExecutionPlan
-    val currentStep =
-      engine.snapshotView(family.definition, saved).steps
-        .firstOrNull { it.stepId == stepId }
-    val launchProjection =
-      launchProjectionIfReady(
-        engine,
-        family.definition,
-        engine.snapshotView(family.definition, saved),
-        ProjectionLaunchRequest(
-          stepId = stepId,
-          producerIteration = currentStep?.attemptCount ?: 0,
-          repositoryCheckpointIdentity = args.repositoryCheckpointIdentity,
-        ),
-      )
-    WorkflowOpenResult.Ok(
-      workflowId = saved.workflowId,
-      dbPath = unitOfWork.dbPath.toString(),
-      snapshot = engine.snapshotView(family.definition, saved),
-      launchProjection = launchProjection,
-    )
-  }
 
 internal fun resolveEffectiveSessionId(
   kind: WorkflowFamilyKind,
@@ -312,7 +239,7 @@ fun generateWorkflowId(
 
 private fun Int.twoDigits(): String = toString().padStart(2, '0')
 
-private fun initialGoalQualityReadiness(args: PersistOpenedWorkflowArgs): Map<String, Any?> {
+internal fun initialGoalQualityReadiness(args: PersistOpenedWorkflowArgs): Map<String, Any?> {
   return if (args.family == WorkflowFamily.TASK_RUNTIME && args.stepId == "plan") {
     mapOf(
       DurableWorkflowArtifactFamily.GOAL_QUALITY_EXECUTION.entry(

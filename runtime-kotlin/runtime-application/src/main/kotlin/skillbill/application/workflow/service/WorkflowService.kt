@@ -36,11 +36,11 @@ import skillbill.application.workflow.model.WorkflowUpdateRequest
 import skillbill.application.workflow.model.WorkflowUpdateResult
 import skillbill.application.workflow.persist.FEATURE_TASK_FAMILY_KINDS
 import skillbill.application.workflow.persist.WorkflowPersistenceContext
+import skillbill.application.workflow.persist.WorkflowRecordPersistence
 import skillbill.application.workflow.persist.buildFeatureTaskExecutionIdentity
 import skillbill.application.workflow.persist.buildUpdateOk
 import skillbill.application.workflow.persist.generateWorkflowId
 import skillbill.application.workflow.persist.incompleteFeatureTaskIdentityError
-import skillbill.application.workflow.persist.persistOpenedWorkflow
 import skillbill.application.workflow.persist.resolveEffectiveSessionId
 import skillbill.application.workflow.persist.toWorkflowUpdateInput
 import skillbill.application.workflow.persist.withGoalObservabilityArtifacts
@@ -54,7 +54,6 @@ import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
-import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -68,7 +67,6 @@ import skillbill.workflow.decomposition.runtime.model.DecompositionManifestProje
 import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.engine.model.WorkflowSnapshotView
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
-import skillbill.workflow.engine.model.WorkflowSummaryView
 import skillbill.workflow.engine.model.WorkflowUpdateInput
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.goalobservability.GoalObservabilityEvent
@@ -81,7 +79,7 @@ class WorkflowService(
   private val database: DatabaseSessionFactory,
   private val gitOperations: WorkflowGitOperations,
   private val decompositionManifestStore: DecompositionManifestStore,
-  private val workflowSnapshotValidator: WorkflowSnapshotValidator,
+  private val recordPersistence: WorkflowRecordPersistence,
   private val decompositionManifestValidator: DecompositionManifestValidator,
   private val decompositionManifestWriter: DecompositionManifestWriter,
   private val repositoryRoot: RepositoryRoot,
@@ -140,7 +138,7 @@ class WorkflowService(
         ),
       )
     return try {
-      persistOpenedWorkflow(
+      recordPersistence.open(
         PersistOpenedWorkflowArgs(
           family = family,
           workflowId = workflowId,
@@ -151,7 +149,6 @@ class WorkflowService(
           executionPlan = args.executionPlan,
           initialArtifacts = args.initialArtifacts,
           engine = engine,
-          workflowSnapshotValidator = workflowSnapshotValidator,
           repositoryCheckpointIdentity = ::repositoryCheckpointIdentity,
           database = database,
         ),
@@ -160,6 +157,11 @@ class WorkflowService(
       error.rethrowUnless(error.isInvalidWorkflowStateFailure())
       WorkflowOpenResult.Error(workflowId, error.message.orEmpty())
     }
+  }
+
+  fun allocateWorkflowId(kind: WorkflowFamilyKind): String {
+    val family = kind.workflowFamily()
+    return generateWorkflowId(family.definition.workflowIdPrefix, clock, workflowIdRandom)
   }
 
   private fun WorkflowOpenResult.withGoalObservability(): WorkflowOpenResult =
@@ -219,7 +221,7 @@ class WorkflowService(
     unitOfWork: UnitOfWork,
   ): WorkflowUpdatePersistence {
     val existing =
-      unitOfWork.workflowStates.get(family, request.workflowId)
+      recordPersistence.get(family, request.workflowId, unitOfWork)
         ?: return WorkflowUpdatePersistence(
           WorkflowUpdateResult.Error(
             request.workflowId,
@@ -227,7 +229,6 @@ class WorkflowService(
           ),
           pendingProjection = null,
         )
-    workflowSnapshotValidator.validate(existing, family.definition.workflowName)
     val runtimeInput =
       family.withDecompositionRuntime(
         DecompositionRuntimeWriteArgs(
@@ -250,7 +251,6 @@ class WorkflowService(
         repoRoot = repositoryRoot.path,
       )
     val updatedRecord = engine.updateRecord(family.definition, existing, effectiveInput)
-    workflowSnapshotValidator.validate(updatedRecord, family.definition.workflowName)
     val updated =
       when (val saved = saveOrdinaryUpdate(family, request.workflowId, existing, updatedRecord, unitOfWork)) {
         is OrdinaryWorkflowSave.Rejected -> return saved.persistence
@@ -381,13 +381,12 @@ class WorkflowService(
     database.read { unitOfWork ->
       val family = kind.workflowFamily()
       val record =
-        unitOfWork.workflowStates.get(family, workflowId)
+        recordPersistence.get(family, workflowId, unitOfWork)
           ?: return@read WorkflowGetResult.Error(
             workflowId,
             "Unknown workflow_id '$workflowId'.",
             unitOfWork.dbPath.toString(),
           )
-      workflowSnapshotValidator.validate(record, family.definition.workflowName)
       val snapshot = engine.snapshotView(family.definition, record)
       WorkflowGetResult.Ok(
         workflowId = record.workflowId,
@@ -403,7 +402,7 @@ class WorkflowService(
   ): WorkflowListResult =
     database.read { unitOfWork ->
       val family = kind.workflowFamily()
-      val summaries = readableSummaries(family, unitOfWork.workflowStates.list(family, limit))
+      val summaries = recordPersistence.summaries(family, unitOfWork.workflowStates.list(family, limit), engine)
       WorkflowListResult(
         dbPath = unitOfWork.dbPath.toString(),
         workflowCount = summaries.size,
@@ -415,7 +414,11 @@ class WorkflowService(
     database.read { unitOfWork ->
       val family = kind.workflowFamily()
       val summary =
-        readableSummaries(family, unitOfWork.workflowStates.list(family, DEFAULT_LIST_LIMIT)).firstOrNull()
+        recordPersistence.summaries(
+          family,
+          unitOfWork.workflowStates.list(family, DEFAULT_LIST_LIMIT),
+          engine,
+        ).firstOrNull()
           ?: return@read WorkflowLatestResult.Error(
             dbPath = unitOfWork.dbPath.toString(),
             error = "No ${family.humanName} workflows found.",
@@ -426,25 +429,6 @@ class WorkflowService(
       )
     }
 
-  private fun readableSummaries(
-    family: WorkflowFamily,
-    rows: List<WorkflowStateSnapshot>,
-  ): List<WorkflowSummaryView> =
-    rows.mapNotNull { row ->
-      try {
-        workflowSnapshotValidator.validate(row, family.definition.workflowName)
-        engine.summaryView(family.definition, row)
-      } catch (error: SkillBillRuntimeException) {
-        error.rethrowUnless(error.isInvalidWorkflowStateFailure())
-        runtimeDiagnostics.warning(
-          "seam=workflow_list value_expected=readable_workflow_row value_used=skipped " +
-            "workflow_id=${row.workflowId} error=${error.message.orEmpty()}",
-          error,
-        )
-        null
-      }
-    }
-
   fun resume(
     kind: WorkflowFamilyKind,
     workflowId: String,
@@ -452,13 +436,12 @@ class WorkflowService(
     database.read { unitOfWork ->
       val family = kind.workflowFamily()
       val record =
-        unitOfWork.workflowStates.get(family, workflowId)
+        recordPersistence.get(family, workflowId, unitOfWork)
           ?: return@read WorkflowResumeResult.Error(
             workflowId,
             "Unknown workflow_id '$workflowId'.",
             unitOfWork.dbPath.toString(),
           )
-      workflowSnapshotValidator.validate(record, family.definition.workflowName)
       WorkflowResumeResult.Ok(
         workflowId = record.workflowId,
         dbPath = unitOfWork.dbPath.toString(),
@@ -481,7 +464,7 @@ class WorkflowService(
     val result =
       database.transaction { unitOfWork ->
         val family = kind.workflowFamily()
-        var record = unitOfWork.workflowStates.get(family, workflowId)
+        var record = recordPersistence.get(family, workflowId, unitOfWork)
         if (record == null && family == WorkflowFamily.TASK_RUNTIME) {
           val resolved =
             DecompositionWorkflowContinuation(
@@ -502,7 +485,6 @@ class WorkflowService(
           dbPath = unitOfWork.dbPath.toString(),
           workflowId = workflowId,
         )
-        workflowSnapshotValidator.validate(record, family.definition.workflowName)
         val continuation =
           engine.continueExistingWorkflow(
             family,
@@ -620,9 +602,9 @@ class WorkflowService(
     if (updatedRecord == existing) {
       return OrdinaryWorkflowSave.Saved(existing)
     }
-    return when (unitOfWork.workflowStates.saveOrdinary(family, updatedRecord)) {
+    return when (recordPersistence.saveOrdinary(family, updatedRecord, unitOfWork)) {
       WorkflowStateWriteResult.Accepted -> {
-        val persisted = unitOfWork.workflowStates.get(family, workflowId)
+        val persisted = recordPersistence.get(family, workflowId, unitOfWork)
         if (persisted == null) {
           OrdinaryWorkflowSave.Rejected(
             WorkflowUpdatePersistence(

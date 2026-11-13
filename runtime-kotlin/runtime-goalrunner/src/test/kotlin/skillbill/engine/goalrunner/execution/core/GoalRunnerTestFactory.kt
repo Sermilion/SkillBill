@@ -9,6 +9,7 @@ import skillbill.application.telemetry.lifecycle.GoalLifecycleTelemetryEmitter
 import skillbill.application.telemetry.lifecycle.noopGoalLifecycleTelemetryEmitter
 import skillbill.application.testDecompositionManifestValidator
 import skillbill.application.testProjectStore
+import skillbill.application.testWorkflowRecordPersistence
 import skillbill.application.testWorkflowSnapshotValidator
 import skillbill.application.workflow.ProjectCheckout
 import skillbill.application.workflow.service.WorkflowService
@@ -477,7 +478,8 @@ private fun testNoChangeChildCloser(
       database = database,
       gitOperations = NoopWorkflowGitOperations,
       decompositionManifestStore = UnavailableDecompositionManifestStore,
-      workflowSnapshotValidator = testWorkflowSnapshotValidator,
+      recordPersistence =
+        testWorkflowRecordPersistence(testWorkflowSnapshotValidator),
       decompositionManifestValidator = testDecompositionManifestValidator,
       decompositionManifestWriter = DecompositionManifestWriter(testProjectStore),
       repositoryRoot = RepositoryRoot(Path.of("/tmp/skillbill-goal-runner")),

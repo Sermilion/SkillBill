@@ -4,6 +4,8 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.lifecycle.continuation.isRuntimeAgentId
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeOperatorDecisionPause
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRoutingStatus
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeStatusProjection
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeStatusRequest
 import skillbill.engine.featuretask.qa.capability.QaCapabilityResolution
 import skillbill.engine.featuretask.qa.capability.QaCapabilityResolver
@@ -34,6 +36,8 @@ import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecution
 import skillbill.ports.idestatus.model.IdeStatusExecutionIdentity
 import skillbill.ports.idestatus.model.IdeStatusPauseReason
 import skillbill.ports.idestatus.model.IdeStatusPauseReasonCode
+import skillbill.ports.idestatus.model.IdeStatusProblem
+import skillbill.ports.idestatus.model.IdeStatusProblemCode
 import skillbill.ports.idestatus.model.IdeStatusProgress
 import skillbill.ports.idestatus.model.IdeStatusSnapshot
 import skillbill.ports.idestatus.model.IdeStatusStep
@@ -251,6 +255,11 @@ public class IdeStatusProjector(
             record.monitorTargetDetail(),
           ).joinToString(" "),
       title = IdeStatusTitles.standalonePhase(record, seededPlanFeatureName(record, context)),
+      problem =
+        record.workflowId?.let { featureTaskRuntimeStatusService.routingStatus(context.unitOfWork, it) }
+          ?.takeIf { it.classification == FeatureTaskRuntimeRoutingStatus.Classification.PROBLEM }
+          ?.recoveryGuidance
+          ?.let { IdeStatusProblem(IdeStatusProblemCode.INCOMPATIBLE_RECORD, it) },
     )
   }
 
@@ -578,22 +587,13 @@ public class IdeStatusProjector(
         lastAgentActivityLabel = activityLabel,
         updatedAt = updatedAt,
         freshness = IdeStatusFreshnessClassifier.classify(updatedAt, context.observedAt),
-        summary =
-          status.criterionExplanation?.let {
-            "Acceptance criteria: $it. " +
-              familySummary(
-                IdeStatusWorkflowFamily.FEATURE_TASK_RUNTIME,
-                candidate.issueKey,
-                candidate.lifecycleState,
-                stepLabel,
-              )
-          } ?: familySummary(
-            IdeStatusWorkflowFamily.FEATURE_TASK_RUNTIME,
-            candidate.issueKey,
-            candidate.lifecycleState,
-            stepLabel,
-          ),
+        summary = runtimeSummary(status, candidate, stepLabel),
         title = IdeStatusTitles.workflow(WorkflowFamily.TASK_RUNTIME, candidate.issueKey, context.branchCorrelation),
+        problem =
+          status.routing
+            ?.takeIf { it.classification == FeatureTaskRuntimeRoutingStatus.Classification.PROBLEM }
+            ?.recoveryGuidance
+            ?.let { IdeStatusProblem(IdeStatusProblemCode.INCOMPATIBLE_RECORD, it) },
       )
     val executingAgentId =
       status.phases.firstOrNull { it.status.workflowStepStatus() == WorkflowStepStatus.RUNNING }
@@ -601,6 +601,26 @@ public class IdeStatusProjector(
         ?: status.finalizingAgentId?.takeIf(String::isRuntimeAgentId)
     return IdeStatusProjection(snapshot, status.operatorDecisionPause?.reason, executingAgentId)
   }
+
+  private fun runtimeSummary(
+    status: FeatureTaskRuntimeStatusProjection,
+    candidate: IdeStatusCandidate,
+    stepLabel: String,
+  ): String =
+    status.criterionExplanation?.let {
+      "Acceptance criteria: $it. " +
+        familySummary(
+          IdeStatusWorkflowFamily.FEATURE_TASK_RUNTIME,
+          candidate.issueKey,
+          candidate.lifecycleState,
+          stepLabel,
+        )
+    } ?: familySummary(
+      IdeStatusWorkflowFamily.FEATURE_TASK_RUNTIME,
+      candidate.issueKey,
+      candidate.lifecycleState,
+      stepLabel,
+    )
 
   private fun projectWorkflowFamily(
     candidate: IdeStatusCandidate,

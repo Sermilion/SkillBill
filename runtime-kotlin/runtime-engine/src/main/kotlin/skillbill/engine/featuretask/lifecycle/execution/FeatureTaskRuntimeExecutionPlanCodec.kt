@@ -4,6 +4,9 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.identity.task.FEATURE_TASK_RUNTIME_EXECUTION_PLAN_CONTRACT_VERSION
 import skillbill.contracts.workflow.identity.task.FEATURE_TASK_RUNTIME_EXECUTION_PLAN_LEGACY_CONTRACT_VERSION
+import skillbill.engine.featuretask.lifecycle.execution.decoding.decodeExecutionPlan
+import skillbill.engine.featuretask.lifecycle.execution.decoding.encodeExecutionPlanTraversal
+import skillbill.engine.featuretask.lifecycle.execution.decoding.executionPolicyDigest
 import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.featuretask.InvalidFeatureTaskRuntimeExecutionPlanSchemaError
@@ -14,7 +17,6 @@ import skillbill.workflow.taskruntime.model.skeleton.ResolvedFeatureTaskRuntimeE
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.phase.task.traversal
-import java.security.MessageDigest
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPlanKeys as Keys
 
 @Inject
@@ -154,8 +156,3 @@ public class FeatureTaskRuntimeExecutionPlanCodec(
     const val SOURCE = "durable execution plan"
   }
 }
-
-public fun executionPolicyDigest(identity: String): String =
-  MessageDigest.getInstance("SHA-256")
-    .digest(JsonCodec.valueToJsonString(identity).toByteArray(Charsets.UTF_8))
-    .joinToString("") { "%02x".format(it) }

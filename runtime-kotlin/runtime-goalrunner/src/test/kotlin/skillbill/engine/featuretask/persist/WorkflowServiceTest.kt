@@ -12,6 +12,7 @@ import skillbill.application.testDecompositionManifestValidator
 import skillbill.application.testDecompositionManifestWriter
 import skillbill.application.testProjectStore
 import skillbill.application.testRepositoryRoot
+import skillbill.application.testWorkflowRecordPersistence
 import skillbill.application.testWorkflowSnapshotValidator
 import skillbill.application.workflow.ProjectCheckout
 import skillbill.application.workflow.decomposition.alignSubtaskResumeStep
@@ -211,7 +212,8 @@ class WorkflowServiceTest {
         database = FakeDatabaseSessionFactory(workflows),
         gitOperations = NoopWorkflowGitOperations,
         decompositionManifestStore = UnavailableDecompositionManifestStore,
-        workflowSnapshotValidator = testWorkflowSnapshotValidator,
+        recordPersistence =
+          testWorkflowRecordPersistence(testWorkflowSnapshotValidator),
         decompositionManifestValidator = testDecompositionManifestValidator,
         decompositionManifestWriter = testDecompositionManifestWriter,
         repositoryRoot = testRepositoryRoot,
@@ -267,7 +269,8 @@ class WorkflowServiceTest {
         database = FakeDatabaseSessionFactory(workflows),
         gitOperations = NoopWorkflowGitOperations,
         decompositionManifestStore = UnavailableDecompositionManifestStore,
-        workflowSnapshotValidator = testWorkflowSnapshotValidator,
+        recordPersistence =
+          testWorkflowRecordPersistence(testWorkflowSnapshotValidator),
         decompositionManifestValidator = testDecompositionManifestValidator,
         decompositionManifestWriter = testDecompositionManifestWriter,
         repositoryRoot = testRepositoryRoot,
@@ -323,7 +326,8 @@ class WorkflowServiceTest {
         database = FakeDatabaseSessionFactory(workflows),
         gitOperations = NoopWorkflowGitOperations,
         decompositionManifestStore = UnavailableDecompositionManifestStore,
-        workflowSnapshotValidator = testWorkflowSnapshotValidator,
+        recordPersistence =
+          testWorkflowRecordPersistence(testWorkflowSnapshotValidator),
         decompositionManifestValidator = testDecompositionManifestValidator,
         decompositionManifestWriter = testDecompositionManifestWriter,
         repositoryRoot = testRepositoryRoot,
@@ -386,7 +390,8 @@ class WorkflowServiceTest {
         database = FakeDatabaseSessionFactory(workflows),
         gitOperations = NoopWorkflowGitOperations,
         decompositionManifestStore = UnavailableDecompositionManifestStore,
-        workflowSnapshotValidator = testWorkflowSnapshotValidator,
+        recordPersistence =
+          testWorkflowRecordPersistence(testWorkflowSnapshotValidator),
         decompositionManifestValidator = testDecompositionManifestValidator,
         decompositionManifestWriter = testDecompositionManifestWriter,
         repositoryRoot = testRepositoryRoot,
@@ -436,7 +441,8 @@ class WorkflowServiceTest {
         database = FakeDatabaseSessionFactory(workflows),
         gitOperations = NoopWorkflowGitOperations,
         decompositionManifestStore = UnavailableDecompositionManifestStore,
-        workflowSnapshotValidator = testWorkflowSnapshotValidator,
+        recordPersistence =
+          testWorkflowRecordPersistence(testWorkflowSnapshotValidator),
         decompositionManifestValidator = testDecompositionManifestValidator,
         decompositionManifestWriter = testDecompositionManifestWriter,
         repositoryRoot = testRepositoryRoot,
@@ -503,7 +509,8 @@ class WorkflowServiceTest {
         database = FakeDatabaseSessionFactory(workflows),
         gitOperations = NoopWorkflowGitOperations,
         decompositionManifestStore = UnavailableDecompositionManifestStore,
-        workflowSnapshotValidator = testWorkflowSnapshotValidator,
+        recordPersistence =
+          testWorkflowRecordPersistence(testWorkflowSnapshotValidator),
         decompositionManifestValidator = testDecompositionManifestValidator,
         decompositionManifestWriter = testDecompositionManifestWriter,
         repositoryRoot = testRepositoryRoot,
@@ -714,7 +721,8 @@ class WorkflowServiceTest {
         database = FakeDatabaseSessionFactory(workflows),
         gitOperations = NoopWorkflowGitOperations,
         decompositionManifestStore = UnavailableDecompositionManifestStore,
-        workflowSnapshotValidator = loudFailValidator,
+        recordPersistence =
+          testWorkflowRecordPersistence(loudFailValidator),
         goalObservabilityEventValidator = AcceptingFeatureTaskRuntimeWireArtifactValidator,
         decompositionManifestValidator = testDecompositionManifestValidator,
         decompositionManifestWriter = testDecompositionManifestWriter,
@@ -761,7 +769,8 @@ class WorkflowServiceTest {
         database = FakeDatabaseSessionFactory(workflows),
         gitOperations = NoopWorkflowGitOperations,
         decompositionManifestStore = UnavailableDecompositionManifestStore,
-        workflowSnapshotValidator = loudFailValidator,
+        recordPersistence =
+          testWorkflowRecordPersistence(loudFailValidator),
         goalObservabilityEventValidator = AcceptingFeatureTaskRuntimeWireArtifactValidator,
         decompositionManifestValidator = testDecompositionManifestValidator,
         decompositionManifestWriter = testDecompositionManifestWriter,
@@ -811,7 +820,8 @@ class WorkflowServiceTest {
         database = FakeDatabaseSessionFactory(workflows),
         gitOperations = NoopWorkflowGitOperations,
         decompositionManifestStore = UnavailableDecompositionManifestStore,
-        workflowSnapshotValidator = testWorkflowSnapshotValidator,
+        recordPersistence =
+          testWorkflowRecordPersistence(testWorkflowSnapshotValidator),
         decompositionManifestValidator = testDecompositionManifestValidator,
         decompositionManifestWriter = testDecompositionManifestWriter,
         repositoryRoot = testRepositoryRoot,
@@ -944,7 +954,7 @@ class WorkflowServiceTest {
       database = FakeDatabaseSessionFactory(workflows),
       gitOperations = NoopWorkflowGitOperations,
       decompositionManifestStore = UnavailableDecompositionManifestStore,
-      workflowSnapshotValidator = validator,
+      recordPersistence = testWorkflowRecordPersistence(validator),
       decompositionManifestValidator = testDecompositionManifestValidator,
       decompositionManifestWriter = testDecompositionManifestWriter,
       repositoryRoot = testRepositoryRoot,
@@ -2457,7 +2467,8 @@ class WorkflowUpdateAcknowledgementBudgetTest {
       database = FakeDatabaseSessionFactory(InMemoryWorkflowStates()),
       gitOperations = NoopWorkflowGitOperations,
       decompositionManifestStore = UnavailableDecompositionManifestStore,
-      workflowSnapshotValidator = testWorkflowSnapshotValidator,
+      recordPersistence =
+        testWorkflowRecordPersistence(testWorkflowSnapshotValidator),
       goalObservabilityEventValidator = AcceptingFeatureTaskRuntimeWireArtifactValidator,
       decompositionManifestValidator = testDecompositionManifestValidator,
       decompositionManifestWriter = testDecompositionManifestWriter,
@@ -4356,7 +4367,8 @@ class GoalChildPlanningHydrationTransactionIntegrationTest {
         database = FakeDatabaseSessionFactory(workflows, planningPreparations = preparations),
         gitOperations = NoopWorkflowGitOperations,
         decompositionManifestStore = UnavailableDecompositionManifestStore,
-        workflowSnapshotValidator = testWorkflowSnapshotValidator,
+        recordPersistence =
+          testWorkflowRecordPersistence(testWorkflowSnapshotValidator),
         decompositionManifestValidator = testDecompositionManifestValidator,
         decompositionManifestWriter = testDecompositionManifestWriter,
         repositoryRoot = testRepositoryRoot,

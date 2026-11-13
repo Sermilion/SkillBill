@@ -3,6 +3,7 @@ package skillbill.engine.work
 import skillbill.application.TestDecompositionManifestStore
 import skillbill.application.testHarnessClock
 import skillbill.engine.RecordingWorkflowGitOperations
+import skillbill.engine.featuretask.lifecycle.execution.workflowAgentAssignmentStoreForTests
 import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence
 import skillbill.engine.featuretask.phase.planning.PlanBundleFeasibilityStateCodec
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeDecomposeTerminalRecorder
@@ -104,6 +105,7 @@ class IdeStatusProjectorTest {
             PlanBundleFeasibilityStateCodec(featureTaskRuntimeWireArtifactValidatorForTest()),
             NoopRuntimeDiagnostics,
           ),
+          workflowAgentAssignmentStore = workflowAgentAssignmentStoreForTests(database),
         ),
       manifestStore = GoalRunnerManifestProjectionReader(EmptyManifestStore),
       diagnostics =

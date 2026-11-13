@@ -17,7 +17,10 @@ class AgentRunService(
     val overrideAgent =
       request.configuredAgentOverrideId
         ?.let { id -> SupportedAgent.fromNormalizedId(id, label = "configuredAgentOverrideId") }
-    val effectiveAgent = overrideAgent ?: invokedAgent
+    val selectedProvider =
+      request.selectedProviderId
+        ?.let { id -> SupportedAgent.fromNormalizedId(id, label = "selectedProviderId") }
+    val effectiveAgent = selectedProvider ?: overrideAgent ?: invokedAgent
     val resolution =
       AgentRunAgentResolution(
         invokedAgent = invokedAgent,

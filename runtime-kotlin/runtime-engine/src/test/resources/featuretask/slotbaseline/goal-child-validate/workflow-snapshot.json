@@ -2238,7 +2238,8 @@
         "install_sync_result": {
             "reason": "goal-continuation defers installer, uninstall, and install-sync flows until the parent goal exits; deferred install sync must not block subtask completion",
             "status": "deferred"
-        }
+        },
+        "workflow_agent_assignments": "{\"admission_workflow_id\":\"wftr-20260602-test-0001\",\"configured_agent_override_id\":null,\"contract_version\":\"0.1\",\"invoked_agent_id\":\"claude\",\"phase_assignments\":{},\"policy_mode\":\"legacy\"}"
     },
     "contract_version": "0.4",
     "current_step_id": "commit_push",

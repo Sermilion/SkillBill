@@ -8,11 +8,15 @@ data class AgentRunStartRequest(
   val invokedAgentId: String,
   val configuredAgentOverrideId: String? = null,
   val skillRunRequest: SkillRunRequest,
+  val selectedProviderId: String? = null,
 ) {
   init {
     require(invokedAgentId.isNotBlank()) { "invokedAgentId is required." }
     configuredAgentOverrideId?.let { overrideId ->
       require(overrideId.isNotBlank()) { "configuredAgentOverrideId must not be blank when provided." }
+    }
+    selectedProviderId?.let { providerId ->
+      require(providerId.isNotBlank()) { "selectedProviderId must not be blank when provided." }
     }
   }
 }

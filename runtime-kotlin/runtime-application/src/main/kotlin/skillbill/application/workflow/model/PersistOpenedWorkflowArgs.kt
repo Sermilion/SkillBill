@@ -2,7 +2,6 @@ package skillbill.application.workflow.model
 
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
-import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.engine.model.WorkflowArtifactPatch
@@ -18,7 +17,6 @@ internal data class PersistOpenedWorkflowArgs(
   val executionPlan: ValidatedFeatureTaskRuntimeExecutionPlan?,
   val initialArtifacts: WorkflowArtifactPatch = WorkflowArtifactPatch.EMPTY,
   val engine: WorkflowEngine,
-  val workflowSnapshotValidator: WorkflowSnapshotValidator,
   val repositoryCheckpointIdentity: () -> String = { "" },
   val database: DatabaseSessionFactory,
 )

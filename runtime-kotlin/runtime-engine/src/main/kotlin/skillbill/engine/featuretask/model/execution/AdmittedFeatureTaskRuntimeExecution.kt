@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.model.execution
 
+import skillbill.config.model.ResolvedWorkflowAgentAssignments
 import skillbill.contracts.JsonCodec
 import skillbill.engine.migration.RuntimeMigrationReceipt
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
@@ -15,6 +16,8 @@ public class AdmittedFeatureTaskRuntimeExecution internal constructor(
   public val recordedMonitorSemantics: RecordedMonitorExecutionSemantics,
   internal val migrationReceipt: RuntimeMigrationReceipt,
   public val workerOwnership: FeatureTaskRuntimeWorkerOwnership? = null,
+  public val workflowAgentAssignments: ResolvedWorkflowAgentAssignments? = null,
+  internal val routingMigrationPrepared: Boolean = false,
 ) {
   private val descriptorValue = descriptor
 
@@ -32,5 +35,7 @@ public class AdmittedFeatureTaskRuntimeExecution internal constructor(
       recordedMonitorSemantics,
       migrationReceipt,
       ownership,
+      workflowAgentAssignments,
+      routingMigrationPrepared,
     )
 }

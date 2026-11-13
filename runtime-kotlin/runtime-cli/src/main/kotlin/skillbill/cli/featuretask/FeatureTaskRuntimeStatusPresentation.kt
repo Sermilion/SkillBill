@@ -21,6 +21,15 @@ internal fun FeatureTaskRuntimeStatusProjection?.toRuntimeStatusCliMap(workflowI
       "current_phase" to it.currentPhaseId,
       "resolved_branch" to it.resolvedBranch,
       "finalizing_agent_id" to it.finalizingAgentId,
+      "routing" to
+        it.routing?.let { routing ->
+          linkedMapOf(
+            "classification" to routing.classification.name.lowercase(),
+            "failure_code" to routing.failureCode?.toString(),
+            "source" to routing.sourceLabel,
+            "recovery_guidance" to routing.recoveryGuidance,
+          )
+        },
       "gate_run_count" to it.gateRunCount,
       ValidationEvidencePayloadKeys.VALIDATION_STATUS to
         it.validationGateExecutionEvidence?.validationStatus,
@@ -93,6 +102,11 @@ internal fun runtimeStatusText(
     appendLine("current_phase: ${projection?.currentPhaseId ?: "none"}")
     appendLine("resolved_branch: ${projection?.resolvedBranch ?: "none"}")
     appendLine("finalizing_agent: ${projection?.finalizingAgentId ?: "none"}")
+    projection?.routing?.let { routing ->
+      appendLine("routing_classification: ${routing.classification.name.lowercase()}")
+      routing.failureCode?.let { appendLine("routing_failure_code: $it") }
+      routing.recoveryGuidance?.let { appendLine("routing_recovery_guidance: $it") }
+    }
     projection?.criterionExplanation?.let { appendLine("acceptance_criteria: $it") }
     appendValidationGateStatus(projection)
     appendDegradedDiagnostic(projection)

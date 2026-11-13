@@ -19,6 +19,7 @@ import skillbill.infrastructure.contracts.locator.FeatureTaskRuntimePlanBundleFe
 import skillbill.infrastructure.contracts.locator.FeatureTaskRuntimeReadinessEvidenceSchemaPaths
 import skillbill.infrastructure.contracts.locator.GoalArchiveSchemaPaths
 import skillbill.infrastructure.contracts.locator.GoalQualityExecutionSchemaPaths
+import skillbill.infrastructure.contracts.workflow.WorkflowAgentAssignmentsSchemaPaths
 import skillbill.infrastructure.sqlite.telemetry.GoalTelemetryPayloadKeys
 import skillbill.infrastructure.sqlite.telemetry.SqliteReviewTelemetryPayloadKeys
 import skillbill.infrastructure.sqlite.telemetry.lifecycle.SqliteLifecycleTelemetryMaterializationPayloadKeys
@@ -39,6 +40,18 @@ internal object WireVocabularyGovernedSeamInventory {
         seamId = "feature-task-runtime-execution-plan",
         schemaRepoRelativePath = FeatureTaskRuntimeExecutionPlanSchemaPaths.REPO_RELATIVE_PATH,
         governedRelativePathMarkers = listOf("FeatureTaskRuntimeExecutionPlan", "FeatureTaskExecutionPlan"),
+      ),
+      GovernedPayloadSeam(
+        seamId = "workflow-agent-assignments",
+        schemaRepoRelativePath = WorkflowAgentAssignmentsSchemaPaths.REPO_RELATIVE_PATH,
+        governedRelativePathMarkers =
+          listOf(
+            "WorkflowAgentAssignmentKeys",
+            "WorkflowAgentAssignmentsSchemaValidator",
+            "WorkflowAgentAssignmentStore",
+            "FeatureTaskRuntimeRunEntry",
+            "WorkflowAdmissionReplay",
+          ),
       ),
       GovernedPayloadSeam(
         seamId = "decomposition-manifest",

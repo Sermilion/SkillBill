@@ -34,6 +34,7 @@ import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskExecutionIden
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionEntry
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeStepLaunchResolver
+import skillbill.engine.featuretask.lifecycle.execution.workflowAgentAssignmentStoreForTests
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeAgentAssignment
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeGoalContinuationContext
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEvent
@@ -128,6 +129,7 @@ import skillbill.infrastructure.workflow.filesystem.FileSystemFeatureSpecPathRes
 import skillbill.infrastructure.workflow.goalplanning.FileSystemGoalPlanningBoundaryBodyResolver
 import skillbill.infrastructure.workflow.goalplanning.FileSystemGoalPlanningContextDiscovery
 import skillbill.install.model.SupportedAgent
+import skillbill.ports.agentaddon.RejectingAgentAddonSelectionPort
 import skillbill.ports.agentrun.AgentRunLauncher
 import skillbill.ports.agentrun.agentRunLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunLaunchModelRequest
@@ -276,7 +278,7 @@ const val SPEC_REFERENCE = RUNNER_TEST_SPEC_REFERENCE
 const val CONVENTION_SPEC_REFERENCE =
   ".feature-specs/SKILL-65-runtime-feature-task-parity/spec_subtask_1.md"
 const val EXPECTED_FEATURE_BRANCH = "feat/SKILL-65-runtime-feature-task-parity"
-const val INVOKED_AGENT = "claude-code"
+const val INVOKED_AGENT = "claude"
 const val VALID_OUTPUT = """{"contract_version":"0.2"}"""
 val VALIDATE_REPAIR_WITHOUT_GATE_COUNTS =
   """
@@ -1517,6 +1519,7 @@ private fun runnerExecutionEntry(
       database,
       fixture.compatibility,
       diagnostics = NoopRuntimeDiagnostics,
+      workflowAgentAssignments = workflowAgentAssignmentStoreForTests(database),
     )
   if (!config.seedDurableWorkflow) {
     return FeatureTaskRuntimeExecutionEntry(
@@ -1664,6 +1667,7 @@ private fun testStepLaunchResolver(): FeatureTaskRuntimeStepLaunchResolver =
         error("A run-loop fixture must not launch through its model resolver.")
     },
     statusProjectionPhaseStrategies(),
+    agentAddonSelectionPort = RejectingAgentAddonSelectionPort,
   )
 
 fun testDecompositionPlanner(): FeatureTaskRuntimeDecompositionPlanner =
@@ -2698,6 +2702,14 @@ class InMemoryRuntimeWorkflowRepository : WorkflowStateRepositoryDefaults() {
 
   override fun latestFeatureTaskWorkflow(mode: FeatureTaskWorkflowMode): WorkflowStateRecord? =
     listFeatureTaskWorkflows(mode, Int.MAX_VALUE).firstOrNull()
+
+  override fun migrateFeatureTaskArtifacts(
+    source: WorkflowStateRecord,
+    targetArtifacts: DurableWorkflowArtifacts,
+  ) {
+    check(taskRuntimeRows[source.workflowId] == source) { "Artifact migration source changed" }
+    taskRuntimeRows[source.workflowId] = source.toSnapshot().copy(artifacts = targetArtifacts).toRecord(source)
+  }
 
   private val taskRuntimeRows = linkedMapOf<String, WorkflowStateRecord>()
   private val implementRows = linkedMapOf<String, WorkflowStateRecord>()

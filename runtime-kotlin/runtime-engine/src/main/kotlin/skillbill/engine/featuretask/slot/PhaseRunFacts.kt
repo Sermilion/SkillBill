@@ -25,6 +25,7 @@ internal fun PhaseRun.stepFacts(
     attempt = attempt,
     observeLaunch = true,
     briefingText = "",
+    selectedProviderId = resolvedAgent.resolvedAgentId,
     liveChecks =
       request.validationCheckInvocationId?.let { invocationId ->
         PhaseLiveChecksLaunch(

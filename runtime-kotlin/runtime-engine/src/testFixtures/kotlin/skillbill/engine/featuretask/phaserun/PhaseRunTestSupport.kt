@@ -11,6 +11,7 @@ import skillbill.engine.RecordingWorkflowGitOperations
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanCodec
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanCompatibility
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
+import skillbill.engine.featuretask.lifecycle.execution.workflowAgentAssignmentStoreForTests
 import skillbill.engine.featuretask.phaserun.monitor.MonitorTargetResolver
 import skillbill.engine.featuretask.phaserun.monitor.StandaloneMonitorExecutionPreparer
 import skillbill.engine.featuretask.phaserun.qa.qaStandalonePhaseRun
@@ -284,6 +285,7 @@ fun PhaseRunEntryFixture.plans(): PhaseRunPlanResolver {
       FeatureTaskRuntimeExecutionPlanResolver(
         strategies, codec, validator, ValidationGateResolver { qaManifests }, gitOperations, config,
         database, compatibility, diagnostics,
+        workflowAgentAssignments = workflowAgentAssignmentStoreForTests(database),
       ),
   )
 }

@@ -41,6 +41,7 @@ internal const val FEATURE_TASK_RUNTIME_CHECKPOINT_IDENTITIES_ARTIFACT_KEY: Stri
 internal const val FEATURE_TASK_RUNTIME_RUN_INVARIANTS_ARTIFACT_KEY: String = "feature_task_runtime_run_invariants"
 
 internal const val FEATURE_TASK_RUNTIME_EXECUTION_PLAN_ARTIFACT_KEY: String = "feature_task_runtime_execution_plan"
+internal const val WORKFLOW_AGENT_ASSIGNMENTS_ARTIFACT_KEY: String = "workflow_agent_assignments"
 
 internal const val FEATURE_TASK_RUNTIME_PHASE_RECORDS_ARTIFACT_KEY: String = "feature_task_runtime_phase_records"
 internal const val FEATURE_TASK_RUNTIME_PHASE_LEDGER_ARTIFACT_KEY: String = "feature_task_runtime_phase_ledger"

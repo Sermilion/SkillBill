@@ -11,6 +11,7 @@ import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecut
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanCodec
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanCompatibility
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
+import skillbill.engine.featuretask.lifecycle.execution.workflowAgentAssignmentStoreForTests
 import skillbill.engine.featuretask.slot.statusProjectionPhaseStrategies
 import skillbill.engine.featuretask.testing.featureTaskRuntimeWireArtifactValidatorForTest
 import skillbill.engine.featuretask.validation.ValidationGateResolver
@@ -112,6 +113,7 @@ fun engineWorkflowGoalRunnerManifestStore(
       NoopRuntimeDiagnostics,
       ContractFeatureTaskRuntimePhaseOutputMigration(),
       NoopFeatureTaskRuntimeWorkerSupervisor,
+      workflowAgentAssignmentStore = workflowAgentAssignmentStoreForTests(database),
     )
   val historyEvidence =
     GoalChildHistoryEvidenceStore(
@@ -204,6 +206,7 @@ private fun testFeatureTaskRuntimeCrashReconciler(
       database,
       testExecutionPlanCompatibility(),
       NoopRuntimeDiagnostics,
+      workflowAgentAssignments = workflowAgentAssignmentStoreForTests(database),
     ),
   )
 

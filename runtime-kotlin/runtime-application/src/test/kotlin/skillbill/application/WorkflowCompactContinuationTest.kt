@@ -207,7 +207,8 @@ private fun newService(): WorkflowService =
     database = FakeDatabaseSessionFactory(InMemoryWorkflowStates()),
     gitOperations = NoopWorkflowGitOperations,
     decompositionManifestStore = UnavailableDecompositionManifestStore,
-    workflowSnapshotValidator = testWorkflowSnapshotValidator,
+    recordPersistence =
+      testWorkflowRecordPersistence(testWorkflowSnapshotValidator),
     decompositionManifestValidator = testDecompositionManifestValidator,
     decompositionManifestWriter = testDecompositionManifestWriter,
     repositoryRoot = testRepositoryRoot,

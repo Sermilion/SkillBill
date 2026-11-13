@@ -327,7 +327,7 @@ object PrincipleEnforcementInventory {
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
           "runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/featuretask/lifecycle/execution/" +
-            "FeatureTaskRuntimeExecutionPlanDecode.kt",
+            "decoding/FeatureTaskRuntimeExecutionPlanDecode.kt",
         functionNames =
           setOf(
             "decodeExecutionPlan",
@@ -344,7 +344,7 @@ object PrincipleEnforcementInventory {
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
           "runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/featuretask/lifecycle/execution/" +
-            "FeatureTaskRuntimeExecutionPlanTraversalCodec.kt",
+            "decoding/FeatureTaskRuntimeExecutionPlanTraversalCodec.kt",
         functionNames = setOf("decodeExecutionPlanTraversal"),
       ),
       ArchitectureScanSupport.ParseBoundarySite(
@@ -352,6 +352,20 @@ object PrincipleEnforcementInventory {
           "runtime-kotlin/runtime-infra/contracts/src/main/kotlin/skillbill/infrastructure/contracts/" +
             "workflow/featuretask/FeatureTaskRuntimeExecutionPlanSchemaValidator.kt",
         functionNames = setOf("read", "write", "validate", "validateInstance", "requireBoundedBytes"),
+      ),
+      ArchitectureScanSupport.ParseBoundarySite(
+        relativePath =
+          "runtime-kotlin/runtime-infra/contracts/src/main/kotlin/skillbill/infrastructure/contracts/" +
+            "workflow/WorkflowAgentAssignmentsSchemaValidator.kt",
+        functionNames =
+          setOf(
+            "canonicalize",
+            "decodeUtf8",
+            "readJson",
+            "validateSchema",
+            "validateVocabulary",
+            "invalid",
+          ),
       ),
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =

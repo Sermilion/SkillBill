@@ -39,6 +39,7 @@ public data class PhaseStepFacts(
   val agentWorkingDirectory: Path? = null,
   val liveChecks: PhaseLiveChecksLaunch? = null,
   val openCodeIdentity: OpenCodeLaunchIdentity? = null,
+  val selectedProviderId: String? = null,
 )
 
 public data class PhaseLiveChecksLaunch(

@@ -123,6 +123,9 @@ data class WorkDetailRuntimeStatus(
   val blockedCount: Int,
   val phaseIds: List<String> = phases.map { it.phaseId },
   val totalPhaseCount: Int = phaseIds.size,
+  val routingClassification: String? = null,
+  val routingFailureCode: String? = null,
+  val routingRecoveryGuidance: String? = null,
 )
 
 data class WorkDetailPhase(

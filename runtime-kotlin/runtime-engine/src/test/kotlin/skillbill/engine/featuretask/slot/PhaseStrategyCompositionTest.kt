@@ -4,7 +4,7 @@ import org.junit.jupiter.api.io.TempDir
 import skillbill.contracts.JsonCodec
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanCodec
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanCompatibility
-import skillbill.engine.featuretask.lifecycle.execution.executionPolicyDigest
+import skillbill.engine.featuretask.lifecycle.execution.decoding.executionPolicyDigest
 import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
 import skillbill.engine.featuretask.model.execution.ValidationGateCommandFamily
 import skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService

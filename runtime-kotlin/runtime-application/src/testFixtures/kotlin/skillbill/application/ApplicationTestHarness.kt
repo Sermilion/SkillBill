@@ -1,8 +1,13 @@
 package skillbill.application
 
 import skillbill.application.decomposition.DecompositionManifestWriter
+import skillbill.application.workflow.persist.WorkflowAdmissionReplay
+import skillbill.application.workflow.persist.WorkflowRecordPersistence
+import skillbill.infrastructure.contracts.workflow.WorkflowAgentAssignmentsSchemaValidator
+import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeExecutionPlanSchemaValidator
 import skillbill.install.model.InstallPlanWireMap
 import skillbill.model.RepositoryRoot
+import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.install.InstallPlanWireValidator
 import skillbill.ports.projectstore.FixedProjectStorePort
 import skillbill.ports.projectstore.ProjectStorePort
@@ -14,6 +19,16 @@ import java.nio.file.Path
 import java.nio.file.StandardCopyOption.ATOMIC_MOVE
 import java.nio.file.StandardCopyOption.REPLACE_EXISTING
 import java.time.Clock
+
+val testWorkflowAdmissionReplay =
+  WorkflowAdmissionReplay(
+    FeatureTaskRuntimeExecutionPlanSchemaValidator(),
+    WorkflowAgentAssignmentsSchemaValidator(),
+    NoopRuntimeDiagnostics,
+  )
+
+fun testWorkflowRecordPersistence(validator: WorkflowSnapshotValidator): WorkflowRecordPersistence =
+  WorkflowRecordPersistence(validator, testWorkflowAdmissionReplay, NoopRuntimeDiagnostics)
 
 val testHarnessClock: Clock = Clock.systemUTC()
 

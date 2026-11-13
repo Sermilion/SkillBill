@@ -290,7 +290,7 @@ class PhaseReviewRunTest {
       )
 
     assertFalse(InlineReviewLanesSection.HEADING in directive)
-    assertTrue(diagnostics.warnings.single().contains(RUBRIC_FAILURE), diagnostics.warnings.toString())
+    assertEquals(1, diagnostics.warnings.count { RUBRIC_FAILURE in it }, diagnostics.warnings.toString())
   }
 
   @Test

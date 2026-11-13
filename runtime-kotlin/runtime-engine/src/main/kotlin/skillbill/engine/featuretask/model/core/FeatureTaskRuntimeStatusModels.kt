@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.model.core
 
+import skillbill.error.core.RuntimeFailureCode
 import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecution
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateExecutionEvidence
 
@@ -40,7 +41,17 @@ public data class FeatureTaskRuntimeStatusProjection(
   public val degradedDiagnostic: FeatureTaskRuntimeDegradedDiagnosticStatus? = null,
   public val operatorDecisionPause: FeatureTaskRuntimeOperatorDecisionPause? = null,
   public val criterionExplanation: String? = null,
+  public val routing: FeatureTaskRuntimeRoutingStatus? = null,
 )
+
+public data class FeatureTaskRuntimeRoutingStatus(
+  public val classification: Classification,
+  public val failureCode: RuntimeFailureCode? = null,
+  public val sourceLabel: String? = null,
+  public val recoveryGuidance: String? = null,
+) {
+  public enum class Classification { LEGACY, CURRENT, PROBLEM }
+}
 
 public data class FeatureTaskRuntimeOperatorDecisionPause(
   val phaseId: String,

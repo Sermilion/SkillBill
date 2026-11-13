@@ -51,22 +51,48 @@ public class FeatureTaskRuntimeExecutionEntry(
         request.workflowId,
       )
     var receipt: RuntimeMigrationReceipt? = null
+    var routingMigrationPrepared = false
     var committed = false
     return try {
       val result =
         catchingNonCancellation {
           database.transaction { unit ->
-            val accepted = admission.admit(unit, request.workflowId, inputs, expected)
+            val accepted =
+              admission.admit(
+                unit,
+                request.workflowId,
+                inputs,
+                ExecutionAdmissionSelection(
+                  expected,
+                  invokedAgentId =
+                    request.invokedAgentId.takeUnless { request.admittedExecution?.workerOwnership != null },
+                ),
+              )
             receipt = accepted.migrationReceipt
+            routingMigrationPrepared = accepted.routingMigrationPrepared
             requireMatchingRequest(request, accepted)
             accepted
           }
         }.getOrThrow()
       committed = true
-      admission.recordTransactionOutcome(result.migrationReceipt, committed = true)
+      admission.recordTransactionOutcome(
+        result.migrationReceipt,
+        committed = true,
+        workflowId = request.workflowId,
+        routingMigrationPrepared = result.routingMigrationPrepared,
+      )
       result
     } finally {
-      if (!committed) receipt?.let { admission.recordTransactionOutcome(it, committed = false) }
+      if (!committed) {
+        receipt?.let {
+          admission.recordTransactionOutcome(
+            it,
+            committed = false,
+            workflowId = request.workflowId,
+            routingMigrationPrepared = routingMigrationPrepared,
+          )
+        }
+      }
     }
   }
 

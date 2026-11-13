@@ -283,6 +283,11 @@ governedResources {
     "SKILL-384: canonical execution-plan schema",
   )
   copy(
+    "copyWorkflowAgentAssignmentsSchema",
+    "workflow-agent-assignments-schema.yaml",
+    "SONA-22: canonical workflow agent assignments schema",
+  )
+  copy(
     "copyFeatureTaskRuntimeExecutionPlanSchemaV01",
     "feature-task-runtime-execution-plan-0.1.yaml",
     "SKILL-403: historical execution-plan schema for admitted 0.1 plans",

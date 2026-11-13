@@ -10,6 +10,7 @@ import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskRuntimeGoa
 import skillbill.engine.featuretask.lifecycle.continuation.agentAttributionFromPhaseState
 import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWireArtifactValidator
 import skillbill.engine.featuretask.lifecycle.execution.ExecutionPlanAdmissionFixture
+import skillbill.engine.featuretask.lifecycle.execution.workflowAgentAssignmentStoreForTests
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeStatusRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBriefing
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLedgerRequest
@@ -1319,6 +1320,7 @@ internal fun statusHarness(): StatusHarness {
       ),
       runInvariantsStore,
       decomposeTerminalRecorder,
+      workflowAgentAssignmentStore = workflowAgentAssignmentStoreForTests(database),
     ),
     repository,
     FeatureTaskRuntimeGoalContinuationRecorder(database, NoopRuntimeDiagnostics, testHarnessClock),

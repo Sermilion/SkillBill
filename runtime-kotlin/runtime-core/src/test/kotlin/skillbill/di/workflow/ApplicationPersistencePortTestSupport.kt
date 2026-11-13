@@ -13,6 +13,7 @@ import skillbill.application.telemetry.model.GoalSubtaskFinishedRequest
 import skillbill.application.telemetry.service.TelemetryLevelMutationService
 import skillbill.application.telemetry.service.TelemetryService
 import skillbill.application.testProjectStore
+import skillbill.application.testWorkflowRecordPersistence
 import skillbill.application.workflow.ProjectCheckout
 import skillbill.application.workflow.model.WorkflowFamilyKind
 import skillbill.application.workflow.model.WorkflowOpenResult
@@ -1241,7 +1242,8 @@ internal fun testWorkflowService(
     database = database,
     gitOperations = gitOperations,
     decompositionManifestStore = testDecompositionManifestFileStore(),
-    workflowSnapshotValidator = WorkflowStateSchemaValidator(),
+    recordPersistence =
+      testWorkflowRecordPersistence(WorkflowStateSchemaValidator()),
     decompositionManifestValidator = DecompositionManifestSchemaValidator(),
     decompositionManifestWriter = DecompositionManifestWriter(testProjectStore),
     repositoryRoot = RepositoryRoot(Path.of("").toAbsolutePath().normalize()),

@@ -12,6 +12,7 @@ import skillbill.application.telemetry.model.FeatureVerifyStartedRequest
 import skillbill.application.testDecompositionManifestValidator
 import skillbill.application.testDecompositionManifestWriter
 import skillbill.application.testProjectStore
+import skillbill.application.testWorkflowRecordPersistence
 import skillbill.application.workflow.ProjectCheckout
 import skillbill.application.workflow.model.WorkflowFamilyKind
 import skillbill.application.workflow.model.WorkflowGetResult
@@ -163,7 +164,8 @@ internal class VerifyOperationHarness : AutoCloseable {
         database = database,
         gitOperations = git,
         decompositionManifestStore = UnavailableDecompositionManifestStore,
-        workflowSnapshotValidator = WorkflowStateSchemaValidator(),
+        recordPersistence =
+          testWorkflowRecordPersistence(WorkflowStateSchemaValidator()),
         decompositionManifestValidator = testDecompositionManifestValidator,
         decompositionManifestWriter = testDecompositionManifestWriter,
         repositoryRoot = RepositoryRoot(repo),

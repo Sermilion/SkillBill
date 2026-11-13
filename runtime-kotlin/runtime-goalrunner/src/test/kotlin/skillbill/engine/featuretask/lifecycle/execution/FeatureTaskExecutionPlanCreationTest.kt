@@ -6,6 +6,7 @@ import skillbill.application.testDecompositionManifestWriter
 import skillbill.application.testHarnessClock
 import skillbill.application.testProjectStore
 import skillbill.application.testRepositoryRoot
+import skillbill.application.testWorkflowRecordPersistence
 import skillbill.application.testWorkflowSnapshotValidator
 import skillbill.application.workflow.ProjectCheckout
 import skillbill.application.workflow.model.WorkflowFamilyKind
@@ -755,7 +756,10 @@ class FeatureTaskExecutionPlanCreationTest {
 
   private fun service(database: DatabaseSessionFactory) =
     WorkflowService(
-      database, NoopWorkflowGitOperations, UnavailableDecompositionManifestStore, testWorkflowSnapshotValidator,
+      database, NoopWorkflowGitOperations, UnavailableDecompositionManifestStore,
+      testWorkflowRecordPersistence(
+        testWorkflowSnapshotValidator,
+      ),
       testDecompositionManifestValidator, testDecompositionManifestWriter, testRepositoryRoot,
       AcceptingFeatureTaskRuntimeWireArtifactValidator, NoopRuntimeDiagnostics, testHarnessClock,
       ProjectCheckout(

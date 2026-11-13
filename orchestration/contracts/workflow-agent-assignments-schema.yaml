@@ -1,0 +1,63 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://skill-bill.dev/contracts/workflow-agent-assignments-schema.yaml
+title: Workflow agent assignments
+type: object
+additionalProperties: false
+required:
+  - contract_version
+  - admission_workflow_id
+  - policy_mode
+  - invoked_agent_id
+  - configured_agent_override_id
+  - phase_assignments
+properties:
+  contract_version:
+    const: '0.1'
+  admission_workflow_id:
+    type: string
+    minLength: 1
+  policy_mode:
+    enum: [frozen, legacy]
+  invoked_agent_id:
+    $ref: '#/$defs/agent'
+  configured_agent_override_id:
+    oneOf:
+      - $ref: '#/$defs/agent'
+      - type: 'null'
+  phase_assignments:
+    type: object
+    propertyNames:
+      enum: [intake, preplan, plan, plan_subtasks, implement, simplify, audit_plan_fix, audit_implement_fix, audit, qa, qa_fix, review, verify_findings, implement_fix, build, validate, write_history, commit_push, pr, monitor, monitor_fix, present_findings, goal_assessment, goal_assessment_fix]
+    additionalProperties:
+      $ref: '#/$defs/phaseAssignment'
+allOf:
+  - if:
+      properties:
+        policy_mode: { const: frozen }
+    then:
+      properties:
+        phase_assignments:
+          minProperties: 24
+          maxProperties: 24
+          required: [intake, preplan, plan, plan_subtasks, implement, simplify, audit_plan_fix, audit_implement_fix, audit, qa, qa_fix, review, verify_findings, implement_fix, build, validate, write_history, commit_push, pr, monitor, monitor_fix, present_findings, goal_assessment, goal_assessment_fix]
+  - if:
+      properties:
+        policy_mode: { const: legacy }
+    then:
+      properties:
+        phase_assignments:
+          additionalProperties:
+            properties:
+              source: { enum: [legacy_recorded, legacy_invoking] }
+$defs:
+  agent:
+    enum: [claude, codex, cursor, devin, junie, opencode]
+  phaseAssignment:
+    type: object
+    additionalProperties: false
+    required: [agent_id, tier, source]
+    properties:
+      agent_id: { $ref: '#/$defs/agent' }
+      tier: { enum: [reasoning, implementation] }
+      source:
+        enum: [run_override, cli_phase, configured_phase, configured_tier, invoking_agent, legacy_recorded, legacy_invoking]

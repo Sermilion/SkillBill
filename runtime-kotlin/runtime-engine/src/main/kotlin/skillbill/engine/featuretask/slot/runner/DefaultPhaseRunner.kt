@@ -148,6 +148,7 @@ public class DefaultPhaseRunner(
     return GoalRunnerSubtaskLaunchRequest(
       invokedAgentId = facts.invokedAgentId,
       configuredAgentOverrideId = facts.configuredAgentOverrideId,
+      selectedProviderId = facts.selectedProviderId,
       skillRunRequest =
         SkillRunRequest(
           issueKey = facts.issueKey,
@@ -301,8 +302,7 @@ public class DefaultPhaseRunner(
         )
       is AgentRunLaunchDenied -> null
       is AgentRunLaunchFacts -> {
-        val agentId =
-          input.facts.invokedAgentId.takeIf(String::isNotBlank) ?: outcome.agent.wireValue
+        val agentId = outcome.agent.wireValue
         providerLimitSignal(outcome)
           ?.let {
             PhaseLaunchFailure(

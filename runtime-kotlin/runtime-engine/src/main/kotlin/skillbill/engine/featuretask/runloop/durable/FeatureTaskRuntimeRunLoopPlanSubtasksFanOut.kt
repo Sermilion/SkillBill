@@ -3,7 +3,6 @@ package skillbill.engine.featuretask.runloop.durable
 import skillbill.application.review.model.ParallelCodeReviewResult
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.lifecycle.branch.FeatureTaskRuntimeBranchSetupOutcome
-import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeAgentResolver
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseSettlementTarget
 import skillbill.engine.featuretask.phase.planning.FeatureTaskRuntimeDecompositionPlanner
@@ -288,10 +287,7 @@ internal class FeatureTaskRuntimeRunLoopPlanSubtasksFanOut(
           unit,
           PlanUnitAttempt(
             attemptCount = 1,
-            resolvedAgentId =
-              FeatureTaskRuntimeAgentResolver
-                .resolve(stepId, facts.agentAssignment, facts.invokedAgentId)
-                .resolvedAgentId,
+            resolvedAgentId = parent.stepBinding.requireAuthorizedFanOutWave().resolvedAgent.resolvedAgentId,
           ),
           reason,
           parent.clock.instant(),
@@ -328,9 +324,7 @@ internal class FeatureTaskRuntimeRunLoopPlanSubtasksFanOut(
             attemptCount = settledStep?.attemptCount ?: outcome.output.iteration,
             resolvedAgentId =
               settledStep?.resolvedAgentId
-                ?: FeatureTaskRuntimeAgentResolver
-                  .resolve(stepId, facts.agentAssignment, facts.invokedAgentId)
-                  .resolvedAgentId,
+                ?: parent.stepBinding.requireAuthorizedFanOutWave().resolvedAgent.resolvedAgentId,
           ),
         prose = outcome.output.output.value.ifBlank { bundle.subtask(unitId)?.planText.orEmpty() },
         now = parent.clock.instant(),

@@ -1,7 +1,18 @@
 package skillbill.engine.featuretask.lifecycle.execution
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.config.model.ExecutionMatrix
+import skillbill.config.model.ResolvedWorkflowAgentAssignments
+import skillbill.config.model.WORKFLOW_AGENT_ASSIGNMENT_PHASE_IDS
+import skillbill.config.model.WorkflowAgentAssignmentPolicyMode
+import skillbill.config.model.WorkflowAgentAssignmentSource
+import skillbill.config.model.WorkflowAgentPhaseAssignment
+import skillbill.config.model.resolvePhaseAgent
 import skillbill.contracts.JsonCodec
+import skillbill.engine.featuretask.lifecycle.assignment.WorkflowAgentAssignmentInspection
+import skillbill.engine.featuretask.lifecycle.assignment.WorkflowAgentAssignmentStore
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeAgentAssignment
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeModelAssignment
 import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
 import skillbill.engine.featuretask.model.execution.FeatureTaskRuntimeExecutionPlanCreationRequest
 import skillbill.engine.featuretask.model.execution.ValidationGateCommandFamily
@@ -10,8 +21,11 @@ import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
 import skillbill.engine.featuretask.validation.ValidationGateResolver
 import skillbill.engine.featuretask.validation.model.ValidationGateResolution
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.shellcontent.missingValidationGate
+import skillbill.error.workflow.WorkflowAgentAssignmentsFailureCode
+import skillbill.install.model.SupportedAgent
 import skillbill.ports.config.RepoLocalConfigPort
 import skillbill.ports.config.model.ReadRepoLocalConfigRequest
 import skillbill.ports.db.DatabaseSessionFactory
@@ -46,7 +60,69 @@ public class FeatureTaskRuntimeExecutionPlanResolver(
   private val database: DatabaseSessionFactory,
   private val compatibility: FeatureTaskRuntimeExecutionPlanCompatibility,
   private val diagnostics: RuntimeDiagnostics,
+  private val workflowAgentAssignments: WorkflowAgentAssignmentStore,
 ) {
+  internal fun resolveAdmissionRouting(
+    workflowId: String,
+    invokedAgentId: String,
+    agentAssignment: FeatureTaskRuntimeAgentAssignment,
+    modelAssignment: FeatureTaskRuntimeModelAssignment,
+  ): WorkflowAgentAssignmentInspection.Present {
+    val invoked = requireRoutingAgent(invokedAgentId, "invoking provider")
+    val matrix = modelAssignment.matrix ?: ExecutionMatrix()
+    val phaseAssignments =
+      WORKFLOW_AGENT_ASSIGNMENT_PHASE_IDS.associateWith { phaseId ->
+        val selected =
+          resolvePhaseAgent(
+            phaseId,
+            invokedAgentId,
+            agentAssignment.perPhaseAgentIds,
+            agentAssignment.override,
+            modelAssignment.matrix,
+          )
+        val provider = requireRoutingAgent(selected.providerId, "phase '$phaseId'")
+        WorkflowAgentPhaseAssignment(
+          agentId = provider,
+          tier = matrix.tierOf(phaseId),
+          source = WorkflowAgentAssignmentSource.valueOf(selected.source.name),
+        )
+      }
+    val configuredOverride = agentAssignment.override?.let { requireRoutingAgent(it, "configured override") }
+    val snapshot =
+      ResolvedWorkflowAgentAssignments(
+        admissionWorkflowId = workflowId,
+        policyMode = WorkflowAgentAssignmentPolicyMode.FROZEN,
+        invokedAgentId = invoked,
+        configuredAgentOverrideId = configuredOverride,
+        phaseAssignments = phaseAssignments,
+      )
+    return workflowAgentAssignments.prepare(snapshot)
+  }
+
+  private fun requireRoutingAgent(
+    agentId: String,
+    owner: String,
+  ): SupportedAgent =
+    SupportedAgent.fromWireOrNull(agentId)
+      ?: throw SkillBillRuntimeException(
+        WorkflowAgentAssignmentsFailureCode.INVALID_RECORD,
+        "Cannot freeze unknown provider '$agentId' for $owner. Select a supported provider and retry admission.",
+      )
+
+  public fun inspectResumeEvidence(workflowId: String): FeatureTaskRuntimeResumeEvidence =
+    database.read { unit ->
+      val routing = workflowAgentAssignments.inspect(unit, workflowId)
+      if (routing is WorkflowAgentAssignmentInspection.Problem) {
+        throw SkillBillRuntimeException(routing.failureCode, routing.recoveryMessage)
+      }
+      val descriptor =
+        unit.workflowStates.getFeatureTaskWorkflow(workflowId)?.toSnapshot()?.artifacts?.let {
+          DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.value(it)
+        }?.let { JsonCodec.valueToJsonString(it).toByteArray(Charsets.UTF_8) }
+      val plan = compatibility.requireSupportedComposition(descriptor)
+      FeatureTaskRuntimeResumeEvidence(routing, plan)
+    }
+
   public fun resolveCreation(
     request: FeatureTaskRuntimeExecutionPlanCreationRequest,
   ): ValidatedFeatureTaskRuntimeExecutionPlan {
@@ -327,3 +403,8 @@ public class FeatureTaskRuntimeExecutionPlanResolver(
       detail,
     )
 }
+
+public data class FeatureTaskRuntimeResumeEvidence(
+  public val routing: WorkflowAgentAssignmentInspection,
+  public val plan: ResolvedPhaseExecutionPlan,
+)

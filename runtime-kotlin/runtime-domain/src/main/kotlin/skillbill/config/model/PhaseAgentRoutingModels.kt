@@ -6,6 +6,8 @@ enum class PhaseAgentRoutingSource {
   CONFIGURED_PHASE,
   CONFIGURED_TIER,
   INVOKING_AGENT,
+  LEGACY_RECORDED,
+  LEGACY_INVOKING,
 }
 
 data class PhaseAgentRoutingSelection(

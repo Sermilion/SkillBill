@@ -3,6 +3,7 @@ package skillbill.engine.featuretask.slot
 import skillbill.application.FakeDatabaseSessionFactory
 import skillbill.engine.featuretask.lifecycle.execution.ExecutionPlanAdmissionFixture
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
+import skillbill.engine.featuretask.lifecycle.execution.workflowAgentAssignmentStoreForTests
 import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
 import skillbill.engine.featuretask.model.execution.FeatureTaskRuntimeExecutionPlanCreationRequest
 import skillbill.engine.featuretask.model.execution.ValidationGateCommandFamily
@@ -408,6 +409,7 @@ class FeatureTaskRuntimeExecutionPlanResolverTest {
         database,
         execution.compatibility,
         diagnostics = NoopRuntimeDiagnostics,
+        workflowAgentAssignments = workflowAgentAssignmentStoreForTests(database),
       )
 
     fun create() =

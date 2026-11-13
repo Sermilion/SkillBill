@@ -7,6 +7,7 @@ import skillbill.application.testDecompositionManifestValidator
 import skillbill.application.testDecompositionManifestWriter
 import skillbill.application.testProjectStore
 import skillbill.application.testRepositoryRoot
+import skillbill.application.testWorkflowRecordPersistence
 import skillbill.application.testWorkflowSnapshotValidator
 import skillbill.application.workflow.ProjectCheckout
 import skillbill.application.workflow.model.WorkflowContinueResult
@@ -40,30 +41,33 @@ private val FEATURE_TASK_RUNTIME_PHASE_RECORDS_ARTIFACT_KEY =
   DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_RECORDS.label()
 
 class FeatureTaskRouterContinuationTest {
+  private fun service(database: FakeDatabaseSessionFactory): WorkflowService =
+    WorkflowService(
+      database = database,
+      gitOperations = NoopWorkflowGitOperations,
+      decompositionManifestStore = UnavailableDecompositionManifestStore,
+      recordPersistence =
+        testWorkflowRecordPersistence(testWorkflowSnapshotValidator),
+      decompositionManifestValidator = testDecompositionManifestValidator,
+      decompositionManifestWriter = testDecompositionManifestWriter,
+      repositoryRoot = testRepositoryRoot,
+      goalObservabilityEventValidator = AcceptingFeatureTaskRuntimeWireArtifactValidator,
+      runtimeDiagnostics = NoopRuntimeDiagnostics,
+      clock = Clock.systemUTC(),
+      projectCheckout =
+        ProjectCheckout(
+          TestRepositoryEnclosingRoot,
+          database,
+          testProjectStore,
+          InPlaceGoalWorktreeResources,
+        ),
+    )
+
   @Test
   fun `runtime router continuation after plan preserves identity and supplies only completed plan`() {
     val states = InMemoryWorkflowStates()
     val database = FakeDatabaseSessionFactory(states)
-    val service =
-      WorkflowService(
-        database = database,
-        gitOperations = NoopWorkflowGitOperations,
-        decompositionManifestStore = UnavailableDecompositionManifestStore,
-        workflowSnapshotValidator = testWorkflowSnapshotValidator,
-        decompositionManifestValidator = testDecompositionManifestValidator,
-        decompositionManifestWriter = testDecompositionManifestWriter,
-        repositoryRoot = testRepositoryRoot,
-        goalObservabilityEventValidator = AcceptingFeatureTaskRuntimeWireArtifactValidator,
-        runtimeDiagnostics = NoopRuntimeDiagnostics,
-        clock = Clock.systemUTC(),
-        projectCheckout =
-          ProjectCheckout(
-            TestRepositoryEnclosingRoot,
-            database,
-            testProjectStore,
-            InPlaceGoalWorktreeResources,
-          ),
-      )
+    val service = service(database)
     val lookup =
       FeatureTaskContinuationLookupService(
         database,

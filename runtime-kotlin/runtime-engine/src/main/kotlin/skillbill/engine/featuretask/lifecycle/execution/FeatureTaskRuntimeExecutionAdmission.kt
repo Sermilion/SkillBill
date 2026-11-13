@@ -1,10 +1,13 @@
 package skillbill.engine.featuretask.lifecycle.execution
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.config.model.ResolvedWorkflowAgentAssignments
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
+import skillbill.engine.featuretask.lifecycle.assignment.WorkflowAgentAssignmentInspection
+import skillbill.engine.featuretask.lifecycle.assignment.WorkflowAgentAssignmentStore
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
@@ -48,32 +51,52 @@ import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 
 private const val ADMISSION_WORKFLOW_LABEL_LIMIT = 128
 
+internal data class ExecutionAdmissionSelection(
+  val expectedIdentity: FeatureTaskExecutionIdentity? = null,
+  val requestedReviewSelection: RuntimeReviewSelection? = null,
+  val invokedAgentId: String? = null,
+)
+
 @Inject
 public class FeatureTaskRuntimeExecutionAdmission(
   private val compatibility: FeatureTaskRuntimeExecutionPlanCompatibility,
   private val diagnostics: RuntimeDiagnostics,
   private val phaseOutputMigration: FeatureTaskRuntimePhaseOutputMigration,
   private val supervisor: FeatureTaskRuntimeWorkerSupervisor,
+  private val workflowAgentAssignmentStore: WorkflowAgentAssignmentStore,
 ) {
   internal fun admit(
     states: WorkflowStateRepository,
     workflowId: String,
     inputs: EffectiveGatePolicyInputs,
-    expectedIdentity: FeatureTaskExecutionIdentity? = null,
-    requestedReviewSelection: RuntimeReviewSelection? = null,
+    selection: ExecutionAdmissionSelection = ExecutionAdmissionSelection(),
   ): AdmittedFeatureTaskRuntimeExecution =
-    admitStored(states, AdmissionRequest(workflowId, inputs, expectedIdentity, requestedReviewSelection))
+    admitStored(
+      states,
+      AdmissionRequest(
+        workflowId,
+        inputs,
+        selection.expectedIdentity,
+        selection.requestedReviewSelection,
+        selection.invokedAgentId,
+      ),
+    )
 
   internal fun admit(
     session: GoalRunnerPersistenceSession,
     workflowId: String,
     inputs: EffectiveGatePolicyInputs,
-    expectedIdentity: FeatureTaskExecutionIdentity? = null,
-    requestedReviewSelection: RuntimeReviewSelection? = null,
+    selection: ExecutionAdmissionSelection = ExecutionAdmissionSelection(),
   ): AdmittedFeatureTaskRuntimeExecution =
     admitStored(
       session.workflowStates,
-      AdmissionRequest(workflowId, inputs, expectedIdentity, requestedReviewSelection),
+      AdmissionRequest(
+        workflowId,
+        inputs,
+        selection.expectedIdentity,
+        selection.requestedReviewSelection,
+        selection.invokedAgentId,
+      ),
     )
 
   private fun admitStored(
@@ -95,6 +118,7 @@ public class FeatureTaskRuntimeExecutionAdmission(
       requireMatchingIdentity(identity, row, workflowId, expectedIdentity)
       val checkedInputs = inputs.frozen()
       val initialSnapshot = row.toSnapshot()
+      val routingAssignments = retainedRouting(states, workflowId)
       val ownsGoalPlanningImport =
         identity.routeScope == FeatureTaskRouteScope.GOAL_CHILD &&
           DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_PLANNING_IMPORT.contains(initialSnapshot.artifacts)
@@ -110,13 +134,19 @@ public class FeatureTaskRuntimeExecutionAdmission(
       requireMatchingPlan(plan, identity, requestedReviewSelection)
       requireCompletedGateOutputEvidence(artifacts, plan)
       val phaseOutputs = migratePhaseOutputs(request, initialSnapshot, ownsGoalPlanningImport)
-      if (phaseOutputs.migratedVersions.isNotEmpty()) {
-        requireStoppedMigrationOwner(states, workflowId)
-        val patch =
-          mapOf(DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_RECORDS.entry(phaseOutputs.records))
-        val migratedArtifacts = initialSnapshot.artifacts + patch
-        states.migrateFeatureTaskArtifacts(row, DurableWorkflowArtifacts.fromMap(migratedArtifacts))
-      }
+      val preparedRouting =
+        if (routingAssignments == null) {
+          workflowAgentAssignmentStore.prepareLegacyRecord(
+            workflowId,
+            initialSnapshot.artifacts,
+            request.invokedAgentId,
+          )
+        } else {
+          null
+        }
+      val admittedRouting =
+        migrateArtifacts(states, row, phaseOutputs, preparedRouting)
+          ?: routingAssignments
       AdmittedFeatureTaskRuntimeExecution(
         identity,
         plan,
@@ -124,6 +154,8 @@ public class FeatureTaskRuntimeExecutionAdmission(
         requireNotNull(descriptor),
         supportedExecution.recordedMonitorSemantics,
         phaseOutputs.receipt ?: currentReceipt(),
+        workflowAgentAssignments = admittedRouting,
+        routingMigrationPrepared = preparedRouting != null,
       ).let { accepted ->
         states.getFeatureTaskRuntimeWorkerOwnership(workflowId)?.let { accepted.withWorkerOwnership(it) }
           ?: accepted
@@ -137,6 +169,45 @@ public class FeatureTaskRuntimeExecutionAdmission(
     } catch (error: SkillBillRuntimeException) {
       reportAdmissionFailure(error, request)
     }
+
+  private fun retainedRouting(
+    states: WorkflowStateRepository,
+    workflowId: String,
+  ): ResolvedWorkflowAgentAssignments? =
+    when (val inspection = workflowAgentAssignmentStore.inspect(states, workflowId)) {
+      WorkflowAgentAssignmentInspection.Legacy -> null
+      is WorkflowAgentAssignmentInspection.Present -> inspection.assignments
+      is WorkflowAgentAssignmentInspection.Problem ->
+        throw SkillBillRuntimeException(inspection.failureCode, inspection.recoveryMessage)
+    }
+
+  private fun migrateArtifacts(
+    states: WorkflowStateRepository,
+    row: WorkflowStateRecord,
+    phaseOutputs: MigratedPhaseOutputs,
+    preparedRouting: String?,
+  ): ResolvedWorkflowAgentAssignments? {
+    val workflowId = row.workflowId
+    val initialSnapshot = row.toSnapshot()
+    if (phaseOutputs.migratedVersions.isNotEmpty() || preparedRouting != null) {
+      requireStoppedMigrationOwner(states, workflowId)
+      val patch =
+        buildMap {
+          if (phaseOutputs.migratedVersions.isNotEmpty()) {
+            putAll(listOf(DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_RECORDS.entry(phaseOutputs.records)))
+          }
+          preparedRouting?.let {
+            putAll(listOf(DurableWorkflowArtifactFamily.WORKFLOW_AGENT_ASSIGNMENTS.entry(it)))
+          }
+        }
+      val migratedArtifacts = initialSnapshot.artifacts + patch
+      states.migrateFeatureTaskArtifacts(row, DurableWorkflowArtifacts.fromMap(migratedArtifacts))
+      if (preparedRouting != null) {
+        return retainedRouting(states, workflowId)
+      }
+    }
+    return null
+  }
 
   private fun reportAdmissionFailure(
     error: SkillBillRuntimeException,
@@ -216,6 +287,7 @@ public class FeatureTaskRuntimeExecutionAdmission(
     val inputs: EffectiveGatePolicyInputs,
     val expectedIdentity: FeatureTaskExecutionIdentity?,
     val requestedReviewSelection: RuntimeReviewSelection?,
+    val invokedAgentId: String?,
   ) {
     var failureFacts: MigrationFailureFacts? = null
   }
@@ -411,6 +483,8 @@ public class FeatureTaskRuntimeExecutionAdmission(
   internal fun recordTransactionOutcome(
     receipt: RuntimeMigrationReceipt,
     committed: Boolean,
+    workflowId: String,
+    routingMigrationPrepared: Boolean = false,
   ) {
     val result =
       when {
@@ -423,6 +497,14 @@ public class FeatureTaskRuntimeExecutionAdmission(
       "seam=feature_task_phase_output_migration source_version=${receipt.sourceVersion} " +
         "target_version=${receipt.targetVersion} result=$result",
     )
+    if (routingMigrationPrepared) {
+      RuntimeDiagnosticsBestEffortWarning.record(
+        diagnostics,
+        "seam=workflow_agent_assignment workflow=${workflowId.take(ADMISSION_WORKFLOW_LABEL_LIMIT)} " +
+          "outcome=${if (committed) "committed" else "rolled_back"} " +
+          "reason=legacy_adoption",
+      )
+    }
   }
 
   private fun recordMapping(workflowId: String) {

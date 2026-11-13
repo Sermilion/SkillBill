@@ -18,6 +18,9 @@ data class StandalonePlanProgress(
   val planningWaveHistoryComplete: Boolean = false,
   val blockedSubtaskIds: List<Int> = emptyList(),
   val waves: List<StandalonePlanWave> = emptyList(),
+  val routingClassification: String? = null,
+  val routingFailureCode: String? = null,
+  val routingRecoveryGuidance: String? = null,
 )
 
 data class StandalonePlanStage(

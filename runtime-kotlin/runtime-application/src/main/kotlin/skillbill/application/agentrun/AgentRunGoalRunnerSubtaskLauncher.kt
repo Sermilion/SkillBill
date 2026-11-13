@@ -16,6 +16,7 @@ class AgentRunGoalRunnerSubtaskLauncher(
         invokedAgentId = request.invokedAgentId,
         configuredAgentOverrideId = request.configuredAgentOverrideId,
         skillRunRequest = request.skillRunRequest,
+        selectedProviderId = request.selectedProviderId,
       ),
     ).launchOutcome
 }

@@ -7,6 +7,7 @@ import skillbill.application.testDecompositionManifestValidator
 import skillbill.application.testDecompositionManifestWriter
 import skillbill.application.testProjectStore
 import skillbill.application.testRepositoryRoot
+import skillbill.application.testWorkflowRecordPersistence
 import skillbill.application.testWorkflowSnapshotValidator
 import skillbill.application.workflow.ProjectCheckout
 import skillbill.application.workflow.model.WorkflowFamilyKind
@@ -42,7 +43,8 @@ class WorkflowIssueKeyPersistenceTest {
         database = FakeDatabaseSessionFactory(workflows),
         gitOperations = NoopWorkflowGitOperations,
         decompositionManifestStore = UnavailableDecompositionManifestStore,
-        workflowSnapshotValidator = testWorkflowSnapshotValidator,
+        recordPersistence =
+          testWorkflowRecordPersistence(testWorkflowSnapshotValidator),
         decompositionManifestValidator = testDecompositionManifestValidator,
         decompositionManifestWriter = testDecompositionManifestWriter,
         repositoryRoot = testRepositoryRoot,
@@ -100,7 +102,8 @@ class WorkflowIssueKeyPersistenceTest {
         database = FakeDatabaseSessionFactory(workflows),
         gitOperations = NoopWorkflowGitOperations,
         decompositionManifestStore = UnavailableDecompositionManifestStore,
-        workflowSnapshotValidator = testWorkflowSnapshotValidator,
+        recordPersistence =
+          testWorkflowRecordPersistence(testWorkflowSnapshotValidator),
         decompositionManifestValidator = testDecompositionManifestValidator,
         decompositionManifestWriter = testDecompositionManifestWriter,
         repositoryRoot = testRepositoryRoot,

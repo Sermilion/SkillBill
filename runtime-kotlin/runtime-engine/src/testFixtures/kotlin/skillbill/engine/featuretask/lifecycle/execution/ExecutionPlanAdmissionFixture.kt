@@ -116,6 +116,7 @@ class ExecutionPlanAdmissionFixture(
       diagnostics,
       ContractFeatureTaskRuntimePhaseOutputMigration(),
       supervisor,
+      workflowAgentAssignmentStore = workflowAgentAssignmentStoreForTests(database),
     )
 
   fun seed(
@@ -172,6 +173,7 @@ class ExecutionPlanAdmissionFixture(
       database,
       compatibility,
       diagnostics = NoopRuntimeDiagnostics,
+      workflowAgentAssignments = workflowAgentAssignmentStoreForTests(database),
     )
 
   fun recoveryResolver(
@@ -205,6 +207,7 @@ class ExecutionPlanAdmissionFixture(
       database,
       compatibility,
       diagnostics = NoopRuntimeDiagnostics,
+      workflowAgentAssignments = workflowAgentAssignmentStoreForTests(database),
     )
 
   fun encoded(inputs: EffectiveGatePolicyInputs = this.inputs): ByteArray = codec.encodeExecution(plan, inputs)

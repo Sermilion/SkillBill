@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.runner
 
 import skillbill.contracts.JsonCodec
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRoutingStatus
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeStatusRequest
 import skillbill.engine.featuretask.phase.record.openTestWorkflow
 import skillbill.ports.workflow.model.toSnapshot
@@ -80,7 +81,10 @@ class FeatureTaskRuntimeStatusHistoryTest {
         ledger,
         harness.recorder.phaseQuery.currentStepId(id),
       )
-    assertEquals(expected, harness.service.status(request))
+    assertEquals(
+      expected.copy(routing = FeatureTaskRuntimeRoutingStatus(FeatureTaskRuntimeRoutingStatus.Classification.LEGACY)),
+      harness.service.status(request),
+    )
     assertEquals("process_retry", expected.phases.single { it.phaseId == "implement" }.continuationKind)
   }
 }

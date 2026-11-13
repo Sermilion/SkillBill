@@ -11,6 +11,7 @@ import skillbill.contracts.workflow.identity.status.IDE_STATUS_CONTRACT_VERSION
 import skillbill.engine.RecordingWorkflowGitOperations
 import skillbill.engine.diagnostics.block.testWorkIncidentProjectionBuilder
 import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWireArtifactValidator
+import skillbill.engine.featuretask.lifecycle.execution.workflowAgentAssignmentStoreForTests
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence
 import skillbill.engine.featuretask.persist.GoalRunnerRestoredChildReference
@@ -333,6 +334,7 @@ internal fun ideStatusService(
           runtimeWorkflowPersistence,
         ),
       decomposeTerminalRecorder = ideStatusDecomposeRecorder(database),
+      workflowAgentAssignmentStore = workflowAgentAssignmentStoreForTests(database),
     )
   val goalStatusService =
     testGoalRunnerStatusService(
@@ -344,10 +346,7 @@ internal fun ideStatusService(
         GoalRunnerStatusTestPorts(
           runtimeStatusService = runtimeStatusService,
           workerSupervisor =
-            object : FeatureTaskRuntimeWorkerSupervisor by NoopFeatureTaskRuntimeWorkerSupervisor {
-              override fun inspect(ownership: FeatureTaskRuntimeWorkerOwnership) =
-                FeatureTaskRuntimeProcessInspection.ExactLive
-            },
+          LiveWorkerSupervisor,
         ),
     )
   val planReports = testPlanReports(manifestStore)
@@ -1107,4 +1106,8 @@ internal fun List<StandalonePhaseStatusRecord>.eligiblePage(
     }
   val anchor = page.after?.let { after -> sliced.indexOfFirst { it.invocationId == after.invocationId } } ?: -1
   return sliced.drop(anchor + 1).take(page.limit)
+}
+
+private object LiveWorkerSupervisor : FeatureTaskRuntimeWorkerSupervisor by NoopFeatureTaskRuntimeWorkerSupervisor {
+  override fun inspect(ownership: FeatureTaskRuntimeWorkerOwnership) = FeatureTaskRuntimeProcessInspection.ExactLive
 }

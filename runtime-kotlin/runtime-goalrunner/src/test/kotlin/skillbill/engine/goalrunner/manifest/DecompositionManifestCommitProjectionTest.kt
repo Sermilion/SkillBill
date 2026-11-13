@@ -18,6 +18,7 @@ import skillbill.application.decomposition.persistDecompositionManifestProjectio
 import skillbill.application.testDecompositionManifestValidator
 import skillbill.application.testDecompositionManifestWriter
 import skillbill.application.testProjectStore
+import skillbill.application.testWorkflowRecordPersistence
 import skillbill.application.testWorkflowSnapshotValidator
 import skillbill.application.workflow.ProjectCheckout
 import skillbill.application.workflow.model.WorkflowContinueResult
@@ -597,7 +598,8 @@ class DecompositionManifestCommitProjectionTest {
         database = FakeDatabaseSessionFactory(workflows),
         gitOperations = NoopWorkflowGitOperations,
         decompositionManifestStore = fileStore,
-        workflowSnapshotValidator = testWorkflowSnapshotValidator,
+        recordPersistence =
+          testWorkflowRecordPersistence(testWorkflowSnapshotValidator),
         decompositionManifestValidator = testDecompositionManifestValidator,
         decompositionManifestWriter = DecompositionManifestWriter(testProjectStore),
         repositoryRoot = RepositoryRoot(repoRoot),

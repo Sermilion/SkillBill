@@ -45,6 +45,7 @@ public class StandalonePlanProgressProjector(
     output: StandalonePhaseOutputSnapshot,
   ): StandalonePlanProgress {
     val workflowId = phase.workflowId
+    val routing = workflowId?.let { runtimeStatus.routingStatus(unitOfWork, it) }
     val workflow = workflowId?.let { unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, it) }
     val records = workflow?.let { decodePhaseRecords(it.artifacts) }.orEmpty()
     val briefingTexts =
@@ -103,6 +104,9 @@ public class StandalonePlanProgressProjector(
       waveHistory?.complete == true,
       blockedIds,
       waves(waveHistory, units),
+      routing?.classification?.name?.lowercase(),
+      routing?.failureCode?.toString(),
+      routing?.recoveryGuidance,
     )
   }
 

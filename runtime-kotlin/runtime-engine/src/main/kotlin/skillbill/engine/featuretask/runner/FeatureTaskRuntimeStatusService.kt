@@ -3,15 +3,19 @@ package skillbill.engine.featuretask.runner
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.decomposition.decompositionManifestPath
 import skillbill.application.decomposition.parentSpecPath
+import skillbill.config.model.WorkflowAgentAssignmentPolicyMode
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_STATE_CONTRACT_VERSION
 import skillbill.contracts.workflow.identity.evidence.ValidationEvidencePayloadKeys
+import skillbill.engine.featuretask.lifecycle.assignment.WorkflowAgentAssignmentInspection
+import skillbill.engine.featuretask.lifecycle.assignment.WorkflowAgentAssignmentStore
 import skillbill.engine.featuretask.lifecycle.continuation.agentAttributionFromPhaseState
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairStatusRead
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeDecomposeTerminalStatus
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeDegradedDiagnosticStatus
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimePhaseStatus
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRoutingStatus
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeStatusProjection
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeStatusRequest
 import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence
@@ -24,6 +28,7 @@ import skillbill.engine.featuretask.slot.PhaseReportedGate
 import skillbill.engine.featuretask.slot.state.PhaseHistoricalInterpreter
 import skillbill.engine.featuretask.slot.state.PhaseHistoricalPolicy
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.ports.persistence.UnitOfWork
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.repair.FocusedRepairStrategy
 import skillbill.workflow.model.workflowStepStatus
@@ -49,15 +54,60 @@ public class FeatureTaskRuntimeStatusService(
   private val workflowPersistence: FeatureTaskRuntimeWorkflowPersistence,
   private val runInvariantsStore: FeatureTaskRuntimeRunInvariantsStore,
   private val decomposeTerminalRecorder: FeatureTaskRuntimeDecomposeTerminalRecorder,
+  private val workflowAgentAssignmentStore: WorkflowAgentAssignmentStore,
 ) {
   internal val history = PhaseHistoricalInterpreter(PhaseHistoricalPolicy.REVISION_1)
 
+  public fun routingStatus(workflowId: String): FeatureTaskRuntimeRoutingStatus =
+    routingStatus(workflowAgentAssignmentStore.inspect(workflowId))
+
+  public fun routingStatus(
+    unit: UnitOfWork,
+    workflowId: String,
+  ): FeatureTaskRuntimeRoutingStatus = routingStatus(workflowAgentAssignmentStore.inspect(unit, workflowId))
+
+  private fun routingStatus(inspection: WorkflowAgentAssignmentInspection): FeatureTaskRuntimeRoutingStatus =
+    when (inspection) {
+      WorkflowAgentAssignmentInspection.Legacy ->
+        FeatureTaskRuntimeRoutingStatus(
+          FeatureTaskRuntimeRoutingStatus.Classification.LEGACY,
+        )
+      is WorkflowAgentAssignmentInspection.Present ->
+        FeatureTaskRuntimeRoutingStatus(
+          if (inspection.assignments.policyMode == WorkflowAgentAssignmentPolicyMode.LEGACY) {
+            FeatureTaskRuntimeRoutingStatus.Classification.LEGACY
+          } else {
+            FeatureTaskRuntimeRoutingStatus.Classification.CURRENT
+          },
+        )
+      is WorkflowAgentAssignmentInspection.Problem ->
+        FeatureTaskRuntimeRoutingStatus(
+          FeatureTaskRuntimeRoutingStatus.Classification.PROBLEM,
+          inspection.failureCode,
+          inspection.sourceLabel,
+          inspection.recoveryMessage,
+        )
+    }
+
   public fun status(request: FeatureTaskRuntimeStatusRequest): FeatureTaskRuntimeStatusProjection? {
-    val records = recorder.loadPhaseRecords(request.workflowId)?.withoutPlanSubtaskUnitRecords() ?: return null
+    val routing = routingStatus(request.workflowId)
+    val storedRecords = recorder.loadPhaseRecords(request.workflowId)?.withoutPlanSubtaskUnitRecords()
+    val workflowCurrentStepId = recorder.phaseQuery.currentStepId(request.workflowId)
+    if (storedRecords == null && workflowCurrentStepId == null &&
+      workflowPersistence.readArtifacts(request.workflowId) == null
+    ) {
+      return null
+    }
+    val records = storedRecords ?: emptyMap()
     val decomposeTerminal = decomposeTerminalRecorder.loadDecomposeTerminal(request.workflowId)
     val ledger = statusPhaseHistory(recorder.phaseQuery, request.workflowId, records, history)
-    val workflowCurrentStepId = recorder.phaseQuery.currentStepId(request.workflowId)
-    return buildStatusProjection(request, records, decomposeTerminal, ledger, workflowCurrentStepId)
+    return buildStatusProjection(
+      request,
+      records,
+      decomposeTerminal,
+      ledger,
+      workflowCurrentStepId,
+    ).copy(routing = routing)
   }
 
   internal fun phaseBriefingTexts(
@@ -156,6 +206,7 @@ public class FeatureTaskRuntimeStatusService(
         records = normalizedRecords,
         ledger = normalizedLedger,
         decomposeTerminal = decomposeTerminal,
+        routing = null,
       ),
     )
   }
@@ -220,6 +271,7 @@ public class FeatureTaskRuntimeStatusService(
             "Acceptance repair state is stored at contract ${repair.version}; the next owned run quarantines " +
               "the original record and regenerates it at $ACCEPTANCE_CRITERION_REPAIR_STATE_CONTRACT_VERSION"
         },
+      routing = parts.routing,
     )
   }
 
@@ -335,6 +387,7 @@ private data class StatusProjectionParts(
   val records: Map<String, FeatureTaskRuntimePhaseRecord>,
   val ledger: List<FeatureTaskRuntimePhaseLedgerEntry>,
   val decomposeTerminal: FeatureTaskRuntimeDecomposeTerminal?,
+  val routing: FeatureTaskRuntimeRoutingStatus?,
 )
 
 public fun validationGateExecutionEvidence(

@@ -7,6 +7,7 @@ data class GoalRunnerSubtaskLaunchRequest(
   val invokedAgentId: String,
   val configuredAgentOverrideId: String?,
   val skillRunRequest: SkillRunRequest,
+  val selectedProviderId: String? = null,
 )
 
 data class GoalRunnerOutOfBandAcceptance(

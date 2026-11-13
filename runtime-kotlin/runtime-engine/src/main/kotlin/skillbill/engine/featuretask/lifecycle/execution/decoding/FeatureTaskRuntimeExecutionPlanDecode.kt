@@ -1,4 +1,4 @@
-package skillbill.engine.featuretask.lifecycle.execution
+package skillbill.engine.featuretask.lifecycle.execution.decoding
 
 import skillbill.contracts.JsonCodec
 import skillbill.error.featuretask.InvalidFeatureTaskRuntimeExecutionPlanSchemaError
@@ -20,6 +20,7 @@ import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseStrategyDispat
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseStrategyIdentity
 import skillbill.workflow.taskruntime.model.skeleton.RuntimeReviewSelection
 import skillbill.workflow.taskruntime.model.skeleton.StepLaunchAssignment
+import java.security.MessageDigest
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPlanKeys as Keys
 
 public fun decodeExecutionPlan(payload: Map<String, Any?>): ResolvedPhaseExecutionPlan {
@@ -171,3 +172,8 @@ public fun invalidPlanValue(): Nothing =
 
 private fun invalidSettings(reason: String): Nothing =
   throw InvalidFeatureTaskRuntimeExecutionPlanSchemaError("execution plan settings are invalid: $reason")
+
+public fun executionPolicyDigest(identity: String): String =
+  MessageDigest.getInstance("SHA-256")
+    .digest(JsonCodec.valueToJsonString(identity).toByteArray(Charsets.UTF_8))
+    .joinToString("") { "%02x".format(it) }

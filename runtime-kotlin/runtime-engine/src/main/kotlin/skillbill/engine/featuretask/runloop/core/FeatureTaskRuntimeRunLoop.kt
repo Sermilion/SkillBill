@@ -2,7 +2,10 @@ package skillbill.engine.featuretask.runloop.core
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.review.spec.SpecIntentProjectionResolver
+import skillbill.config.model.PhaseAgentRoutingSource
+import skillbill.config.model.WorkflowAgentAssignmentPolicyMode
 import skillbill.contracts.projectstore.LegacyProjectStatePaths
+import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeAgentResolver
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeLifecycleTelemetry
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeModelResolver
@@ -41,6 +44,8 @@ import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
 import skillbill.engine.featuretask.slot.state.PhaseRunState
 import skillbill.engine.recovery.recommendedDurableChildRecoveryCommand
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.workflow.WorkflowAgentAssignmentsFailureCode
 import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.diff.DiffResolverPort
@@ -383,19 +388,117 @@ public class FeatureTaskRuntimePhaseRunFactory(
     request: FeatureTaskRuntimeRunFacts,
     recorded: StepLaunchAssignment?,
   ): FeatureTaskRuntimeResolvedPhaseAgent =
-    FeatureTaskRuntimeAgentResolver.resolve(
-      phaseId = phaseId,
-      assignment = request.agentAssignment,
-      invokedAgentId = request.invokedAgentId,
-    ).let { resolved ->
-      val priorPhase = context.state.phase(phaseId).record
-      val providerPaused =
-        priorPhase?.status == WorkflowStepStatus.PAUSED &&
-          FeatureTaskRuntimeProviderLimitPause.isProviderLimitPauseReason(priorPhase.blockedReason.orEmpty())
+    frozenAgent(context, phaseId, request, recorded) ?: legacyAgent(context, phaseId, request, recorded)
+
+  private fun frozenAgent(
+    context: FeatureTaskRuntimeRunLoopContext,
+    phaseId: String,
+    request: FeatureTaskRuntimeRunFacts,
+    recorded: StepLaunchAssignment?,
+  ): FeatureTaskRuntimeResolvedPhaseAgent? =
+    request.admittedExecution?.workflowAgentAssignments
+      ?.takeIf { it.policyMode == WorkflowAgentAssignmentPolicyMode.FROZEN }
+      ?.let { frozen ->
+        val phase =
+          frozen.phaseAssignments[phaseId]
+            ?: run {
+              routingDiagnostic(context, phaseId, "refused", "missing_frozen_phase")
+              throw SkillBillRuntimeException(
+                WorkflowAgentAssignmentsFailureCode.INVALID_RECORD,
+                "Frozen routing for workflow '${request.workflowId}' has no assignment for phase '$phaseId'. " +
+                  "Keep the stored record and repair it before resuming.",
+              )
+            }
+        if (recorded != null && recorded.agentId != phase.agentId.wireValue) {
+          routingDiagnostic(context, phaseId, "refused", "provider_contradiction")
+          throw SkillBillRuntimeException(
+            WorkflowAgentAssignmentsFailureCode.INVALID_RECORD,
+            "Frozen routing for workflow '${request.workflowId}' " +
+              "selects '${phase.agentId.wireValue}' for '$phaseId', " +
+              "but its retained launch evidence selects '${recorded.agentId}'. " +
+              "Keep both records and repair the contradiction before resuming.",
+          )
+        }
+        FeatureTaskRuntimeResolvedPhaseAgent(
+          phaseId = phaseId,
+          invokedAgentId = frozen.invokedAgentId.wireValue,
+          configuredAgentOverrideId = frozen.configuredAgentOverrideId?.wireValue,
+          routingSource = PhaseAgentRoutingSource.valueOf(phase.source.name),
+          selectedProviderId = phase.agentId.wireValue,
+        )
+      }
+
+  private fun legacyAgent(
+    context: FeatureTaskRuntimeRunLoopContext,
+    phaseId: String,
+    request: FeatureTaskRuntimeRunFacts,
+    recorded: StepLaunchAssignment?,
+  ): FeatureTaskRuntimeResolvedPhaseAgent {
+    val legacy =
+      request.admittedExecution?.workflowAgentAssignments
+        ?.takeIf { it.policyMode == WorkflowAgentAssignmentPolicyMode.LEGACY }
+    val recordedPhase = legacy?.phaseAssignments?.get(phaseId)
+    val compatibilitySelection =
+      FeatureTaskRuntimeAgentResolver.resolve(
+        phaseId = phaseId,
+        assignment = request.agentAssignment.copy(matrix = null),
+        invokedAgentId = request.invokedAgentId,
+      )
+    val resolved =
+      compatibilitySelection.copy(
+        routingSource =
+          if (recordedPhase?.agentId?.wireValue == compatibilitySelection.resolvedAgentId) {
+            PhaseAgentRoutingSource.LEGACY_RECORDED
+          } else {
+            PhaseAgentRoutingSource.LEGACY_INVOKING
+          },
+      )
+    val priorPhase = context.state.phase(phaseId).record
+    val providerPaused =
+      priorPhase?.status == WorkflowStepStatus.PAUSED &&
+        FeatureTaskRuntimeProviderLimitPause.isProviderLimitPauseReason(priorPhase.blockedReason.orEmpty())
+    val retained =
       recorded?.takeIf { providerPaused }?.let { assignment ->
-        resolved.copy(invokedAgentId = assignment.agentId, configuredAgentOverrideId = null)
+        resolved.copy(
+          invokedAgentId = assignment.agentId,
+          configuredAgentOverrideId = null,
+          routingSource = PhaseAgentRoutingSource.LEGACY_RECORDED,
+          selectedProviderId = assignment.agentId,
+        )
       } ?: resolved
-    }
+    routingDiagnostic(
+      context,
+      phaseId,
+      "selected",
+      if (providerPaused && recorded != null) {
+        "provider_limit_retained"
+      } else if (retained.routingSource == PhaseAgentRoutingSource.LEGACY_RECORDED) {
+        "legacy_recorded"
+      } else {
+        "legacy_invoking"
+      },
+      retained.resolvedAgentId,
+    )
+    return retained
+  }
+}
+
+private const val ROUTING_DIAGNOSTIC_ID_LIMIT = 128
+
+private fun routingDiagnostic(
+  context: FeatureTaskRuntimeRunLoopContext,
+  phaseId: String,
+  outcome: String,
+  reason: String,
+  providerId: String? = null,
+) {
+  RuntimeDiagnosticsBestEffortWarning.record(
+    context.diagnostics,
+    "seam=workflow_agent_assignment workflow=${context.request.workflowId.take(
+      ROUTING_DIAGNOSTIC_ID_LIMIT,
+    )} phase=$phaseId " +
+      "provider=${providerId ?: "unknown"} outcome=$outcome reason=$reason",
+  )
 }
 
 public class FeatureTaskRuntimeRunLoop internal constructor(

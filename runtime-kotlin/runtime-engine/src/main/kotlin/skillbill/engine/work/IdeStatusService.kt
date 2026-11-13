@@ -775,6 +775,9 @@ public class IdeStatusService(
           blockedCount = status.blockedCount,
           phaseIds = page.phaseIds,
           totalPhaseCount = page.phaseIds.size,
+          routingClassification = status.routing?.classification?.name?.lowercase(),
+          routingFailureCode = status.routing?.failureCode?.toString(),
+          routingRecoveryGuidance = status.routing?.recoveryGuidance,
         ),
         page.hasMore,
       )
