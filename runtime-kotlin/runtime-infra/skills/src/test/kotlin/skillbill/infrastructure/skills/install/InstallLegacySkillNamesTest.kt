@@ -11,6 +11,7 @@ class InstallLegacySkillNamesTest {
   fun `retired feature skill keeps its link and mdp alias as cleanup names`() {
     val cleanupNames = legacySkillBillCleanupNames(listOf("skill-bill"))
 
+    assertContains(cleanupNames, "skill-bill")
     assertContains(cleanupNames, "bill-feature")
     assertContains(cleanupNames, "mdp-feature")
   }
@@ -41,6 +42,7 @@ class InstallLegacySkillNamesTest {
     assertContains(cacheNames, "bill-quality-check")
     assertFalse("bill-code-review" in cacheNames)
     assertFalse(cacheNames.any { name -> name.startsWith("mdp-") })
+    assertFalse("skill-bill" in cacheNames)
   }
 
   private companion object {

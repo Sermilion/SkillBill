@@ -86,6 +86,9 @@ public class OperationCardLaunches(
 
   internal fun find(token: String): OperationCardProjection? = cards.find(token)
 
+  internal fun launchContext(token: String): OperationLaunchContext? =
+    cards.find(token)?.let { cards.findLaunchContext(it.launchId) }
+
   internal fun findByLaunch(launchId: String): OperationCardProjection? = cards.findByLaunch(launchId)
 
   private companion object {

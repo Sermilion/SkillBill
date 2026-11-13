@@ -7,6 +7,7 @@ import skillbill.application.decomposition.model.SpecBundleScope
 import skillbill.application.decomposition.repoRelativePath
 import skillbill.application.workflow.decomposition.isPlanWorkflow
 import skillbill.engine.featuretask.lifecycle.checkpoint.pruneGoalPurgeCheckpointRefs
+import skillbill.engine.goal.goalRepositoryIdentity
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.model.GoalRunnerPurgeRequest
 import skillbill.engine.goalrunner.model.GoalRunnerPurgeResult
@@ -18,6 +19,7 @@ import skillbill.ports.db.model.DatabasePathProtectionResult
 import skillbill.ports.db.model.FencedTransactionResult
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.filesystem.model.DatabaseFileObservation
+import skillbill.ports.goalrunner.model.GoalPlanningOwnership
 import skillbill.ports.persistence.model.GoalPurgeTarget
 import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.repository.RepositoryEnclosingRootPort
@@ -30,9 +32,11 @@ import skillbill.ports.workflow.goalstate.model.GoalRuntimeDirectoryDeletion
 import skillbill.ports.workflow.goalworktree.GoalWorktreeResources
 import skillbill.ports.workflow.goalworktree.model.GoalWorktreeSettleRequest
 import skillbill.ports.workflow.goalworktree.model.GoalWorktreeSettlement
+import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
 import skillbill.workflow.taskruntime.artifact.FeatureTaskRuntimeRunEvidenceAddress
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Path
 
 @Inject
@@ -122,7 +126,7 @@ public class GoalRunnerPurgeCoordinator(
       when (
         val result =
           worktrees.settle(
-            GoalWorktreeSettleRequest(repositoryEnclosingRootPort.primaryRepositoryRoot(progress.repoRoot), path),
+            worktreeSettleRequest(progress.repoRoot, progress.issueKey, path),
           )
       ) {
         GoalWorktreeSettlement.Removed -> progress.removedPaths += path.toString()
@@ -289,16 +293,16 @@ public class GoalRunnerPurgeCoordinator(
     val worktreeRefusal =
       worktreePaths.firstNotNullOfOrNull { path ->
         if (repoRoot.toAbsolutePath().normalize().startsWith(path.toAbsolutePath().normalize())) {
-          "Run skill-bill goal purge $issueKey from the main checkout, not from the goal's worktree at $path."
+          "Run sona goal purge $issueKey from the main checkout, not from the goal's worktree at $path."
         } else {
           val verdict =
             worktrees.retentionVerdict(
-              GoalWorktreeSettleRequest(repositoryEnclosingRootPort.primaryRepositoryRoot(repoRoot), path),
+              worktreeSettleRequest(repoRoot, issueKey, path),
             )
           verdict?.let {
             "Goal '$issueKey' has ${it.reason.wireValue} in its worktree at $path. " +
               "Keep the work, or discard it with: " +
-              "git worktree remove --force $path. Then run skill-bill goal purge $issueKey again."
+              "git worktree remove --force $path. Then run sona goal purge $issueKey again."
           }
         }
       }
@@ -407,6 +411,48 @@ public class GoalRunnerPurgeCoordinator(
       unitOfWork.workflowStates.findStandaloneFeatureTaskCandidates(issueKey, repositoryIdentity)
         .any { candidate -> !candidate.workflow.isPlanWorkflow() }
     }
+  }
+
+  private fun worktreeSettleRequest(
+    repoRoot: Path,
+    issueKey: String,
+    path: Path,
+  ): GoalWorktreeSettleRequest {
+    val identity = goalRepositoryIdentity(repoRoot, repositoryEnclosingRootPort)
+    val ownership =
+      database.read { unit ->
+        val owner =
+          unit.goalPlanningOwnership.findByIssue(
+            identity,
+            FeatureTaskExecutionIdentityPolicy.canonicalIssueKey(issueKey),
+          )
+        val parentWorkflowId = owner?.parentWorkflowId
+        val matchingControl = parentWorkflowId?.let { unit.goalRunnerControls.controlState(it) }
+        val selectedPlanWorkflowId =
+          parentWorkflowId?.let { id ->
+            unit.workflowStates
+              .get(WorkflowFamily.TASK_RUNTIME, id)
+              ?.step(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN)
+              ?.planWorkflowId
+          }
+        owner?.takeIf { record ->
+          record.state == GoalPlanningOwnership.State.TRANSFERRED &&
+            matchingControl?.repositoryIdentity == identity &&
+            record.workflowId == selectedPlanWorkflowId &&
+            record.normalizedIssueKey == FeatureTaskExecutionIdentityPolicy.canonicalIssueKey(issueKey) &&
+            record.repositoryIdentity == identity &&
+            matchingControl.executionWorktreePath?.let(Path::of)?.toAbsolutePath()?.normalize() ==
+            path.toAbsolutePath().normalize()
+        }
+      }
+    return GoalWorktreeSettleRequest(
+      repositoryEnclosingRootPort.primaryRepositoryRoot(repoRoot),
+      path,
+      ownership,
+      identity,
+      issueKey,
+      ownership?.parentWorkflowId,
+    )
   }
 }
 

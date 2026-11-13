@@ -223,7 +223,7 @@ private fun NewTaskHomeBody(
     ) {
       val returning = state.home as? NewTaskHome.Returning
       val hasNeedsYouCard = returning != null && returning.needsYou.isNotEmpty()
-      val hasSections = recent.isNotEmpty() || returning != null
+      val hasSections = recent.entries.isNotEmpty() || recent.recoveries.isNotEmpty() || returning != null
       Column(Modifier.widthIn(max = CONTENT_MAX_WIDTH).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(if (hasSections) 32.dp else 40.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
           BasicText("What should we ship?", Modifier.semantics { heading() }, style = type.t2xl.copy(color = colors.fg))
@@ -233,9 +233,9 @@ private fun NewTaskHomeBody(
           )
         }
         StepLine(progress, preview)
-        if (recent.isNotEmpty()) {
+        if (recent.entries.isNotEmpty()) {
           RecentChatsSection(
-            chats = recent,
+            chats = recent.entries,
             selectedRoot = root,
             openSessionIds = openSessionIds,
             now = host.now,
@@ -246,6 +246,7 @@ private fun NewTaskHomeBody(
             nextCardFocusRequester = if (hasNeedsYouCard) needsYouFocusRequester else FocusRequester.Default,
           )
         }
+        SavedChatRecoverySection(recent.recoveries)
         if (returning != null) {
           NeedsYouSection(
             returning,

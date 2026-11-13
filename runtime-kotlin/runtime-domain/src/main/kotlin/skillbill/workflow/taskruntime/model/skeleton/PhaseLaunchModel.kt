@@ -68,7 +68,6 @@ data class EffectiveLaunchModel(
     requestedModel?.let { require(it.isNotBlank() && LAUNCH_MODEL_TOKEN_PATTERN.matches(it)) }
     requestedEffort?.let { require(it.isNotBlank()) }
     effectiveModel?.let { require(it.isNotBlank() && LAUNCH_MODEL_TOKEN_PATTERN.matches(it)) }
-    require(profile == PhaseModelProfileClassifier.classify(namespace, effectiveModel))
     if (provenance == LaunchModelProvenance.UNRESOLVED) {
       require(unknownReason != null)
     } else {
@@ -88,28 +87,6 @@ data class StepLaunchAssignment(
   }
 
   val profile: PhaseModelProfile get() = launch.profile
-}
-
-object PhaseModelProfileClassifier {
-  const val ANTHROPIC_OPUS_55: String = "claude-opus-5-5"
-  const val BEDROCK_OPUS_55: String = "anthropic.claude-opus-5-5"
-
-  fun classify(
-    namespace: LaunchProviderNamespace,
-    effectiveModel: String?,
-  ): PhaseModelProfile {
-    val model = effectiveModel ?: return PhaseModelProfile.CANONICAL
-    return when (namespace) {
-      LaunchProviderNamespace.ANTHROPIC_API,
-      LaunchProviderNamespace.GOOGLE,
-      LaunchProviderNamespace.CLAUDE_PLATFORM_AWS,
-      ->
-        if (model == ANTHROPIC_OPUS_55) PhaseModelProfile.OPUS_5_5 else PhaseModelProfile.CANONICAL
-      LaunchProviderNamespace.BEDROCK ->
-        if (model == BEDROCK_OPUS_55) PhaseModelProfile.OPUS_5_5 else PhaseModelProfile.CANONICAL
-      LaunchProviderNamespace.OPAQUE -> PhaseModelProfile.CANONICAL
-    }
-  }
 }
 
 fun passThroughLaunchModel(

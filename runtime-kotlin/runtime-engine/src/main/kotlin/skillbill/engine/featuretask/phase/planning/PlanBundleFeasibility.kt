@@ -124,8 +124,8 @@ public object PlanBundleFeasibility {
   internal const val REPAIRED: String = "$PREFIX repaired"
   private val REPAIRED_HEADER = Regex("""bundle-feasibility-v2: repaired(?:[^\w-].*)?""")
   private val REVIEW_HEADER = Regex("""bundle-feasibility-v2: (approved|changes_requested) ([0-9a-f]{64})""")
-  private val REVIEW_LINE = Regex("""(criterion|conflict) ([1-9][0-9]*\.[1-9][0-9]*): (\S.*)""")
-  private val CITATION = Regex("""(?:^|\s)([^\s:]+):([1-9][0-9]*)(?=\s|$|[),.;])""")
+  private val REVIEW_LINE =
+    Regex("""(?:[-*]\s+)?`?(criterion|conflict) ([1-9][0-9]*\.[1-9][0-9]*)`?:\s*(.*)""")
 
   internal fun reportsRepaired(value: String): Boolean =
     value.lineSequence().firstOrNull()?.trimEnd()?.let(REPAIRED_HEADER::matches) == true
@@ -156,13 +156,15 @@ public object PlanBundleFeasibility {
     planner: FeatureTaskRuntimeDecompositionPlanner,
     repoRoot: Path,
     issueKey: String,
-  ): PlanBundleFeasibilitySnapshot = captureInDirectory(planner, repoRoot, issueKey, null)
+    resolveSpecPath: (String) -> String = { it },
+  ): PlanBundleFeasibilitySnapshot = captureInDirectory(planner, repoRoot, issueKey, null, resolveSpecPath)
 
   internal fun captureInDirectory(
     planner: FeatureTaskRuntimeDecompositionPlanner,
     repoRoot: Path,
     issueKey: String,
     directory: Path?,
+    resolveSpecPath: (String) -> String = { it },
   ): PlanBundleFeasibilitySnapshot {
     val parent =
       directory?.resolve("spec.md")
@@ -174,7 +176,9 @@ public object PlanBundleFeasibility {
       planner.specText(parent),
       planner.specText(parent.resolveSibling(DECOMPOSITION_MANIFEST_FILENAME)),
       manifest.subtasks.associate {
-        val path = directory?.resolve(Path.of(it.specPath).fileName) ?: planner.bundlePath(repoRoot, it.specPath)
+        val path =
+          directory?.resolve(Path.of(it.specPath).fileName)
+            ?: planner.bundlePath(repoRoot, resolveSpecPath(it.specPath))
         it.id to planner.specText(path)
       },
     )
@@ -313,9 +317,10 @@ public object PlanBundleFeasibility {
     requiredRefs: List<String> = snapshot.criterionRefs,
   ): ReviewParseResult {
     val lines = value.lines()
-    val header = lines.firstOrNull()?.let(REVIEW_HEADER::matchEntire)
+    val headerIndex = lines.indexOfFirst { REVIEW_HEADER.containsMatchIn(it) }
+    val header = lines.getOrNull(headerIndex)?.let(REVIEW_HEADER::find)
     return when {
-      header == null -> ReviewParseResult.Rejected("Feasibility receipt header is malformed.")
+      header == null -> ReviewParseResult.Rejected("Feasibility receipt header is missing.")
       header.groupValues[FINGERPRINT_GROUP] != snapshot.fingerprint ->
         ReviewParseResult.Rejected("Feasibility receipt identifies a stale bundle fingerprint.")
       else ->
@@ -323,7 +328,7 @@ public object PlanBundleFeasibility {
           value,
           header.groupValues[1] == "approved",
           header.groupValues[FINGERPRINT_GROUP],
-          lines.drop(1),
+          lines.filterIndexed { index, _ -> index != headerIndex },
           requiredRefs,
         )
     }
@@ -331,44 +336,41 @@ public object PlanBundleFeasibility {
 
   private fun parseReviewLines(
     value: String,
-    approved: Boolean,
+    headerApproves: Boolean,
     fingerprint: String,
     lines: List<String>,
     requiredRefs: List<String>,
   ): ReviewParseResult {
-    val resultLines = mutableListOf<ReviewLine>()
-    for (line in lines.filter(String::isNotBlank)) {
-      val match =
-        REVIEW_LINE.matchEntire(line)
-          ?: return ReviewParseResult.Rejected("Malformed feasibility receipt line.")
-      reviewLineRejection(match)?.let { return ReviewParseResult.Rejected(it) }
-      resultLines += ReviewLine(match.groupValues[FINGERPRINT_GROUP], match.groupValues[1] == "conflict", line)
-    }
-    val refs = resultLines.map { it.ref }
+    val byRef =
+      lines
+        .mapNotNull { line ->
+          REVIEW_LINE.matchEntire(line.trim())?.let { match ->
+            ReviewLine(match.groupValues[REF_GROUP], match.groupValues[1] == "conflict", line)
+          }
+        }.groupBy(ReviewLine::ref)
+    val missing = requiredRefs.filterNot(byRef::containsKey)
+    val resultLines =
+      requiredRefs.mapNotNull {
+          ref ->
+        byRef[ref]?.let { candidates -> candidates.firstOrNull { it.conflict } ?: candidates.first() }
+      }
     val hasConflicts = resultLines.any { it.conflict }
     return when {
-      refs != requiredRefs || refs.isEmpty() ->
+      missing.isNotEmpty() ->
         ReviewParseResult.Rejected(
-          "Feasibility receipt must cover every required criterion exactly once in manifest order.",
+          "Feasibility receipt does not cover required criteria: ${missing.joinToString(", ")}.",
         )
-      approved == hasConflicts ->
-        ReviewParseResult.Rejected("Feasibility receipt verdict does not match its conflict lines.")
-      else -> ReviewParseResult.Accepted(ReviewReceipt(approved, fingerprint, resultLines, value))
+      !headerApproves && !hasConflicts ->
+        ReviewParseResult.Rejected("Feasibility receipt requests changes but names no conflict line.")
+      else ->
+        ReviewParseResult.Accepted(
+          ReviewReceipt(headerApproves && !hasConflicts, fingerprint, resultLines, value),
+        )
     }
   }
 
-  private fun reviewLineRejection(match: MatchResult): String? {
-    val evidence = match.groupValues[EVIDENCE_GROUP]
-    return when {
-      evidence.length < MIN_EVIDENCE_CHARS -> "Feasibility evidence must contain at least 40 characters."
-      match.groupValues[1] == "conflict" && !CITATION.containsMatchIn(evidence) ->
-        "Every feasibility conflict must cite a nonempty path and positive line."
-      else -> null
-    }
-  }
-
+  private const val REF_GROUP = 2
   private const val FINGERPRINT_GROUP = 2
-  private const val EVIDENCE_GROUP = 3
 
   internal fun approvalRejection(
     snapshot: PlanBundleFeasibilitySnapshot,
@@ -378,6 +380,4 @@ public object PlanBundleFeasibility {
       is ReviewParseResult.Accepted -> if (parsed.receipt.approved) null else "Feasibility receipt requests changes."
       is ReviewParseResult.Rejected -> parsed.reason
     }
-
-  private const val MIN_EVIDENCE_CHARS: Int = 40
 }

@@ -17,7 +17,7 @@ class SkillBillDispatcherRoutingTest {
 
   @Test
   fun `dispatcher routes exactly the in-memory phase definitions and each route parses`() {
-    val routed = Regex("""skill-bill phase ([a-z_-]+)""").findAll(dispatcher).map { it.groupValues[1] }.toSet()
+    val routed = Regex("""sona phase ([a-z_-]+)""").findAll(dispatcher).map { it.groupValues[1] }.toSet()
 
     assertEquals(PhaseInvocationParser.phaseNames().toSet(), routed)
     routed.forEach { name -> assertEquals(name, PhaseInvocationParser.parse(name, listOf("SKILL-1")).definitionId) }
@@ -25,7 +25,7 @@ class SkillBillDispatcherRoutingTest {
 
   @Test
   fun `dispatcher routes exactly the registered operations and each route parses`() {
-    val routed = Regex("""skill-bill operation ([a-z-]+)""").findAll(dispatcher).map { it.groupValues[1] }.toSet()
+    val routed = Regex("""sona operation ([a-z-]+)""").findAll(dispatcher).map { it.groupValues[1] }.toSet()
     val home = Files.createTempDirectory("dispatcher-operations")
     val unknown =
       try {
@@ -77,14 +77,14 @@ class SkillBillDispatcherRoutingTest {
   fun `phase with operation stays a usage error that never reaches the cli`() {
     assertContains(dispatcher, "the caller passes `phase:` together with `operation:`: report a usage error.")
     assertTrue(dispatcher.contains("Stop without running any CLI command when:"))
-    assertFalse(Regex("""skill-bill phase [^\n`]*operation:""").containsMatchIn(dispatcher))
+    assertFalse(Regex("""sona phase [^\n`]*operation:""").containsMatchIn(dispatcher))
   }
 
   @Test
   fun `full run launches intake through the goal runtime without standalone preparation`() {
     assertContains(
       section(dispatcher, "Launch"),
-      "skill-bill <intake> --agent <currently-executing-agent> --no-live-output",
+      "sona <intake> --agent <currently-executing-agent> --no-live-output",
     )
     assertContains(section(dispatcher, "Intake"), "allocate the next local key by default")
     assertContains(section(dispatcher, "Intake"), "A supplied key with requirements launches without tracker lookup.")
@@ -105,9 +105,9 @@ class SkillBillDispatcherRoutingTest {
     val resolution = section(dispatcher, "Issue resolution")
     assertContains(resolution, "A readable local spec launches directly through the full runtime.")
     assertContains(resolution, "Do not run `work status` or `work list` during intake.")
-    assertFalse(resolution.contains("skill-bill work list"))
-    assertFalse(resolution.contains("skill-bill work status"))
-    assertContains(resolution, "skill-bill goal status <issue-key> --repo-root <repo-root>")
+    assertFalse(resolution.contains("sona work list"))
+    assertFalse(resolution.contains("sona work status"))
+    assertContains(resolution, "sona goal status <issue-key> --repo-root <repo-root>")
   }
 
   private fun section(

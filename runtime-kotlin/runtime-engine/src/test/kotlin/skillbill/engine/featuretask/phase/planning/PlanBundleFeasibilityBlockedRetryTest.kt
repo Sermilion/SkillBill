@@ -148,9 +148,9 @@ class PlanBundleFeasibilityBlockedRetryTest {
         projectCheckout =
           ProjectCheckout(
             TestRepositoryEnclosingRoot,
+            database,
             testProjectStore,
             InPlaceGoalWorktreeResources,
-            NoopWorkflowGitOperations,
           ),
       )
 

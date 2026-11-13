@@ -82,7 +82,7 @@ internal class WorkflowGoalRunnerPurgePersistence(
             ?.takeIf { repositoryEnclosingRootPort.primaryRepositoryRoot(it) == primaryRoot }
             ?: return@mapNotNull null
         "workflows ${workflowIds.sorted().joinToString()} match $issueKey but belong to worktree $worktree; " +
-          "they were not purged (run `skill-bill goal purge $issueKey --repo-root $worktree`)"
+          "they were not purged (run `sona goal purge $issueKey --repo-root $worktree`)"
       }
   }
 

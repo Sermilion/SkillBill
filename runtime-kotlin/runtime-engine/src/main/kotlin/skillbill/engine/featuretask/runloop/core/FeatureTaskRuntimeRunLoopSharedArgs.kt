@@ -19,6 +19,7 @@ import skillbill.engine.featuretask.slot.state.PhaseRunGoal
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
+import skillbill.ports.taskruntime.model.PreplanEvidenceWriteResult
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
@@ -340,6 +341,7 @@ internal data class DeclaredLaunchArgs(
   val context: LaunchRejectionMeasurementContext,
   val prompt: PhaseStepPromptSource,
   val boundStep: PhaseAcceptedStepExecution,
+  val preplanEvidence: PreplanEvidenceWriteResult.Written? = null,
 )
 
 internal data class PauseAndPersistInPhaseArgs(

@@ -23,7 +23,14 @@ class NativeBypassLaunchTest {
           effects: ApprovalOwnerEffects,
         ): ApprovalOwnerOpenResult = error("A bypass launch must not consult operator approvals")
       }
-    for (agent in listOf(SupportedAgent.CODEX, SupportedAgent.CLAUDE, SupportedAgent.CURSOR, SupportedAgent.JUNIE)) {
+    val bypassMarkers: Map<SupportedAgent, (List<String>) -> Boolean> =
+      mapOf(
+        SupportedAgent.CODEX to { command -> "--dangerously-bypass-approvals-and-sandbox" in command },
+        SupportedAgent.CLAUDE to { command -> "--dangerously-skip-permissions" in command },
+        SupportedAgent.CURSOR to { command -> "--force" in command && "--print" in command },
+        SupportedAgent.JUNIE to { command -> "--output-format" in command && "text" in command },
+      )
+    for ((agent, hasBypassMarker) in bypassMarkers) {
       val runner = RecordingAgentRunProcessRunner()
       val adapters =
         headlessAgentRunAdapters(
@@ -39,15 +46,7 @@ class NativeBypassLaunchTest {
       assertNull(process.approval.channel, agent.id)
       assertFalse("acp" in process.launch.command || "--acp" in process.launch.command, agent.id)
       assertFalse("app-server" in process.launch.command, agent.id)
-      when (agent) {
-        SupportedAgent.CODEX -> assertTrue("--dangerously-bypass-approvals-and-sandbox" in process.launch.command)
-        SupportedAgent.CLAUDE -> assertTrue("--dangerously-skip-permissions" in process.launch.command)
-        SupportedAgent.CURSOR -> assertTrue("--force" in process.launch.command && "--print" in process.launch.command)
-        SupportedAgent.JUNIE ->
-          assertTrue(
-            "--output-format" in process.launch.command && "text" in process.launch.command,
-          )
-      }
+      assertTrue(hasBypassMarker(process.launch.command), agent.id)
     }
   }
 

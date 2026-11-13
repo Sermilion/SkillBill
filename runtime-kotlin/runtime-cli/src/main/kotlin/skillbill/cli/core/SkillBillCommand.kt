@@ -78,7 +78,7 @@ internal fun resolveVerboseLogging(
 class SkillBillCommand(
   commands: CliCommandProvider,
 ) : DocumentedCliCommand(
-    "skill-bill",
+    "sona",
     "Run a goal, a standalone phase, or a runtime operation, and inspect review and telemetry data.",
   ) {
   init {

@@ -15,6 +15,7 @@ import dev.skillbill.desktop.core.domain.model.ReadProblem
 import dev.skillbill.desktop.core.domain.model.TelemetryLevel
 import dev.skillbill.desktop.core.domain.model.TelemetryLevelRead
 import dev.skillbill.desktop.core.domain.model.TelemetryPreviousLevel
+import dev.skillbill.desktop.core.domain.model.AdvertisedAgentChoices
 
 /** The runtime's machine and project config, telemetry level, agent detection and phase instruction files. */
 interface RuntimeConfigRepository {
@@ -23,6 +24,9 @@ interface RuntimeConfigRepository {
 
   /** Reads the machine document and resolves each agent's phase directives. */
   suspend fun modelMatrix(): ModelMatrixRead
+
+  /** Acquires provider-advertised models and the selected model's offered effort values. */
+  suspend fun advertisedAgentChoices(request: AdvertisedAgentChoicesRequest): AdvertisedAgentChoices
 
   /** A [ReadProblem] when the runtime could not be reached; the document's own state otherwise. */
   suspend fun machineConfig(): ConfigRead<MachineConfig>
@@ -84,6 +88,11 @@ interface RuntimeConfigRepository {
   /** Lists known step stems in runtime order, with aliases after their target step; incomplete reads retain observed entries. */
   suspend fun phaseInstructionFiles(repoRoot: String): PhaseInstructionFilesRead
 }
+
+data class AdvertisedAgentChoicesRequest(
+  val repositoryRoot: String?,
+  val modelId: String?,
+)
 
 sealed interface ClaudeConfigDirectoriesRead {
   data class Success(val directories: List<String>) : ClaudeConfigDirectoriesRead

@@ -69,7 +69,7 @@ class CliWorkflowUpdateRuntimeTest {
           "feature_flag_audit_receipt",
           "unit_test_value_receipt",
         ),
-      readOnlyCommand = "skill-bill --db '$dbPath' verify-workflow show '$workflowId' --format json",
+      readOnlyCommand = "sona --db '$dbPath' verify-workflow show '$workflowId' --format json",
     )
     assertFalse(update["read_only_full_state_command"].toString().contains(" workflow show "))
   }

@@ -1,3 +1,26 @@
+## [2026-11-12] SKILL-535 add OpenCode support
+Areas: install.sh, orchestration/contracts, runtime-kotlin install, launcher, workflow and SQLite, desktop configuration and chat
+- MEDIUM feature. OpenCode installation resolves effective roots and edits the managed JSON/JSONC MCP subtree while preserving unrelated content. Native specialists render from neutral sources and use managed link, inventory and digest checks.
+- ACP execution acknowledges advertised model, effort and mode before prompting. Owned runs require complete capture and matching durable settlement when the launched prompt requests it.
+- Reusable: OpenCode launch identity retains profile and configuration fingerprints across resume without persisting inline configuration. A temporary ACP setup session acquires advertised model and effort choices for the editor.
+- Governed review uses private per-lane launch scopes, verified workers and lane-bound evidence authority. Admission is limited to the pinned OpenCode 1.15.3 API-authenticated baseline and supported host permissions.
+- Desktop chat saves provider handles and configuration bindings, resumes with session/load, preserves unsafe records for recovery, and applies chat permission and stop settlement rules.
+- SQLite migration 122 carries optional launch identity; the current desktop read schema is 123. Writable readiness repairs a missing or stale desktop read identity after supported migrations, preserves work data, records a diagnostic, and rejects newer or unrecognized schemas.
+- Limits: live provider execution, review isolation and desktop continuity are not fully established by the supplied evidence. QA finished with findings, and later validation changed the tree QA examined.
+Feature flag: N/A
+Acceptance criteria: 5/5 addressed in source; integrated acceptance remains unconfirmed.
+
+## [2026-11-13] SONA-5 rename public commands to sona
+Areas: install.sh, uninstall.sh, scripts, docs, orchestration, runtime-kotlin, desktop, skills/skill-bill, .codex
+- MEDIUM feature. Public CLI is sona, MCP is sona-mcp with server sona, listed skill is /sona, and the desktop launcher is sona-app with visible name Sona. Canonical skills/skill-bill, internal-for: skill-bill, raw operations, telemetry, state paths and historical records stay unchanged.
+- The owned skill-bill launcher prints only "skill-bill has been renamed to sona. Run sona instead." plus a newline and exits 0 for every argument list, without runtime lookup or dispatch. Publication removes skill-bill-mcp only when it targets this installation; unrelated occupants stay with a warning.
+- ListedSkillNames maps canonical skill-bill to public sona. Authoring accepts either spelling and installs one target. MCP registration and removal recognize both product names; TOML removal matches owned nested tables without deleting neighboring servers or linear-sona.
+- Fresh recovery, planning, continuation, desktop launch, chat, review and operator guidance emit sona or /sona. DetachedWorkRunLauncher resolves only sona so a missing binary cannot fall through to the notice shim. The update-check action hint says Checks for Sona updates.
+- Reusable: ListedSkillNames; McpConfigKeys in registration adapters; existing launcher ownership, staging and rollback. Prefix-dependent consumers such as archive export changed with their command producers.
+- Limits: no persisted-schema migration. Unrelated files, links and dangling targets stay and return typed ownership failures. Native Debian, macOS and Windows installer checks were unavailable here. Validate changed code after QA settled, including this hint, so QA did not re-test the published tree.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
+
 ## [2026-11-10] SKILL-535 — Carry captured roots into desktop work items
 Areas: runtime-infra/sqlite/idestatus; desktop/core/domain and desktop/core/data/runtime
 - MEDIUM feature. Optional `primaryRepositoryRoot` survives SQLite snapshot caching, validation, and decoding; absent and null legacy values remain readable, while malformed values retain the undecodable-row diagnostic path.

@@ -17,7 +17,6 @@ import skillbill.engine.featuretask.runloop.observability.AgentBuildObserverFact
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepBindingCoordinator
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
-import skillbill.engine.featuretask.slot.ModelDirectiveSupplements
 import skillbill.engine.featuretask.slot.PhaseBindingFactory
 import skillbill.engine.featuretask.slot.PhaseBindingFamily
 import skillbill.engine.featuretask.slot.PhaseStrategy
@@ -33,6 +32,7 @@ import skillbill.engine.featuretask.slot.state.PhaseRunState
 import skillbill.engine.featuretask.slot.state.PhaseSettledEnvelopeRead
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
+import skillbill.error.featuretask.FeatureTaskRuntimePhaseOutputFailureCode
 import skillbill.error.featuretask.PhaseRunFanOutUnsupportedError
 import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.ports.featuretask.PhaseInstructionFileSource
@@ -86,8 +86,6 @@ internal class FeatureTaskRuntimeRunLoopDurableState(
   override fun runnerFor(stepId: String) = strategies.runnerFor(stepId, executionPlan)
 
   override fun selectedOwnerOf(stepId: String): PhaseStrategy? = strategies.selectedOwnerOf(stepId, executionPlan)
-
-  override val modelDirectiveSupplements: ModelDirectiveSupplements get() = strategies.modelDirectiveSupplements
 
   override val phaseInstructionSource: PhaseInstructionFileSource get() = strategies.phaseInstructionSource
 
@@ -181,7 +179,10 @@ internal class FeatureTaskRuntimeRunLoopDurableState(
         ?.let { PhaseSettledEnvelopeRead.Found(it.envelope) }
         ?: PhaseSettledEnvelopeRead.None
     } catch (error: SkillBillRuntimeException) {
-      error.rethrowUnless(error.code == FeatureTaskRuntimeFailureCode.INVALID_VALIDATION_EVIDENCE_SCHEMA)
+      error.rethrowUnless(
+        error.code == FeatureTaskRuntimeFailureCode.INVALID_VALIDATION_EVIDENCE_SCHEMA ||
+          error.code is FeatureTaskRuntimePhaseOutputFailureCode,
+      )
       PhaseSettledEnvelopeRead.Failed(error)
     }
 }

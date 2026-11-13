@@ -29,7 +29,7 @@ class ConfigCommand(
   editCommand: ConfigEditCommand,
 ) : DocumentedNoOpCliCommand(
     "config",
-    "Inspect resolved project configuration (project store config.yaml; see skill-bill project path).",
+    "Inspect resolved project configuration (project store config.yaml; see sona project path).",
   ) {
   init {
     subcommands(

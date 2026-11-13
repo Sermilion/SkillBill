@@ -80,6 +80,43 @@ properties:
                         content_sha256: {type: string, pattern: "^[0-9a-f]{64}$"}
                         description: {type: string}
                         content: {type: string}
+                  open_code_identity:
+                    oneOf:
+                      - type: "null"
+                      - type: object
+                        additionalProperties: false
+                        required: [home, config_home, data_home, cache_home, state_home, config_directory, config_file, disable_project_config, effective_home, effective_config_home, effective_data_home, effective_cache_home, effective_state_home, effective_config_directory, effective_config_file, inline_config_present, inline_config_fingerprint]
+                        properties:
+                          home: {$ref: "#/$defs/open_code_selection"}
+                          config_home: {$ref: "#/$defs/open_code_selection"}
+                          data_home: {$ref: "#/$defs/open_code_selection"}
+                          cache_home: {$ref: "#/$defs/open_code_selection"}
+                          state_home: {$ref: "#/$defs/open_code_selection"}
+                          config_directory: {$ref: "#/$defs/open_code_selection"}
+                          config_file: {$ref: "#/$defs/open_code_selection"}
+                          disable_project_config: {$ref: "#/$defs/open_code_selection"}
+                          effective_home: {type: string, minLength: 1}
+                          effective_config_home: {type: string, minLength: 1}
+                          effective_data_home: {type: string, minLength: 1}
+                          effective_cache_home: {type: string, minLength: 1}
+                          effective_state_home: {type: string, minLength: 1}
+                          effective_config_directory: {type: string, minLength: 1}
+                          effective_config_file: {type: [string, "null"]}
+                          inline_config_present: {type: boolean}
+                          inline_config_fingerprint: {type: [string, "null"], pattern: "^[0-9a-f]{64}$"}
+                        allOf:
+                          - if:
+                              properties:
+                                inline_config_present: {const: true}
+                            then:
+                              properties:
+                                inline_config_fingerprint: {type: string, pattern: "^[0-9a-f]{64}$"}
+                          - if:
+                              properties:
+                                inline_config_present: {const: false}
+                            then:
+                              properties:
+                                inline_config_fingerprint: {type: "null"}
           execution_plans:
             oneOf:
               - type: "null"
@@ -269,6 +306,20 @@ allOf:
                     properties:
                       final_validation_content_fingerprint: {type: "null"}
 $defs:
+  open_code_selection:
+    type: object
+    additionalProperties: false
+    required: [supplied, value]
+    properties:
+      supplied: {type: boolean}
+      value: {type: [string, "null"]}
+    oneOf:
+      - properties:
+          supplied: {const: false}
+          value: {type: "null"}
+      - properties:
+          supplied: {const: true}
+          value: {type: string}
   validation_gate_progress:
     type: object
     additionalProperties: false

@@ -16,6 +16,7 @@ import skillbill.infrastructure.launcher.process.cursor.AcpProvider
 import skillbill.infrastructure.launcher.process.cursor.CursorAcpLaunch
 import skillbill.infrastructure.launcher.process.cursor.CursorAcpMcpDependency
 import skillbill.infrastructure.launcher.process.cursor.CursorSessionChannel
+import skillbill.infrastructure.launcher.process.cursor.commandCarriesModel
 import skillbill.infrastructure.launcher.process.cursor.cursorAcpDependencyRefusal
 import skillbill.infrastructure.launcher.process.interaction.AgentRunApprovalChannelOpening
 import skillbill.infrastructure.launcher.process.interaction.AgentRunApprovalOpenResult
@@ -109,7 +110,7 @@ internal class ProcessAgentRunAdapter(
 
   fun launch(request: SkillRunRequest): AgentRunLaunchOutcome {
     request.modelObserver?.reported(null)
-    approvalRefusal(request)?.let { return it }
+    (approvalRefusal(request) ?: builderLaunchRefusal(request))?.let { return it }
     val built = commandBuilder.build(request)
     val cardRequiredCursor =
       built.approvalProtocol == AgentRunApprovalProtocol.CURSOR_ACP &&
@@ -136,6 +137,12 @@ internal class ProcessAgentRunAdapter(
     }
     return launchResolved(request, built, cursorDependency)
   }
+
+  private fun builderLaunchRefusal(request: SkillRunRequest): UnsupportedAgentRunLaunch? =
+    commandBuilder.launchRefusal(request)?.let { reason ->
+      diagnostics.warning("seam=agent_run outcome=launch_prerequisite_unsupported provider=${agent.id}")
+      UnsupportedAgentRunLaunch(agent, reason)
+    }
 
   private fun approvalRefusal(request: SkillRunRequest): UnsupportedAgentRunLaunch? {
     if (request.approval is AgentRunApprovalRequirement.Unowned ||
@@ -183,14 +190,12 @@ internal class ProcessAgentRunAdapter(
       )
     try {
       val process = processRequest(command, streamRequest)
-      when (command.approvalProtocol) {
-        AgentRunApprovalProtocol.CURSOR_ACP ->
-          return launchAcpSession(streamRequest, command, process, cursorDependency, AcpProvider.Cursor)
-        AgentRunApprovalProtocol.JUNIE_ACP ->
-          return launchAcpSession(streamRequest, command, process, cursorDependency, AcpProvider.Junie)
-        else -> Unit
+      val acpProvider = command.approvalProtocol?.acpProvider()
+      return if (acpProvider != null) {
+        launchAcpSession(streamRequest, command, process, cursorDependency, acpProvider)
+      } else {
+        launchOtherSession(streamRequest, command, process)
       }
-      return launchOtherSession(streamRequest, command, process)
     } finally {
       tap?.finish()
       displaySink?.finish()
@@ -469,6 +474,8 @@ internal class ProcessAgentRunAdapter(
       AgentRunApprovalProtocol.CODEX_APP_SERVER,
       AgentRunApprovalProtocol.CURSOR_ACP,
       AgentRunApprovalProtocol.JUNIE_ACP,
+      AgentRunApprovalProtocol.DEVIN_ACP,
+      AgentRunApprovalProtocol.OPENCODE_ACP,
       -> null
       null -> refusedOpening("agent '${agent.id}' cannot host approval cards for this launch")
     }
@@ -481,9 +488,10 @@ internal class ProcessAgentRunAdapter(
     dependency: CursorAcpMcpDependency,
     provider: AcpProvider,
   ): AgentRunLaunchOutcome {
+    val devin = provider == AcpProvider.Devin
     val launch =
       CursorAcpLaunch(
-        command.workingDirectory.toString(),
+        if (devin) absolutePath(command.workingDirectory) else command.workingDirectory.toString(),
         requireNotNull(command.stdinText),
         command.sessionModel,
         if (provider != AcpProvider.Cursor) {
@@ -493,6 +501,10 @@ internal class ProcessAgentRunAdapter(
         },
         mcpDependency = dependency,
         provider = provider,
+        mcpServers = command.acpMcpServers,
+        additionalDirectories =
+          if (devin) request.additionalWritableDirectories.map(::absolutePath).distinct() else emptyList(),
+        modelOnCommandLine = commandCarriesModel(command.command, command.sessionModel),
       )
     val deadline = approvalEnclosingDeadline(clock, request.timeout)
     val result =
@@ -603,7 +615,8 @@ internal class ProcessAgentRunAdapter(
       }
       is ReportedLaunchIdentity.Reported -> {
         if (command.approvalProtocol != AgentRunApprovalProtocol.CURSOR_ACP &&
-          command.approvalProtocol != AgentRunApprovalProtocol.JUNIE_ACP
+          command.approvalProtocol != AgentRunApprovalProtocol.JUNIE_ACP &&
+          command.approvalProtocol != AgentRunApprovalProtocol.DEVIN_ACP
         ) {
           reportedIdentity.identities.singleOrNull()?.let { request.modelObserver?.reported(it) }
         }
@@ -795,6 +808,8 @@ private fun decodeCodexJsonl(stdout: String): DecodedAgentRunOutput {
 
 internal const val RAW_OUTPUT_PREVIEW_MAX_CHARS = 2_000
 
+private fun absolutePath(path: Path): String = path.toAbsolutePath().normalize().toString()
+
 internal data class AgentRunWorkerBinding(
   val databasePath: Path? = null,
   val runtimeMcpBin: Path? = null,
@@ -821,6 +836,14 @@ internal fun headlessAgentRunAdapters(
       runtimeMcpBin = workerBinding.runtimeMcpBin,
     ),
     JunieAgentRunCommandBuilder(databasePath = workerBinding.databasePath),
+    OpenCodeAgentRunCommandBuilder(
+      databasePath = workerBinding.databasePath,
+      runtimeMcpBin = workerBinding.runtimeMcpBin,
+    ),
+    DevinAgentRunCommandBuilder(
+      databasePath = workerBinding.databasePath,
+      runtimeMcpBin = workerBinding.runtimeMcpBin,
+    ),
     CursorAgentRunCommandBuilder(databasePath = workerBinding.databasePath),
   ).associate { builder ->
     builder.agent to
@@ -849,3 +872,12 @@ private fun approvalEnclosingDeadline(
   clock: Clock,
   timeout: Duration?,
 ): Instant? = timeout?.let { clock.instant().plusMillis(it.inWholeMilliseconds) }
+
+private fun AgentRunApprovalProtocol.acpProvider(): AcpProvider? =
+  when (this) {
+    AgentRunApprovalProtocol.CURSOR_ACP -> AcpProvider.Cursor
+    AgentRunApprovalProtocol.JUNIE_ACP -> AcpProvider.Junie
+    AgentRunApprovalProtocol.DEVIN_ACP -> AcpProvider.Devin
+    AgentRunApprovalProtocol.OPENCODE_ACP -> AcpProvider.OpenCode
+    AgentRunApprovalProtocol.CLAUDE_HOST, AgentRunApprovalProtocol.CODEX_APP_SERVER -> null
+  }

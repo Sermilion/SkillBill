@@ -15,7 +15,9 @@ import skillbill.ports.agentrun.model.UnsupportedAgentRunLaunch
 import skillbill.ports.approval.ApprovalOwnerAuthority
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.system.HostPlatformPort
 import skillbill.workflow.taskruntime.model.skeleton.EffectiveLaunchModel
+import skillbill.workflow.taskruntime.model.skeleton.passThroughLaunchModel
 import java.nio.file.Path
 import java.time.Clock
 
@@ -29,6 +31,7 @@ class FileSystemAgentRunLauncher internal constructor(
   runtimeMcpBin: Path? = null,
   approvals: AgentRunApprovalOwners? = null,
   userHome: Path? = null,
+  hostPlatform: HostPlatformPort? = null,
 ) : AgentRunLauncher {
   @Inject
   constructor(
@@ -39,6 +42,7 @@ class FileSystemAgentRunLauncher internal constructor(
     diagnostics: RuntimeDiagnostics,
     approvalOwners: ApprovalOwnerAuthority,
     clock: Clock,
+    hostPlatform: HostPlatformPort,
   ) : this(
     processRunner = processRunner as AgentRunProcessRunner,
     executableLookup = executableLookup,
@@ -49,6 +53,7 @@ class FileSystemAgentRunLauncher internal constructor(
     runtimeMcpBin = resolveRuntimeMcpBin(environment.environment, environment.userHome),
     approvals = AgentRunApprovalOwners(approvalOwners, clock),
     userHome = environment.userHome.takeUnless { it == EnvironmentContext.UnspecifiedUserHome },
+    hostPlatform = hostPlatform,
   )
 
   private val adapters: Map<SupportedAgent, ProcessAgentRunAdapter> =
@@ -61,7 +66,7 @@ class FileSystemAgentRunLauncher internal constructor(
     )
 
   override fun resolveLaunchModel(request: AgentRunLaunchModelRequest): EffectiveLaunchModel =
-    resolveAgentRunLaunchModel(request, providerEnvironment)
+    passThroughLaunchModel(request.requestedModel, request.requestedEffort)
 
   override fun launch(request: AgentRunLaunchRequest): AgentRunLaunchOutcome {
     val agent = SupportedAgent.fromNormalizedId(request.agentId)

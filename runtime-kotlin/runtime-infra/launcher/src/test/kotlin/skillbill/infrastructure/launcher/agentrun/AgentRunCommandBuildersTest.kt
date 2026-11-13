@@ -12,12 +12,11 @@ import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.model.AgentRunLaunchModelRequest
 import skillbill.ports.agentrun.model.ReportedLaunchIdentity
 import skillbill.ports.agentrun.model.ReportedLaunchIdentityReason
+import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.review.model.ReviewLaunchIsolationStrategy
 import skillbill.review.context.model.launch.ReviewConversationIsolation
 import skillbill.workflow.taskruntime.model.skeleton.LaunchEnvironmentKind
-import skillbill.workflow.taskruntime.model.skeleton.LaunchModelProvenance
 import skillbill.workflow.taskruntime.model.skeleton.PhaseModelProfile
-import skillbill.workflow.taskruntime.model.skeleton.PhaseModelProfileClassifier
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Path
 import kotlin.test.Test
@@ -28,6 +27,44 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class AgentRunCommandBuildersTest {
+  @Test
+  fun `launch resolution passes configured models through without selecting model behavior`() {
+    val launcher =
+      FileSystemAgentRunLauncher(
+        RecordingAgentRunProcessRunner(),
+        ALL_EXECUTABLES_AVAILABLE,
+        providerEnvironment =
+          mapOf(
+            "ANTHROPIC_BASE_URL" to "https://custom.example",
+            "ANTHROPIC_MODEL" to "replacement",
+            "ANTHROPIC_DEFAULT_OPUS_MODEL" to "claude-opus-5-5",
+          ),
+        diagnostics = NoopRuntimeDiagnostics,
+        clock = LAUNCH_TEST_CLOCK,
+      )
+    listOf("claude", "codex", "cursor").forEach { agent ->
+      listOf("opus", "claude-opus-5-5", "arbitrary-deployment", null).forEach { model ->
+        val resolved =
+          launcher.resolveLaunchModel(
+            AgentRunLaunchModelRequest(agent, model, "high", LaunchEnvironmentKind.INHERITED),
+          )
+        assertEquals(model, resolved.requestedModel)
+        assertEquals(model, resolved.effectiveModel)
+        assertEquals("high", resolved.requestedEffort)
+        assertEquals(PhaseModelProfile.CANONICAL, resolved.profile)
+        val command =
+          ClaudeAgentRunCommandBuilder(
+            mapOf("ANTHROPIC_BASE_URL" to "https://custom.example", "ANTHROPIC_MODEL" to "replacement"),
+          ).build(request(model = resolved.effectiveModel, effort = resolved.requestedEffort)).command
+        if (model == null) {
+          assertFalse("--model" in command)
+        } else {
+          assertEquals(model, command[command.indexOf("--model") + 1])
+        }
+      }
+    }
+  }
+
   @Test
   fun `a non-review launch carries the database path and a governed review launch does not`() {
     val database = Path.of("/tmp/runtime.db")
@@ -274,69 +311,6 @@ class AgentRunCommandBuildersTest {
   }
 
   @Test
-  fun `claude directive naming an anthropic model falls back to the parent model on a non-anthropic endpoint`() {
-    val env =
-      mapOf(
-        "ANTHROPIC_BASE_URL" to "https://api.deepseek.com/anthropic",
-        "ANTHROPIC_MODEL" to "deepseek-v4-flash",
-      )
-    val resolved =
-      resolveAgentRunLaunchModel(
-        AgentRunLaunchModelRequest("claude", "claude-opus-5-5", "high", LaunchEnvironmentKind.INHERITED),
-        env,
-      )
-
-    assertEquals("deepseek-v4-flash", resolved.effectiveModel)
-    assertEquals(PhaseModelProfile.CANONICAL, resolved.profile)
-    assertEquals(LaunchModelProvenance.PROVIDER_REMAPPED, resolved.provenance)
-    val command =
-      ClaudeAgentRunCommandBuilder(env)
-        .build(request(model = resolved.effectiveModel, effort = resolved.requestedEffort))
-        .command
-    val modelIndex = command.indexOf("--model")
-    assertTrue(modelIndex >= 0)
-    assertEquals("deepseek-v4-flash", command[modelIndex + 1])
-    assertEquals("high", command[command.indexOf("--effort") + 1])
-
-    val lookalike =
-      resolveAgentRunLaunchModel(
-        AgentRunLaunchModelRequest("claude", "claude-opus-5-5", null, LaunchEnvironmentKind.INHERITED),
-        mapOf(
-          "ANTHROPIC_BASE_URL" to "https://notanthropic.com",
-          "ANTHROPIC_MODEL" to "deepseek-v4-flash",
-        ),
-      )
-    assertEquals("deepseek-v4-flash", lookalike.effectiveModel)
-    assertEquals(PhaseModelProfile.CANONICAL, lookalike.profile)
-  }
-
-  @Test
-  fun `a pinned opus alias resolves to the documented Opus identity and an unpinned alias stays unknown`() {
-    val pinned =
-      resolveAgentRunLaunchModel(
-        AgentRunLaunchModelRequest("claude", "opus", "high", LaunchEnvironmentKind.INHERITED),
-        mapOf(ANTHROPIC_DEFAULT_OPUS_MODEL to PhaseModelProfileClassifier.ANTHROPIC_OPUS_55),
-      )
-    assertEquals(PhaseModelProfileClassifier.ANTHROPIC_OPUS_55, pinned.effectiveModel)
-    assertEquals(PhaseModelProfile.OPUS_5_5, pinned.profile)
-    assertEquals(LaunchModelProvenance.ALIAS_PINNED_BY_ENVIRONMENT, pinned.provenance)
-
-    val unpinned =
-      resolveAgentRunLaunchModel(
-        AgentRunLaunchModelRequest("claude", "opus", null, LaunchEnvironmentKind.INHERITED),
-        emptyMap(),
-      )
-    assertEquals(null, unpinned.effectiveModel)
-    assertEquals(PhaseModelProfile.CANONICAL, unpinned.profile)
-    val child =
-      resolveAgentRunLaunchModel(
-        AgentRunLaunchModelRequest("claude", "opus", null, LaunchEnvironmentKind.GOVERNED_CHILD),
-        mapOf(ANTHROPIC_DEFAULT_OPUS_MODEL to PhaseModelProfileClassifier.ANTHROPIC_OPUS_55),
-      )
-    assertEquals(PhaseModelProfile.CANONICAL, child.profile)
-  }
-
-  @Test
   fun `claude directive naming a served deepseek model passes through unchanged`() {
     val builder =
       ClaudeAgentRunCommandBuilder(
@@ -428,10 +402,15 @@ class AgentRunCommandBuildersTest {
         ClaudeAgentRunCommandBuilder(),
         CodexAgentRunCommandBuilder(),
         CursorAgentRunCommandBuilder(),
+        OpenCodeAgentRunCommandBuilder(),
+        DevinAgentRunCommandBuilder(),
       )
 
     assertEquals(MODEL_DIRECTIVE_CAPABLE_AGENTS, builders.map { it.agent }.toSet())
     assertEquals("model[effort=high]", CursorAgentRunCommandBuilder().build(request("model", "high")).sessionModel)
+    val openCode = OpenCodeAgentRunCommandBuilder().build(request("anthropic/model", "high"))
+    assertEquals("anthropic/model", openCode.sessionModel)
+    assertEquals("high", openCode.sessionEffort)
     builders.filter { it.agent == SupportedAgent.CLAUDE }.forEach { builder ->
       val command = builder.build(request(model = "model", effort = "high")).command
       assertTrue(command.contains("--model"))

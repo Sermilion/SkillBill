@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
@@ -28,6 +29,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.LocalContentColor
 import dev.skillbill.desktop.core.designsystem.SkillBillRadius
@@ -103,14 +105,24 @@ internal fun DetailSections.qaResultsSection(key: String, title: String, view: Q
   }
 }
 
+/**
+ * Selection on the open findings, as a Verify run's QA step takes it: [head] (Select all) opens the findings box, and each
+ * finding gets a [leading] column (checkbox), a [trailing] column (Chat or Goal) and [details] at the end of its open body.
+ */
+internal class QaFindingSelection(
+  val head: (@Composable () -> Unit)?,
+  val leading: @Composable (QaFindingRow) -> Unit,
+  val trailing: @Composable (QaFindingRow) -> Unit,
+  val details: @Composable (QaFindingRow) -> Unit,
+)
+
 @Composable
 internal fun QaResultsContent(
   view: QaResultsView,
   state: SectionCollapse,
   onAction: (DetailAction) -> Unit,
   showVerdictMark: Boolean = false,
-  beforeFindings: @Composable () -> Unit = {},
-  findingExtra: @Composable (QaFindingRow) -> Unit = {},
+  selection: QaFindingSelection? = null,
 ) {
   val base = "qa-results:${view.runKey}"
   Column(Modifier.fillMaxWidth()) {
@@ -119,11 +131,13 @@ internal fun QaResultsContent(
       BasicText(view.sentence, style = SkillBillTheme.type.tMd.copy(color = SkillBillTheme.colors.fg))
     } else BasicText(view.sentence, style = SkillBillTheme.type.tMd.copy(color = SkillBillTheme.colors.fg))
     if (view.open.isNotEmpty()) {
-      beforeFindings()
       GroupLabel(view.openLabel, count = view.open.size.toString(), modifier = Modifier.padding(top = 16.dp, bottom = 6.dp))
+      val head = selection?.head
+      val offset = if (head != null) 1 else 0
+      val count = view.open.size + offset
+      head?.let { Box(Modifier.fillMaxWidth().sbBoxSegment(0, count).padding(horizontal = 12.dp, vertical = 2.dp)) { it() } }
       view.open.forEachIndexed { index, row ->
-        QaFindingItem(row, index, view.open.size, state, "$base:f:${row.id}", onAction, view.evidenceMode)
-        findingExtra(row)
+        QaFindingItem(row, index + offset, count, state, "$base:f:${row.id}", onAction, view.evidenceMode, selection)
       }
     }
     if (view.left.isNotEmpty()) {
@@ -182,7 +196,7 @@ private fun qaFolds(view: QaResultsView, base: String, state: SectionCollapse, o
 }
 
 @Composable
-private fun QaVerdictMark(view: QaResultsView) {
+internal fun QaVerdictMark(view: QaResultsView) {
   val colors = SkillBillTheme.colors
   val color = when (view.tone) {
     QaResultsTone.Failed -> colors.stFailed
@@ -251,12 +265,13 @@ private fun QaItemHead(
   state: String?,
   line: String?,
   open: Boolean?,
+  start: Dp = 12.dp,
   onToggle: () -> Unit,
 ) {
   val colors = SkillBillTheme.colors
   val type = SkillBillTheme.type
   Row(
-    Modifier.fillMaxWidth().then(qaHeadModifier(open, onToggle)).padding(horizontal = 12.dp, vertical = 10.dp),
+    Modifier.fillMaxWidth().then(qaHeadModifier(open, onToggle)).padding(start = start, end = 12.dp, top = 10.dp, bottom = 10.dp),
     horizontalArrangement = Arrangement.spacedBy(8.dp),
   ) {
     CompositionLocalProvider(LocalContentColor provides glyphColor) { SbIcon(glyph, 14.dp, modifier = Modifier.padding(top = 2.dp)) }
@@ -304,17 +319,24 @@ private fun QaEvidenceChips(paths: List<String>, directory: String?, onAction: (
   }
 }
 
+/** With [selection], the checkbox takes a 30dp column before the head, Chat or Goal sits after it and the body lines up under the title. */
 @Composable
-private fun QaFindingItem(row: QaFindingRow, index: Int, count: Int, state: SectionCollapse, part: String, onAction: (DetailAction) -> Unit, mode: QaEvidenceMode) {
+private fun QaFindingItem(row: QaFindingRow, index: Int, count: Int, state: SectionCollapse, part: String, onAction: (DetailAction) -> Unit, mode: QaEvidenceMode, selection: QaFindingSelection? = null) {
   val colors = SkillBillTheme.colors
   val hasEvidence = row.evidencePaths.isNotEmpty() && (row.evidenceDirectory != null || mode == QaEvidenceMode.VerifyNamesOnly)
   val expandable = row.expected != null || row.steps != null || hasEvidence
   val open = expandable && !state.isCollapsed(part, default = true)
   Column(Modifier.fillMaxWidth().sbBoxSegment(index, count)) {
     if (index > 0) SbDivider()
-    QaItemHead(LucideIcons.alert, if (row.state == "Fixing") colors.stBlocked else colors.stFailed, row.id, row.title, row.state, row.observed, open.takeIf { expandable }) { state.toggle(part, default = true) }
+    Row(Modifier.fillMaxWidth()) {
+      selection?.let { Box(Modifier.width(30.dp).padding(start = 12.dp, top = 12.dp)) { it.leading(row) } }
+      Box(Modifier.weight(1f)) {
+        QaItemHead(LucideIcons.alert, if (row.state == "Fixing") colors.stBlocked else colors.stFailed, row.id, row.title, row.state, row.observed, open.takeIf { expandable }, start = if (selection != null) 2.dp else 12.dp) { state.toggle(part, default = true) }
+      }
+      selection?.let { Box(Modifier.padding(top = 8.dp, end = 10.dp)) { it.trailing(row) } }
+    }
     if (open) {
-      Column(Modifier.padding(start = 34.dp, end = 12.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+      Column(Modifier.padding(start = if (selection != null) 56.dp else 34.dp, end = 12.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         row.expected?.let { QaField("Expected", it) }
         row.steps?.let { QaField("Steps", it) }
         if (hasEvidence || row.copySteps != null) {
@@ -322,6 +344,7 @@ private fun QaFindingItem(row: QaFindingRow, index: Int, count: Int, state: Sect
             row.copySteps?.let { steps -> SbTag("Copy steps", icon = LucideIcons.copy, onClick = { onAction(DetailAction.Copy(steps)) }) }
           }
         }
+        selection?.details?.invoke(row)
       }
     }
   }

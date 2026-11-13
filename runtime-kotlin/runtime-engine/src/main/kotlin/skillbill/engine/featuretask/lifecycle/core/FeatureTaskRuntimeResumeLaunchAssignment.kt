@@ -34,5 +34,6 @@ public object FeatureTaskRuntimeResumeLaunchAssignment {
         val chosen = matching ?: current[stepId]
         if (chosen != null) put(stepId, chosen)
       }
+      current.forEach { (stepId, assignment) -> if (stepId !in recorded) put(stepId, assignment) }
     }
 }

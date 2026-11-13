@@ -1,6 +1,7 @@
 package skillbill.engine.goalrunner.manifest
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.application.workflow.decomposition.isPlanWorkflow
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionAdmission
 import skillbill.engine.goal.GoalRunnerManifestState
 import skillbill.engine.goal.goalRepositoryIdentityFilters
@@ -32,19 +33,23 @@ import skillbill.goalrunner.model.GoalRunnerExecutionLease
 import skillbill.goalrunner.model.planningStatusSnapshot
 import skillbill.ports.agentrun.model.AgentRunSpawnAuthorization
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.goalrunner.model.GoalPlanningOwnership
 import skillbill.ports.goalrunner.runner.model.GoalRunnerOutOfBandAcceptance
 import skillbill.ports.goalrunner.runner.model.GoalRunnerReviewPolicy
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
 import skillbill.ports.workflow.model.WorkflowFamily
+import skillbill.ports.workflow.toRecord
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.decomposition.afterIncompatibleChildDeletion
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.decomposition.runtime.decompositionRuntime
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
+import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
 import skillbill.workflow.taskruntime.model.persistence.goalContinuationArtifact
+import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
 
@@ -100,18 +105,59 @@ public class WorkflowGoalRunnerManifestStore
       issueKey: String,
       repoRoot: Path?,
     ): GoalRunnerManifestState? {
-      val projected = repoRoot?.let { root -> manifestLoader.findProjectedManifest(root, issueKey) }
       val identities = identityCandidates(repoRoot)
+      val planningOwner = planningOwner(issueKey, identities, repoRoot)
+      val projected = projectedManifest(issueKey, repoRoot, planningOwner, manifestLoader)
       val stored = identities.firstNotNullOfOrNull { manifestLoader.loadFromWorkflowStore(issueKey, projected, it) }
       if (manifestLoader.shouldRefreshFromCompleteProjection(stored, projected)) {
         return save(
           requireNotNull(stored).copy(manifest = requireNotNull(projected), repoRoot = repoRoot),
         )
       }
-      return stored?.copy(repoRoot = repoRoot) ?: projected?.let { manifest ->
-        manifestLoader.importFromManifestProjection(manifest, identities)?.copy(repoRoot = repoRoot)
+      stored?.let { return it.copy(repoRoot = repoRoot) }
+      projected?.let { manifest ->
+        return manifestLoader
+          .importFromManifestProjection(manifest, identities, planningOwner = planningOwner)
+          ?.copy(repoRoot = repoRoot)
       }
+      return null
     }
+
+    private fun planningOwner(
+      issueKey: String,
+      identities: List<String?>,
+      repoRoot: Path?,
+    ): GoalPlanningOwnership? =
+      database.read { unit ->
+        val normalizedIssueKey = FeatureTaskExecutionIdentityPolicy.canonicalIssueKey(issueKey)
+        identities.filterNotNull().firstNotNullOfOrNull { identity ->
+          unit.goalPlanningOwnership
+            .findByIssue(identity, normalizedIssueKey)
+            ?.takeUnless {
+              it.state == GoalPlanningOwnership.State.TRANSFERRED || it.state == GoalPlanningOwnership.State.SUPERSEDED
+            }
+            ?.takeUnless { owner ->
+              unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, owner.workflowId) == null &&
+                unit.workflowStates.getFeatureTaskExecutionIdentity(owner.workflowId) == null &&
+                unit.workflowStates.getFeatureTaskRuntimeWorkerOwnership(owner.workflowId) == null
+            }
+            ?.also { owner ->
+              val record = unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, owner.workflowId)
+              val executionIdentity = unit.workflowStates.getFeatureTaskExecutionIdentity(owner.workflowId)
+              val ownerMatches =
+                owner.state in setOf(GoalPlanningOwnership.State.INITIALIZED, GoalPlanningOwnership.State.RESERVED) &&
+                  owner.repositoryIdentity == identity && owner.normalizedIssueKey == normalizedIssueKey
+              val workflowMatches =
+                unit.workflowStates.getFeatureTaskRuntimeWorkerOwnership(owner.workflowId) == null &&
+                  record?.toRecord()?.isPlanWorkflow() == true &&
+                  executionIdentity?.repositoryIdentity == identity &&
+                  executionIdentity.normalizedIssueKey == normalizedIssueKey
+              if (!ownerMatches || !workflowMatches) {
+                ownershipRefused(owner)
+              }
+            }
+        }
+      }.let { owner -> reconcilePlanningOwner(owner, repoRoot, manifestLoader, database) }
 
     override fun readByIssueKey(
       issueKey: String,
@@ -162,15 +208,15 @@ public class WorkflowGoalRunnerManifestStore
       issueKey: String,
       repoRoot: Path,
     ): GoalRunnerManifestState? {
-      val projected =
-        manifestLoader.findProjectedManifest(repoRoot, issueKey) ?: return null
+      val identities = identityCandidates(repoRoot)
+      val owner = planningOwner(issueKey, identities, repoRoot)
+      val projected = projectedManifest(issueKey, repoRoot, owner, manifestLoader) ?: return null
       val stored = loadDurableByIssueKey(issueKey, repoRoot) ?: return null
-      if (projectionStillReusableParentHistory(projected, stored)) {
+      if (owner == null && projectionStillReusableParentHistory(projected, stored)) {
         return null
       }
-      val identities = identityCandidates(repoRoot)
       return manifestLoader
-        .importFromManifestProjection(projected, identities, independentParent = true)
+        .importFromManifestProjection(projected, identities, independentParent = true, planningOwner = owner)
         ?.copy(repoRoot = repoRoot)
     }
 
@@ -670,3 +716,38 @@ public class WorkflowGoalRunnerManifestStore
       return result.first
     }
   }
+
+private fun reconcilePlanningOwner(
+  owner: GoalPlanningOwnership?,
+  repoRoot: Path?,
+  manifestLoader: WorkflowGoalRunnerManifestLoader,
+  database: DatabaseSessionFactory,
+): GoalPlanningOwnership? {
+  if (owner?.state == GoalPlanningOwnership.State.RESERVED) {
+    manifestLoader.reconcileReservation(owner, repoRoot ?: ownershipRefused(owner))
+    return database.read { it.goalPlanningOwnership.findByWorkflow(owner.workflowId) } ?: ownershipRefused(owner)
+  }
+  if (owner != null && !Files.isDirectory(owner.ownedPath)) {
+    manifestLoader.recoverPlanningCheckout(owner, repoRoot ?: ownershipRefused(owner))
+  }
+  return owner
+}
+
+private fun ownershipRefused(owner: GoalPlanningOwnership): Nothing =
+  throw SkillBillRuntimeException(
+    WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA,
+    "Planning checkout ${owner.ownedPath} or workflow ${owner.workflowId} cannot be adopted. " +
+      "Preserve the path and reconcile its ownership, evidence and any live worker before retrying.",
+  )
+
+private fun projectedManifest(
+  issueKey: String,
+  repoRoot: Path?,
+  owner: GoalPlanningOwnership?,
+  manifestLoader: WorkflowGoalRunnerManifestLoader,
+) = if (owner != null) {
+  manifestLoader.findProjectedManifest(owner.ownedPath, issueKey)
+    ?: if (manifestLoader.isIncompletePlan(owner.workflowId)) null else ownershipRefused(owner)
+} else {
+  repoRoot?.let { manifestLoader.findProjectedManifest(it, issueKey) }
+}

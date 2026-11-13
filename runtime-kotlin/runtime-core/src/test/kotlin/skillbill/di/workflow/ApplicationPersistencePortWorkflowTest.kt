@@ -83,7 +83,7 @@ class ApplicationPersistencePortWorkflowTest {
       service.continueWorkflow(WorkflowFamilyKind.TASK_RUNTIME, workflowId)
         as WorkflowContinueResult.Standard
 
-    assertEquals(listOf("transaction", "transaction", "read", "read", "read", "transaction"), database.calls)
+    assertEquals(listOf("transaction", "transaction", "read", "read", "read", "read", "transaction"), database.calls)
     assertEquals("blocked", updated.acknowledgement.workflowStatus.wireValue)
     assertEquals(1, listed.workflowCount)
     assertEquals(workflowId, latest.summary.workflowId)

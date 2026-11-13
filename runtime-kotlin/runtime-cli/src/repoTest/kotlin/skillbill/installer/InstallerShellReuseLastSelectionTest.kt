@@ -168,6 +168,7 @@ class InstallerShellReuseLastSelectionTest {
     cliBin.toFile().setExecutable(true)
     mcpBin.toFile().setExecutable(true)
     InstallerDesktopFixtures.writeBuildIdentity(cliBin.parent.parent)
+    InstallerDesktopFixtures.writeBuildIdentity(mcpBin.parent.parent)
   }
 
   private fun runtimeCliStub(): String =

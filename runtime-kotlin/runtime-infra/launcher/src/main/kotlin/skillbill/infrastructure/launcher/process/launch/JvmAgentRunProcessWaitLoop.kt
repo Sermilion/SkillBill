@@ -41,6 +41,7 @@ internal data class ProcessWait(
   val wallClockTimedOut: Boolean,
   val liveness: AgentRunLivenessSnapshot? = null,
   val sessionSettled: Boolean = false,
+  val naturalExitStatus: Int? = null,
 )
 
 internal class ProcessWaitLoop(
@@ -157,6 +158,7 @@ internal class ProcessWaitLoop(
           fileActivityGraceExhausted = false,
           wallClockTimedOut = false,
           liveness = liveness("watchdog", "process_exited", GoalRunnerProcessState.EXITED),
+          naturalExitStatus = process.exitValue(),
         )
       else -> pollProgress()
     }

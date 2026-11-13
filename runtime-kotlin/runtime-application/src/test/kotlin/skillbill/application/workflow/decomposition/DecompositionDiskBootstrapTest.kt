@@ -152,9 +152,9 @@ class DecompositionDiskBootstrapTest {
         checkout =
           ProjectCheckout(
             TestRepositoryEnclosingRoot,
+            FakeDatabaseSessionFactory(workflows),
             testProjectStore,
             InPlaceGoalWorktreeResources,
-            NoopWorkflowGitOperations,
           ),
       )
 
@@ -211,9 +211,9 @@ class DecompositionDiskBootstrapTest {
         checkout =
           ProjectCheckout(
             TestRepositoryEnclosingRoot,
+            db,
             testProjectStore,
             InPlaceGoalWorktreeResources,
-            NoopWorkflowGitOperations,
           ),
       )
 
@@ -275,9 +275,9 @@ class DecompositionDiskBootstrapTest {
         checkout =
           ProjectCheckout(
             TestRepositoryEnclosingRoot,
+            db,
             testProjectStore,
             InPlaceGoalWorktreeResources,
-            NoopWorkflowGitOperations,
           ),
       )
 
@@ -334,9 +334,9 @@ class DecompositionDiskBootstrapTest {
         checkout =
           ProjectCheckout(
             TestRepositoryEnclosingRoot,
+            db,
             testProjectStore,
             InPlaceGoalWorktreeResources,
-            NoopWorkflowGitOperations,
           ),
       )
 
@@ -430,9 +430,9 @@ class DecompositionDiskBootstrapTest {
         checkout =
           ProjectCheckout(
             TestRepositoryEnclosingRoot,
+            FakeDatabaseSessionFactory(workflows),
             testProjectStore,
             InPlaceGoalWorktreeResources,
-            NoopWorkflowGitOperations,
           ),
       )
   }
@@ -481,9 +481,9 @@ class DecompositionDiskBootstrapTest {
         checkout =
           ProjectCheckout(
             TestRepositoryEnclosingRoot,
+            db,
             testProjectStore,
             InPlaceGoalWorktreeResources,
-            NoopWorkflowGitOperations,
           ),
       )
 
@@ -564,9 +564,9 @@ class DecompositionDiskBootstrapTest {
         checkout =
           ProjectCheckout(
             TestRepositoryEnclosingRoot,
+            db,
             testProjectStore,
             InPlaceGoalWorktreeResources,
-            NoopWorkflowGitOperations,
           ),
       )
 
@@ -637,9 +637,9 @@ class DecompositionDiskBootstrapTest {
         checkout =
           ProjectCheckout(
             TestRepositoryEnclosingRoot,
+            db,
             testProjectStore,
             InPlaceGoalWorktreeResources,
-            NoopWorkflowGitOperations,
           ),
       )
 
@@ -668,9 +668,9 @@ class DecompositionDiskBootstrapTest {
         checkout =
           ProjectCheckout(
             TestRepositoryEnclosingRoot,
+            db,
             testProjectStore,
             InPlaceGoalWorktreeResources,
-            NoopWorkflowGitOperations,
           ),
       )
 

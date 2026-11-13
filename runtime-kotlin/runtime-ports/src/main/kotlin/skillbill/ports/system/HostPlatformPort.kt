@@ -10,6 +10,8 @@ interface HostPlatformPort {
 
   fun resolveUserHome(): Path
 
+  fun resolveUserName(): String?
+
   fun resolveEnvironment(): Map<String, String>
 
   fun resolveJavaHome(): Path

@@ -13,6 +13,7 @@ import skillbill.engine.featuretask.phaserun.phaseRunEntry
 import skillbill.engine.featuretask.phaserun.plans
 import skillbill.engine.featuretask.phaserun.qa.InMemoryQaWorkspaces
 import skillbill.engine.featuretask.phaserun.qa.RecordingQaLeases
+import skillbill.engine.featuretask.phaserun.testStandalonePhaseRegistration
 import skillbill.engine.featuretask.qa.capability.QaCapabilityResolver
 import skillbill.engine.featuretask.qa.execution.testQaExecutionLifecycle
 import skillbill.engine.featuretask.qa.report.FeatureTaskQaOutcomeRecorder
@@ -344,13 +345,13 @@ class GoalQaRepairLoopTest {
   }
 
   @Test
-  fun `QA resumes with the newly selected agent after a provider limit`() {
+  fun `QA resume retains the admitted agent after a provider limit`() {
     val fixture = Fixture(verdicts = listOf(QaVerdict.PASSED), qaFixOutput = { "unused" }, limitFirstQa = true)
 
     assertIs<GoalQaGateResult.Paused>(fixture.gate.run(fixture.state, fixture.request))
     fixture.gate.run(fixture.state, fixture.request.copy(invokedAgentId = "codex"))
 
-    assertEquals(listOf("claude", "codex"), fixture.qaAgents())
+    assertEquals(listOf("claude", "claude"), fixture.qaAgents())
     assertEquals(StandaloneQaOutcome.PASSED, assertNotNull(fixture.storedOutcome()).outcome)
   }
 
@@ -506,21 +507,29 @@ class GoalQaRepairLoopTest {
           phasePlans,
           progress,
           git,
-          object : FeatureTaskRuntimeRunInvariantsSource {
-            override fun read(specPath: Path) =
-              FeatureTaskRuntimeRunInvariantsRead.Read(
-                FeatureTaskRuntimeRunInvariants(
-                  specReference = "SKILL-500",
-                  acceptanceCriteria = listOf("The home screen shows the signed-in user name."),
-                  mandatesAndOverrides = emptyList(),
-                ),
-              )
-          },
+          GoalQualityPreparation(
+            NoopRuntimeDiagnostics,
+            phasePlans,
+            requests,
+            progress,
+            git,
+            object : FeatureTaskRuntimeRunInvariantsSource {
+              override fun read(specPath: Path) =
+                FeatureTaskRuntimeRunInvariantsRead.Read(
+                  FeatureTaskRuntimeRunInvariants(
+                    specReference = "SKILL-500",
+                    acceptanceCriteria = listOf("The home screen shows the signed-in user name."),
+                    mandatesAndOverrides = emptyList(),
+                  ),
+                )
+            },
+            testProjectStore,
+            testStandalonePhaseRegistration(clock, NoopRuntimeDiagnostics),
+          ),
           requests,
           GoalQualityBuildBoundary(entry, phasePlans, progress, git, requests, NoopRuntimeDiagnostics),
           outcomes,
           QaCapabilityResolver(git) { listOf(pack) },
-          testProjectStore,
           NoopRuntimeDiagnostics,
         )
     }

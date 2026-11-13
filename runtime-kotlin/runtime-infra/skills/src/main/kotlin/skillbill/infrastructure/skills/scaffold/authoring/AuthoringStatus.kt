@@ -1,10 +1,11 @@
 package skillbill.infrastructure.skills.scaffold.authoring
 
+import skillbill.install.model.ListedSkillNames
 import skillbill.ports.scaffold.model.ScaffoldBaselineLayer
 import skillbill.ports.scaffold.model.ScaffoldCompletionStatus
 import skillbill.ports.scaffold.model.ScaffoldReviewComposition
 import skillbill.ports.scaffold.model.ScaffoldSkillStatus
-import skillbill.scaffold.model.CodeReviewBaselineLayer
+import skillbill.review.model.CodeReviewBaselineLayer
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -19,13 +20,13 @@ internal fun skillStatus(
   val contentText = Files.readString(target.contentFile)
   val completionStatus = contentCompletionStatus(contentText)
   return ScaffoldSkillStatus(
-    skillName = target.skillName,
+    skillName = ListedSkillNames.publicName(target.skillName),
     packageName = target.packageName,
     platform = target.platform,
     family = target.family,
     area = target.area,
     contentFile = target.contentFile.toString(),
-    renderCommand = "skill-bill render ${target.skillName} --repo-root $repoRoot",
+    renderCommand = "sona render ${ListedSkillNames.publicName(target.skillName)} --repo-root $repoRoot",
     completionStatus = completionStatus,
     sectionCount = parseContentSections(contentText).second.size,
     sections = sectionStatuses(contentText),
@@ -73,12 +74,13 @@ internal fun recommendedCommands(
   completionStatus: ScaffoldCompletionStatus,
   issues: List<String>,
 ): List<String> {
-  val commands = mutableListOf("skill-bill show ${target.skillName} --repo-root $repoRoot")
+  val publicName = ListedSkillNames.publicName(target.skillName)
+  val commands = mutableListOf("sona show $publicName --repo-root $repoRoot")
   if (completionStatus != ScaffoldCompletionStatus.COMPLETE) {
-    commands += "skill-bill fill ${target.skillName} --repo-root $repoRoot --body-file <file>"
+    commands += "sona fill $publicName --repo-root $repoRoot --body-file <file>"
   }
   if (issues.isNotEmpty()) {
-    commands += "skill-bill validate --repo-root $repoRoot --skill-name ${target.skillName}"
+    commands += "sona validate --repo-root $repoRoot --skill-name $publicName"
   }
   return commands.distinct()
 }

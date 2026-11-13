@@ -9,10 +9,12 @@ import java.nio.file.StandardCopyOption.REPLACE_EXISTING
 fun atomicMoveReplacing(
   source: Path,
   target: Path,
+  strictAtomic: Boolean = false,
 ) {
   try {
     Files.move(source, target, ATOMIC_MOVE, REPLACE_EXISTING)
-  } catch (_: AtomicMoveNotSupportedException) {
+  } catch (error: AtomicMoveNotSupportedException) {
+    if (strictAtomic) throw error
     Files.move(source, target, REPLACE_EXISTING)
   }
 }

@@ -2,6 +2,7 @@ package skillbill.engine.featuretask.model.core
 
 import skillbill.agentaddon.model.HydratedAgentAddonSelection
 import skillbill.config.model.CompactionSettings
+import skillbill.contracts.system.OpenCodeLaunchIdentity
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.model.execution.MonitorExecutionContext
 import skillbill.engine.featuretask.model.execution.QaExecutionContext
@@ -54,6 +55,8 @@ public interface FeatureTaskRuntimeRunFacts {
   /** The environment launched agents inherit. */
   public val environment: Map<String, String>
 
+  public val openCodeIdentity: OpenCodeLaunchIdentity?
+
   /** The repository the run changes. */
   public val repoRoot: Path
 
@@ -92,6 +95,10 @@ public interface FeatureTaskRuntimeRunFacts {
 
   /** The operator's plan intake text the `intake` step resolves the parent spec from; null when none was supplied. */
   public val planIntake: String?
+
+  public val planIntakeRoot: Path?
+
+  public val planSpecResolution: PlanSpecSeed?
 
   /** Whether this pass ends once the `intake` step settles, before run invariants can be read from the spec. */
   public val stopAfterIntake: Boolean

@@ -1,7 +1,8 @@
 package skillbill.infrastructure.launcher.agentrun
 
 import skillbill.contracts.JsonCodec
-import skillbill.infrastructure.launcher.mcp.RUNTIME_MCP_BIN_ENV
+import skillbill.contracts.persistence.RuntimeMcpEnvironmentKeys
+import skillbill.infrastructure.launcher.mcp.claudeRuntimeSettlementToolArguments
 import skillbill.infrastructure.launcher.mcp.resolveRuntimeMcpBin
 import java.nio.file.Files
 import java.nio.file.Path
@@ -16,7 +17,7 @@ class RuntimeMcpServerTest {
   private val database = Path.of("/opt/skill-bill/review-metrics.db")
 
   @Test
-  fun `a claude phase worker carries the skill-bill server bound to the runtime database`() {
+  fun `a claude phase worker carries the sona server bound to the runtime database`() {
     val command = ClaudeAgentRunCommandBuilder(databasePath = database, runtimeMcpBin = bin).build(request()).command
 
     val config = command[command.indexOf("--mcp-config") + 1]
@@ -24,10 +25,17 @@ class RuntimeMcpServerTest {
       JsonCodec.anyToStringAnyMap(
         JsonCodec.anyToStringAnyMap(JsonCodec.parseValue(config))?.get("mcpServers"),
       )
-    val server = JsonCodec.anyToStringAnyMap(servers?.get("skill-bill"))
+    val server = JsonCodec.anyToStringAnyMap(servers?.get("sona"))
     assertEquals(bin.toString(), server?.get("command"))
     assertEquals(emptyList<Any?>(), server?.get("args"))
     assertEquals(mapOf("SKILL_BILL_REVIEW_DB" to database.toString()), server?.get("env"))
+    assertEquals(
+      listOf(
+        "--allowedTools",
+        "mcp__sona__feature_task_phase_complete,mcp__sona__feature_task_phase_block",
+      ),
+      claudeRuntimeSettlementToolArguments(request(), bin),
+    )
     assertEquals("--dangerously-skip-permissions", command[command.indexOf("--mcp-config") + 2])
     assertTrue("--strict-mcp-config" !in command)
   }
@@ -44,20 +52,20 @@ class RuntimeMcpServerTest {
   }
 
   @Test
-  fun `a codex phase worker carries the skill-bill server and a governed codex review does not`() {
+  fun `a codex phase worker carries the sona server and a governed codex review does not`() {
     val builder = CodexAgentRunCommandBuilder(databasePath = database, runtimeMcpBin = bin)
 
     val worker = builder.build(request()).command
-    assertTrue("mcp_servers.skill-bill.command=\"$bin\"" in worker)
-    assertTrue("mcp_servers.skill-bill.args=[]" in worker)
-    assertTrue("mcp_servers.skill-bill.env={SKILL_BILL_REVIEW_DB=\"$database\"}" in worker)
+    assertTrue("mcp_servers.sona.command=\"$bin\"" in worker)
+    assertTrue("mcp_servers.sona.args=[]" in worker)
+    assertTrue("mcp_servers.sona.env={SKILL_BILL_REVIEW_DB=\"$database\"}" in worker)
 
     val governed = builder.build(governedReviewRequest()).command
-    assertTrue(governed.none { it.startsWith("mcp_servers.skill-bill.") })
+    assertTrue(governed.none { it.startsWith("mcp_servers.sona.") })
   }
 
   @Test
-  fun `a validation launch passes its invocation id to the skill-bill server only`() {
+  fun `a validation launch passes its invocation id to the sona server only`() {
     val validation = request().copy(validationCheckInvocationId = "phr-validation")
     val claude = ClaudeAgentRunCommandBuilder(databasePath = database, runtimeMcpBin = bin).build(validation)
     val codex = CodexAgentRunCommandBuilder(databasePath = database, runtimeMcpBin = bin).build(validation)
@@ -69,10 +77,10 @@ class RuntimeMcpServerTest {
       )
     assertEquals(
       mapOf("SKILL_BILL_REVIEW_DB" to database.toString(), VALIDATION_ENV to "phr-validation"),
-      JsonCodec.anyToStringAnyMap(servers?.get("skill-bill"))?.get("env"),
+      JsonCodec.anyToStringAnyMap(servers?.get("sona"))?.get("env"),
     )
     assertTrue(
-      "mcp_servers.skill-bill.env={SKILL_BILL_REVIEW_DB=\"$database\", $VALIDATION_ENV=\"phr-validation\"}" in
+      "mcp_servers.sona.env={SKILL_BILL_REVIEW_DB=\"$database\", $VALIDATION_ENV=\"phr-validation\"}" in
         codex.command,
     )
     assertTrue(VALIDATION_ENV !in claude.environment && VALIDATION_ENV !in codex.environment)
@@ -105,7 +113,10 @@ class RuntimeMcpServerTest {
     val configured = home.resolve("custom-mcp")
     Files.writeString(configured, "#!/bin/sh\n")
     Files.setPosixFilePermissions(configured, PosixFilePermissions.fromString("rwx------"))
-    assertEquals(configured, resolveRuntimeMcpBin(mapOf(RUNTIME_MCP_BIN_ENV to configured.toString()), home))
+    assertEquals(
+      configured,
+      resolveRuntimeMcpBin(mapOf(RuntimeMcpEnvironmentKeys.RUNTIME_MCP_BIN to configured.toString()), home),
+    )
   }
 
   private companion object {

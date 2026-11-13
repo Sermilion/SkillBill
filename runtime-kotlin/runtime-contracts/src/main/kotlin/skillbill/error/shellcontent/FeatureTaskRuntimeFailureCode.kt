@@ -56,15 +56,6 @@ enum class FeatureTaskRuntimeFailureCode : RuntimeFailureCode {
   INVALID_MODEL_DIRECTIVE_SUPPLEMENTS_SETTING,
 }
 
-fun invalidModelDirectiveSupplementsSetting(
-  key: String,
-  value: String,
-): SkillBillRuntimeException =
-  SkillBillRuntimeException(
-    FeatureTaskRuntimeFailureCode.INVALID_MODEL_DIRECTIVE_SUPPLEMENTS_SETTING,
-    "Setting $key must be 'true' or 'false', got '$value'.",
-  )
-
 fun invalidFeatureTaskRuntimeRepairReceipt(
   fieldPath: String,
   reason: String,

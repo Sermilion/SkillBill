@@ -12,6 +12,11 @@ import skillbill.contracts.time.JvmSystemClock
 import skillbill.infrastructure.host.jvm.hostPath
 import skillbill.infrastructure.host.jvm.testGateJvmResolver
 import skillbill.infrastructure.host.scratch.testAgentRunScratchRoot
+import skillbill.infrastructure.launcher.process.interaction.AgentRunApprovalChannelOpening
+import skillbill.infrastructure.launcher.process.interaction.AgentRunApprovalOpenResult
+import skillbill.infrastructure.launcher.process.interaction.AgentRunSessionCapture
+import skillbill.infrastructure.launcher.process.interaction.AgentRunSessionChannel
+import skillbill.infrastructure.launcher.process.interaction.AgentRunSessionOutcome
 import skillbill.ports.agentrun.model.AgentRunBuildObserver
 import skillbill.ports.agentrun.model.AgentRunCommandEvent
 import skillbill.ports.agentrun.model.AgentRunMcpStartupProbe
@@ -21,6 +26,7 @@ import skillbill.ports.agentrun.model.AgentRunProcessSample
 import skillbill.ports.agentrun.model.AgentRunProgressProbe
 import skillbill.ports.agentrun.model.AgentRunSpawnAuthorization
 import skillbill.ports.agentrun.model.AgentRunSpawnAuthorizationResult
+import skillbill.ports.approval.model.ApprovalPendingWait
 import skillbill.ports.review.evidence.GovernedReviewEvidenceEndpointHandle
 import skillbill.ports.review.evidence.ReviewEvidenceBroker
 import skillbill.ports.review.model.GovernedReviewEvidenceEndpointDescriptor
@@ -311,6 +317,42 @@ class JvmAgentRunProcessRunnerTest {
   }
 
   @Test
+  fun `a session worker that exits nonzero before settling keeps its native exit code`() {
+    val session =
+      object : AgentRunSessionChannel {
+        override fun attach(process: Process): Boolean = true
+
+        override fun observe(chunk: String) = Unit
+
+        override fun pendingWait(): ApprovalPendingWait? = null
+
+        override fun enforceOpening() = Unit
+
+        override fun finish() = Unit
+
+        override fun outcome(): AgentRunSessionOutcome? = null
+
+        override fun capture(): AgentRunSessionCapture =
+          AgentRunSessionCapture(text = "", complete = false, truncated = false, deliveryFailed = false)
+      }
+    val request =
+      testAgentRunProcessRequest(listOf("sh", "-c", "exit 17"), Path.of(".")).let { base ->
+        base.copy(
+          launch =
+            base.launch.copy(
+              session = AgentRunApprovalChannelOpening { AgentRunApprovalOpenResult.Opened(session) },
+            ),
+        )
+      }
+
+    val result = JvmAgentRunProcessRunner(JvmSystemClock, testGateJvmResolver(), testAgentRunScratchRoot()).run(request)
+
+    assertEquals(17, result.exitStatus)
+    assertFalse(result.timedOut)
+    assertTrue(result.processStarted)
+  }
+
+  @Test
   fun `spawn refusal remains distinct from a started process`() {
     val result =
       JvmAgentRunProcessRunner(JvmSystemClock, testGateJvmResolver(), testAgentRunScratchRoot()).run(
@@ -494,6 +536,29 @@ class JvmAgentRunProcessRunnerTest {
     assertEquals("sk-ant-ambient", builder.environment()["ANTHROPIC_API_KEY"])
     assertEquals("1", builder.environment()["SKILL_BILL_GOAL_CONTINUATION"])
     assertNull(builder.environment()["SOME_AMBIENT_SECRET"])
+  }
+
+  @Test
+  fun `explicit launch environment strips every inherited value and keeps only owned settings`() {
+    val builder = ProcessBuilder("echo", "test")
+    builder.environment().clear()
+    builder.environment()["HOME"] = "/home/operator"
+    builder.environment()["OPENCODE_DB"] = "/home/operator/.local/share/opencode/opencode.db"
+    builder.environment()["NODE_OPTIONS"] = "--require=/tmp/injected.js"
+    builder.environment()["PATH"] = "/ambient/bin"
+
+    configureLaunchEnvironment(
+      builder,
+      testAgentRunProcessRequest(listOf("echo"), Path.of(".")) {
+        environment = mapOf("HOME" to "/private/home", "PATH" to "/trusted/bin")
+        inheritEnvironment = false
+        explicitEnvironment = true
+        environmentPassthroughKeys = setOf("OPENCODE_DB")
+      },
+      testGateJvmResolver(),
+    )
+
+    assertEquals(mapOf("HOME" to "/private/home", "PATH" to "/trusted/bin"), builder.environment())
   }
 
   @Test

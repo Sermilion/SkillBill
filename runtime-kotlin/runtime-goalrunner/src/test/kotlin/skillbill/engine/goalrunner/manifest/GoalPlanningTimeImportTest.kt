@@ -5,12 +5,14 @@ import skillbill.application.testDecompositionManifestValidator
 import skillbill.application.testProjectStore
 import skillbill.engine.featuretask.slot.artifactValue
 import skillbill.engine.featuretask.slot.testExecutionPlan
+import skillbill.engine.goalrunner.persist.testGoalPlanningCheckoutOwnership
 import skillbill.idestatus.model.IdeStatusLaunchScope
 import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdate
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdateResult
 import skillbill.ports.persistence.UnitOfWork
+import skillbill.ports.workflow.goalworktree.InPlaceGoalWorktreeResources
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.toRecord
 import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
@@ -59,6 +61,8 @@ class GoalPlanningTimeImportTest {
           Random(1),
           testProjectStore,
           parentProjection = GoalParentProjectionWriter(testDecompositionManifestValidator),
+          worktrees = InPlaceGoalWorktreeResources,
+          ownership = testGoalPlanningCheckoutOwnership(database),
         )
 
       val imported = assertNotNull(loader.importFromManifestProjection(manifest))

@@ -21,6 +21,6 @@ public class GoalBranchCheckouts(
     val holder = worktrees.checkoutHolding(executionRoot, branch) ?: return null
     if (holder == repositoryEnclosingRootPort.enclosingRepositoryRoot(executionRoot)) return null
     return "Goal '$issueKey' needs branch '$branch', which is checked out at $holder. " +
-      "Switch that checkout to another branch, then run skill-bill goal $issueKey again."
+      "Switch that checkout to another branch, then run sona goal $issueKey again."
   }
 }

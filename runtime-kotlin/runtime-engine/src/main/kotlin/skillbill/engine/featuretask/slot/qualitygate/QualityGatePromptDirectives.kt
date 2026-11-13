@@ -1,14 +1,13 @@
 package skillbill.engine.featuretask.slot.qualitygate
 
-import skillbill.engine.featuretask.model.audit.ValidateProbeScope
 import skillbill.engine.featuretask.model.phase.ValidationFindingSetProjection
 
 private const val VALIDATE_PHASE_FORBIDDEN_EXTRAS: String =
-  "Do not run `skill-bill validate`, `npx agnix`, `scripts/validate_agent_configs`, or any other " +
+  "Do not run `sona validate`, `npx agnix`, `scripts/validate_agent_configs`, or any other " +
     "repo-root checklist. Those commands are not this phase. "
 
 private const val VALIDATE_TRIAGE_FORBIDDEN_PACK_GATE: String =
-  "Do not run `skill-bill phase validation`, the pack validation_gate collect_all_full_gate_command, " +
+  "Do not run `sona phase validation`, the pack validation_gate collect_all_full_gate_command, " +
     "cache_bypassing_collect_all_full_gate_command, or any other pack-declared full-suite argv " +
     "during this triage turn. "
 
@@ -18,16 +17,11 @@ private const val MACHINE_BUILD_SETTINGS_DIRECTIVE: String =
     "and never pass --gradle-user-home or -g. "
 
 private const val BUILD_PHASE_FORBIDDEN_EXTRAS: String =
-  "Do not run `skill-bill validate`, `npx agnix`, `scripts/validate_agent_configs`, " +
-    "`skill-bill phase validation`, `./gradlew check`, `check " + "--" + "continue`, or the pack " +
+  "Do not run `sona validate`, `npx agnix`, `scripts/validate_agent_configs`, " +
+    "`sona phase validation`, `./gradlew check`, `check " + "--" + "continue`, or the pack " +
     "collect_all_full_gate_command. Those are not this phase. "
 
-internal fun runtimeOwnedValidateAgentPhaseTask(probeScope: ValidateProbeScope? = null): String {
-  val probes = probeScope?.let { "\n\n${ValidateProbePrompt.directive(it)}" }.orEmpty()
-  return runtimeOwnedValidateChecksDirective() + probes
-}
-
-private fun runtimeOwnedValidateChecksDirective(): String {
+internal fun runtimeOwnedValidateAgentPhaseTask(): String {
   return "Discover the validation checks required by this project from its repository instructions, " +
     "build and test configuration, scripts, and CI workflows. Use the project's commands and environment. " +
     "Before choosing a host or container, read the applicable repository instructions and CI/setup scripts. " +
@@ -68,7 +62,7 @@ private fun runtimeOwnedValidateChecksDirective(): String {
     "Put every temporary copy, file, or directory this session creates under ${'$'}TMPDIR; the runtime owns " +
     "that directory and deletes it when the session ends. Never create them under ~/.cache, the " +
     "skill-bill state directory, or beside the checkout. " +
-    "Do not recursively invoke `skill-bill phase validation`. " +
+    "Do not recursively invoke `sona phase validation`. " +
     "Keep repairing in this same session until every runnable required project check passes. Do not spawn delegated " +
     "subagents. Settle completed when every runnable required check passes, with warnings for unavailable " +
     "tooling coverage. Missing tooling alone never blocks validation. If no checks can run because their " +
@@ -187,8 +181,8 @@ internal fun buildGateFindingsDirective(
       add(
         "A prior gate run parsed these items. They are the full open set for this repair turn — fix every one in " +
           "this session (shared root causes may collapse several into one change). " +
-          commandGuidance + "Do not run `skill-bill validate`, " +
-          "`skill-bill phase validation`, or the pack collect_all_full_gate_command. Do not spawn delegated " +
+          commandGuidance + "Do not run `sona validate`, " +
+          "`sona phase validation`, or the pack collect_all_full_gate_command. Do not spawn delegated " +
           "subagents.",
       )
       findings.findings.forEachIndexed { index, finding ->
@@ -216,9 +210,6 @@ internal const val VALIDATE_VALUE_CONTENT: String =
     "Gate runs and their evidence are runtime-measured.\n" +
     "Never introduce suppressions, baselines, disabled rules, or skipped tests to silence findings."
 
-internal const val VALIDATE_PROBE_VALUE_CONTENT: String =
-  VALIDATE_VALUE_CONTENT + "\n" + ValidateProbePrompt.VALUE_CONTENT
-
 internal const val BUILD_VALUE_CONTENT: String =
   "Run only the pack build_command. Do not run collect_all_full_gate_command, check " + "--" + "continue,\n" +
-    "skill-bill validate, or skill-bill phase validation. Gate runs and their evidence are runtime-measured."
+    "sona validate, or sona phase validation. Gate runs and their evidence are runtime-measured."

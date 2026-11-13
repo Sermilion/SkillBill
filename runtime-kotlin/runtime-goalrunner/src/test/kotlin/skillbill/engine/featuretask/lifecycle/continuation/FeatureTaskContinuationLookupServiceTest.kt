@@ -212,7 +212,7 @@ class FeatureTaskContinuationLookupServiceTest {
     val refusal = assertFailsWith<SkillBillRuntimeException> { fixture.lookup.claimForTest(candidate, retired.inputs) }
 
     assertEquals(WorkflowFailureCode.RETIRED_STANDALONE_WORKFLOW, refusal.code)
-    assertTrue(requireNotNull(refusal.message).contains("skill-bill SKILL-120"), refusal.message)
+    assertTrue(requireNotNull(refusal.message).contains("sona SKILL-120"), refusal.message)
     fixture.service.abandonFeatureTaskRuntime(opened.workflowId, "Retired standalone workflow.")
     assertEquals(
       listOf(opened.workflowId),
@@ -290,9 +290,12 @@ class FeatureTaskContinuationLookupServiceTest {
     val row = requireNotNull(fixture.states.getFeatureTaskWorkflow(opened.workflowId))
     fixture.states.saveFeatureTaskWorkflow(row.copy(mode = PROSE), RUNTIME)
 
-    assertFailsWith<SkillBillRuntimeException> {
-      fixture.lookup.lookup("SKILL-120", REPOSITORY_A)
-    }.also { assertEquals(WorkflowFailureCode.LEGACY_PROSE_WORKFLOW, it.code) }
+    val refusal =
+      assertFailsWith<SkillBillRuntimeException> {
+        fixture.lookup.lookup("SKILL-120", REPOSITORY_A)
+      }
+    assertEquals(WorkflowFailureCode.LEGACY_PROSE_WORKFLOW, refusal.code)
+    assertTrue(requireNotNull(refusal.message).contains("sona goal SKILL-120"), refusal.message)
   }
 
   @Test
@@ -440,9 +443,9 @@ class FeatureTaskContinuationLookupServiceTest {
         projectCheckout =
           ProjectCheckout(
             TestRepositoryEnclosingRoot,
+            database,
             testProjectStore,
             InPlaceGoalWorktreeResources,
-            NoopWorkflowGitOperations,
           ),
       )
     return Fixture(

@@ -23,6 +23,7 @@ import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhase
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseProjectInstructions
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseProjectInstructionsResolution
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSource
+import skillbill.engine.featuretask.phase.prompt.compose.settlementTarget
 import skillbill.engine.featuretask.phase.prompt.directives.PriorAttemptCorrection
 import skillbill.engine.featuretask.runloop.attempt.FeatureTaskRuntimeRunLoopHookViews.launchHookContext
 import skillbill.engine.featuretask.runloop.attempt.settlementCoupling
@@ -49,7 +50,6 @@ import skillbill.engine.featuretask.slot.PhaseLaunchReviewTier
 import skillbill.engine.featuretask.slot.audit.claim.NoChangeClaimResolution
 import skillbill.engine.featuretask.slot.carriesPackBuildCommand
 import skillbill.engine.featuretask.slot.implementationTurn
-import skillbill.engine.featuretask.slot.qualitygate.ValidateProbeActivation
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
@@ -58,6 +58,8 @@ import skillbill.error.core.rethrowUnless
 import skillbill.error.featuretask.InvalidFeatureTaskRuntimeHandoffProjectionContext
 import skillbill.error.shellcontent.invalidFeatureTaskRuntimeHandoffProjection
 import skillbill.error.shellcontent.isInvalidWorkflowStateFailure
+import skillbill.ports.taskruntime.model.PreplanEvidenceWriteResult
+import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.handoff.FeatureTaskRuntimeHandoffContract
@@ -65,12 +67,12 @@ import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionGapStatus
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeRepositoryCheckpoint
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
+import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionDeclaration
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimeHandoffAssemblyRequest
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseHandoff
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffSourceRef
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeProducerIteration
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeProjectionFailureClassification
-import skillbill.workflow.taskruntime.model.skeleton.PhaseModelProfile
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Path
 
@@ -202,7 +204,12 @@ internal object PhaseLaunchPreparation {
     context: PhaseAttemptLaunchPreparationContext,
     args: DeclaredLaunchArgs,
   ): LaunchPreparation {
-    val selectedArgs = args.copy(run = args.run.forLaunchHandoff(args.boundStep))
+    val preplanEvidence = context.preplanEvidenceFor(args.run, args.boundStep)
+    val selectedArgs =
+      args.copy(
+        run = args.run.forLaunchHandoff(args.boundStep, preplanEvidence != null),
+        preplanEvidence = preplanEvidence,
+      )
     with(context) {
       val run = selectedArgs.run
       val state = selectedArgs.state
@@ -293,6 +300,7 @@ internal object PhaseLaunchPreparation {
           FeatureTaskRuntimeBriefingScope(
             sharedEvidence?.reference,
             briefingInvariantFields(run.phaseId),
+            args.preplanEvidence,
           ),
         )
       if (assembly is FeatureTaskRuntimePhaseBriefingAssemblyResult.Rejected) {
@@ -317,27 +325,50 @@ internal object PhaseLaunchPreparation {
         PhaseLaunchPreparation
           .run { context.composeLaunchPromptInputs(args, handoff, briefing) }
           .copy(
-            phaseSettlement = args.iteration?.let(::phaseSettlementTarget),
+            phaseSettlement =
+              context.phaseSettlementTarget(args.iteration ?: args.state.phase(run.phaseId).nextIteration),
             projectInstructions = projectInstructions,
             goalHistoryWriterInput = run.request.goalHistoryWriterInput,
           )
-      return PreparedLaunchReady(
-        PreparedLaunch(
-          briefing,
-          PhaseLaunchPreparation.composeLaunchPrompt(context, run, inputs, prompt, args.boundStep),
-        ),
-      )
+      val prepared = PhaseLaunchPreparation.composeLaunchPrompt(context, run, inputs, prompt, args.boundStep)
+      return PreparedLaunchReady(prepared)
     }
   }
 
-  private fun PhaseRun.forLaunchHandoff(boundStep: PhaseAcceptedStepExecution): PhaseRun {
-    if (boundStep.boundHooks.launchHandoffSelection != PhaseLaunchHandoffSelection.BUNDLE_FEASIBILITY) return this
-    val declarations =
-      declaration.projectionDeclarations.filterNot { projection ->
-        (projection.sourceRef as? FeatureTaskRuntimeHandoffSourceRef.UpstreamPhaseOutput)?.producingPhaseId ==
-          FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PREPLAN
-      }
+  private fun PhaseRun.forLaunchHandoff(
+    boundStep: PhaseAcceptedStepExecution,
+    preplanEvidenceWritten: Boolean,
+  ): PhaseRun {
+    val bundleFeasibility =
+      boundStep.boundHooks.launchHandoffSelection == PhaseLaunchHandoffSelection.BUNDLE_FEASIBILITY
+    if (!bundleFeasibility && !preplanEvidenceWritten) return this
+    val declarations = declaration.projectionDeclarations.filterNot(::isPreplanProjection)
     return copy(declaration = declaration.copy(projectionDeclarations = declarations))
+  }
+
+  private fun isPreplanProjection(projection: PhaseHandoffProjectionDeclaration): Boolean =
+    (projection.sourceRef as? FeatureTaskRuntimeHandoffSourceRef.UpstreamPhaseOutput)?.producingPhaseId ==
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PREPLAN
+
+  private fun PhaseAttemptLaunchPreparationContext.preplanEvidenceFor(
+    run: PhaseRun,
+    boundStep: PhaseAcceptedStepExecution,
+  ): PreplanEvidenceWriteResult.Written? {
+    val readsPreplan =
+      boundStep.boundHooks.launchHandoffSelection != PhaseLaunchHandoffSelection.BUNDLE_FEASIBILITY &&
+        run.declaration.projectionDeclarations.any(::isPreplanProjection) &&
+        run.request.workflowId.isNotBlank()
+    val digest =
+      auditProseValue(
+        progress.phase(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PREPLAN).output?.normalizedOutput
+          ?.envelopeWireMap(),
+      )?.takeIf { readsPreplan } ?: return null
+    val head =
+      (gitOperations.headCommitSha(run.request.repoRoot) as? WorkflowGitOperationResult.Ok)
+        ?.value
+        ?.trim()
+        ?.takeIf(String::isNotBlank)
+    return decompositionPlanner.writePreplanEvidence(run.request.repoRoot, run.request.workflowId, head, digest)
   }
 
   private fun resolveProjectInstructions(
@@ -421,15 +452,18 @@ internal object PhaseLaunchPreparation {
     inputs: FeatureTaskRuntimePhasePromptComposeInputs,
     prompt: PhaseStepPromptSource,
     boundStep: PhaseAcceptedStepExecution,
-  ): String {
+  ): PreparedLaunch {
+    val sections = prompt.sections(inputs)
     val launchContext = context.launchHookContext(run, context.stepHooks(run))
-    return if (boundStep.boundHooks.launchHandoffSelection == PhaseLaunchHandoffSelection.BUNDLE_FEASIBILITY) {
-      val supplement = boundStep.boundHooks.launchPromptSupplement(run, launchContext)
-      FeatureTaskRuntimePhasePromptComposer.compose(inputs, prompt) + supplement
-    } else {
-      FeatureTaskRuntimePhasePromptComposer.compose(inputs, prompt) +
-        boundStep.boundHooks.launchPromptSupplement(run, launchContext)
-    }
+    val promptText =
+      if (boundStep.boundHooks.launchHandoffSelection == PhaseLaunchHandoffSelection.BUNDLE_FEASIBILITY) {
+        val supplement = boundStep.boundHooks.launchPromptSupplement(run, launchContext)
+        FeatureTaskRuntimePhasePromptComposer.compose(inputs, prompt) + supplement
+      } else {
+        FeatureTaskRuntimePhasePromptComposer.compose(inputs, prompt) +
+          boundStep.boundHooks.launchPromptSupplement(run, launchContext)
+      }
+    return PreparedLaunch(inputs.briefing, promptText, settlementTarget(inputs, sections))
   }
 
   private fun PhaseAttemptLaunchPreparationContext.planBundleTargetFor(run: PhaseRun): PlanBundleTarget? {
@@ -518,13 +552,11 @@ internal object PhaseLaunchPreparation {
       validationGateTriagePlan = run.validationGateTriagePlan,
       validationGateRepair = run.validationGateRepair,
       validationGateTriage = run.validationGateTriage,
-      validateProbeScopeSource = { ValidateProbeActivation.scopeFor(run.request, run.validationGateTriage) },
       agentRunValidateFallback = run.agentRunValidateFallback,
       packBuildCommand = packCommand(run, checkpointResolutionArgs(run), carriesBuild = true),
       mutating = run.policy.mutating,
       singleAgentSession = run.policy.singleAgentSession,
       repoRoot = run.request.repoRoot,
-      stepProfile = run.launchAssignment?.profile ?: PhaseModelProfile.CANONICAL,
       implementationChecklistAddress = implementationChecklistAddress(run),
     ).withAcceptanceGapInputs(acceptanceRepair, acceptanceAuditProse)
   }

@@ -5,6 +5,7 @@ import kotlinx.serialization.json.JsonObject
 import skillbill.cli.core.CliRuntime
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.featuretask.DECOMPOSITION_MANIFEST_CONTRACT_VERSION
+import skillbill.engine.featuretask.phase.core.scriptedPhaseValueRecord
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.AgentRunLauncher
 import skillbill.ports.agentrun.agentRunLaunchFacts
@@ -69,6 +70,97 @@ class CliPhasePlanRuntimeTest {
   }
 
   @Test
+  fun `completed standalone plan resumes from its own safe removal proof and retains its evidence`() {
+    installGoalBuildPack(tempDir)
+    Files.writeString(tempDir.resolve(".skill-bill/config.yaml.lock"), "")
+    git("add", "-f", ".skill-bill/config.yaml.lock")
+    val tracked = Files.writeString(tempDir.resolve("operator.txt"), "baseline")
+    git("add", "operator.txt")
+    git(
+      "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
+      "-c", "commit.gpgsign=false", "commit", "-m", "tracked baseline",
+    )
+    publishInitialRevision()
+    Files.writeString(tracked, "caller edit")
+    val untracked = Files.writeString(tempDir.resolve("caller-untracked.txt"), "caller notes")
+    val launcher = PhasePlanLauncher(tempDir)
+    val context = fixture.context(launcher = launcher).copy(repositoryRoot = tempDir)
+    val arguments = listOf("--db", fixture.dbPath.toString(), "phase", "plan", ISSUE_KEY)
+
+    val first = CliRuntime.run(arguments + listOf("split the work", "--agent", "codex"), context)
+    assertEquals(0, first.exitCode, first.stdout + first.stderr)
+    val owner = planningOwnership()
+    val checkout = Path.of(owner.second)
+    assertEquals("initialized", owner.first)
+    assertTrue(Files.notExists(checkout), "completed standalone checkout was not safely removed")
+    assertTrue("proven" in checkoutRecoveryStates())
+    val evidence = savedPlanEvidence()
+    val firstLaunches = launcher.phaseIds.toList()
+
+    val resumed = CliRuntime.run(arguments + listOf("--agent", "codex"), context)
+    assertEquals(0, resumed.exitCode, resumed.stdout + resumed.stderr)
+    assertEquals(owner, planningOwnership())
+    assertEquals(evidence, savedPlanEvidence())
+    assertEquals(firstLaunches, launcher.phaseIds.toList())
+    assertEquals(1, rowCount("feature_task_workflows"))
+    assertTrue(Files.notExists(checkout))
+    assertTrue("consumed" in checkoutRecoveryStates())
+    assertTrue("proven" in checkoutRecoveryStates())
+    assertEquals("caller edit", Files.readString(tracked))
+    assertEquals("caller notes", Files.readString(untracked))
+
+    DriverManager.getConnection("jdbc:sqlite:${fixture.dbPath}").use { connection ->
+      connection.createStatement().use {
+        it.executeUpdate("DELETE FROM goal_planning_checkout_recovery WHERE recovery_state = 'proven'")
+      }
+    }
+    val refused = CliRuntime.run(arguments + listOf("--agent", "codex"), context)
+    assertEquals(1, refused.exitCode, refused.stdout + refused.stderr)
+    assertTrue(Files.notExists(checkout))
+    assertEquals(evidence, savedPlanEvidence())
+    assertEquals(firstLaunches, launcher.phaseIds.toList())
+  }
+
+  @Test
+  fun `completed standalone plan hands its recovered checkout to a goal`() {
+    installGoalBuildPack(tempDir)
+    Files.writeString(tempDir.resolve(".skill-bill/config.yaml.lock"), "")
+    git("add", "-f", ".skill-bill/config.yaml.lock")
+    val tracked = Files.writeString(tempDir.resolve("operator.txt"), "baseline")
+    git("add", "operator.txt")
+    git(
+      "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
+      "-c", "commit.gpgsign=false", "commit", "-m", "tracked baseline",
+    )
+    publishInitialRevision()
+    Files.writeString(tracked, "caller edit")
+    val untracked = Files.writeString(tempDir.resolve("caller-untracked.txt"), "caller notes")
+    val planner = PhasePlanLauncher(tempDir)
+    val planned =
+      CliRuntime.run(
+        listOf("--db", fixture.dbPath.toString(), "phase", "plan", ISSUE_KEY, "split the work", "--agent", "codex"),
+        fixture.context(launcher = planner).copy(repositoryRoot = tempDir),
+      )
+    assertEquals(0, planned.exitCode, planned.stdout + planned.stderr)
+    val checkout = Path.of(planningOwnership().second)
+    val evidence = savedPlanEvidence()
+    val phases = planner.phaseIds.toList()
+    assertTrue(Files.notExists(checkout))
+
+    val goal = GoalFixtureAgentRunLauncher(fixture, noTerminalSubtask = 1)
+    val result = runFull(PlanThenGoalLauncher(planner, goal))
+
+    assertEquals(3, result.exitCode, result.stdout + result.stderr)
+    assertEquals("transferred" to checkout.toString(), planningOwnership())
+    assertEquals(evidence, savedPlanEvidence())
+    assertEquals(phases, planner.phaseIds.toList())
+    assertEquals(1, goal.childLaunches.size)
+    assertEquals(checkout, goal.childLaunches.single().skillRunRequest.repoRoot)
+    assertEquals("caller edit", Files.readString(tracked))
+    assertEquals("caller notes", Files.readString(untracked))
+  }
+
+  @Test
   fun `blocked planning resumes its own authored manifest without rerunning preplan`() {
     installGoalBuildPack(tempDir)
     val launcher = PhasePlanLauncher(tempDir, incompleteFirstBundle = true)
@@ -81,6 +173,8 @@ class CliPhasePlanRuntimeTest {
     val resumed = CliRuntime.run(arguments + listOf("--agent", "codex"), context)
     assertEquals(0, resumed.exitCode, resumed.stdout + resumed.stderr)
     assertEquals(RESUMED_PLAN_LAUNCHES, launcher.phaseIds)
+    assertTrue(launcher.launchRoots.none { it == tempDir }, launcher.launchRoots.toString())
+    assertEquals(1, launcher.launchRoots.distinct().size, launcher.launchRoots.toString())
     assertEquals(1, rowCount("feature_task_workflows"))
     assertEquals(PLANNED_UNITS, completedPlanUnitIds())
     assertEquals(mapOf("status" to "completed", "attempt_count" to 1), settledIntakeStep())
@@ -208,20 +302,96 @@ class CliPhasePlanRuntimeTest {
   fun `full run on a new key plans first then imports the bundle and runs the goal linked to the plan`() {
     installGoalBuildPack(tempDir)
     val planner = PhasePlanLauncher(tempDir)
+    val competingPlanner = PhasePlanLauncher(tempDir)
+    var competingExit: Int? = null
+    planner.onFirstLaunch = {
+      competingExit = runFull(PlanThenGoalLauncher(competingPlanner, GoalFixtureAgentRunLauncher(fixture))).exitCode
+    }
     val goal = GoalFixtureAgentRunLauncher(fixture, noTerminalSubtask = 1)
+    Files.writeString(tempDir.resolve("tracked.txt"), "base")
+    git("add", "tracked.txt")
+    git(
+      "-c",
+      "user.name=Goal Fixture",
+      "-c",
+      "user.email=goal-fixture@example.invalid",
+      "-c",
+      "commit.gpgsign=false",
+      "commit",
+      "--quiet",
+      "-m",
+      "tracked base",
+    )
+    Files.writeString(tempDir.resolve("tracked.txt"), "caller tracked change")
+    Files.writeString(tempDir.resolve("caller-untracked.txt"), "caller untracked change")
 
     val result = runFull(PlanThenGoalLauncher(planner, goal))
 
     assertEquals(3, result.exitCode, result.stdout + result.stderr)
     assertEquals(PLAN_LAUNCHES, planner.phaseIds)
+    assertTrue(competingExit != null && competingExit != 0)
+    assertTrue(competingPlanner.phaseIds.isEmpty())
     assertTrue(planner.timeouts.all { it == 180.minutes }, planner.timeouts.toString())
     assertEquals(1, goal.childLaunches.size, result.stdout + result.stderr)
+    val owner = planningOwnership()
+    assertEquals("transferred", owner.first)
+    assertEquals(planWorkflowId(), planningOwnershipWorkflowId())
+    assertEquals(planner.launchRoots.distinct(), listOf(Path.of(owner.second)))
+    assertEquals("caller tracked change", Files.readString(tempDir.resolve("tracked.txt")))
+    assertEquals("caller untracked change", Files.readString(tempDir.resolve("caller-untracked.txt")))
     assertEquals(1, rowCount("goal_runner_controls"))
     assertTrue(workflowIdsMentioning(planWorkflowId()).isNotEmpty())
     assertEquals(
-      listOf("goal" to listOf("goal", "$ISSUE_KEY Split the work into two parts.", "--agent", "codex")),
+      List(2) { "goal" to listOf("goal", "$ISSUE_KEY Split the work into two parts.", "--agent", "codex") },
       planLaunches(),
     )
+  }
+
+  @Test
+  fun `goal reconciles an interrupted reservation and refuses a competing planner`() {
+    installGoalBuildPack(tempDir)
+    val interrupted = PhasePlanLauncher(tempDir, authorNothingFirst = true)
+    val first = runFull(PlanThenGoalLauncher(interrupted, GoalFixtureAgentRunLauncher(fixture)))
+    assertEquals(1, first.exitCode, first.stdout + first.stderr)
+    val workflowId = planWorkflowId()
+    val checkout = planningOwnership().second
+    DriverManager.getConnection("jdbc:sqlite:${fixture.dbPath}").use { connection ->
+      connection.createStatement().use { statement ->
+        assertEquals(
+          1,
+          statement.executeUpdate(
+            "UPDATE goal_planning_ownership SET ownership_state = 'reserved', git_worktree_identity = NULL",
+          ),
+        )
+      }
+    }
+    val planner = PhasePlanLauncher(tempDir)
+    val competitor = PhasePlanLauncher(tempDir)
+    var competingExit: Int? = null
+    planner.onFirstLaunch = {
+      competingExit = runFull(PlanThenGoalLauncher(competitor, GoalFixtureAgentRunLauncher(fixture))).exitCode
+    }
+    val goal = GoalFixtureAgentRunLauncher(fixture, noTerminalSubtask = 1)
+
+    val resumed = runFull(PlanThenGoalLauncher(planner, goal))
+
+    assertEquals(3, resumed.exitCode, resumed.stdout + resumed.stderr)
+    assertTrue(competingExit != null && competingExit != 0)
+    assertTrue(competitor.phaseIds.isEmpty())
+    assertEquals(workflowId, planWorkflowId())
+    assertEquals("transferred" to checkout, planningOwnership())
+    DriverManager.getConnection("jdbc:sqlite:${fixture.dbPath}").use { connection ->
+      connection.createStatement().use { statement ->
+        statement.executeQuery(
+          "SELECT json_extract(control_state_json, '$.execution_worktree_path') FROM goal_runner_controls",
+        ).use { rows ->
+          assertTrue(rows.next())
+          assertEquals(checkout, rows.getString(1))
+        }
+      }
+    }
+    assertEquals(listOf(Path.of(checkout)), planner.launchRoots.distinct())
+    assertEquals(1, goal.childLaunches.size)
   }
 
   @Test
@@ -296,9 +466,15 @@ class CliPhasePlanRuntimeTest {
     val goal = GoalFixtureAgentRunLauncher(fixture, noTerminalSubtask = 1)
     val result = runFull(PlanThenGoalLauncher(planner, goal), reusedBundle.toString())
 
-    assertEquals(3, result.exitCode, result.stdout + result.stderr)
+    assertEquals(3, result.exitCode, "earlier=$earlierPlan " + result.stdout + result.stderr)
     val plans = planWorkflowIds()
-    assertEquals(2, plans.size, plans.toString())
+    assertEquals(
+      2,
+      plans.size,
+      plans.toString() + result.stdout + result.stderr +
+        " ownership=" + rowCount("goal_planning_ownership") +
+        if (rowCount("goal_planning_ownership") > 0) " owner=" + planningOwnershipWorkflowId() else "",
+    )
     assertTrue(earlierPlan in plans, plans.toString())
     assertEquals(1, goal.childLaunches.size)
   }
@@ -306,6 +482,12 @@ class CliPhasePlanRuntimeTest {
   @Test
   fun `full run resumes an unfinished standalone plan without replacing its unbounded timeout`() {
     installGoalBuildPack(tempDir)
+    Files.writeString(tempDir.resolve("tracked-legacy.txt"), "base")
+    git("add", "tracked-legacy.txt")
+    git(
+      "-c", "user.name=Goal Fixture", "-c", "user.email=goal-fixture@example.invalid",
+      "-c", "commit.gpgsign=false", "commit", "-m", "legacy base",
+    )
     val planner = PhasePlanLauncher(tempDir, authorNothingFirst = true)
     val context = fixture.context(launcher = planner).copy(repositoryRoot = tempDir)
     val first =
@@ -316,6 +498,9 @@ class CliPhasePlanRuntimeTest {
     assertEquals(1, first.exitCode, first.stdout + first.stderr)
     val workflowId = planWorkflowId()
     val descriptor = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.value(planArtifacts())
+    val firstLaunchCount = planner.launchRoots.size
+    Files.writeString(tempDir.resolve("tracked-legacy.txt"), "caller edit")
+    Files.writeString(tempDir.resolve("untracked-legacy.txt"), "caller file")
     val goal = GoalFixtureAgentRunLauncher(fixture, noTerminalSubtask = 1)
 
     val resumed = runFull(PlanThenGoalLauncher(planner, goal))
@@ -323,10 +508,13 @@ class CliPhasePlanRuntimeTest {
     assertEquals(3, resumed.exitCode, resumed.stdout + resumed.stderr)
     assertEquals(workflowId, planWorkflowId())
     assertEquals(descriptor, DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.value(planArtifacts()))
+    assertTrue(planner.launchRoots.drop(firstLaunchCount).all { it == Path.of(planningOwnership().second) })
+    assertEquals("caller edit", Files.readString(tempDir.resolve("tracked-legacy.txt")))
+    assertEquals("caller file", Files.readString(tempDir.resolve("untracked-legacy.txt")))
     assertEquals(RESUMED_PLAN_LAUNCHES, planner.phaseIds)
     assertTrue(planner.timeouts.all { it == null }, planner.timeouts.toString())
     assertEquals(PLANNED_UNITS, completedPlanUnitIds())
-    assertEquals(1, goal.childLaunches.size)
+    assertEquals(1, goal.childLaunches.size, resumed.stdout + resumed.stderr)
   }
 
   @Test
@@ -392,7 +580,11 @@ class CliPhasePlanRuntimeTest {
         JsonCodec.anyToStringAnyMap(DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_RECORDS.value(after)),
       )
     listOf("preplan", "plan", "plan_subtasks:2").forEach { assertEquals(records[it], retained[it], it) }
-    assertEquals(listOf("plan_subtasks", "plan_subtasks"), planner.phaseIds.drop(PLAN_LAUNCHES.size))
+    assertEquals(
+      listOf("plan_subtasks", "plan_subtasks"),
+      planner.phaseIds.drop(PLAN_LAUNCHES.size),
+      "launches=${planner.phaseIds} output=${resumed.stdout}${resumed.stderr}",
+    )
     assertTrue(planner.timeouts.all { it == null }, planner.timeouts.toString())
     assertEquals(1, goal.childLaunches.size)
   }
@@ -584,6 +776,70 @@ class CliPhasePlanRuntimeTest {
       }
     }
 
+  private fun savedPlanEvidence(): List<String?> =
+    DriverManager.getConnection("jdbc:sqlite:${fixture.dbPath}").use { connection ->
+      connection.createStatement().use { statement ->
+        statement.executeQuery(
+          "SELECT owner.workflow_id, owner.reservation_id, owner.initial_commit, " +
+            "plan.steps_json, plan.artifacts_json FROM goal_planning_ownership owner " +
+            "JOIN feature_task_workflows plan ON owner.workflow_id = plan.workflow_id",
+        ).use { rows ->
+          assertTrue(rows.next())
+          (1..5).map(rows::getString)
+        }
+      }
+    }
+
+  private fun checkoutRecoveryStates(): List<String> =
+    DriverManager.getConnection("jdbc:sqlite:${fixture.dbPath}").use { connection ->
+      connection.createStatement().use { statement ->
+        statement.executeQuery("SELECT recovery_state FROM goal_planning_checkout_recovery").use { rows ->
+          buildList { while (rows.next()) add(rows.getString(1)) }
+        }
+      }
+    }
+
+  private fun planningOwnership(): Pair<String, String> =
+    DriverManager.getConnection("jdbc:sqlite:${fixture.dbPath}").use { connection ->
+      connection.createStatement().use { statement ->
+        statement.executeQuery(
+          "SELECT ownership_state, owned_path FROM goal_planning_ownership ORDER BY created_at DESC LIMIT 1",
+        ).use { rows ->
+          assertTrue(rows.next())
+          rows.getString(1) to rows.getString(2)
+        }
+      }
+    }
+
+  private fun planningOwnershipWorkflowId(): String =
+    DriverManager.getConnection("jdbc:sqlite:${fixture.dbPath}").use { connection ->
+      connection.createStatement().use { statement ->
+        statement.executeQuery(
+          "SELECT workflow_id FROM goal_planning_ownership ORDER BY created_at DESC LIMIT 1",
+        ).use { rows ->
+          assertTrue(rows.next())
+          rows.getString(1)
+        }
+      }
+    }
+
+  private fun publishInitialRevision() {
+    val remote = tempDir.resolve(".git/recovery-remote.git")
+    git("init", "--bare", remote.toString())
+    git("remote", "add", "origin", remote.toString())
+    git("push", "--set-upstream", "origin", "main")
+  }
+
+  private fun git(vararg arguments: String) {
+    val process =
+      ProcessBuilder(listOf("git", *arguments))
+        .directory(tempDir.toFile())
+        .redirectErrorStream(true)
+        .start()
+    val output = process.inputStream.bufferedReader().use { it.readText() }
+    assertEquals(0, process.waitFor(), output)
+  }
+
   private class PlanThenGoalLauncher(
     private val planner: PhasePlanLauncher,
     private val goal: GoalFixtureAgentRunLauncher,
@@ -601,7 +857,7 @@ class CliPhasePlanRuntimeTest {
     }
   }
 
-  private class PhasePlanLauncher(
+  private inner class PhasePlanLauncher(
     private val repoRoot: Path,
     private val dirtyOutsideBundle: Boolean = false,
     private val incompleteFirstBundle: Boolean = false,
@@ -612,6 +868,8 @@ class CliPhasePlanRuntimeTest {
     val phaseIds = CopyOnWriteArrayList<String>()
     val planPrompts = CopyOnWriteArrayList<String>()
     val timeouts = CopyOnWriteArrayList<Duration?>()
+    val launchRoots = CopyOnWriteArrayList<Path>()
+    var onFirstLaunch: (() -> Unit)? = null
 
     override fun resolveLaunchModel(request: AgentRunLaunchModelRequest): EffectiveLaunchModel =
       passThroughResolvedLaunchModel(request)
@@ -621,18 +879,22 @@ class CliPhasePlanRuntimeTest {
         return agentRunLaunchFacts(SupportedAgent.CODEX, termination = AgentRunTermination.SpawnFailed)
       }
       timeouts += request.skillRunRequest.timeout
+      launchRoots.add(request.skillRunRequest.repoRoot)
       val phaseId =
         requireNotNull(PHASE_LINE.find(request.skillRunRequest.promptOverride.orEmpty())?.groupValues?.get(1)) {
           "phase plan launched a prompt with no phase header"
         }
       phaseIds += phaseId
+      val firstLaunch = onFirstLaunch
+      onFirstLaunch = null
+      firstLaunch?.invoke()
       if (phaseId == "plan") planPrompts += request.skillRunRequest.promptOverride.orEmpty()
       if (failPlanSubtasks && phaseId == "plan_subtasks") {
         return agentRunLaunchFacts(SupportedAgent.CODEX, termination = AgentRunTermination.SpawnFailed)
       }
       val stdout =
         if (phaseId == "plan") {
-          authorBundle()
+          scriptedPhaseValueRecord(phaseId, authorBundle())
         } else {
           phasePlanningPayload(
             phaseId,
@@ -642,7 +904,12 @@ class CliPhasePlanRuntimeTest {
       if (dirtyOutsideBundle && phaseIds.count { it == "plan" } == 1 && phaseId == "plan") {
         Files.writeString(repoRoot.resolve("outside-plan.txt"), "Concurrent edit")
       }
-      return agentRunLaunchFacts(agent = SupportedAgent.CODEX, stdout = stdout, stderr = "")
+      return RuntimeWorkflowTestSupport.settlePhase(
+        agentRunLaunchFacts(agent = SupportedAgent.CODEX, stdout = stdout, stderr = ""),
+        request.skillRunRequest.promptOverride,
+        fixture.dbPath,
+        fixture.context(launcher = this),
+      )
     }
 
     fun authorBundle(): String {

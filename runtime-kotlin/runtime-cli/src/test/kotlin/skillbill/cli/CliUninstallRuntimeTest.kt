@@ -22,8 +22,8 @@ class CliUninstallRuntimeTest {
     assertEquals(
       "uninstall_status: dry_run\n" +
         "state_root: ${fixture.stateRoot}\n" +
-        "agent_targets: 7\n" +
-        "skill_names: 1\n",
+        "agent_targets: 9\n" +
+        "skill_names: 3\n",
       result.stdout,
     )
     assertTrue(Files.exists(fixture.stateRoot))
@@ -132,19 +132,22 @@ class CliUninstallRuntimeTest {
     assertFalse(Files.exists(fixture.ownedSymlink))
     assertFalse(Files.exists(fixture.skillBillLauncher))
     assertFalse(Files.exists(fixture.skillBillMcpLauncher))
+    assertFalse(Files.exists(fixture.sonaLauncher))
+    assertFalse(Files.exists(fixture.sonaMcpLauncher))
     assertTrue(Files.exists(fixture.userSkillDir))
     assertTrue(Files.exists(fixture.userLauncher))
   }
 
   @Test
-  fun `uninstall removes the skill-bill and bill-feature links and keeps an unrelated user skill`() {
+  fun `uninstall removes public and old dispatcher links and keeps an unrelated user skill`() {
     val fixture = uninstallFixture()
     val codexSkills = fixture.home.resolve(".codex/skills")
     val installedSkills = fixture.stateRoot.resolve("installed-skills")
     val dispatcherLink = codexSkills.resolve("skill-bill")
+    val publicDispatcherLink = codexSkills.resolve("sona")
     val featureLink = codexSkills.resolve("bill-feature")
     val mySkill = codexSkills.resolve("my-skill")
-    listOf("skill-bill", "bill-feature").forEach { name ->
+    listOf("skill-bill", "sona", "bill-feature").forEach { name ->
       val staged = Files.createDirectories(installedSkills.resolve("$name-2222222222222222"))
       Files.writeString(staged.resolve("SKILL.md"), "# $name\n")
       Files.createSymbolicLink(codexSkills.resolve(name), staged)
@@ -156,8 +159,21 @@ class CliUninstallRuntimeTest {
 
     assertEquals(0, result.exitCode, result.stdout)
     assertFalse(Files.exists(dispatcherLink, LinkOption.NOFOLLOW_LINKS))
+    assertFalse(Files.exists(publicDispatcherLink, LinkOption.NOFOLLOW_LINKS))
     assertFalse(Files.exists(featureLink, LinkOption.NOFOLLOW_LINKS))
     assertTrue(Files.isRegularFile(mySkill.resolve("SKILL.md")))
+  }
+
+  @Test
+  fun `uninstall preserves an unrelated regular file at the public dispatcher name`() {
+    val fixture = uninstallFixture()
+    val publicTarget = Files.createDirectories(fixture.home.resolve(".codex/skills")).resolve("sona")
+    Files.writeString(publicTarget, "user-owned")
+
+    val result = runUninstall(fixture.home, "--yes")
+
+    assertEquals(0, result.exitCode, result.stdout)
+    assertEquals("user-owned", Files.readString(publicTarget))
   }
 
   private fun runUninstall(
@@ -205,9 +221,13 @@ class CliUninstallRuntimeTest {
     Files.createDirectories(binDir)
     val skillBillLauncher = binDir.resolve("skill-bill")
     val skillBillMcpLauncher = binDir.resolve("skill-bill-mcp")
+    val sonaLauncher = binDir.resolve("sona")
+    val sonaMcpLauncher = binDir.resolve("sona-mcp")
     val userLauncher = binDir.resolve("skill-bill-user")
     Files.createSymbolicLink(skillBillLauncher, runtimeCli)
     Files.createSymbolicLink(skillBillMcpLauncher, runtimeMcp)
+    Files.writeString(sonaLauncher, "#!/usr/bin/env bash\n# skill-bill managed launcher\n")
+    Files.createSymbolicLink(sonaMcpLauncher, runtimeMcp)
     Files.writeString(userLauncher, "user launcher\n")
 
     return UninstallFixture(
@@ -219,6 +239,8 @@ class CliUninstallRuntimeTest {
       ownedSymlink = ownedSymlink,
       skillBillLauncher = skillBillLauncher,
       skillBillMcpLauncher = skillBillMcpLauncher,
+      sonaLauncher = sonaLauncher,
+      sonaMcpLauncher = sonaMcpLauncher,
       userLauncher = userLauncher,
     )
   }
@@ -233,5 +255,7 @@ private data class UninstallFixture(
   val ownedSymlink: Path,
   val skillBillLauncher: Path,
   val skillBillMcpLauncher: Path,
+  val sonaLauncher: Path,
+  val sonaMcpLauncher: Path,
   val userLauncher: Path,
 )

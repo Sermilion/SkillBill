@@ -10,6 +10,8 @@ import skillbill.ports.install.mcp.model.InstallMcpRegistrationResult
 import skillbill.ports.install.mcp.model.InstallMcpUnregistrationRequest
 import skillbill.ports.system.UninstallPathsPort
 import java.io.IOException
+import java.nio.file.Files
+import java.nio.file.LinkOption
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -80,7 +82,7 @@ class UninstallMutationFailurePolicyTest {
       nativeSourceRoots = emptyList(),
       mcpAgents = listOf("claude", "codex"),
       launchers = emptyList(),
-      desktop = DesktopRemoval(launcher = null, files = emptyList(), directories = emptyList()),
+      desktop = DesktopRemoval(launchers = emptyList(), files = emptyList(), directories = emptyList()),
     )
 
   private companion object {
@@ -112,6 +114,12 @@ private class RecordingDiagnostics : RuntimeDiagnostics {
 private class ThrowingUninstallPathsPort(
   private val failingOperation: String,
 ) : UninstallPathsPort {
+  override fun isRegularFile(path: Path): Boolean = Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)
+
+  override fun isDirectory(path: Path): Boolean = Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)
+
+  override fun readRegularFile(path: Path): String = Files.readString(path)
+
   override fun <T> withConfigTransaction(
     userHome: Path,
     environment: Map<String, String>,

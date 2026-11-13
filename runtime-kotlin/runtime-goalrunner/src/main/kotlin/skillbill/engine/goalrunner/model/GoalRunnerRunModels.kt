@@ -30,6 +30,7 @@ public data class GoalRunnerRunRequest(
   public val intake: String? = null,
   public val modelAssignment: FeatureTaskRuntimeModelAssignment = FeatureTaskRuntimeModelAssignment(),
   internal val executionGeneration: Long? = null,
+  public val sourceRepoRoot: Path = repoRoot,
 ) {
   init {
     require(issueKey.isNotBlank()) { "issueKey is required." }

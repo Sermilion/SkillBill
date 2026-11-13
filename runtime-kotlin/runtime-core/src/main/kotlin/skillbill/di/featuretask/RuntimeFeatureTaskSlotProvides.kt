@@ -39,7 +39,6 @@ import skillbill.engine.featuretask.slot.writehistory.BoundaryHistoryStrategy
 import skillbill.engine.featuretask.slot.writehistory.GoalChildHistoryDraftStrategy
 import skillbill.engine.featuretask.validation.check.ValidationLiveChecks
 import skillbill.infrastructure.workflow.featuretask.FileSystemPhaseInstructionFileSource
-import skillbill.model.EnvironmentContext
 import skillbill.ports.concurrency.BoundedWorkFanOutPort
 import skillbill.ports.featuretask.PhaseInstructionFileSource
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
@@ -152,13 +151,11 @@ internal interface RuntimeFeatureTaskSlotProvides {
   fun phaseStrategyLookup(
     registry: PhaseStrategyRegistry,
     selection: PhaseStrategySelection,
-    environmentContext: EnvironmentContext,
     phaseInstructionSource: PhaseInstructionFileSource,
   ): PhaseStrategyLookup =
     PhaseStrategyLookup(
       registry,
       selection,
-      ModelDirectiveSupplementsSetting.resolve(environmentContext.environment),
       phaseInstructionSource,
     )
 }

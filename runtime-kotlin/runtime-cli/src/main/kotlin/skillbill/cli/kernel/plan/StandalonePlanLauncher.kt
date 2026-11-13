@@ -23,6 +23,12 @@ class StandalonePlanLauncher(
 ) {
   fun issueKeyOf(intake: String): String = planRun.issueKeyOf(intake)
 
+  fun prepareGoalCheckout(
+    issueKey: String,
+    intake: String?,
+    repoRoot: Path,
+  ): StandalonePlanResult.Refused? = planRun.prepareGoalCheckout(issueKey, intake, repoRoot)
+
   fun run(
     issueKey: String,
     intake: String?,
@@ -68,11 +74,11 @@ fun StandalonePlanResult.planReportText(
         (
           listOf("Parent spec: $parentSpecPath", "Manifest: $decompositionManifestPath") +
             subtaskSpecPaths.map { path -> "Subtask spec: $path" } +
-            listOf("Plan workflow ID: $workflowId", "Run the goal with: skill-bill $issueKey")
+            listOf("Plan workflow ID: $workflowId", "Run the goal with: sona $issueKey")
         ).joinToString("\n")
       is StandalonePlanResult.Blocked ->
         "Plan for $issueKey blocked: $reason\nPlan workflow ID: $workflowId\n" +
-          "Resume with: skill-bill phase plan $issueKey (or skill-bill $issueKey)"
+          "Resume with: sona phase plan $issueKey (or sona $issueKey)"
       is StandalonePlanResult.Refused ->
         listOfNotNull(reason, workflowId?.let { "Plan workflow ID: $it" }).joinToString("\n")
     } + incidentLines.takeIf { it.isNotEmpty() }?.joinToString("\n", prefix = "\n").orEmpty()

@@ -60,10 +60,33 @@ class IdeStatusPolicyVerifyLifecycleTest {
   }
 
   @Test
-  fun `non-running verify lifecycles are never rewritten`() {
+  fun `a verify parked on its criteria needs the operator until the abandonment window ends`() {
+    val parked =
+      IdeStatusPolicy.verifyLifecycle(
+        IdeStatusLifecycleState.PAUSED,
+        updatedAt = observedAt.minus(IdeStatusPolicy.VERIFY_ABANDONED_AFTER),
+        observedAt = observedAt,
+      )
+    val policy = IdeStatusPolicy.work(facts(parked).copy(awaitingOperatorDecision = true))
+
+    assertEquals(IdeStatusLifecycleState.PAUSED, parked)
+    assertEquals(IdeStatusLiveSection.NEEDS_YOU, policy.liveSection)
+    assertEquals(true, policy.requiresAttention)
+    assertEquals(
+      IdeStatusLifecycleState.IDLE,
+      IdeStatusPolicy.verifyLifecycle(
+        IdeStatusLifecycleState.PAUSED,
+        updatedAt = observedAt.minus(IdeStatusPolicy.VERIFY_ABANDONED_AFTER).minusSeconds(1),
+        observedAt = observedAt,
+      ),
+    )
+  }
+
+  @Test
+  fun `settled verify lifecycles are never rewritten`() {
     val longAgo = observedAt.minus(IdeStatusPolicy.VERIFY_ABANDONED_AFTER.multipliedBy(10))
 
-    listOf(IdeStatusLifecycleState.BLOCKED, IdeStatusLifecycleState.PAUSED, IdeStatusLifecycleState.TERMINAL)
+    listOf(IdeStatusLifecycleState.BLOCKED, IdeStatusLifecycleState.TERMINAL)
       .forEach { durable ->
         assertEquals(durable, IdeStatusPolicy.verifyLifecycle(durable, longAgo, observedAt))
       }

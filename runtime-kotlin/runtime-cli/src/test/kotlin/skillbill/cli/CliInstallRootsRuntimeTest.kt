@@ -31,8 +31,7 @@ class CliInstallRootsRuntimeTest {
     assertContains(register.stderr, malformed.toString())
     assertEquals("{ not valid json", Files.readString(malformed))
     val servers = decodeJsonObject(Files.readString(defaultConfig))["mcpServers"] as Map<*, *>
-    assertTrue("other" in servers)
-    assertTrue("skill-bill" in servers)
+    assertEquals(setOf("other", "sona"), servers.keys)
   }
 
   @Test
@@ -65,7 +64,7 @@ class CliInstallRootsRuntimeTest {
     assertEquals(1, unregister.exitCode)
     assertContains(liveStdout.toString(), defaultConfig.toString())
     assertFalse(
-      "skill-bill" in (
+      "sona" in (
         decodeJsonObject(
           Files.readString(defaultConfig),
         )["mcpServers"] as? Map<*, *> ?: emptyMap<Any, Any>()
@@ -79,7 +78,7 @@ class CliInstallRootsRuntimeTest {
     val home = Files.createTempDirectory("skillbill-cli-install-cleanup")
     val targetDir = home.resolve("agent-skills")
     Files.createDirectories(targetDir)
-    val skillSource = home.resolve("bill-test-skill")
+    val skillSource = home.resolve(".skill-bill/installed-skills/bill-test-skill-deadbeefdeadbeef")
     Files.createDirectories(skillSource)
     Files.createSymbolicLink(targetDir.resolve("bill-test-skill"), skillSource)
     Files.writeString(targetDir.resolve("not-skill-bill"), "user file")

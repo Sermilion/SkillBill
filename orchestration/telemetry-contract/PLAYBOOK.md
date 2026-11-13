@@ -28,10 +28,10 @@ Do not reference this repo-relative path directly from installable skills — us
 
 Every telemeterable skill must be usable alone. When invoked directly by a user, each skill generates its own session id and emits its own events:
 
-- `skill-bill phase review` — `skillbill_review_finished` (once the review lifecycle resolves)
-- `skill-bill phase validation` — `skillbill_quality_check_started` + `_finished`
-- `skill-bill operation verify` — `skillbill_feature_verify_started` + `_finished`
-- `skill-bill phase pr` — `skillbill_pr_description_generated`
+- `sona phase review` — `skillbill_review_finished` (once the review lifecycle resolves)
+- `sona phase validation` — `skillbill_quality_check_started` + `_finished`
+- `sona operation verify` — `skillbill_feature_verify_started` + `_finished`
+- `sona phase pr` — `skillbill_pr_description_generated`
 
 ## The `orchestrated` flag
 
@@ -46,28 +46,28 @@ The orchestrator is responsible for setting the flag. A child skill never infers
 
 ### Review skills
 
-Review skills (`skill-bill phase review` and its stack-specific implementations) use the `import_review` and `triage_findings` MCP tools.
+Review skills (`sona phase review` and its stack-specific implementations) use the `import_review` and `triage_findings` MCP tools.
 
 - **Standalone:** `import_review` imports the review text and emits telemetry; `triage_findings` records user feedback and completes the review lifecycle.
 - **Orchestrated (`orchestrated=true`):** both tools suppress outbox emission and return a `telemetry_payload` for the parent to embed.
 
 ### Quality-check skills
 
-Quality-check skills (`skill-bill phase validation` and its stack-specific implementations) use the `quality_check_started` and `quality_check_finished` MCP tools.
+Quality-check skills (`sona phase validation` and its stack-specific implementations) use the `quality_check_started` and `quality_check_finished` MCP tools.
 
 - **Standalone:** call `quality_check_started` once stack routing is decided, then `quality_check_finished` when the loop finishes.
 - **Orchestrated:** skip `quality_check_started`; call `quality_check_finished` with `orchestrated=true` and all started+finished fields combined.
 
 ### Feature-verify skills
 
-Feature-verify skills (`skill-bill operation verify`) use the `feature_verify_started` and `feature_verify_finished` MCP tools.
+Feature-verify skills (`sona operation verify`) use the `feature_verify_started` and `feature_verify_finished` MCP tools.
 
 - **Standalone:** call `feature_verify_started` after criteria are confirmed, then `feature_verify_finished` after the verdict.
 - **Orchestrated:** skip `feature_verify_started`; call `feature_verify_finished` with `orchestrated=true` and all started+finished fields combined.
 
 ### PR description skills
 
-PR description skills (`skill-bill phase pr`) use the `pr_description_generated` MCP tool.
+PR description skills (`sona phase pr`) use the `pr_description_generated` MCP tool.
 
 - **Standalone:** call `pr_description_generated` after the PR description is presented.
 - **Orchestrated:** call `pr_description_generated` with `orchestrated=true`.
@@ -120,7 +120,7 @@ When the parent's finished event fires, it embeds each collected `telemetry_payl
 
 ## Routers never emit
 
-`skill-bill phase review` and `skill-bill phase validation` are thin routers. They do not emit telemetry of their own — routing metadata is carried inside the concrete routed skill's telemetry call. They pass `orchestrated` through to the routed concrete skill unchanged.
+`sona phase review` and `sona phase validation` are thin routers. They do not emit telemetry of their own — routing metadata is carried inside the concrete routed skill's telemetry call. They pass `orchestrated` through to the routed concrete skill unchanged.
 
 ## Governed add-ons
 

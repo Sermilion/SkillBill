@@ -1,26 +1,33 @@
 package skillbill.infrastructure.skills.scaffold.authoring
+
 import skillbill.infrastructure.skills.nativeagent.composition.NATIVE_AGENT_BUNDLE_FILE
 import skillbill.infrastructure.skills.nativeagent.composition.NATIVE_AGENT_SOURCE_DIR
 import skillbill.infrastructure.skills.nativeagent.composition.parseNativeAgentSourceFile
 import skillbill.infrastructure.skills.scaffold.rendering.renderFrontmatter
 import skillbill.infrastructure.skills.scaffold.rendering.renderSubagentSpawnRuntimeNotes
 import skillbill.infrastructure.skills.scaffold.validation.shape.parseSkillFrontmatter
-import skillbill.scaffold.model.CodeReviewBaselineLayer
+import skillbill.install.model.ListedSkillNames
+import skillbill.review.model.CodeReviewBaselineLayer
 import skillbill.scaffold.model.GovernedAddonSelection
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
+import java.util.logging.Logger
 
 internal fun renderWrapper(target: AuthoringTarget): String {
   val contentText = Files.readString(target.contentFile)
   authoredContentFrontmatterBlock(contentText, target.contentFile, target.skillName)
   val sourceFrontmatter = parseSkillFrontmatter(contentText)
+  val isDispatcher = target.skillName == ListedSkillNames.DISPATCHER
+  val sourceDescription = sourceFrontmatter["description"].orEmpty()
   val frontmatter =
     renderFrontmatter(
-      skillName = sourceFrontmatter["name"].orEmpty(),
-      description = sourceFrontmatter["description"].orEmpty(),
+      skillName = ListedSkillNames.publicName(target.skillName),
+      description = if (isDispatcher) adaptLegacyDispatcherText(sourceDescription) else sourceDescription,
     )
-  val executionBody = renderedAuthoredExecutionBody(contentText, target.contentFile, target.skillName)
+  val authoredExecutionBody = renderedAuthoredExecutionBody(contentText, target.contentFile, target.skillName)
+  val executionBody =
+    if (isDispatcher) adaptLegacyDispatcherText(authoredExecutionBody) else authoredExecutionBody
   return assembleRenderedWrapper(
     target = target,
     frontmatter = frontmatter,
@@ -128,7 +135,7 @@ internal fun renderGeneratedSubagentSpawnRuntimeNotes(target: AuthoringTarget): 
     nativeAgentSourceFiles(nativeAgentDir)
       .flatMap(::parseNativeAgentSourceFile)
       .map { source -> source.name }
-  return renderSubagentSpawnRuntimeNotes(target.skillName, specialists)
+  return renderSubagentSpawnRuntimeNotes(ListedSkillNames.publicName(target.skillName), specialists)
 }
 
 private fun nativeAgentSourceFiles(nativeAgentDir: Path): List<Path> =
@@ -143,4 +150,19 @@ private fun nativeAgentSourceFiles(nativeAgentDir: Path): List<Path> =
 private fun isNativeAgentSourceFile(file: Path): Boolean {
   val fileName = file.fileName.toString()
   return fileName.endsWith(".md") || fileName == NATIVE_AGENT_BUNDLE_FILE
+}
+
+private val legacyDispatcherLog: Logger = Logger.getLogger("skillbill.scaffold.LegacyDispatcherCompatibility")
+
+internal fun adaptLegacyDispatcherText(text: String): String {
+  val adapted =
+    text
+      .replace(Regex("(?<![\\w-])mcp__skill-bill__(?=\\w)"), "mcp__sona__")
+      .replace("`skill-bill`", "`sona`")
+      .replace(Regex("(?<![\\w.-])/skill-bill(?![\\w-])"), "/sona")
+      .replace(Regex("(?<![\\w./-])(?:\\./)?skill-bill(?=\\s|$|[<\\[])"), "sona")
+  if (adapted != text) {
+    legacyDispatcherLog.info("Adapted legacy skill-bill dispatcher commands to the public sona command.")
+  }
+  return adapted
 }

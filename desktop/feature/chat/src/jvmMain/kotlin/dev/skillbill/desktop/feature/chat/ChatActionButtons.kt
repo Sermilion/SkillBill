@@ -93,7 +93,7 @@ private fun actionHint(action: ChatSuggestedAction): String? = when (action.star
   NewTaskActionKind.Verify -> "Proposes acceptance criteria for confirmation, then audits them."
   NewTaskActionKind.PrReviewFix -> "Proposes fixes for review comments, then applies selected fixes after confirmation."
   null -> when (action.label.trim().lowercase()) {
-    "run operation:update-check" -> "Checks for skill-bill updates."
+    "run operation:update-check" -> "Checks for Sona updates."
     "run operation:unit-test-value-check" -> "Reviews the value of tests and reports findings."
     "run operation:feature-guard" -> "Proposes a feature flag, then adds it after confirmation."
     "run operation:feature-guard-cleanup" -> "Proposes flag removal, then removes it and runs validation after confirmation."

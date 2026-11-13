@@ -330,6 +330,7 @@ input { font: inherit; color: inherit; }
 /* Usage allowance */
 .sb-usage-card { display: flex; flex-direction: column; gap: 8px; box-sizing: border-box; width: 100%; height: 110px; padding: 12px; margin-bottom: 10px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--bg-panel); color: var(--fg-2); text-align: left; cursor: pointer; font-size: var(--t-xs); line-height: 1.4; }
 .sb-usage-card:hover { background: var(--bg-raised); border-color: var(--border-strong); }
+.sb-side-foot > .sb-usage-card { flex-shrink: 0; margin: var(--sp-2) 0 0; }
 .sb-usage-provider { display: flex; align-items: center; justify-content: space-between; gap: 8px; height: 18px; flex: none; }
 .sb-usage-provider > b { font-weight: 500; color: var(--c); font-size: var(--t-sm); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sb-usage-provider > .sb-icon { color: var(--fg-faint); }
@@ -1534,54 +1535,10 @@ button.sb-chk-hd:focus-visible { outline-offset: -2px; }
 .sb-dirs .c { text-align: right; color: var(--fg-muted); font-variant-numeric: tabular-nums; }
 .sb-tlink { align-self: flex-start; padding: 0; border: 0; background: none; font: inherit; color: var(--accent-text); cursor: pointer; }
 .sb-tlink:hover { text-decoration: underline; }
-/* VerifyQa: the QA step's results */
+
+/* A Verify run's QA step: the QA verdict above the QA results */
 .sb-vqa { display: flex; flex-direction: column; gap: var(--sp-3); }
-.sb-vqa > .vd { display: inline-flex; align-items: center; gap: 6px; font-size: var(--t-sm); font-weight: 500; color: var(--c); }
-.sb-vqa > .vd > i { width: 8px; height: 8px; flex: none; border-radius: 50%; background: currentColor; }
-.sb-vqa > .sn { margin: 0; font-size: var(--t-base); line-height: 1.45; color: var(--fg); }
-.sb-vqa .gh { display: flex; align-items: baseline; gap: 6px; margin: 0 0 6px; font-size: var(--t-xs); font-weight: 500; color: var(--fg-muted); }
-.sb-vqa .gh > .n { font-weight: 400; color: var(--fg-faint); font-variant-numeric: tabular-nums; }
-.sb-vqa .sb-box { background: var(--bg-panel); }
-.sb-vqa .it + .it { border-top: 1px solid var(--border-subtle); }
-.sb-vqa .ih { width: 100%; display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; gap: 2px var(--sp-2); padding: 10px var(--sp-3); border: 0; background: transparent; font: inherit; color: inherit; text-align: left; }
-.sb-vqa button.ih { cursor: pointer; }
-.sb-vqa button.ih:hover { background: var(--bg-hover); }
-.sb-vqa button.ih:focus-visible { outline-offset: -2px; }
-.sb-vqa .gl { padding-top: 2px; color: var(--c); }
-.sb-vqa .gl > .sb-icon { display: block; }
-.sb-vqa .ti { min-width: 0; font-weight: 500; color: var(--fg); }
-.sb-vqa .ref { margin-right: 6px; font: 400 var(--t-sm) var(--font-mono); color: var(--st-failed); }
-.sb-vqa .st { display: inline-flex; align-items: center; gap: 6px; padding-top: 1px; font-size: var(--t-xs); white-space: nowrap; color: var(--st-failed); }
-.sb-vqa .st > .sb-icon { color: var(--fg-faint); transition: transform var(--dur-fast) var(--ease); }
-.sb-vqa .ih[aria-expanded="true"] .st > .sb-icon { transform: rotate(90deg); }
-.sb-vqa .ln { grid-column: 2 / 4; font-size: var(--t-sm); color: var(--fg-muted); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
-.sb-vqa .ih[aria-expanded="true"] .ln, .sb-vqa .ln.is-full { display: block; }
-.sb-vqa .ib { display: flex; flex-direction: column; gap: var(--sp-3); padding: 0 var(--sp-3) var(--sp-3) 36px; font-size: var(--t-sm); color: var(--fg-2); }
-.sb-vqa .it.is-sel { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; align-items: start; }
-.sb-vqa .it.is-sel > .ih { padding-left: 2px; }
-.sb-vqa .it.is-sel > .ib { grid-column: 2 / 4; padding-left: 26px; }
-.sb-vqa .it > .lead { padding: 11px 0 0 12px; }
-.sb-vqa .it > .end { min-width: 104px; display: flex; justify-content: flex-end; padding: 8px 10px 0 0; }
-.sb-vqa .qf { width: 100%; display: grid; grid-template-columns: 16px auto minmax(0, 1fr) 14px; align-items: center; gap: var(--sp-2); padding: 9px var(--sp-3); border: 0; background: transparent; font: inherit; color: inherit; text-align: left; cursor: pointer; }
-.sb-vqa .qf:hover { background: var(--bg-hover); }
-.sb-vqa .qf > span:first-child { display: inline-flex; color: var(--c); }
-.sb-vqa .qf > .lb { font-weight: 500; color: var(--fg-2); white-space: nowrap; }
-.sb-vqa .qf > .pv { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: var(--t-sm); color: var(--fg-faint); }
-.sb-vqa .qf > .sb-icon { color: var(--fg-faint); transition: transform var(--dur-fast) var(--ease); }
-.sb-vqa .qf[aria-expanded="true"] > .sb-icon { transform: rotate(90deg); }
-.sb-vqa .qf[aria-expanded="true"] > .pv { visibility: hidden; }
-.sb-vqa .sl { padding: var(--sp-1) 0; border-top: 1px solid var(--border-subtle); }
-.sb-vqa .sub { padding: 6px var(--sp-3) 6px 36px; font-size: var(--t-sm); color: var(--fg-muted); }
-.sb-vqa .sub > b { display: block; font-weight: 500; color: var(--fg-2); }
-.sb-vqa .sub > .sb-fchips { margin-top: 6px; }
-.sb-vqa .sb-fchip .sb-icon { color: currentColor; }
-.sb-vqa .tg { display: flex; flex-wrap: wrap; gap: 2px var(--sp-2); font-size: var(--t-sm); color: var(--fg-faint); }
-.sb-vqa .tg b { font-weight: 400; color: var(--fg-muted); }
-.sb-vqa .rp { padding: var(--sp-3) var(--sp-4) var(--sp-4); border-top: 1px solid var(--border-subtle); font-size: var(--t-sm); color: var(--fg-2); }
-.sb-vqa .rp h3 { margin: var(--sp-4) 0 var(--sp-2); font-size: var(--t-sm); font-weight: 500; color: var(--fg); }
-.sb-vqa .rp h3:first-child, .sb-vqa .rp p:first-child { margin-top: 0; }
-.sb-vqa .rp p { margin: 0 0 var(--sp-2); }
-.sb-vqa .rp ul { margin: 0 0 var(--sp-2); padding-left: var(--sp-4); display: flex; flex-direction: column; gap: 6px; }
+.sb-vqa > .sb-qav { line-height: 1.45; }
 
 /* Device switcher: the QA device row at the bottom of the sidebar */
 .sb-devsw { width: 100%; height: 40px; margin-top: var(--sp-2); display: flex; align-items: center; gap: var(--sp-2); padding: 0 var(--sp-2); border: 1px solid var(--border-subtle); border-radius: var(--r-md); background: rgba(255, 255, 255, 0.015); color: var(--fg-2); font: inherit; text-align: left; cursor: pointer; }

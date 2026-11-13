@@ -62,13 +62,20 @@ class InstallLinkSkillCommand(
     if (state.refuseInstallMutationDuringGoalContinuation(inputs, "link-skill")) {
       return
     }
-    installService.linkSkill(
-      source = Path.of(source),
-      targetDir = Path.of(targetDir),
-      agent = agent,
-      repoRoot = repoRoot?.let(Path::of),
-      home = inputs.userHome,
-    )
-    state.completeText("")
+    val result =
+      installService.linkSkill(
+        source = Path.of(source),
+        targetDir = Path.of(targetDir),
+        agent = agent,
+        repoRoot = repoRoot?.let(Path::of),
+        home = inputs.userHome,
+      )
+    val issues = result.issues
+    if (issues.isEmpty()) {
+      state.completeText(result.linkedPaths.joinToString("\n") { path -> path.toString() }, exitCode = 0)
+    } else {
+      val output = issues.joinToString("\n") { issue -> issue.message }
+      state.completeText(output, exitCode = 1)
+    }
   }
 }

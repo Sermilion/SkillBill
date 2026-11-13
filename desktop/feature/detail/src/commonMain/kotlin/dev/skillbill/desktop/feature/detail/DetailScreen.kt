@@ -78,6 +78,7 @@ internal class DetailScreenHost(
   val detailsWidthDp: Int? = null,
   val onResizeDetails: (Int) -> Unit = {},
   val onResetDetails: () -> Unit = {},
+  val onOpenParkedVerify: (adjust: Boolean) -> Unit = {},
 )
 
 internal fun DetailScreenHost.detailsSurfaceVisible(drawerMode: Boolean, itemResolved: Boolean): Boolean =
@@ -255,7 +256,7 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
             val verifyRun = loaded?.detail?.verifyRun
             if (verifyRun != null) VerifyHeader(verifyRun, onAction) {
               if (state.sections != SectionsUi.Gone) {
-                VerifyHeaderActions(state, verifyRun, view, recoverFocus, onAction) { if (!host.chatOpen) host.onToggleChat() }
+                VerifyHeaderActions(state, verifyRun, view, recoverFocus, onAction, host.onOpenParkedVerify)
               }
             } else DetailHeader(item, state.stale, { onAction(DetailAction.RevealFolder) }, { item.branch?.let { onAction(DetailAction.OpenBranch(it)) } }, qa = if (qaRow) QaHeaderFacts(qaView?.testedCommit, qaView?.criteriaSource) else null, validation = validationRow, planReady = item.isStandalonePlan() && planFinished(item, loaded?.detail), planBlocked = item.isStandalonePlan() && hasBlockedSubtasks(loaded?.detail?.standalonePlan)) {
               if (state.sections != SectionsUi.Gone) {

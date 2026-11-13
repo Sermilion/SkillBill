@@ -2,6 +2,7 @@ package skillbill.infrastructure.skills.scaffold.rendering
 
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.infrastructure.skills.scaffold.runtime.service.contract.TemplateContext
+import skillbill.install.model.ListedSkillNames
 
 private val FRONTMATTER_BLOCK_LEADING = Regex("""(?s)\A---\n.*?\n---\n""")
 
@@ -94,7 +95,7 @@ internal fun renderDescriptorSection(
   buildString {
     appendLine("## Descriptor")
     appendLine()
-    appendLine("Governed skill: `${context.skillName}`")
+    appendLine("Governed skill: `${ListedSkillNames.publicName(context.skillName)}`")
     appendLine("Family: `${context.family}`")
     if (context.platform.isNotBlank()) {
       appendLine("Platform pack: `${context.platform}` (${context.displayName.ifBlank { context.platform }})")
@@ -116,7 +117,7 @@ internal fun renderContentBody(
   contentBody?.let { raw ->
     if (FRONTMATTER_BLOCK_LEADING.containsMatchIn(raw.trimStart())) {
       throw SkillBillRuntimeException(
-        "skill-bill new payload content_body for '${context.skillName}' must not start with a " +
+        "sona new payload content_body for '${ListedSkillNames.publicName(context.skillName)}' must not start with a " +
           "YAML frontmatter block; the canonical block is rendered from the payload's name/" +
           "description.",
       )
@@ -124,7 +125,7 @@ internal fun renderContentBody(
   }
   val body = contentBody?.trimEnd()?.plus("\n") ?: renderGovernedContentStarter(context, resolvedDescription)
   return buildString {
-    append(renderFrontmatter(context.skillName, resolvedDescription, internalFor))
+    append(renderFrontmatter(ListedSkillNames.publicName(context.skillName), resolvedDescription, internalFor))
     appendLine()
     appendLine("# ${contentTitle(context)}")
     appendLine()

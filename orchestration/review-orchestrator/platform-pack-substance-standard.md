@@ -5,7 +5,7 @@ Audit contract version: `0.1`
 This standard is the maintained-repository substance gate for platform packs. It
 does not change the structural contract accepted by the platform-pack loader.
 Every requirement below is independently measured by the canonical audit used by
-tests and `skill-bill validate`.
+tests and `sona phase validation`.
 
 ## Corpus and effective coverage
 

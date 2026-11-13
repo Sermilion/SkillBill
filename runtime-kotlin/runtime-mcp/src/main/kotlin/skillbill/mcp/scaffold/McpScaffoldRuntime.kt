@@ -30,7 +30,7 @@ internal fun newSkillScaffold(
           clock = component.clock,
         ),
       )
-    scaffoldSuccessMap(
+    scaffoldResultMap(
       sessionId = invocation.sessionId,
       payload = payload,
       result = invocation.scaffoldResult,

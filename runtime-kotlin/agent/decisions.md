@@ -1,3 +1,37 @@
+## [2026-11-13] Convert fresh runtime commands while preserving stored records
+Context: SONA-5 stages the public command rename across dependent subtasks. Runtime command producers convert after public executables, namespace and skill alias exist.
+Decision: Change newly constructed guidance and its prefix-dependent consumers together. Retain stored prose, identities, checkpoints and storage paths.
+Reason: Preserving saved records keeps existing runs and their completed work available during the rename. Prefix-dependent consumers such as archive export must change with the producers they parse.
+
+## [2026-11-12] Use acknowledged ACP for OpenCode runtime execution
+Context: OpenCode needs headless runtime execution with actual model and effort consumption, approvals and complete capture.
+Decision: Reuse ACP session, approval and process owners, acknowledge advertised configuration before prompting, and retain the runtime continuation wrapper.
+Reason: A registered command cannot establish that the selected configuration reached the provider. Acknowledged ACP setup avoids CLI output scraping and another execution loop.
+Revisit when: Live provider QA establishes sustained execution and cancellation or OpenCode changes ACP configuration.
+Scope: This replaces only the OpenCode product-exclusion conclusion in the 2026-08-09 runtime-only engine decision. Its rejected-driver rationale, zcode removal and legacy-data quarantine remain relevant.
+
+## [2026-11-12] Require durable settlement according to the launched prompt
+Context: Provider exit zero or end_turn can arrive without phase settlement; runtime-owned build repair turns can explicitly omit settlement.
+Decision: Carry the launched prompt's settlement target through PreparedLaunch and require matching durable workflow, phase and attempt evidence when present. Preserve unreadable records and report typed failures; permit captured prose only for non-settling turns.
+Reason: Transport completion cannot grant workflow authority. Prompt-derived requirements preserve repair turns that never received a settlement request and retain the PhaseOutput ownership recorded in SKILL-387.
+
+## [2026-11-12] Reserve planning ownership before creating a Git worktree
+Context: SQLite and Git cannot share an atomic transaction, and a launch can stop between recording ownership and creating its checkout.
+Decision: Persist the reservation, selected workflow, intended path and initial revision before Git creation. Reconcile interruptions against recorded ownership and Git identity; transfer ownership and the execution path to goal control in one conditional SQLite transaction.
+Reason: A durable reservation gives recovery evidence without treating an issue key or a Git-listed directory as ownership proof. Refusing ambiguous paths preserves work whose ownership cannot be established.
+
+## [2026-11-12] Keep plan identity separate from its execution checkout
+Context: Standalone planning must leave caller edits untouched while a later goal continues the selected plan and its accepted evidence.
+Decision: Select plans by repository identity and workflow, resolve intake against its caller context, and execute planning in the acquired owned checkout. Preserve project-store paths, copy repository-local inputs and legacy bundles when needed, and transfer the same checkout to the goal. Refuse a standalone launch that resolves to the caller checkout.
+Reason: The execution path says where agents run, not which plan they selected. Separating those identities preserves retry and handoff continuity without making caller edits part of the planning launch gate.
+
+## [2026-11-12] Fence planning checkout recovery in durable storage
+Context: A reusable filesystem receipt and a short file lock could not prevent a later runtime writer from invalidating cleanup proof. Recreating a checkout can also change its Git identity.
+Decision: Migration 126 adds an initially empty recovery journal. Existing ownership rows and filesystem receipts remain intact and supply no new proof. Shared settlement commits a writer fence before inspecting dirty, untracked, ignored and publication state; only the original commit permits recovery proof. Worker admission, goal execution leases, transfer and checkout writers consult the fence transactionally.
+Direct control mutations hold their writer transaction across checkout access; recovery commits before that transaction starts, and nested access refuses pending recovery. Goal preparation fences branch alignment before lease admission. Cleanup retains checkouts while any parent execution lease remains, including an expired lease.
+Recovery holds a per-path operating system lock and its own database transaction. It verifies the durable generation, available original commit and matching owner, updates replacement Git identity and consumes proof before admitting writers. Consumed generations remain stored and cannot authorize another reconstruction.
+Completed standalone plans settle through this shared resource after report publication; interrupted and goal-scoped planning retain their checkout. Goal intake resolves recovery before requiring the checkout for projection and transfer.
+Reason: The persisted fence survives process exit, and writer admission checks it in the same transaction as admission. A file lock alone protects only the current resource operation. Uncertain interruptions retain the checkout and journal with recovery guidance.
 ## [2026-11-12] Gate-less execution plans tolerate changed pack gate commands
 Context: A plan workflow records a `gate-commands` policy digest even though the `plan` definition has no quality-gate slot. After a platform pack changed its `validation_gate` argv, resuming a blocked plan, including a goal's `plan_subtasks` re-plan, refused with an undetailed `incompatible_descriptor`, and the goal could not continue.
 Decision: Policy comparison ignores `gate-commands` only for plans without a `QUALITY_GATE` slot. When no declared candidate reproduces the recorded digest, such a plan resumes on the current repository gate and emits a `seam=execution_plan_gate_commands` warning. The recorded descriptor is unchanged. Plans with a quality gate still refuse changed commands, and the refusal now names the gate drift.
@@ -7,31 +41,25 @@ Reason: A gate-less run never executes gate commands, so their drift cannot chan
 Context: Blocked feasibility recovery ran only in the existing-manifest branch. An interrupted compatibility adoption could also leave a pending phase with a blocked feasibility cycle, which the adoption replay check treated as already recovered.
 Decision: The shared planning resume path reopens blocked feasibility when its launch has settled. A blocked cycle cannot satisfy the pending-adoption replay check. Reopening archives the rejected cycle and preserves accepted unit plans. Repeated resume of the recovered cycle remains idempotent.
 Reason: Resume must admit a fresh review against the current repository baseline without requiring the operator to reset the run or undo unrelated commits. Worker ownership and active-launch recovery still guard the transition.
-
 ## [2026-11-12] Operator retry opens a fresh feasibility cycle from a blocked one
 Context: A feasibility safety block (for example, repository paths changed outside the admitted authority because the operator edited the same checkout) settles the launch and sets feasibility mode to `blocked`. `retry-blocked --phase plan_subtasks` reopened only the phase record, so the next attempt read the blocked state and blocked again with the same reason. The workflow could not recover.
 Decision: `retry-blocked` passes a phase-owned artifact hook into the retry transaction. For `plan_subtasks` with a blocked feasibility state and no active launch, the engine archives the current cycle into `cycleHistory`, resets the launch counters, and opens cycle `<workflow>:plan_subtasks:retry-<ledger sequence>` in review mode with an `operator-blocked-retry` reopening. A blocked state that still has an active launch refuses the retry, because launch recovery must settle that launch first. Other phases and non-blocked states are unchanged.
 Reason: The retry is the operator's explicit decision that the block is resolved. The new cycle captures a fresh repository baseline at its next admission instead of comparing against the blocked launch's baseline. Incremental review scope reads the archived cycle's evidence, and the blocked launch stays in history. The feasibility codec lives in runtime-engine, so the application layer takes the reopen as a hook and applies it in the same transaction as the phase reopen.
 
+## [2026-11-12] Retain OpenCode identity without persisting inline configuration
+Context: Resumed work must retain its admitted profile and model assignment even when environment or defaults change.
+Decision: Persist optional identity facts and the presence and fingerprint of inline configuration, keeping its contents ephemeral. Require matching caller content on resume and retain admitted assignments, including an absent model directive.
+Reason: Persisting inline content could copy credentials. Reselecting defaults could redirect admitted work. Optional storage preserves older records through the launch-identity migration.
+
+## [2026-11-12] Acquire OpenCode choices through a temporary ACP setup session
+Context: OpenCode advertises models and model-specific effort through ACP; acknowledging a model refreshes its options.
+Decision: Acquire choices through initialize, session/new and acknowledged session/set_config_option, then close the owned connection without prompting or app-chat persistence. Omit runtime settlement credentials.
+Reason: The editor needs current provider choices before saving explicit directives. Catalog acquisition does not prove inference authentication; absent effort after valid model acknowledgement permits a no-effort selection.
+
 ## [2026-11-10] Store pattern rules with an empty action fingerprint
 Context: approval_rules.action_fingerprint is NOT NULL and exact rules still key on fingerprint equality.
 Decision: Pattern rules write pattern plus actionFingerprint ""; scopes() skips fingerprint compare when pattern is non-null.
 Reason: Avoids a table rebuild to relax NOT NULL while keeping exact-rule behavior unchanged.
-
-## [2026-11-10] Refuse bare-wildcard patterns at match time for stored rules
-Context: Operators might persist overly broad patterns; tampered rows could bypass decide-time validation.
-Decision: ApprovalMatchFacts.matches runs patternShapeRefusal before glob matching so all-wildcard stored patterns never auto-allow.
-Reason: Defense in depth after decide; bare patterns stay inert even if validation was bypassed.
-
-## [2026-11-10] Judge approval paths lexically in the domain matcher
-Context: Wildcard approval must match checkout-relative path strings before provider adapters normalize absolute paths.
-Decision: Keep ApprovalMatchFacts path rules lexical only; no java.nio or filesystem resolution in runtime-domain.
-Reason: Adapters own absolute path normalization; the matcher must stay pure and testable without I/O.
-
-## [2026-11-10] Charge acceptance repairs by verified gap progress
-Context: SKILL-533 replaces unfinished-report charging after partial repairs consumed the budget even when they closed production gaps.
-Decision: Charge an unsuccessful outcome only when open gaps do not decrease. Gate and reset the current criterion's count independently; retain gaps, outcomes, plan generation and sticky escalation on operator retry. Replays reuse stored charge facts.
-Reason: Independent verification measures partial progress without requiring the whole criterion to pass. A worker block has no verification result and leaves the gap count unchanged, so it charges once. Retained evidence prevents retry from erasing earlier work. Existing work-detail projection rules remain unchanged.
 
 ## [2026-11-09] Map Cursor CLI model slugs to the advertised ACP variant
 Context: Cursor `--list-models` and `execution_matrix` use slugs such as `composer-2.5` and `cursor-grok-4.6-high`. ACP `session/new` advertises one parameterized value per base (`composer-2.5[fast=true]`) and accepts only those exact strings. Exact-match selection stopped the session before the prompt.
@@ -2134,6 +2162,8 @@ or `~/.zcode`.
 Revisit when: a working headless OpenCode/zcode driver can sustain the runtime
 child model, or prose-quarantine loud-fails keep firing long after the cut.
 
+Superseded by: Use acknowledged ACP for OpenCode runtime execution (2026-11-12)
+
 ## [2026-08-08] link and compile toolchain pin is JDK 21 (SKILL-166)
 
 Context: The Kotlin runtime compiled and linked against JDK 17 while the
@@ -3788,3 +3818,60 @@ The optional `total_elapsed_ms` and `total_elapsed_as_of` fields extend the boar
 and detail build payloads without changing their required fields or versions.
 Older payloads remain valid and default to an absent total. Repeated reads derive
 the total without mutating stored runs, identities or timestamps.
+
+## [2026-11-12] Completed standalone plans produce their own recovery evidence
+Context: Safe-removal receipts originally came only from transferred goal checkouts. A test that changed transferred ownership to initialized ownership did not exercise a reachable standalone recovery path.
+Decision: After publishing its completed report, a standalone plan settles its initialized checkout through the shared resource policy. The ownership coordinator checks completion and worker absence in the same SQLite write transaction as settlement, so worker admission and goal transfer cannot commit during cleanup. The resource checks the selected standalone workflow, repository, issue, path and Git ownership marker, retains dirty or publication-unknown work, and retains any revision beyond the original commit. Successful removal writes the existing recovery receipt without changing ownership, workflow evidence or revision. Goal-scoped planning and interrupted standalone planning keep their checkout. Goal intake consults recovery evidence before requiring the initialized checkout directory for projection and transfer.
+Reason: A completed standalone plan now supplies actual recovery evidence. CLI regression tests cover completion followed by standalone resume and goal handoff, preserve accepted plan evidence and caller edits, and refuse recovery after proof is removed. Recovery uses the existing receipt format and database schema.
+Superseded by: Fence planning checkout recovery in durable storage (2026-11-12)
+
+## [2026-11-13] Separate blocked-start settlement from child admission
+
+A goal can fail checkout verification before it can admit its existing child. Saving
+that refusal still needs a fenced parent lease. `BLOCK_SETTLEMENT` permits that
+parent-only claim without checking a child descriptor. Only blocked-start settlement
+selects it. Execution keeps the existing descriptor and linkage checks. Lease owner,
+generation, process-liveness and checkout-recovery fences still apply.
+
+Checkout adoption also accepts a mount device change when the recorded reservation,
+repository, path, initial commit, inode, creation time and Git registration match.
+Device numbers differ across mount namespaces. This compatibility read preserves the
+original ownership marker and emits a warning. Destructive cleanup still requires
+exact ownership identity. No persisted schema or marker format changes.
+
+## [2026-11-13] Plan reads preplan evidence from a file
+
+Plan workers re-read source files preplan had already read, because the digest pasted
+into their briefing summarized code without carrying it. Preplan now ends its digest with
+an `EVIDENCE` list of `path:A-B` references. When plan or a plan_subtasks unit launches,
+the runtime copies those checkout ranges verbatim, with line numbers, into
+`<store>/run-evidence/<workflowId>/preplan-evidence.md` together with the full digest. The
+briefing then drops the pasted `preplan_prose` projection and names the file instead.
+Preplan is read-only, so the checkout at plan launch is the one preplan read.
+
+The runtime parses references, not tool activity. Decoded activity reaches the engine only
+through the desktop status sink, which keeps 128 rows per phase and drops `Read` offsets.
+
+Nothing in this path blocks. An unreadable reference is listed as unreadable, a missing
+`EVIDENCE` section writes a digest-only file, and an unwritable store keeps the pasted
+digest with a `preplan_evidence` diagnostic. Runs whose preplan completed earlier work the
+same way, so no persisted schema or migration changes. Implement still gets no preplan
+input; that waits for evidence that plan stops re-reading.
+
+## [2026-11-13] Bundle-feasibility receipts reject only missing coverage or a stale bundle
+
+A rejected receipt discards the review and reruns the whole read-only review session.
+The parser rejected receipts for form alone: header not on line 1, lines out of manifest
+order, duplicate or extra lines, evidence under 40 characters, uncited conflicts, a
+verdict that disagreed with the conflict lines, or any line it could not parse. None of
+those made the verdict wrong.
+
+The receipt is now rejected only when its v2 header is missing, its fingerprint names a
+different bundle, a required criterion has no criterion or conflict line, or it requests
+changes without a conflict line. Treating that last case as approval could release a
+bundle whose conflict line was malformed. The header may sit on any line. Unparsable
+lines and lines for refs outside `required_refs` are ignored. A duplicated ref keeps its
+first conflict line, else its first criterion line. An `approved` header with a conflict
+line settles as changes requested. Parsed lines keep their raw text and are returned in
+required-ref order, so persisted accepted lines still match a re-parse of the same
+receipt. The review prompt still asks for citations, so repair starts from them.

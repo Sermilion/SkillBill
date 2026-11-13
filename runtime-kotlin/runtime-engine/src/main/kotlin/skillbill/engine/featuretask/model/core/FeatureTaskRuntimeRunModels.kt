@@ -5,6 +5,7 @@ import skillbill.agentaddon.model.HydratedAgentAddonSelection
 import skillbill.application.decomposition.decompositionManifestPath
 import skillbill.application.decomposition.parentSpecPath
 import skillbill.config.model.CompactionSettings
+import skillbill.contracts.system.OpenCodeLaunchIdentity
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairRunState
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.model.execution.MonitorExecutionContext
@@ -20,6 +21,7 @@ import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.engine.model.WorkflowArtifactPatch
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.model.goalreview.GoalSubtaskOperatorDecision
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanSpecOrigin
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationTurnRole
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
@@ -52,9 +54,12 @@ public data class FeatureTaskRuntimeRunRequest(
   public override val skeletonDefinition: SkeletonDefinition? = null,
   public override val protectedSpecSha256: String? = null,
   public override val planIntake: String? = null,
+  public override val planIntakeRoot: Path? = null,
+  public override val planSpecResolution: PlanSpecSeed? = null,
   public override val stopAfterIntake: Boolean = false,
   public val acceptanceCriterionRepair: AcceptanceCriterionRepairRunState? = null,
   public override val activityParentWorkflowId: String? = null,
+  public override val openCodeIdentity: OpenCodeLaunchIdentity? = null,
 ) : FeatureTaskRuntimeRunFacts {
   override val qaSelection: FeatureTaskRuntimeQaSelection? = null
   override val reviewInvocation: ReviewInvocation? = null
@@ -98,9 +103,13 @@ public data class FeatureTaskRuntimeRunInput(
   internal val protectedSpecSha256: String? = null,
   internal val openArtifacts: WorkflowArtifactPatch = WorkflowArtifactPatch.EMPTY,
   public val planIntake: String? = null,
+  public val planIntakeRoot: Path? = null,
+  public val planSpecResolution: PlanSpecSeed? = null,
   public val qaSelection: FeatureTaskRuntimeQaSelection? = null,
   internal val inheritRecordedPlanningTimeout: Boolean = false,
   public val activityParentWorkflowId: String? = null,
+  public val openCodeIdentity: OpenCodeLaunchIdentity? = null,
+  public val workflowIdForCreation: String? = null,
 )
 
 public data class FeatureTaskRuntimeGoalContinuationContext(
@@ -410,3 +419,9 @@ public data class FeatureTaskRuntimeImplementationTurn(
 
   internal val check: Boolean get() = role == FeatureTaskRuntimeImplementationTurnRole.CHECK_LAUNCH
 }
+
+public data class PlanSpecSeed(
+  val specPath: Path,
+  val specOrigin: FeatureTaskRuntimePlanSpecOrigin,
+  val suppliedIntake: String? = null,
+)

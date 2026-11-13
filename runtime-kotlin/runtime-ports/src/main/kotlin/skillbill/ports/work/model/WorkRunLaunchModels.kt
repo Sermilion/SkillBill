@@ -1,5 +1,6 @@
 package skillbill.ports.work.model
 
+import skillbill.contracts.system.OpenCodeLaunchIdentity
 import java.nio.file.Path
 import java.util.concurrent.CompletionStage
 
@@ -11,6 +12,9 @@ data class WorkRunLaunchRequest(
   val agentEnvironment: Map<String, String> = emptyMap(),
   val operationLaunchId: String? = null,
   val pinnedAgentHomes: Map<String, String>? = null,
+  val openCodeIdentity: OpenCodeLaunchIdentity? = null,
+  val inlineOpenCodeConfig: String? = null,
+  val validateOpenCodeIdentity: Boolean = false,
 )
 
 sealed interface WorkRunLaunchKind {

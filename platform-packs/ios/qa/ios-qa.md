@@ -36,9 +36,9 @@ Check each one in order. The first that fails decides the skip, and the `skipped
 | Signing | the scheme builds for the device with the project's team | Select a team and a signing identity in the project. |
 | WebDriverAgent | the Appium XCUITest driver can build and launch WebDriverAgent on the device | Run `appium driver run xcuitest open-wda` and sign the runner. |
 
-When the user named a UDID or simulator, use only that target. If it is unavailable, unauthorized, contended, or unusable, release any held lease, settle `skipped`, and say why. When no target was named, choose any authorized free booted or bootable simulator or free device and lease it with `skill-bill qa lease acquire`. If the chosen target is contended or unusable, release the lease when held and try another untried target. Try each candidate at most once. If none can be used, settle `skipped` and describe the obstacles; call it device-contended only when every authorized target is leased by someone else.
+When the user named a UDID or simulator, use only that target. If it is unavailable, unauthorized, contended, or unusable, release any held lease, settle `skipped`, and say why. When no target was named, choose any authorized free booted or bootable simulator or free device and lease it with `sona qa lease acquire`. If the chosen target is contended or unusable, release the lease when held and try another untried target. Try each candidate at most once. If none can be used, settle `skipped` and describe the obstacles; call it device-contended only when every authorized target is leased by someone else.
 
-Name the device or simulator used in the report by its lowercase hex sha256 of the trimmed device UDID, the same value `skill-bill qa lease` prints, and say why it was chosen. Never print the raw UDID.
+Name the device or simulator used in the report by its lowercase hex sha256 of the trimmed device UDID, the same value `sona qa lease` prints, and say why it was chosen. Never print the raw UDID.
 
 ## Background processes
 
@@ -55,7 +55,7 @@ A command that never exits holds your shell, so the run never finishes and the r
 Before installing anything, run:
 
 ```
-skill-bill qa lease acquire --invocation <invocation id> --device <udid>
+sona qa lease acquire --invocation <invocation id> --device <udid>
 ```
 
 `contended` means another QA run owns the device; do not use it or release its lease. If no target was named, try another untried authorized target as described above. Skip when the named target is contended or no usable candidate remains, and say why. Release only leases this invocation acquired, using the same command with `release`, before switching targets and when you finish.
@@ -71,7 +71,7 @@ skill-bill qa lease acquire --invocation <invocation id> --device <udid>
 - Run every flow the criteria describe on the app built from the QA checkout. Do not inspect git history, diffs, or source to decide whether the change is present. Missing or wrong behavior is a finding. Skip only when the tools to perform QA are unavailable.
 - Prefer existing automation. Reuse the project's XCUITest schemes for the screens the criteria cover before writing new steps.
 - Otherwise drive the device through the Appium XCUITest driver with WebDriverAgent. Save screenshots and page source after each step that matters.
-- At capture time, run `skill-bill qa screenshot --invocation <invocation id> --file <absolute path> --label <short label>` for every PNG or JPEG screenshot, including images not linked to findings. Keep each image under the invocation evidence directory and list it in the `## Screenshots` report section.
+- At capture time, run `sona qa screenshot --invocation <invocation id> --file <absolute path> --label <short label>` for every PNG or JPEG screenshot, including images not linked to findings. Keep each image under the invocation evidence directory and list it in the `## Screenshots` report section.
 - Keep only the log excerpt that explains a failure, saved as a file under the invocation directory.
 
 ## Simulator fallback

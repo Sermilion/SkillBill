@@ -9,6 +9,7 @@ import skillbill.engine.featuretask.model.subtask.FeatureTaskRuntimeSubtaskCommi
 import skillbill.engine.goalrunner.InMemoryGoalManifestStore
 import skillbill.engine.goalrunner.RecordingOutcomeStore
 import skillbill.engine.goalrunner.execution.core.GoalRunnerStatusTestPorts
+import skillbill.engine.goalrunner.execution.core.goalRunnerTestDatabase
 import skillbill.engine.goalrunner.execution.core.testGoalRunnerStatusService
 import skillbill.engine.goalrunner.goalTestPhaseRecorder
 import skillbill.engine.goalrunner.manifest
@@ -123,6 +124,7 @@ class GoalHardResetCommitSpanRecoveryTest {
         outcomeStore = RecordingOutcomeStore(),
         phaseRecorder = goalTestPhaseRecorder(),
         ports = GoalRunnerStatusTestPorts(gitOperations = git),
+        database = goalRunnerTestDatabase(store),
       )
 
     val hard =
@@ -284,6 +286,7 @@ class GoalHardResetCommitSpanRecoveryTest {
       outcomeStore = outcomes,
       phaseRecorder = goalTestPhaseRecorder(),
       ports = GoalRunnerStatusTestPorts(gitOperations = git),
+      database = goalRunnerTestDatabase(store),
     )
   }
 }

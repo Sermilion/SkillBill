@@ -2,6 +2,7 @@ package skillbill.engine.featuretask.slot.intake
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.engine.featuretask.lifecycle.execution.governedFeatureTaskSpecPath
+import skillbill.engine.featuretask.model.core.PlanSpecSeed
 import skillbill.error.core.InvalidFeatureSpecPreparationRequestError
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.ports.projectstore.ProjectStorePort
@@ -27,6 +28,11 @@ internal sealed interface PlanIntakeSettlement {
   data class Refused(val reason: String) : PlanIntakeSettlement
 }
 
+internal data class PlanIntakeSelection(
+  val governedSpecPath: String,
+  val resolvedSelection: PlanSpecSeed?,
+)
+
 @Inject
 public class FeatureTaskRuntimePlanIntake(
   private val intakePreparation: PlanSpecIntakePreparation,
@@ -40,8 +46,9 @@ public class FeatureTaskRuntimePlanIntake(
     issueKey: String,
     intake: String?,
     repoRoot: Path,
-    governedSpecPath: String,
+    selection: PlanIntakeSelection,
   ): PlanIntakeSettlement {
+    val governedSpecPath = selection.governedSpecPath
     val governed = Path.of(governedSpecPath)
     val recorded = seedRecorder.read(workflowId)
     if (recorded != null && intakeFinished(recorded, governed)) {
@@ -49,7 +56,7 @@ public class FeatureTaskRuntimePlanIntake(
       return PlanIntakeSettlement.AlreadySettled(governed)
     }
     val resolution =
-      try {
+      selection.resolvedSelection ?: try {
         intakePreparation.resolvePlanSpec(issueKey, intake, repoRoot)
       } catch (error: InvalidFeatureSpecPreparationRequestError) {
         return PlanIntakeSettlement.Refused("${error.reason} $RESUME_HINT")
@@ -117,6 +124,6 @@ public class FeatureTaskRuntimePlanIntake(
     }
 
   private companion object {
-    const val RESUME_HINT = "Resume with `skill-bill phase plan <KEY> <requirements>`."
+    const val RESUME_HINT = "Resume with `sona phase plan <KEY> <requirements>`."
   }
 }

@@ -7,6 +7,7 @@ import androidx.compose.runtime.setValue
 import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatChangesBaseline
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
+import dev.skillbill.desktop.core.domain.model.SavedChatProjection
 import dev.skillbill.desktop.core.domain.model.ChatImage
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.CursorMcpDependency
@@ -30,6 +31,7 @@ import dev.skillbill.desktop.feature.chat.ChatMessage
 import dev.skillbill.desktop.feature.chat.ChatOperationCardActions
 import dev.skillbill.desktop.feature.chat.ChatThread
 import dev.skillbill.desktop.feature.chat.OperationCardCoordinator
+import dev.skillbill.desktop.feature.chat.OperationCardRequests
 import dev.skillbill.desktop.feature.chat.RunOpener
 import dev.skillbill.desktop.feature.chat.START_AGAIN_SUFFIX
 import dev.skillbill.desktop.feature.chat.UnavailableApprovalFeed
@@ -78,6 +80,7 @@ class NewTaskDraft internal constructor(
   private val changesRepository: ChatChangesRepository = UnavailableChatChanges,
   private val diagnostics: Diagnostics,
   private val runs: RunOpener = UnavailableRunOpener,
+  cardRequests: OperationCardRequests = OperationCardRequests(),
 ) {
   private val scope = windowScope.scope
   private val cardOwners = IdentityHashMap<ChatThread, NewTaskChat>()
@@ -104,7 +107,7 @@ class NewTaskDraft internal constructor(
     }
   }, { thread ->
     synchronized(cardOwners) { cardOwners[thread] }?.persist()?.also { if (it) refreshSaved() } ?: false
-  }, runs = runs)
+  }, runs = runs, requests = cardRequests)
   private val chatState = MutableStateFlow<NewTaskChat?>(null)
   private val offerState = MutableStateFlow(NewTaskOffer())
   private var previewTracker: Pair<String, NewTaskChatChanges>? = null
@@ -146,7 +149,8 @@ class NewTaskDraft internal constructor(
   internal val chat: StateFlow<NewTaskChat?> = chatState.asStateFlow()
 
   /** The Confirm, Dismiss, Adjust and option callbacks of the operation cards in [current]'s transcript. */
-  internal fun operationCardActions(current: NewTaskChat): ChatOperationCardActions = cards.actions(current.thread)
+  internal fun operationCardActions(current: NewTaskChat): ChatOperationCardActions =
+    cards.actions(current.thread).copy(handOffVerify = true)
 
   internal val offer: StateFlow<NewTaskOffer> = offerState.asStateFlow()
 
@@ -155,7 +159,7 @@ class NewTaskDraft internal constructor(
   internal var cursorMcpDependency by mutableStateOf(CursorMcpDependency.ProjectUserOnly)
 
   /** Every repository's saved drafts, newest first, as of the latest [refreshSaved]. */
-  internal val saved: StateFlow<List<ChatHistoryEntry>> = savedChats.saved
+  internal val saved: StateFlow<SavedChatProjection> = savedChats.saved
 
   internal fun addPastedImage(image: ChatImage) {
     if (closing) return
@@ -172,7 +176,15 @@ class NewTaskDraft internal constructor(
   private fun canAdmitTurn(message: String, attachments: List<ChatImage> = emptyList()): Boolean {
     val current = chatState.value
     return !closing && (message.isNotBlank() || attachments.isNotEmpty()) && repository != null && selectedAgent != null && selectedAgent?.agentId == agentId &&
+      !openCodeContextChanged(current) &&
       current?.repositoryMissing != true && !offerState.value.starting
+  }
+
+  private fun openCodeContextChanged(current: NewTaskChat?): Boolean {
+    if (current?.agent?.agentId != "opencode") return false
+    val selected = selectedAgent ?: return true
+    return repository?.root != current.repositoryRoot || baseBranch.ifBlank { null } != current.baseBranch ||
+      selected.agentId != current.agent.agentId || selected.profile != current.agent.profile
   }
 
   /** Sends the text and images, opening the chat on the first message, and clears the draft. Requires [canSend]. */
@@ -209,6 +221,10 @@ class NewTaskDraft internal constructor(
     cursorMcpDependency: CursorMcpDependency = CursorMcpDependency.ProjectUserOnly,
   ) {
     val current = chatState.value ?: open(UUID.randomUUID().toString(), checkNotNull(repository).root, baseBranch.ifBlank { null }, checkNotNull(selectedAgent))
+    if (openCodeContextChanged(current)) {
+      current.thread.append(ChatMessage.Notice("This OpenCode conversation is bound to its saved repository, branch and profile. Start a new chat to use the changed selection."))
+      return
+    }
     offerState.value = offerState.value.copy(prefixKind = null, choices = emptyList(), action = null, started = null, selectedKey = null)
     if (action == null && attachments.isEmpty() && cards.submitAdjustment(current.thread, submitted)) {
       if (text == submitted) text = ""
@@ -441,9 +457,24 @@ class NewTaskDraft internal constructor(
   /** Opens a new agent session on the current repository, branch and agent, keeping the transcript. */
   internal fun rebindChat() {
     val current = chatState.value ?: return
-    scope.launch {
-      rebindChat(current)
+    val agent = selectedAgent ?: return
+    val repo = repository ?: return
+    val branch = baseBranch.ifBlank { null }
+    if (current.agent.agentId == "opencode" &&
+      (current.repositoryRoot != repo.root || current.baseBranch != branch || current.agent.agentId != agent.agentId || current.agent.profile != agent.profile)) {
+      val notice = "This OpenCode conversation is bound to its saved repository, branch and profile. Start a new chat to use the changed selection."
+      if (current.thread.transcript.value.lastOrNull()?.let { it is ChatMessage.Notice && it.text == notice } != true) {
+        current.thread.append(ChatMessage.Notice(notice))
+      }
+      return
     }
+    if (closing || current.repositoryMissing || current.thread.busy.value || offerState.value.starting) return
+    if (current.repositoryRoot == repo.root && current.baseBranch == branch &&
+      current.agent.agentId == agent.agentId && current.agent.profile == agent.profile) {
+      current.changeModel(agent)
+      return
+    }
+    scope.launch { rebindChat(current) }
   }
 
   private suspend fun rebindChat(current: NewTaskChat) {
@@ -529,7 +560,9 @@ class NewTaskDraft internal constructor(
       changesCaptureAttempted = context.changesCaptureAttempted || context.sessionEstablished || context.changesBaseline != null,
     )
     val lines = if (retained == null) entry.lines.map(::restored) else emptyList()
-    val notice = ChatMessage.Notice("This draft's repository no longer exists: ${context.repositoryRoot}. Discard it to continue.")
+    val notice = if (entry.agent.agentId == "opencode") {
+      ChatMessage.Notice("This draft's repository no longer exists: ${context.repositoryRoot}. Its saved OpenCode history stays available. Start a new chat to continue elsewhere.")
+    } else ChatMessage.Notice("This draft's repository no longer exists: ${context.repositoryRoot}. Discard it to continue.")
     if (retained == null) resumed.thread.replaceTranscript(if (missing) lines + notice else lines)
     resumed.thread.showCapability(entry.agent)
     synchronized(cardOwners) { cardOwners[resumed.thread] = resumed }

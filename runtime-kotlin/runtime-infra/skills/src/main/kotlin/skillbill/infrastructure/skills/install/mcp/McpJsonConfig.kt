@@ -1,28 +1,39 @@
 package skillbill.infrastructure.skills.install.mcp
 
 import skillbill.contracts.JsonCodec
+import skillbill.error.shellcontent.malformedMcpConfig
 import skillbill.infrastructure.host.jvm.atomicWriteString
 import skillbill.install.model.McpMutationResult
 import skillbill.ports.repository.toFileLocation
 import java.nio.file.Files
 import java.nio.file.Path
 
+enum class McpJsonEntryShape {
+  TYPED_STDIO,
+  PLAIN_STDIO,
+}
+
 object McpJsonConfig {
+  private const val MCP_SERVERS_KEY: String = "mcpServers"
+  private const val TYPE_KEY: String = "type"
+  private const val STDIO_TYPE: String = "stdio"
+  private const val COMMAND_KEY: String = "command"
+  private const val ARGS_KEY: String = "args"
+  private const val ENV_KEY: String = "env"
+
   fun register(
     agent: String,
     path: Path,
     command: String,
+    entryShape: McpJsonEntryShape = McpJsonEntryShape.TYPED_STDIO,
   ): McpMutationResult {
-    val beforeContent = if (Files.exists(path)) Files.readString(path) else ""
-    val settings = readJsonObject(path).toMutableMap()
-    val servers = mutableStringAnyMap(settings["mcpServers"])
-    servers["skill-bill"] =
-      linkedMapOf(
-        "type" to "stdio",
-        "command" to command,
-        "args" to emptyList<String>(),
-      )
-    settings["mcpServers"] = servers
+    val beforeContent = readMcpConfigText(path)
+    val settings = parseMcpSettings(path, beforeContent).toMutableMap()
+    val servers = mutableStringAnyMap(settings[MCP_SERVERS_KEY])
+    servers.remove(McpConfigKeys.SKILL_BILL_SERVER)
+    servers.remove(McpConfigKeys.SONA_SERVER)
+    servers[McpConfigKeys.SONA_SERVER] = managedEntry(command, entryShape)
+    settings[MCP_SERVERS_KEY] = servers
     val afterContent = JsonCodec.mapToJsonString(settings) + "\n"
     val changed = beforeContent != afterContent
     if (changed) {
@@ -35,18 +46,48 @@ object McpJsonConfig {
     agent: String,
     path: Path,
   ): McpMutationResult {
-    val settings = readJsonObject(path).toMutableMap()
-    val servers = mutableStringAnyMap(settings["mcpServers"])
-    val changed = servers.remove("skill-bill") != null
+    val settings = parseMcpSettings(path, readMcpConfigText(path)).toMutableMap()
+    val servers = mutableStringAnyMap(settings[MCP_SERVERS_KEY])
+    val changed =
+      servers.remove(McpConfigKeys.SKILL_BILL_SERVER) != null ||
+        servers.remove(McpConfigKeys.SONA_SERVER) != null
     if (changed) {
       if (servers.isEmpty()) {
-        settings.remove("mcpServers")
+        settings.remove(MCP_SERVERS_KEY)
       } else {
-        settings["mcpServers"] = servers
+        settings[MCP_SERVERS_KEY] = servers
       }
       writeJson(path, settings)
     }
     return McpMutationResult(agent, path.toFileLocation(), changed = changed)
+  }
+
+  private fun managedEntry(
+    command: String,
+    entryShape: McpJsonEntryShape,
+  ): Map<String, Any?> =
+    when (entryShape) {
+      McpJsonEntryShape.TYPED_STDIO ->
+        linkedMapOf(TYPE_KEY to STDIO_TYPE, COMMAND_KEY to command, ARGS_KEY to emptyList<String>())
+      McpJsonEntryShape.PLAIN_STDIO ->
+        linkedMapOf(COMMAND_KEY to command, ARGS_KEY to emptyList<String>(), ENV_KEY to emptyMap<String, String>())
+    }
+
+  private fun readMcpConfigText(path: Path): String = if (Files.exists(path)) Files.readString(path) else ""
+
+  private fun parseMcpSettings(
+    path: Path,
+    raw: String,
+  ): Map<String, Any?> {
+    if (raw.isBlank()) return linkedMapOf()
+    val settings =
+      JsonCodec.anyToStringAnyMap(JsonCodec.parseObjectOrNull(raw)?.let(JsonCodec::jsonElementToValue))
+        ?: throw malformedMcpConfig(path.toString(), "the document is not a well-formed JSON object")
+    val servers = settings[MCP_SERVERS_KEY]
+    if (settings.containsKey(MCP_SERVERS_KEY) && JsonCodec.anyToStringAnyMap(servers) == null) {
+      throw malformedMcpConfig(path.toString(), "'$MCP_SERVERS_KEY' is not a JSON object")
+    }
+    return settings
   }
 }
 
@@ -69,3 +110,13 @@ fun writeJson(
 
 fun mutableStringAnyMap(value: Any?): MutableMap<String, Any?> =
   JsonCodec.anyToStringAnyMap(value)?.toMutableMap() ?: linkedMapOf()
+
+internal object McpConfigKeys {
+  const val MCP_SERVERS = "mcpServers"
+  const val SKILL_BILL_SERVER = "skill-bill"
+  const val SONA_SERVER = "sona"
+  const val TYPE = "type"
+  const val STDIO = "stdio"
+  const val COMMAND = "command"
+  const val ARGS = "args"
+}

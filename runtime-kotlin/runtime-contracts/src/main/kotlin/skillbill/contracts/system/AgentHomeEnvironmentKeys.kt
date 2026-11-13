@@ -4,5 +4,6 @@ object AgentHomeEnvironmentKeys {
   const val CLAUDE_CONFIG_DIR: String = "CLAUDE_CONFIG_DIR"
   const val CODEX_HOME: String = "CODEX_HOME"
   const val CURSOR_CONFIG_DIR: String = "CURSOR_CONFIG_DIR"
-  val ALL: Set<String> = setOf(CLAUDE_CONFIG_DIR, CODEX_HOME, CURSOR_CONFIG_DIR)
+  const val OPENCODE_CONFIG_DIR: String = "OPENCODE_CONFIG_DIR"
+  val ALL: Set<String> = setOf(CLAUDE_CONFIG_DIR, CODEX_HOME, CURSOR_CONFIG_DIR, OPENCODE_CONFIG_DIR)
 }

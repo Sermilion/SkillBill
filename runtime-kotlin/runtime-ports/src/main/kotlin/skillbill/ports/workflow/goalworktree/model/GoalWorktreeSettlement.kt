@@ -1,9 +1,18 @@
 package skillbill.ports.workflow.goalworktree.model
 
+import skillbill.ports.goalrunner.model.GoalPlanningOwnership
 import skillbill.ports.monitor.model.MonitorRetentionReason
 import java.nio.file.Path
 
-data class GoalWorktreeSettleRequest(val primaryRoot: Path, val worktreePath: Path)
+data class GoalWorktreeSettleRequest(
+  val primaryRoot: Path,
+  val worktreePath: Path,
+  val ownership: GoalPlanningOwnership? = null,
+  val repositoryIdentity: String? = null,
+  val issueKey: String? = null,
+  val parentWorkflowId: String? = null,
+  val standaloneWorkflowId: String? = null,
+)
 
 sealed interface GoalWorktreeSettlement {
   data object Removed : GoalWorktreeSettlement

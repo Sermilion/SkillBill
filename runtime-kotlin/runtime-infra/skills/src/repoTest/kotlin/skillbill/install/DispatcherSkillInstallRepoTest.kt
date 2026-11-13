@@ -18,7 +18,7 @@ import kotlin.test.assertTrue
 
 class DispatcherSkillInstallRepoTest : InstallApplyTestSupport() {
   @Test
-  fun `the install catalog lists only skill-bill with its feature class pointers and docs name no retired entry`() {
+  fun `the install catalog lists only sona with its feature class pointers and docs name no retired entry`() {
     val repoRoot = repoRootFromTest()
     val home = Files.createTempDirectory("skillbill-dispatcher-install").also(tempDirs::add)
     val agents = setOf(SupportedAgent.CLAUDE, SupportedAgent.CODEX)
@@ -35,8 +35,8 @@ class DispatcherSkillInstallRepoTest : InstallApplyTestSupport() {
             Files.isRegularFile(entry.resolve("SKILL.md"))
           }.map { entry -> entry.name }.toList()
         }
-      assertEquals(setOf("skill-bill"), listed.toSet(), "listed catalog for ${agent.id}")
-      val installedSkillBill = readSymlinkTarget(targetDir.resolve("skill-bill"))
+      assertEquals(setOf("sona"), listed.toSet(), "listed catalog for ${agent.id}")
+      val installedSkillBill = readSymlinkTarget(targetDir.resolve("sona"))
       FEATURE_CLASS_POINTERS.forEach { pointer ->
         assertTrue(Files.isRegularFile(installedSkillBill.resolve(pointer)), "${agent.id} skill-bill/$pointer")
       }
@@ -55,19 +55,19 @@ class DispatcherSkillInstallRepoTest : InstallApplyTestSupport() {
   }
 
   @Test
-  fun `skill-bill routes both operations to the operation subcommand and states the relay rule`() {
+  fun `sona routes both operations to the operation subcommand and states the relay rule`() {
     val content = Files.readString(repoRootFromTest().resolve("skills/skill-bill/content.md"))
-    val routingRows = content.lines().filter { line -> line.startsWith("| `/skill-bill") }
+    val routingRows = content.lines().filter { line -> line.startsWith("| `/sona") }
 
     listOf(
       "operation:update-check [--include-prereleases] [--format json]`" to
-        "`skill-bill operation update-check [--include-prereleases] [--format json]`",
+        "`sona operation update-check [--include-prereleases] [--format json]`",
       "standalone quality check: run checks, lint, format, or quality validation" to
-        "`skill-bill phase validation [<intake>] --agent <currently-executing-agent>`",
-      "operation:release" to "`skill-bill operation release bump:<value>",
-      "operation:pr-review-fix" to "`skill-bill operation pr-review-fix [<pr>] [<tokens>]",
+        "`sona phase validation [<intake>] --agent <currently-executing-agent>`",
+      "operation:release" to "`sona operation release bump:<value>",
+      "operation:pr-review-fix" to "`sona operation pr-review-fix [<pr>] [<tokens>]",
       "operation:verify" to
-        "`skill-bill operation verify <intake> [spec:<value>] [target:<value>] [mode:inline\\|delegated]",
+        "`sona operation verify <intake> [spec:<value>] [target:<value>] [mode:inline\\|delegated]",
     ).forEach { (token, command) ->
       assertTrue(
         routingRows.any { row -> token in row && command in row },

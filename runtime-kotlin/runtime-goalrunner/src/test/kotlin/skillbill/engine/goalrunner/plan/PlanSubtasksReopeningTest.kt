@@ -24,6 +24,7 @@ import skillbill.engine.featuretask.phaserun.phaseRunDatabase
 import skillbill.engine.featuretask.prepare.FeatureSpecPreparationRuntime
 import skillbill.engine.featuretask.prepare.FeatureSpecPreparationWriter
 import skillbill.engine.featuretask.runner.RUNNER_TEST_PROJECT_STORE
+import skillbill.engine.featuretask.runner.testPreplanEvidenceStore
 import skillbill.engine.featuretask.testing.featureTaskRuntimeWireArtifactValidatorForTest
 import skillbill.engine.goalrunner.planning.outcome.proseRecordPayload
 import skillbill.engine.goalrunner.planning.source.findImportedSubtaskPlanWorkflowIds
@@ -402,7 +403,7 @@ class PlanSubtasksReopeningTest {
       val records = acceptedRecords()
       seedPlans(database, execution, selectedId, "wftr-older-plan", records)
       val (bundle, manifestPath) = seedLegacyBundle(home, database, selectedId)
-      val replan = PlanSubtasksReplan("SKILL-384", selectedId, home, setOf(1), feasibilityAdoption = true)
+      val replan = PlanSubtasksReplan("SKILL-384", selectedId, home, home, setOf(1), feasibilityAdoption = true)
       val reopening = reopening(database)
       assertTrue(reopening.reopenWithRebasedBundle(replan))
       val adopted = database.read { requireNotNull(it.workflowStates.get(WorkflowFamily.TASK_RUNTIME, selectedId)) }
@@ -477,44 +478,20 @@ class PlanSubtasksReopeningTest {
       val captured = PlanBundleFeasibility.capture(planner(), home, "SKILL-384")
       seedSafetyBlockedFeasibility(database, selectedId, codec, captured.identity)
       if (interruptedAdoption) {
-        database.transaction { unit ->
-          val snapshot = requireNotNull(unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, selectedId))
-          val family = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PLAN_BUNDLE_FEASIBILITY
-          val state = codec.decode(family.value(snapshot.artifacts), "test")
-          val records = decodePhaseRecords(snapshot.artifacts)
-          val pending = requireNotNull(records["plan_subtasks"]).copy(status = WorkflowStepStatus.PENDING)
-          val retained =
-            state.copy(
-              reopenings =
-                listOf(
-                  PlanBundleFeasibilityReopening(
-                    pending.attemptCount,
-                    state.revision,
-                    0,
-                    PLAN_BUNDLE_FEASIBILITY_FULL_V2_REVIEW_ADOPTION_REASON,
-                    pending,
-                  ),
-                ),
-            )
-          unit.workflowStates.saveAcceptedSnapshotMutation(
-            WorkflowFamily.TASK_RUNTIME,
-            snapshot.copy(
-              artifacts =
-                DurableWorkflowArtifacts.fromMap(
-                  snapshot.artifacts + family.entry(codec.encode(retained)) +
-                    DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_RECORDS.entry(
-                      (records + ("plan_subtasks" to pending)).mapValues { it.value.asWorkflowArtifactEntry() },
-                    ),
-                ),
-            ),
-          )
-        }
+        seedInterruptedPendingAdoption(database, selectedId, codec)
       }
 
       val reopening = reopening(database)
-      val replan = PlanSubtasksReplan("SKILL-384", selectedId, home, setOf(1), feasibilityAdoption = true)
+      assertTrue(reopening.hasReopenableBlockedFeasibility(selectedId))
+      val replan =
+        PlanSubtasksReplan(
+          issueKey = "SKILL-384",
+          planWorkflowId = selectedId,
+          repoRoot = home,
+          settledSubtaskIds = setOf(1),
+          feasibilityAdoption = true,
+        )
       assertTrue(reopening.reopenWithRebasedBundle(replan))
-
       val reopened = database.read { requireNotNull(it.workflowStates.get(WorkflowFamily.TASK_RUNTIME, selectedId)) }
       val family = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PLAN_BUNDLE_FEASIBILITY
       val state = codec.decode(family.value(reopened.artifacts), "test")
@@ -531,6 +508,45 @@ class PlanSubtasksReopeningTest {
       assertEquals(reopened, database.read { it.workflowStates.get(WorkflowFamily.TASK_RUNTIME, selectedId) })
     } finally {
       home.toFile().deleteRecursively()
+    }
+  }
+
+  private fun seedInterruptedPendingAdoption(
+    database: DatabaseSessionFactory,
+    selectedId: String,
+    codec: PlanBundleFeasibilityStateCodec,
+  ) {
+    database.transaction { unit ->
+      val snapshot = requireNotNull(unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, selectedId))
+      val family = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PLAN_BUNDLE_FEASIBILITY
+      val state = codec.decode(family.value(snapshot.artifacts), "test")
+      val records = decodePhaseRecords(snapshot.artifacts)
+      val pending = requireNotNull(records["plan_subtasks"]).copy(status = WorkflowStepStatus.PENDING)
+      val retained =
+        state.copy(
+          reopenings =
+            listOf(
+              PlanBundleFeasibilityReopening(
+                pending.attemptCount,
+                state.revision,
+                0,
+                PLAN_BUNDLE_FEASIBILITY_FULL_V2_REVIEW_ADOPTION_REASON,
+                pending,
+              ),
+            ),
+        )
+      unit.workflowStates.saveAcceptedSnapshotMutation(
+        WorkflowFamily.TASK_RUNTIME,
+        snapshot.copy(
+          artifacts =
+            DurableWorkflowArtifacts.fromMap(
+              snapshot.artifacts + family.entry(codec.encode(retained)) +
+                DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_RECORDS.entry(
+                  (records + ("plan_subtasks" to pending)).mapValues { it.value.asWorkflowArtifactEntry() },
+                ),
+            ),
+        ),
+      )
     }
   }
 
@@ -740,6 +756,7 @@ class PlanSubtasksReopeningTest {
       ),
       database,
       PlanBundleFeasibilityStateCodec(featureTaskRuntimeWireArtifactValidatorForTest()),
+      NoopRuntimeDiagnostics,
     )
 
   private fun acceptedRecords(): Map<String, FeatureTaskRuntimePhaseRecord> =
@@ -810,6 +827,7 @@ class PlanSubtasksReopeningTest {
       FileSystemFeatureSpecPathResolver(RUNNER_TEST_PROJECT_STORE),
       RUNNER_TEST_PROJECT_STORE,
       TestDecompositionManifestStore,
+      testPreplanEvidenceStore(),
     )
 
   private fun reopening(database: DatabaseSessionFactory): PlanSubtasksReopening =

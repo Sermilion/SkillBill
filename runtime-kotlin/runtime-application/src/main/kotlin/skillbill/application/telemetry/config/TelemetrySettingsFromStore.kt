@@ -62,7 +62,7 @@ internal fun resolveTelemetrySettingsFromStore(
     if (enabled && envSettings.installId.isBlank()) {
       TelemetrySettingsLoad.Unavailable(
         "Telemetry is enabled but no install_id is configured at '$configPath'. " +
-          "Run 'skill-bill telemetry enable' to create one.",
+          "Run 'sona telemetry enable' to create one.",
       )
     } else {
       TelemetrySettingsLoad.Loaded(
@@ -110,7 +110,7 @@ fun telemetrySettingsSnapshotFromConfig(
   val installIdError =
     if (effectiveLevel != "off" && installId.isBlank()) {
       val detail = "Telemetry is enabled but no install_id is configured at '$configPath'."
-      "$detail Run 'skill-bill telemetry enable' to create one."
+      "$detail Run 'sona telemetry enable' to create one."
     } else {
       null
     }

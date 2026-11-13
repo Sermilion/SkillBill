@@ -1,8 +1,11 @@
 package skillbill.infrastructure.launcher.mcp
 
 import skillbill.contracts.JsonCodec
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.infrastructure.skills.install.mcp.McpJsonConfig
 import skillbill.infrastructure.skills.install.mcp.McpRegistrationOperations
+import skillbill.infrastructure.skills.install.mcp.McpTomlConfig
 import skillbill.install.model.McpMutationResult
 import skillbill.install.model.McpRegistrationOutcome
 import skillbill.model.toPath
@@ -25,7 +28,7 @@ class McpRegistrationOperationsTest {
 
   private fun skillBillServer(path: Path): Map<*, *> {
     val servers = decode(path)["mcpServers"] as Map<*, *>
-    return servers["skill-bill"] as Map<*, *>
+    return servers["sona"] as Map<*, *>
   }
 
   private fun markedProfile(
@@ -85,8 +88,93 @@ class McpRegistrationOperationsTest {
       assertEquals("dark", settings["theme"])
       val servers = settings["mcpServers"] as Map<*, *>
       assertTrue("other" in servers)
-      assertFalse("skill-bill" in servers)
+      assertFalse("sona" in servers)
     }
+  }
+
+  @Test
+  fun `registration migrates both JSON namespace entries and preserves unrelated settings`() {
+    val path = Files.createTempFile("mcp-json-migration", ".json")
+    Files.writeString(
+      path,
+      """
+      {"theme":"dark","mcpServers":{
+        "skill-bill":{"old":true},"sona":null,
+        "linear-sona":{"url":"https://mcp.linear.app/mcp"},"sona-tools":{"enabled":true}
+      }}
+      """.trimIndent(),
+    )
+
+    McpJsonConfig.register("cursor", path, "/opt/sona-mcp")
+    val registered = Files.readString(path)
+    assertFalse(McpJsonConfig.register("cursor", path, "/opt/sona-mcp").changed)
+    assertEquals(registered, Files.readString(path))
+
+    val settings = decode(path)
+    val servers = settings["mcpServers"] as Map<*, *>
+    assertEquals("dark", settings["theme"])
+    assertFalse("skill-bill" in servers)
+    assertEquals(mapOf("url" to "https://mcp.linear.app/mcp"), servers["linear-sona"])
+    assertEquals(mapOf("enabled" to true), servers["sona-tools"])
+    val server = servers["sona"] as Map<*, *>
+    assertEquals("stdio", server["type"])
+    assertEquals("/opt/sona-mcp", server["command"])
+    assertEquals(emptyList<String>(), server["args"])
+
+    assertTrue(McpJsonConfig.unregister("cursor", path).changed)
+    assertFalse(McpJsonConfig.unregister("cursor", path).changed)
+    assertEquals(setOf("linear-sona", "sona-tools"), (decode(path)["mcpServers"] as Map<*, *>).keys)
+  }
+
+  @Test
+  fun `codex registration removes selected nested TOML tables and keeps adjacent sections`() {
+    val path = Files.createTempFile("mcp-toml-migration", ".toml")
+    Files.writeString(
+      path,
+      listOf(
+        "[mcp_servers.skill-bill]",
+        "command = \"old\"",
+        "[mcp_servers.skill-bill.env]",
+        "TOKEN = \"old\"",
+        "  [ mcp_servers . \"sona\" . tools ] # selected tools",
+        "enabled = [\"one\"]",
+        "[mcp_servers.sona]",
+        "command = \"old-sona\"",
+        "[[mcp_servers.items]]",
+        "name = \"array entry\"",
+        "[mcp_servers.sona-extra]",
+        "command = \"keep\"",
+        "[mcp_servers.linear-sona]",
+        "url = \"https://mcp.linear.app/mcp\"",
+        "[mcp_servers.linear-sona.env]",
+        "TOKEN = \"keep\"",
+        "[unrelated]",
+        "text = \"\"\"",
+        "[mcp_servers.skill-bill.not-a-table]",
+        "\"\"\"",
+      ).joinToString("\n"),
+    )
+
+    McpTomlConfig.register("codex", path, "/opt/sona-mcp")
+    val registered = Files.readString(path)
+    McpTomlConfig.register("codex", path, "/opt/sona-mcp")
+    assertEquals(registered, Files.readString(path))
+    assertEquals(1, registered.lines().count { it == "[mcp_servers.sona]" })
+    assertFalse(registered.contains("[mcp_servers.skill-bill]"))
+    assertFalse(registered.contains("[mcp_servers.skill-bill.env]"))
+    assertFalse(registered.contains("selected tools"))
+    assertTrue(registered.contains("[[mcp_servers.items]]\nname = \"array entry\""))
+    assertTrue(registered.contains("[mcp_servers.sona-extra]"))
+    assertTrue(registered.contains("[mcp_servers.linear-sona]\nurl = \"https://mcp.linear.app/mcp\""))
+    assertTrue(registered.contains("[mcp_servers.linear-sona.env]\nTOKEN = \"keep\""))
+    assertTrue(registered.contains("[mcp_servers.skill-bill.not-a-table]"))
+
+    McpTomlConfig.unregister("codex", path)
+    val removed = Files.readString(path)
+    McpTomlConfig.unregister("codex", path)
+    assertEquals(removed, Files.readString(path))
+    assertFalse(removed.contains("[mcp_servers.sona]"))
+    assertTrue(removed.contains("[mcp_servers.linear-sona.env]\nTOKEN = \"keep\""))
   }
 
   @Test
@@ -241,7 +329,7 @@ class McpRegistrationOperationsTest {
       result.profiles.map { it.configPath.toPath() }.toSet(),
     )
     listOf(home.resolve(".codex/config.toml"), openRouter.resolve("config.toml")).forEach { path ->
-      assertTrue(Files.readString(path).contains("skill-bill"))
+      assertTrue(Files.readString(path).contains("sona"))
     }
   }
 
@@ -274,8 +362,8 @@ class McpRegistrationOperationsTest {
     assertEquals("unrelatedValue", updated["unrelatedKey"])
     val servers = updated["mcpServers"] as Map<*, *>
     assertTrue(servers.containsKey("other-server"))
-    assertTrue(servers.containsKey("skill-bill"))
-    val skillBillServer = servers["skill-bill"] as Map<*, *>
+    assertTrue(servers.containsKey("sona"))
+    val skillBillServer = servers["sona"] as Map<*, *>
     assertEquals("stdio", skillBillServer["type"])
     assertEquals("/tmp/runtime-mcp", skillBillServer["command"])
     assertEquals(emptyList<String>(), skillBillServer["args"])
@@ -309,7 +397,7 @@ class McpRegistrationOperationsTest {
           "other-server": {
             "command": "other-command"
           },
-          "skill-bill": {
+          "sona": {
             "command": "runtime-mcp"
           }
         }
@@ -326,7 +414,7 @@ class McpRegistrationOperationsTest {
     assertEquals("unrelatedValue", updated["unrelatedKey"])
     val servers = updated["mcpServers"] as Map<*, *>
     assertTrue(servers.containsKey("other-server"))
-    assertFalse(servers.containsKey("skill-bill"))
+    assertFalse(servers.containsKey("sona"))
   }
 
   @Test
@@ -337,9 +425,11 @@ class McpRegistrationOperationsTest {
     Files.writeString(configPath, "{ not valid json")
 
     val error =
-      assertFailsWith<IllegalArgumentException> {
+      assertFailsWith<SkillBillRuntimeException> {
         McpRegistrationOperations.register("cursor", runtimeMcpBin, home, environment = emptyMap())
       }
+    assertEquals(InstallFailureCode.MALFORMED_MCP_CONFIG, error.code)
+    assertEquals("{ not valid json", Files.readString(configPath))
     assertTrue(error.message?.contains("mcp.json") == true)
     assertTrue(error.message?.contains("JSON") == true || error.message?.contains("json") == true)
   }

@@ -269,7 +269,7 @@ class FileSystemInstallSelectionPersistenceTest {
     val store = FileSystemInstallSelectionPersistence()
     val selection =
       selection(
-        selectedAgents = setOf(SupportedAgent.CURSOR, SupportedAgent.CLAUDE),
+        selectedAgents = setOf(SupportedAgent.CURSOR, SupportedAgent.CLAUDE, SupportedAgent.OPENCODE),
         platformPackSelection =
           PlatformPackSelection(
             mode = PlatformPackSelectionMode.SELECTED,
@@ -291,7 +291,9 @@ class FileSystemInstallSelectionPersistenceTest {
     assertFalse(Files.exists(home.resolve(".cursor")))
     assertEquals(selection, replayed)
     assertContains(replayed.selectedAgents, SupportedAgent.CURSOR)
+    assertContains(replayed.selectedAgents, SupportedAgent.OPENCODE)
     assertContains(Files.readString(home.resolve(".skill-bill/install-selection.json")), "cursor")
+    assertContains(Files.readString(home.resolve(".skill-bill/install-selection.json")), "opencode")
   }
 
   @Test

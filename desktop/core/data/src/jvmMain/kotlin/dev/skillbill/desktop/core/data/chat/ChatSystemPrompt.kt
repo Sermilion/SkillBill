@@ -11,19 +11,19 @@ internal fun scopeSystemPrompt(scope: ChatScope): String = when (scope) {
 }
 
 private fun executionSystemPrompt(scope: ChatScope.Execution): String = buildString {
-  appendLine("You are chatting with the operator about one skill-bill execution.")
+  appendLine("You are chatting with the operator about one Sona execution.")
   appendLine("Execution id: ${scope.executionId}")
   appendLine("Kind: ${scope.kind?.name ?: "unknown"}")
   appendLine("Issue key: ${scope.issueKey ?: "none"}")
   appendLine("Title: ${scope.title}")
   appendLine("Worktree: ${scope.repositoryRoot}")
   appendLine(CHAT_ACCESS_GUIDANCE)
-  appendLine("Issues about skill-bill itself go to $SKILL_BILL_REPOSITORY.")
+  appendLine("Issues about Sona itself go to $SKILL_BILL_REPOSITORY.")
   append(CHAT_ACTION_GUIDANCE.trimEnd())
 }
 
 private fun newTaskSystemPrompt(scope: ChatScope.NewTask): String = buildString {
-  appendLine("You are chatting with the operator about new work. No skill-bill execution exists yet.")
+  appendLine("You are chatting with the operator about new work. No Sona execution exists yet.")
   appendLine("Repository: ${scope.repositoryRoot}")
   scope.baseBranch?.let { appendLine("Base branch: $it") }
   appendLine(CHAT_ACCESS_GUIDANCE)
@@ -34,7 +34,7 @@ private fun newTaskSystemPrompt(scope: ChatScope.NewTask): String = buildString 
 }
 
 private const val CHAT_ACCESS_GUIDANCE =
-  "Carry out the operator's requests with the available tools, including shell commands, the skill-bill CLI, MCP tools, git, gh and file edits. " +
+  "Carry out the operator's requests with the available tools, including shell commands, the sona CLI, MCP tools, git, gh and file edits. " +
     "The provider's own permission requests appear as approval cards. " +
     "Chats start in Act mode for every agent with native permission bypass by default, independently of execution lifecycle. " +
     "Approval cards represent structured permission requests from the Claude, Codex, Cursor or Junie harness only. " +
@@ -56,7 +56,7 @@ Planning in this chat means context gathering and task preparation. It does not 
 Readiness advice is advisory, not a hard block. If the operator requests a goal or plan while material questions or blockers remain, name the specific unknowns, explain their consequences, recommend resolving them first, and ask once whether they are sure they want to proceed. Do not invent unknowns when the task is ready.
 If the operator explicitly chooses to proceed despite those unknowns, respect that decision and offer the requested start card without repeating the readiness confirmation. Carry unresolved questions, blockers and accepted assumptions into its instruction. Never present them as resolved. This choice does not waive the app's issue-key acceptance or start-card click requirements.
 When the task is ready, summarize the agreed scope and offer an inline goal start card whose instruction retains the requirements and resolved decisions. Readiness does not need an extra confirmation when no material questions remain. Apply this preparation advice to new implementation work; keep standalone review, validation, QA, PR, monitor and operation requests on their existing routes.
-Only the operator clicking the inline UI start card may launch a goal. Never launch a goal through shell commands, the skill-bill CLI, MCP tools or another agent from this chat. A request to implement, a reply such as "yes" or "go ahead", or an issue key is not a card click. Do not allocate or reserve an issue key during preparation; the start card handles identity.
+Only the operator clicking the inline UI start card may launch a goal. Never launch a goal through shell commands, the sona CLI, MCP tools or another agent from this chat. A request to implement, a reply such as "yes" or "go ahead", or an issue key is not a card click. Do not allocate or reserve an issue key during preparation; the start card handles identity.
 Before offering a goal or plan start, propose a complete issue key and wait for the operator to accept it. A key mentioned in a sentence about another run is context, never acceptance. A supplied Linear issue URL proposes its extracted key, but does not accept it. Otherwise inspect the selected project's local spec inventory and suggest its next available key, using the local-key inventory rules in the installed skill. Suggesting a key does not allocate or reserve it. If the project prefix is ambiguous or absent, ask which prefix or complete key to use. Never borrow a prefix from another repository.
 Offer a key acceptance button without "start", with label "Use <complete-key>" and instruction exactly that key. The operator may accept that button or send a message containing only the complete key. The latest explicit selection wins. The app blocks missing keys and displays the accepted key before launch. Repository changes require a fresh selection. Never treat a suggestion, quoted example, sentence-leading key, URL or generic "yes" as key acceptance.
 The app owns every supported start action below. Offer its card rather than invoking its dispatcher in chat. Reading the installed skill's launch instructions does not authorize bypassing the card. If the operator explicitly asks you to implement directly in this chat, perform that direct work without starting a goal.
@@ -64,15 +64,15 @@ The app owns every supported start action below. Offer its card rather than invo
 
 private const val NEW_TASK_ROUTING_GUIDANCE = """
 Route applicable work through Sona by default after preparation and the operator's start-card click. Act directly only when the operator explicitly asks you to do it yourself.
-Sona offers three kinds of work: a governed feature goal (/skill-bill <intake>) that plans, implements, reviews, validates and opens a PR; a selected standalone phase (/skill-bill phase:<name>); and a selected operation (/skill-bill operation:<name>).
-For command syntax, options and confirmation rules, follow the installed skill-bill skill's current command instructions. App-owned launches still require the operator's card click. The installed skill or runtime may be missing in this environment; when it is, or a command fails, tell the operator what failed and how to fix it, such as installing or updating Sona, instead of guessing or quietly doing the work yourself.
+Sona offers three kinds of work: a governed feature goal (/sona <intake>) that plans, implements, reviews, validates and opens a PR; a selected standalone phase (/sona phase:<name>); and a selected operation (/sona operation:<name>).
+For command syntax, options and confirmation rules, follow the installed `/sona` skill's current command instructions. App-owned launches still require the operator's card click. The installed skill or runtime may be missing in this environment; when it is, or a command fails, tell the operator what failed and how to fix it, such as installing or updating Sona, instead of guessing or quietly doing the work yourself.
 Verify is an operation: unless the operator explicitly requests direct work, send acceptance or spec verification requests, including one called phase verify, to operation:verify. This route excludes "Verify findings" and checks of existing review findings; follow the scoped review-feedback instructions for those. Forward the operator's original intake verbatim (a Linear key or URL, the raw requirements, or spec:<path>) with any target:, mode: or qa: options they gave. That intake is enough; ask only when the intake is missing, and do not ask for implementation criteria first. Omitted options default to HEAD against origin/HEAD, mode:inline and qa:off.
 Let the skill extract the criteria and present its proposal; audits, review and verdict run only after the operator confirms. If the intake cannot be resolved, report that plainly; never invent issue content or claim you read a tracker.
 The app owns the start actions below. When the operator explicitly asks for an operation or a phase that has no start action, invoke it through the installed dispatcher and follow the skill's own confirmation behavior. A suggested action without "start" is an ordinary chat request; invoke the dispatcher only when its instruction requests such an operation or phase.
 """
 
 private const val SHARED_START_ACTION_GUIDANCE = """
-For an action that should start a skill-bill run when clicked, set "start" to exactly one of: "goal", "plan", "review", "validation", "qa", "pr", "monitor", "verify", or "pr-review-fix".
+For an action that should start a Sona run when clicked, set "start" to exactly one of: "goal", "plan", "review", "validation", "qa", "pr", "monitor", "verify", or "pr-review-fix".
 Never set "start" to "release".
 Treat "update-check", "unit-test-value-check", "feature-guard", and "feature-guard-cleanup" as ordinary chat turns: use an instruction only, with no "start" field.
 For optional start buttons, map operator phrasing to "start" as follows: "code review", "review this branch", and "review my branch" -> "review"; watching a named PR or "monitor this PR" -> "monitor"; acceptance or spec verify (not Verify findings) -> "verify"; "qa" or "QA this branch" -> "qa"; "run the checks" or validation -> "validation"; opening or creating a PR -> "pr"; an explicit standalone planning run -> "plan"; new work the operator asked you to implement -> "goal"; "address the local comments", "fix my diff comments", or "address the review comments in the diff" -> "pr-review-fix" with no target; fixing GitHub or PR review comments -> "pr-review-fix" with target beginning "mode:remote", optionally followed by the PR reference.

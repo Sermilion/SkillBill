@@ -6,12 +6,19 @@ import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 
 interface FeatureTaskRuntimeWorkerRepository :
   FeatureTaskRuntimeWorkerGenerationReads,
-  FeatureTaskRuntimeWorkerLeaseReads {
+  FeatureTaskRuntimeWorkerLeaseReads,
+  FeatureTaskRuntimeCrashReconciliation {
   fun getFeatureTaskRuntimeWorkerOwnership(workflowId: String): FeatureTaskRuntimeWorkerOwnership?
 
   fun acquireFeatureTaskRuntimeWorker(
     ownership: FeatureTaskRuntimeWorkerOwnership,
     expectedUpdatedAt: String?,
+  ): Boolean
+
+  fun acquireFeatureTaskRuntimeWorkerForGoal(
+    ownership: FeatureTaskRuntimeWorkerOwnership,
+    expectedUpdatedAt: String?,
+    parentWorkflowId: String,
   ): Boolean
 
   fun reserveFeatureTaskRuntimeWorkerTakeover(
@@ -48,7 +55,18 @@ interface FeatureTaskRuntimeWorkerRepository :
     generation: Long,
     nowInstant: String,
   ): Boolean
+}
 
+/** Reads the latest admitted generation even after its worker releases ownership. */
+interface FeatureTaskRuntimeWorkerGenerationReads {
+  fun getLatestFeatureTaskRuntimeWorkerGeneration(workflowId: String): FeatureTaskRuntimeWorkerGenerationObservation?
+}
+
+interface FeatureTaskRuntimeWorkerLeaseReads {
+  fun hasActiveFeatureTaskRuntimeWorkerLeases(): Boolean
+}
+
+interface FeatureTaskRuntimeCrashReconciliation {
   /**
    * Non-terminal runtime rows with an active or takeover-reserved worker lease that has already
    * expired as of [nowInstant] (an RFC 3339 instant): the crash-reconciliation candidate set.
@@ -62,9 +80,11 @@ interface FeatureTaskRuntimeWorkerRepository :
   /**
    * Atomic fenced reconcile write: transition the still-`running` row to the resumable `pending`
    * state at its existing current_step_id, keep blocked rows blocked, record [interruptionReason],
-   * and release the lease under the existing owner_token/generation fencing, all only while the
-   * lease is still expired as of [nowInstant]. Returns false on a lost fencing race (another pass
-   * reconciled first) so the caller can skip rather than fail; the write never partially applies.
+   * and release the lease under the existing owner_token/generation fencing. The caller must have
+   * confirmed the recorded process is dead; expiry of [nowInstant] is not required, because
+   * standalone-phase leases can outlive a stopped worker. Returns false on a lost fencing race
+   * (another pass reconciled first) so the caller can skip rather than fail; the write never
+   * partially applies.
    */
   fun reconcileFeatureTaskRuntimeCrashedWorker(
     workflowId: String,
@@ -73,13 +93,4 @@ interface FeatureTaskRuntimeWorkerRepository :
     interruptionReason: String,
     nowInstant: String,
   ): Boolean
-}
-
-/** Reads the latest admitted generation even after its worker releases ownership. */
-interface FeatureTaskRuntimeWorkerGenerationReads {
-  fun getLatestFeatureTaskRuntimeWorkerGeneration(workflowId: String): FeatureTaskRuntimeWorkerGenerationObservation?
-}
-
-interface FeatureTaskRuntimeWorkerLeaseReads {
-  fun hasActiveFeatureTaskRuntimeWorkerLeases(): Boolean
 }

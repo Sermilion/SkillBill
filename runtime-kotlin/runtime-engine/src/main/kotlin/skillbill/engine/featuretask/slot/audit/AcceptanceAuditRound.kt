@@ -52,7 +52,7 @@ internal object AcceptanceAuditRound :
 
   private const val REPEATED_VERDICTLESS_AUDIT_REASON =
     "runtime: audit completed two rounds in a row without a verdict. The audit agent most likely could not reach " +
-      "the skill-bill settlement tools (feature_task_phase_complete). Make the skill-bill MCP server available " +
+      "the skill-bill settlement tools (feature_task_phase_complete). Make the sona MCP server available " +
       "to the agent, then resume the goal."
 
   private val NO_CHANGE_WORDS: Set<String> =

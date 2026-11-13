@@ -10,6 +10,7 @@ import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatModel
 import dev.skillbill.desktop.core.domain.model.ChatImage
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
+import dev.skillbill.desktop.core.domain.model.ChatStopSettlement
 import dev.skillbill.desktop.core.domain.model.CursorMcpDependency
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.ApprovalRulesResult
@@ -23,6 +24,12 @@ import dev.skillbill.desktop.core.domain.model.NewTaskActionKind
 import dev.skillbill.desktop.core.domain.model.NewTaskKind
 import dev.skillbill.desktop.core.domain.model.NewTaskStart
 import dev.skillbill.desktop.core.domain.model.NewTaskStartOutcome
+import dev.skillbill.desktop.core.domain.model.OperationCardDetailsView
+import dev.skillbill.desktop.core.domain.model.OperationCardView
+import dev.skillbill.desktop.core.domain.model.VerifyQaChoice
+import dev.skillbill.desktop.core.domain.model.VerifyReviewModeChoice
+import dev.skillbill.desktop.core.domain.model.VerifyRunDetails
+import dev.skillbill.desktop.core.domain.model.VerifyStartChoices
 import dev.skillbill.desktop.core.domain.model.toNewTaskKind
 import dev.skillbill.desktop.core.domain.repository.ApprovalFeedRepository
 import dev.skillbill.desktop.core.domain.repository.ExecutionChatRepository
@@ -42,10 +49,10 @@ import dev.skillbill.desktop.feature.chat.newtask.NewTaskRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -55,6 +62,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.collect
@@ -128,6 +136,7 @@ class ChatWorkspace(
   private val newTask: NewTaskChats,
   private val approvals: ApprovalFeedRepository = UnavailableApprovalFeed,
   private val diagnostics: Diagnostics,
+  private val runs: RunOpener = UnavailableRunOpener,
 ) : ChatCommands {
   internal val cursorMcpDependencies = mutableStateMapOf<String, CursorMcpDependency>()
   private val scope = windowScope.scope
@@ -221,6 +230,61 @@ class ChatWorkspace(
 
   override fun openChat(item: WorkItem) = open(item)
 
+  /**
+   * Opens [item]'s chat with its parked verify card. With [adjust] the chat skips the opening turn and asks how to change the
+   * proposal, as the card's Adjust does.
+   */
+  override fun openParkedVerify(item: WorkItem, adjust: Boolean) {
+    setPaneOpen(true)
+    val existing = tabState.value.tabs.firstOrNull { it.executionId == item.id }
+    if (existing == null) start(item, item.id, opening = !adjust) else activate(existing.id)
+    val session = sessions[existing?.id ?: item.id] ?: return
+    scope.launch(session.job) {
+      session.busyState.first { !it }
+      val token = parkedVerifyToken(session) ?: attachParkedVerify(session, turns.accept(session, turns.freshRead(session.item)))
+      if (adjust && token != null) cards(session).actions(session.thread).onAdjust(token)
+    }
+  }
+
+  private fun parkedVerifyToken(session: ChatSession): String? =
+    session.transcript.value.filterIsInstance<ChatMessage.OperationCard>()
+      .lastOrNull { it.card.token == session.item.id && it.card.state.decidable }?.card?.token
+
+  /**
+   * Shows the card a parked verify run waits on, and returns its token. A card some other chat started keeps that chat's
+   * request for Adjust; otherwise the request is rebuilt from the run.
+   */
+  private suspend fun attachParkedVerify(session: ChatSession, read: ExecutionRead?): String? {
+    val run = read?.detail?.verifyRun ?: return null
+    val card = controls.operationCard(run.workflowId)?.takeIf { it.state.decidable } ?: return null
+    if (card.launchId !in newTask.cardRequests) {
+      verifyRequest(run, card, read)?.let { newTask.cardRequests.remember(card.launchId, it) }
+    }
+    return card.token.takeIf { cards(session).show(session.thread, card.launchId) }
+  }
+
+  private suspend fun verifyRequest(run: VerifyRunDetails, card: OperationCardView, read: ExecutionRead): NewTaskStart? {
+    val intake = run.intake?.takeIf(String::isNotBlank) ?: return null
+    val details = card.details as? OperationCardDetailsView.Verify ?: return null
+    val agent = chat.resolveAgent(read.header, read.detail, read.runOptions) ?: return null
+    return NewTaskStart(
+      repoRoot = run.repoRoot?.takeIf(String::isNotBlank) ?: read.header.repositoryRoot,
+      requirements = intake,
+      baseBranch = null,
+      agentId = agent.agentId,
+      profile = agent.profile,
+      kind = NewTaskKind.Verify,
+      keyChoice = run.issueKey,
+      expectedDatabaseSessionId = (databaseSession.state.value as? DatabaseSessionState.Open)?.sessionId,
+      target = intake,
+      branch = run.target?.takeIf(String::isNotBlank),
+      verify = VerifyStartChoices(
+        VerifyQaChoice.entries.firstOrNull { it.wire == details.qa },
+        VerifyReviewModeChoice.entries.firstOrNull { it.wire == details.mode },
+      ),
+    )
+  }
+
   override fun runReviewAction(item: WorkItem, action: ReviewFindingsAction) {
     val instruction = reviewActionInstruction(item, action) ?: return
     actOnItemChat(item, instruction)
@@ -283,6 +347,7 @@ class ChatWorkspace(
     session.stoppableState.value = opening
     launchTurn(session) {
       val read = turns.accept(session, turns.freshRead(item)) ?: return@launchTurn
+      attachParkedVerify(session, read)
       if (opening) {
         turns.turn(session, read, openingInstruction(classify(read.header)))
       } else {
@@ -326,26 +391,17 @@ class ChatWorkspace(
       observeActive()
       return
     }
-    val session = sessions[id] ?: return
-    synchronized(session) {
-      if (deferAcceptedPersistence(session) { close(id) }) return
-      if (session.thread.deferDestructiveAction("close this chat")) {
-        activate(id)
-        setPaneOpen(true)
-        return
-      }
-      sessions.remove(id)
-      drafts.remove(id)
-      cursorMcpDependencies.remove(id)
-      pastedImages.remove(id)
-      operationCards.remove(id)
-      session.job.cancel()
-      chat.end(session.sessionId)
-      // Read now, because a restart can rotate the session id.
-      chat.requestSummary(session.sessionId)
-      tabState.update { it.without(id) }
-      observeActive()
-    }
+    val session = sessions.remove(id) ?: return
+    drafts.remove(id)
+    cursorMcpDependencies.remove(id)
+    pastedImages.remove(id)
+    operationCards.remove(id)
+    chat.end(session.sessionId)
+    session.job.cancel()
+    // Read now, because a restart can rotate the session id.
+    chat.requestSummary(session.sessionId)
+    tabState.update { it.without(id) }
+    observeActive()
   }
 
   /** Ends every chat, and every New task chat's agent process with its saved draft kept. Resumes are cancelled first, so a quit mid-act leaves the execution paused rather than half resumed. */
@@ -363,6 +419,8 @@ class ChatWorkspace(
   private suspend fun closeExecutionChats(): Boolean {
     resumeJobs.toList().forEach { it.cancel() }
     resumeJobs.clear()
+    observer?.cancel()
+    observer = null
     var closed = true
     sessions.values.toList().forEach { session ->
       if (session.thread.hasDeliveryClaim()) {
@@ -404,47 +462,6 @@ class ChatWorkspace(
       action()
     }
     return true
-  }
-
-  private fun persistAccepted(session: ChatSession) {
-    val entry = turns.acceptedTranscript(session) ?: return
-    val save = scope.launch(start = CoroutineStart.LAZY) { turns.saveAccepted(session, entry) }
-    session.trackAcceptedPersistence(save)
-    save.start()
-  }
-
-  internal fun retryDelivery(id: String, deliveryId: String) {
-    val session = sessions[id] ?: return
-    synchronized(session) {
-      val open = databaseSession.state.value as? DatabaseSessionState.Open
-      if (open == null || open.sessionId != session.databaseSessionId || session.gone.value) {
-        session.append(ChatMessage.Notice("The database session changed or the execution is gone. Keep this follow-up for reference or discard it, then open a new chat."))
-        return
-      }
-      if (session.steering?.recover(deliveryId, retry = true) == true) {
-        if (session.recoveryOnly) {
-          followUnprompted(session)
-          followApprovals(session)
-        }
-        session.recoveryOnly = false
-        drainQueue(session)
-      }
-    }
-  }
-
-  internal fun discardDelivery(id: String, deliveryId: String) {
-    val session = sessions[id] ?: return
-    synchronized(session) {
-      if (session.steering?.recover(deliveryId, retry = false) == true) {
-        val open = databaseSession.state.value as? DatabaseSessionState.Open
-        if (session.recoveryOnly && open != null && open.sessionId == session.databaseSessionId && !session.gone.value) {
-          followUnprompted(session)
-          followApprovals(session)
-          session.recoveryOnly = false
-        }
-        drainQueue(session)
-      }
-    }
   }
 
   fun executeAction(id: String, reply: ChatMessage.Agent, action: ChatSuggestedAction) {
@@ -594,14 +611,45 @@ class ChatWorkspace(
     }
   }
 
+  internal fun retryDelivery(id: String, deliveryId: String): Boolean {
+    val session = sessions[id] ?: return false
+    val recovered = session.steering?.recover(deliveryId, retry = true, drainAfter = false) ?: return false
+    scope.launch(session.job) {
+      turns.followWorktree(session)
+      drainQueue(session)
+    }
+    return recovered
+  }
+
+  internal fun discardDelivery(id: String, deliveryId: String): Boolean {
+    val session = sessions[id] ?: return false
+    val recovered = session.steering?.recover(deliveryId, retry = false, drainAfter = false) ?: return false
+    scope.launch(session.job) {
+      turns.followWorktree(session)
+      drainQueue(session)
+    }
+    return recovered
+  }
+
+  private fun persistAccepted(session: ChatSession) {
+    val entry = turns.acceptedTranscript(session) ?: return
+    val job = scope.launch(start = CoroutineStart.LAZY) { turns.saveAccepted(session, entry) }
+    session.trackAcceptedPersistence(job)
+    job.start()
+  }
+
   private fun interrupt(session: ChatSession) {
     session.steering?.settle()
     session.stoppableState.value = false
     session.thread.dropUnprompted = true
     val running = session.turnJob
+    val runningSessionId = session.sessionId
     if (running != null) {
       session.stoppedTurn = running
-      running.cancel()
+      scope.launch(start = CoroutineStart.UNDISPATCHED) {
+        if (requestStop(runningSessionId) != ChatStopSettlement.Settled) running.cancel()
+        running.join()
+      }
     } else {
       // No turn collects an unprompted reply, so ending the process is this path's job.
       launchTurn(session) {
@@ -715,11 +763,12 @@ class ChatWorkspace(
     if (session.goneState.value) return
     session.thread.clearQueuedEntries()
     val running = session.turnJob
+    val runningSessionId = session.sessionId
+    if (running != null) session.stoppedTurn = running
     session.busyState.value = true
     session.stoppableState.value = false
     launchTurn(session) {
-      running?.cancelAndJoin()
-      session.awaitAcceptedPersistence()
+      if (running != null) stopTurnAndJoin(session, runningSessionId, running)
       endAgent(session)
       session.restart(UUID.randomUUID().toString())
       session.replaceTranscript(listOf(stateCard(session.item), ChatMessage.Notice(CLEARED_NOTICE)))
@@ -756,10 +805,12 @@ class ChatWorkspace(
     if (session.goneState.value || (entry.executionId != null && entry.executionId != session.item.id)) return
     session.thread.clearQueuedEntries()
     val running = session.turnJob
+    val runningSessionId = session.sessionId
+    if (running != null) session.stoppedTurn = running
     session.busyState.value = true
     session.stoppableState.value = false
     launchTurn(session) {
-      running?.cancelAndJoin()
+      if (running != null) stopTurnAndJoin(session, runningSessionId, running)
       turns.followWorktree(session)
       val lines = try {
         chat.openSavedChat(entry)
@@ -806,7 +857,7 @@ class ChatWorkspace(
             checkoutRoot = session.item.workingRoot(),
           )
         }
-      }, { turns.operationCardChanged(session) })
+      }, { turns.operationCardChanged(session) }, runs = runs, requests = newTask.cardRequests)
     }
 
   private fun enqueue(id: String, message: QueuedChatMessage) {
@@ -856,7 +907,7 @@ class ChatWorkspace(
   private suspend fun settleTurn(session: ChatSession, turn: Job) {
     if (session.turnJob !== turn) return
     try {
-      if (session.stoppedTurn === turn && turn.isCancelled) withContext(NonCancellable) { turns.finishStopped(session) }
+      if (session.stoppedTurn === turn) withContext(NonCancellable) { turns.finishStopped(session) }
     } finally {
       if (session.turnJob === turn) {
         session.turnJob = null
@@ -865,6 +916,23 @@ class ChatWorkspace(
         session.stoppableState.value = false
       }
     }
+  }
+
+  private suspend fun stopTurnAndJoin(session: ChatSession, sessionId: String, turn: Job) {
+    if (requestStop(sessionId) != ChatStopSettlement.Settled) turn.cancel()
+    turn.join()
+    if (session.stoppedTurn === turn) {
+      session.stoppedTurn = null
+      withContext(NonCancellable) { turns.finishStopped(session) }
+    }
+  }
+
+  private suspend fun requestStop(sessionId: String): ChatStopSettlement = try {
+    chat.stopTurn(sessionId)
+  } catch (cancelled: CancellationException) {
+    throw cancelled
+  } catch (_: Exception) {
+    ChatStopSettlement.CollectorCancellationRequired
   }
 
   private suspend fun awaitExecutionStopped(header: WorkItem, deadline: Instant): DetailState? =

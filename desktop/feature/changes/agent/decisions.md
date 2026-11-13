@@ -1,3 +1,18 @@
+## [2026-11-12] Draw only the uncovered modal shadow
+Context: The modal shadow painted a blurred bitmap beneath the entire opaque Changes panel on every redraw. An offscreen CPU probe reproduced slow frames with a small diff.
+Decision: Put ShadowBackdrop behind the opaque panel and exclude the panel shape from the shadow draw. Keep the same shadow tokens, shape, border and fill.
+Reason: The visible shadow belongs outside the panel. Drawing its covered interior consumes frame time without changing the image.
+
+## [2026-11-12] Keep diff layout at viewport width
+Context: One long loaded line widened the whole vertical list. Comment cards then needed inverse scroll offsets, and every diff line registered a separate lazy-list interval.
+Decision: Use a virtual horizontal extent for the scroll range while the vertical list stays at viewport width. Offset only diff text, gutters and comment affordances during placement. Register count-based line ranges separated by sparse comment slots in source-line order. Allow sortedBy only in DiffLines for this positional layout.
+Reason: Offscreen lines must not enlarge the drawing area. Sparse slots keep anchored comments in place without rebuilding an interval for every line. Comment cards and file headers stay within the viewport.
+
+## [2026-11-12] Keep diff preparation and animation out of broad recomposition
+Context: Width scanning ran on the UI thread after file reads, the overlay collected the whole screen state for its title, and hover animation read its value during row composition.
+Decision: Prepare LoadedDiff on the injected IO dispatcher before updating state. Collect only distinct titles in the overlay, cache the stream's usable files and start indexes, search the existing IntArray directly, and read affordance animation values in graphicsLayer.
+Reason: File preparation must not interrupt pointer handling. Selection and hover changes should invalidate only the composition or drawing that needs them.
+
 ## [2026-11-08] Allow chat commit scopes without subtask attribution
 Context: New Task chats supply timeline commits with empty ownerIds and have no subtasks or subtask ranges.
 Decision: Mark chat targets explicitly and offer All, Uncommitted and Commits through availableScopes. Reuse normalizeCommits and resolveScope for their timeline selections.

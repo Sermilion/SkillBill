@@ -64,12 +64,14 @@ internal class CursorPendingPermission(
 }
 
 internal object CursorPermissionRequests {
+  fun requestId(message: JsonObject): ApprovalProviderRequestId? = message[K.ID].cursorRequestId()
+
   fun decode(
     message: JsonObject,
     session: String?,
   ): CursorPermissionInput? {
     val params = message.obj(K.PARAMS) ?: return null
-    val id = message[K.ID].cursorRequestId() ?: return null
+    val id = requestId(message) ?: return null
     val tool = params.obj(K.TOOL_CALL) ?: return null
     val options = options(params[K.OPTIONS])
     return if (params.text(K.SESSION_ID) != session || tool.text(K.TOOL_CALL_ID).isNullOrBlank() || options == null) {
@@ -89,7 +91,6 @@ internal object CursorPermissionRequests {
     val entries = message.obj(K.PARAMS)?.get(K.OPTIONS) as? JsonArray ?: return null
     val parsed = entries.mapNotNull(::option)
     return parsed.firstOrNull { it.kind == CursorPermissionKind.ALLOW_ONCE.wireValue }?.id
-      ?: parsed.firstOrNull { it.kind == CursorPermissionKind.ALLOW_ALWAYS.wireValue }?.id
   }
 
   private fun option(value: JsonElement): CursorPermissionOption? {

@@ -9,10 +9,13 @@ import skillbill.install.model.InstallApplyIssue
 import skillbill.install.model.InstallApplyIssueKind
 import skillbill.install.model.InstallPlan
 import skillbill.install.model.InstallPlanSkill
+import skillbill.install.model.ListedSkillNames
 import skillbill.install.model.SupportedAgent
 import skillbill.model.toPath
 import skillbill.ports.repository.toFileLocation
 import skillbill.scaffold.model.PlatformManifest
+import java.nio.file.Files
+import java.nio.file.LinkOption
 import java.nio.file.Path
 
 internal fun cleanupExistingSkillBillLinks(
@@ -28,17 +31,40 @@ internal fun cleanupExistingSkillBillLinks(
     )
       .map(InstallPlanSkill::name)
       .distinct()
+  val preservedTargetNames =
+    standaloneInstallableSkills(plan.skills, plan.selectedPlatformSlugs.toSet())
+      .flatMap { skill -> listOf(skill.name, ListedSkillNames.publicName(skill.name)) }
+      .toSet()
   val legacyNames = legacySkillBillCleanupNames(cleanupSkillNames)
   val cleanupContext =
     InstallCleanupContext(
-      skillNames = cleanupSkillNames,
-      legacyNames = legacyNames,
+      skillNames = emptyList(),
+      legacyNames = (cleanupSkillNames + legacyNames).filterNot { name -> name in preservedTargetNames },
       installedSkillsRoot = installedSkillsCacheRoot(plan.request.home.toPath()),
+      preservedTargetNames = preservedTargetNames,
     )
   plan.agents.forEach { agentTarget ->
-    cleanupOneTarget(agentTarget.agent, agentTarget.path.toPath(), cleanupContext, failures)
+    val targetDir = agentTarget.path.toPath()
+    val publicTarget = targetDir.resolve(ListedSkillNames.PUBLIC_DISPATCHER)
+    if (
+      ListedSkillNames.DISPATCHER in cleanupSkillNames &&
+      Files.exists(publicTarget, LinkOption.NOFOLLOW_LINKS) &&
+      !InstallCleanupOperations.isOwnedSymlink(publicTarget, cleanupContext.installedSkillsRoot)
+    ) {
+      failures.add(
+        InstallApplyIssue(
+          kind = InstallApplyIssueKind.SKILL_LINK_FAILED,
+          message = "Existing public dispatcher target at $publicTarget was preserved.",
+          skillName = ListedSkillNames.PUBLIC_DISPATCHER,
+          agent = agentTarget.agent,
+          path = publicTarget.toFileLocation(),
+        ),
+      )
+    } else {
+      cleanupOneTarget(agentTarget.agent, targetDir, cleanupContext, failures)
+    }
 
-    legacyClaudeCommandsDir(agentTarget.agent, agentTarget.path.toPath())?.let { legacyDir ->
+    legacyClaudeCommandsDir(agentTarget.agent, targetDir)?.let { legacyDir ->
       cleanupOneTarget(agentTarget.agent, legacyDir, cleanupContext, failures)
     }
   }
@@ -53,6 +79,7 @@ private data class InstallCleanupContext(
   val skillNames: List<String>,
   val legacyNames: List<String>,
   val installedSkillsRoot: Path,
+  val preservedTargetNames: Set<String>,
 )
 
 private fun cleanupOneTarget(
@@ -64,11 +91,23 @@ private fun cleanupOneTarget(
   catchingNonCancellation {
     InstallCleanupOperations.cleanupAgentTarget(
       targetDir = targetDir,
-      skillNames = cleanupContext.skillNames,
-      legacyNames = cleanupContext.legacyNames,
+      skillNames = cleanupContext.skillNames + cleanupContext.legacyNames,
       managedInstallMarker = ".skill-bill-install",
       installedSkillsRoot = cleanupContext.installedSkillsRoot,
+      preservedTargetNames = cleanupContext.preservedTargetNames,
     )
+  }.onSuccess { (_, skipped) ->
+    skipped.forEach { path ->
+      failures.add(
+        InstallApplyIssue(
+          kind = InstallApplyIssueKind.SKILL_LINK_FAILED,
+          message = "Existing target at $path was preserved because cleanup ownership could not be established.",
+          skillName = path.fileName.toString(),
+          agent = agent,
+          path = path.toFileLocation(),
+        ),
+      )
+    }
   }.getOrElse { error ->
     failures.add(
       InstallApplyIssue(

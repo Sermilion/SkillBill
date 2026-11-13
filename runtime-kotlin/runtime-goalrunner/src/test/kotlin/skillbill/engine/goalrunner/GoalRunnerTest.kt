@@ -65,6 +65,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerChildWorkflowSetup
 import skillbill.engine.goalrunner.model.GoalRunnerCompletionPersistenceResult
 import skillbill.engine.goalrunner.model.GoalRunnerEventSink
 import skillbill.engine.goalrunner.model.GoalRunnerLaunchAuthorization
+import skillbill.engine.goalrunner.model.GoalRunnerLeasePurpose
 import skillbill.engine.goalrunner.model.GoalRunnerLedgerSequenceWatermarks
 import skillbill.engine.goalrunner.model.GoalRunnerObservabilityLivenessClass
 import skillbill.engine.goalrunner.model.GoalRunnerProgressEventRecordRequest
@@ -309,10 +310,12 @@ class GoalRunnerTest {
     val outcomeStore = testWorkflowGoalRunnerOutcomeStore(database)
     val report =
       testGoalRunner(
-        manifestStore = manifestStore,
-        subtaskLauncher = TestNoopGoalRunnerSubtaskLauncher,
-        outcomeStore = outcomeStore,
-        pullRequestPort = RecordingPullRequestPort(),
+        goalRunnerDeps(
+          manifestStore,
+          TestNoopGoalRunnerSubtaskLauncher,
+          outcomeStore,
+          RecordingPullRequestPort(),
+        ).toWiring().copy(goalDatabase = database),
       ).run(
         GoalRunnerRunRequest(
           issueKey = "SKILL-352",
@@ -2806,6 +2809,7 @@ class GoalRunnerPauseLaunchBoundaryTest {
       object : GoalRunnerExecutionCoordinator {
         override fun <T> runOwnedWithLease(
           parentWorkflowId: String,
+          purpose: GoalRunnerLeasePurpose,
           block: (Long, String?) -> T,
         ): GoalRunnerOwnedRun<T> = runOwned(parentWorkflowId) { block(1, null) }
 
@@ -5002,7 +5006,7 @@ internal class InMemoryGoalManifestStore(
     parentWorkflowId: String,
     repositoryIdentity: String,
   ): GoalRunnerControlState {
-    controlState = controlState.copy(repositoryIdentity = repositoryIdentity)
+    controlState = controlState.copy(repositoryIdentity = controlState.repositoryIdentity ?: repositoryIdentity)
     return controlState
   }
 

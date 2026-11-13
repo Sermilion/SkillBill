@@ -49,7 +49,7 @@ class AgentSessionCatalogTest {
     write(".codex/sessions/2026/10/31/rollout-b.jsonl", """{"type":"session_meta","payload":{"id":"t-2","cwd":"/elsewhere"}}""", modified = 4_000)
     write(".cursor/chats/h/k-1/meta.json", """{"cwd":"$root","hasConversation":true,"updatedAtMs":2000}""", modified = 2_000)
 
-    val listed = catalog.list("wf-1", root, "current", ::ChatAgentFor)
+    val listed = catalog.list("wf-1", root, "current", ::ChatAgentFor).entries
 
     assertEquals(listOf("t-1", "k-1", "c-1"), listed.map { it.sessionId })
     assertEquals(listOf("why is CI red?", "cursor session", "Fix lint"), listed.map { it.title })
@@ -106,7 +106,7 @@ class AgentSessionCatalogTest {
     assertEquals(otherBefore.toList(), other.readBytes().toList())
     assertEquals(2_000, other.lastModified())
     assertEquals(listOf("rollout-a.jsonl", "rollout-b.jsonl"), mine.parentFile.list()!!.sorted())
-    assertEquals(listOf("t-1"), catalog.list("wf-1", root, "current", ::ChatAgentFor).map { it.sessionId })
+    assertEquals(listOf("t-1"), catalog.list("wf-1", root, "current", ::ChatAgentFor).entries.map { it.sessionId })
   }
 
   // A resume picked from a listing made before the move must still show the session's earlier lines.
@@ -118,7 +118,7 @@ class AgentSessionCatalogTest {
       """{"type":"user","message":{"role":"user","content":"ship it"}}""",
       modified = 1_000,
     )
-    val entry = catalog.list("wf-1", worktree, "current", ::ChatAgentFor).single()
+    val entry = catalog.list("wf-1", worktree, "current", ::ChatAgentFor).entries.single()
 
     catalog.move(worktree, root)
 
@@ -136,7 +136,7 @@ class AgentSessionCatalogTest {
       modified = 2_000,
     )
 
-    val listed = catalog.list("wf-1", root, "current", ::ChatAgentFor)
+    val listed = catalog.list("wf-1", root, "current", ::ChatAgentFor).entries
 
     assertEquals(listOf("c-1" to "Fix the lint job's formatter step", "c-2" to null), listed.map { it.sessionId to it.summary })
     assertEquals(listOf("c-1", null), listed.map { it.appSessionId })
