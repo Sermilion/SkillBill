@@ -9,6 +9,9 @@ import skillbill.engine.operation.verify.VerifyWorkflow
 import skillbill.engine.work.model.IdeStatusCandidate
 import skillbill.idestatus.model.IdeStatusWorkflowFamily
 import skillbill.ports.UnitOfWork
+import skillbill.ports.idestatus.model.VerifyCompletenessAudit
+import skillbill.ports.idestatus.model.VerifyGradeStatus
+import skillbill.ports.idestatus.model.VerifyReviewSection
 import skillbill.ports.idestatus.model.VerifyRunDetails
 import skillbill.ports.idestatus.model.VerifyRunStep
 import skillbill.ports.idestatus.model.VerifyRunVerdict
@@ -52,8 +55,12 @@ internal object VerifyRunDetailsProjection {
       nonGoals = VerifyCriteriaParser.bullets(criteriaSummary.nonGoals),
       technicalConstraints = VerifyCriteriaParser.bullets(criteriaSummary.technicalConstraints),
       rolloutExpectation = criteriaSummary.rolloutExpectation.trim().takeIf(String::isNotEmpty),
-      completenessAudit = VerifyCriteriaParser.completeness(artifacts[VerifyWorkflow.COMPLETENESS_AUDIT_RECEIPT]),
-      reviewFindings = VerifyReviewParser.parse(artifacts[VerifyWorkflow.CODE_REVIEW_RECEIPT]),
+      completenessAudit =
+        VerifyCriteriaParser.completeness(artifacts[VerifyWorkflow.COMPLETENESS_AUDIT_RECEIPT])
+          ?.withResolutions(snapshot.workflowId, unitOfWork),
+      reviewFindings =
+        VerifyReviewParser.parse(artifacts[VerifyWorkflow.CODE_REVIEW_RECEIPT])
+          ?.withFindingStatuses(snapshot.sessionId.ifBlank { snapshot.workflowId }, unitOfWork),
       flagAudit = VerifyFlagAuditParser.parse(artifacts[VerifyWorkflow.FEATURE_FLAG_AUDIT_RECEIPT]),
       unitTestValue = VerifyUnitTestValueParser.parse(artifacts[VerifyWorkflow.UNIT_TEST_VALUE_RECEIPT]),
       changedFiles = VerifyWorkflow.strings(artifacts[VerifyWorkflow.DIFF_PROJECTION], VerifyWorkflow.CHANGED_FILES),
@@ -80,6 +87,29 @@ internal object VerifyRunDetailsProjection {
         is VerifyIntake.Text -> stored.value
       }
     }
+
+  private fun VerifyCompletenessAudit.withResolutions(
+    workflowId: String,
+    unitOfWork: UnitOfWork,
+  ): VerifyCompletenessAudit {
+    val resolutions = unitOfWork.verifyCriterionResolutions.resolutions(workflowId).associateBy { it.criterionNumber }
+    if (resolutions.isEmpty()) return this
+    return copy(
+      grades =
+        grades.map { grade ->
+          grade.copy(resolution = resolutions[grade.number]?.takeIf { grade.status != VerifyGradeStatus.PASS })
+        },
+    )
+  }
+
+  private fun VerifyReviewSection.withFindingStatuses(
+    reviewSessionId: String,
+    unitOfWork: UnitOfWork,
+  ): VerifyReviewSection {
+    val reviewRunId = unitOfWork.reviews.latestSessionReviewRunId(reviewSessionId) ?: return this
+    val statuses = unitOfWork.reviews.fetchFindingStatuses(reviewRunId)
+    return copy(reviewRunId = reviewRunId, items = items.map { it.copy(status = statuses[it.ref]) })
+  }
 
   private fun qaDetails(
     reportText: String?,

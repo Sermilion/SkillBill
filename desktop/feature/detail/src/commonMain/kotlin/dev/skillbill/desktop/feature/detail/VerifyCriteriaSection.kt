@@ -30,11 +30,11 @@ internal fun verifyCriteriaView(run: VerifyRunDetails, filter: VerifyCriteriaFil
   val rows = run.criteria.map { criterion -> VerifyCriteriaViewRow(criterion.number, criterion.text, grades.firstOrNull { it.number == criterion.number }) }
   val visible = when (filter) {
     VerifyCriteriaFilter.All -> rows
-    VerifyCriteriaFilter.Gaps -> rows.filter { it.grade?.status in setOf("PARTIAL", "FAIL") }
-    VerifyCriteriaFilter.Met -> rows.filter { it.grade?.status == "PASS" }
+    VerifyCriteriaFilter.Gaps -> rows.filter { it.grade?.gap == true }
+    VerifyCriteriaFilter.Met -> rows.filter { it.grade?.met == true }
   }
   val raw = run.criteriaRaw.takeIf { run.criteria.isEmpty() }
-  return VerifyCriteriaView(run.workflowId, visible, filter, rows.size, rows.count { it.grade?.status in setOf("PARTIAL", "FAIL") }, rows.count { it.grade?.status == "PASS" }, grades.isNotEmpty() && raw == null, raw, run.nonGoals, run.technicalConstraints, run.rolloutExpectation)
+  return VerifyCriteriaView(run.workflowId, visible, filter, rows.size, rows.count { it.grade?.gap == true }, rows.count { it.grade?.met == true }, grades.isNotEmpty() && raw == null, raw, run.nonGoals, run.technicalConstraints, run.rolloutExpectation)
 }
 
 internal fun DetailSections.verifyCriteriaSection(view: VerifyCriteriaView, run: VerifyRunDetails, state: DetailUiState, items: List<FixItem>, onAction: (DetailAction) -> Unit) {
@@ -91,16 +91,17 @@ internal fun VerifyCriterionRow(
 ) {
   val colors = SkillBillTheme.colors
   val grade = row.grade
-  val gradeColor = if (mark != null) colors.fgFaint else when (grade?.status) {
-    "PASS" -> colors.stDone
-    "PARTIAL" -> colors.stBlocked
-    "FAIL" -> colors.stFailed
+  val gradeColor = when {
+    mark != null -> colors.fgFaint
+    grade?.met == true -> colors.stDone
+    grade?.status == "PARTIAL" -> colors.stBlocked
+    grade?.status == "FAIL" -> colors.stFailed
     else -> colors.fgFaint
   }
   val stateLabel = when (mark) {
     CriterionMark.NotInRepo -> "Not in this repo"
     CriterionMark.SpecQuestion -> "Spec question"
-    null -> grade?.status ?: pendingLabel
+    null -> if (grade?.resolution != null) "RESOLVED" else grade?.status ?: pendingLabel
   }
   ExpandableResultRow(
     modifier = modifier,
@@ -137,6 +138,7 @@ internal fun VerifyCriterionRow(
           style = SkillBillTheme.type.tSm.copy(color = colors.fgMuted),
         )
       }
+      grade?.resolution?.let { VerifyCriterionField("Resolved after the run, which graded it ${grade.status}", it.evidence) }
       grade?.evidence?.takeIf { it.isNotEmpty() }?.let { evidence ->
         BasicText("Evidence", style = SkillBillTheme.type.tXs.copy(color = colors.fgFaint))
         val (prose, locations) = evidence.partition { it.any(Char::isWhitespace) }

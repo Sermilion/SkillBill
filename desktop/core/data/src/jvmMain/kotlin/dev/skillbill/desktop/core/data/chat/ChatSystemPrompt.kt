@@ -111,6 +111,8 @@ Identify the original execution and findings in the instruction. Do not claim th
 unless a supported command actually records that result. Use mode "read" for an inspection with no runtime changes;
 use mode "act" if the verification records finding statuses.
 "Fix findings" and "Verify findings" are not "start" "verify" and must not set "start":"verify".
+When execution context includes detail.verify.record, record fixed verify review findings and now-met verify criteria
+with exactly those commands after confirming each against the current worktree, then say which records changed.
 $SHARED_START_ACTION_GUIDANCE
 Start buttons for this execution are available while it is not running.
 Omit the block when no action is useful. Keep the visible reply concise; this block is hidden by the app.

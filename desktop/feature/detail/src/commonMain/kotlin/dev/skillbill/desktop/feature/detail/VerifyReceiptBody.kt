@@ -96,6 +96,7 @@ internal fun VerifyFindingRow(
         (finding.specialists + listOfNotNull(finding.confidence?.let { "$it confidence" })).forEach {
           BasicText(it, style = SkillBillTheme.type.t2xs.copy(color = colors.fgMuted, fontWeight = FontWeight.Normal))
         }
+        finding.status?.takeUnless { finding.open }?.let { status -> VerifyBadge(status.label(), status.color()) }
         trailing()
       }
       ExpandableResultRow(

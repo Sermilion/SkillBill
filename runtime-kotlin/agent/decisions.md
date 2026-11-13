@@ -1,3 +1,8 @@
+## [2026-11-13] Record work done after a finished verify run beside the run
+Context: A completed verify workflow refuses every write, so its frozen grades and review register stayed FAIL or open after the operator fixed the gaps, and nothing recorded the follow-up.
+Decision: Migration 128 adds `verify_criterion_resolutions`, written by `verify-workflow resolve-criterion` for a criterion the run graded PARTIAL or FAIL. The verify detail overlays those resolutions and the stored status of each finding in the review run imported under the verify session id. Feedback and finding-action triggers also signal that verify workflow.
+Reason: The audit stays an immutable record of what the run saw, and later evidence sits beside it the way review feedback sits beside an imported review. A new verify run remains the way to re-audit.
+
 ## [2026-11-13] Convert fresh runtime commands while preserving stored records
 Context: SONA-5 stages the public command rename across dependent subtasks. Runtime command producers convert after public executables, namespace and skill alias exist.
 Decision: Change newly constructed guidance and its prefix-dependent consumers together. Retain stored prose, identities, checkpoints and storage paths.
