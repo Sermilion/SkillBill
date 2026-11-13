@@ -27,6 +27,7 @@ import dev.skillbill.desktop.core.domain.model.StandalonePlanProgress
 import dev.skillbill.desktop.core.domain.model.StandalonePlanStage
 import dev.skillbill.desktop.core.domain.model.StandalonePlanUnit
 import dev.skillbill.desktop.core.domain.model.IncidentProgress
+import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.model.WorkKind
 import dev.skillbill.desktop.core.domain.repository.WorkControlRepository
 import dev.skillbill.desktop.core.testing.FakeWorkControlRepository
@@ -275,6 +276,64 @@ class PlanActionsTest {
     assertEquals("Agent: Codex", runActionsView(state.copy(defaultAgentId = "codex")).agent?.label)
     assertEquals("Choose agent", runActionsView(state.copy(defaultAgentId = "retired-agent")).agent?.label)
     assertEquals("Agent: Claude", runActionsView(finishedPlanState(planOptions(goalStarted = false)).copy(defaultAgentId = "codex")).agent?.label)
+  }
+
+  @Test
+  fun `Resume requires a supported choice even when Implement has a configured default`() = runTest {
+    val options = RunOptions(true, true, "Resume", "retired-agent", listOf("claude", "codex"), null)
+    val finished = finishedPlanState(options)
+    var current = finished.copy(
+      header = finished.header.copy(lifecycle = Lifecycle.Paused, agentId = "retired-agent"),
+      defaultAgentId = "claude",
+    )
+    val requestedAgents = mutableListOf<String?>()
+    val repository = object : WorkControlRepository by FakeWorkControlRepository() {
+      override suspend fun launch(item: WorkItem, agentId: String?): ControlOutcome {
+        requestedAgents += agentId
+        return ControlOutcome.RequestAccepted
+      }
+    }
+    val controls = DetailControls(backgroundScope, repository, ToastQueue(), {}, {}) { current }
+    val view = runActionsView(current)
+
+    assertTrue(view.launch!!.enabled)
+    assertEquals(null, view.resumeAgentId)
+    assertEquals("claude", view.implementationAgentId)
+    assertEquals("Choose agent", view.agent?.label)
+    assertTrue(controls.onAction(ControlsAction.Launch))
+    assertTrue(controls.state.value.agentMenuOpen)
+    runCurrent()
+    assertEquals(emptyList(), requestedAgents)
+
+    assertTrue(controls.onAction(ControlsAction.ChooseAgent("codex")))
+    current = current.copy(controls = controls.state.value)
+    assertEquals("Agent: Codex", runActionsView(current).agent?.label)
+    assertTrue(controls.onAction(ControlsAction.Launch))
+    runCurrent()
+    assertEquals(listOf("codex"), requestedAgents)
+  }
+
+  @Test
+  fun `Implement uses its supported configured default without a historical header fallback`() = runTest {
+    val options = RunOptions(false, false, "Run again", null, listOf("claude", "codex"), null, false)
+    val plan = finishedPlanState(options)
+    val finished = plan.copy(
+      header = plan.header.copy(agentId = "retired-agent"),
+      defaultAgentId = "claude",
+    )
+    val agents = mutableListOf<String?>()
+    val repository = object : WorkControlRepository by FakeWorkControlRepository() {
+      override suspend fun startGoal(repoRoot: String, issueKey: String, agentId: String?): ControlOutcome {
+        agents += agentId
+        return ControlOutcome.RequestAccepted
+      }
+    }
+    val controls = DetailControls(backgroundScope, repository, ToastQueue(), {}, {}) { finished }
+
+    assertEquals("claude", runActionsView(finished).implementationAgentId)
+    assertTrue(controls.onAction(ControlsAction.ImplementPlan))
+    runCurrent()
+    assertEquals(listOf("claude"), agents)
   }
 
   @Test

@@ -18,8 +18,9 @@ internal data class ControlButton(val label: String, val enabled: Boolean, val t
 
 /**
  * What the run actions, the prerequisite checklist and the decision block show, derived from one detail state. A null button is
- * absent. [agentId] is a supported choice or recorded agent, with the configured default available for a new goal. [checklist]
- * is null when the prerequisites render as plain rows. [decision] is null when no decision is awaited.
+ * absent. [resumeAgentId] is a supported explicit choice or recorded launch agent. [implementationAgentId] may also use the
+ * configured default for a new goal. [agentId] is the value shown by the picker for its current action. [checklist] is null when
+ * the prerequisites render as plain rows. [decision] is null when no decision is awaited.
  */
 internal data class RunActionsView(
   val usable: Boolean,
@@ -28,6 +29,8 @@ internal data class RunActionsView(
   val pauseNow: ControlButton?,
   val launch: ControlButton?,
   val agent: ControlButton?,
+  val resumeAgentId: String?,
+  val implementationAgentId: String?,
   val agentId: String?,
   val cancel: ControlButton?,
   val recover: ControlButton?,
@@ -71,9 +74,12 @@ internal fun runActionsView(state: DetailUiState): RunActionsView {
     ready && !goalStarted && loaded != null && planImplementationEnabled(item, loaded.detail) && item.issueKey !in controls.reservations,
     tooltip = GOAL_STARTED.takeIf { goalStarted },
   ).takeIf { item.offersPlanImplementation() }
-  val agentId = controls.chosenAgent?.takeIf { it in options?.agentChoices.orEmpty() }
-    ?: options?.agentId?.takeIf { it in options.agentChoices }
+  val chosenAgent = controls.chosenAgent?.takeIf { it in options?.agentChoices.orEmpty() }
+  val recordedAgent = options?.agentId?.takeIf { it in options.agentChoices }
+  val resumeAgentId = chosenAgent ?: recordedAgent
+  val implementationAgentId = resumeAgentId
     ?: state.defaultAgentId?.takeIf { implement != null && it in options?.agentChoices.orEmpty() }
+  val agentId = if (resumable) resumeAgentId else implementationAgentId
   val launch = ControlButton(label(InFlightControl.Launch, options?.launchLabel?.ifBlank { null } ?: "Resume"), launchable).takeIf { resumable }
 
   val agentLabel = agentId?.let { "Agent: ${agentDisplayName(it)}" } ?: "Choose agent"
@@ -110,6 +116,8 @@ internal fun runActionsView(state: DetailUiState): RunActionsView {
     pauseNow = pauseNow,
     launch = launch,
     agent = agent,
+    resumeAgentId = resumeAgentId,
+    implementationAgentId = implementationAgentId,
     agentId = agentId,
     cancel = ControlButton(label(InFlightControl.Cancel, "Cancel"), ready && options?.canCancel == true).takeIf { item.lifecycle != Lifecycle.Terminal && item.lifecycle != Lifecycle.Canceled },
     recover = recover,
