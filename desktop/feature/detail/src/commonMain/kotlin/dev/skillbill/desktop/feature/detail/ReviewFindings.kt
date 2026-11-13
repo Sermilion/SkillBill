@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
@@ -84,7 +85,13 @@ internal fun ReviewFindingRow(index: Int, count: Int, finding: ReviewReportFindi
 /** The whole findings table outside a lazy list. */
 @Composable
 internal fun ReviewFindingsBox(findings: List<ReviewReportFinding>) {
-  Column { findings.forEachIndexed { index, finding -> ReviewFindingRow(index, findings.size, finding) } }
+  Column {
+    findings.forEachIndexed { index, finding ->
+      key(finding.ref, finding.location, finding.description) {
+        ReviewFindingRow(index, findings.size, finding)
+      }
+    }
+  }
 }
 
 /** Empty pass or every finding has a specialist — enough attribution to claim per-lane zero. */

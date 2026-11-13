@@ -8,7 +8,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -124,11 +126,13 @@ private fun CurrentCriteriaBox(criteria: List<AuditCriterion>, subtaskId: Int) {
   val ordered = criteria.filterNot { it.met } + criteria.filter { it.met }
   Column(Modifier.fillMaxWidth()) {
     ordered.forEachIndexed { index, criterion ->
-      AuditCriterionRow(
-        criterion,
-        Modifier.fillMaxWidth().sbBoxSegment(index, ordered.size, fill = SkillBillTheme.colors.bgInset),
-        subtaskId,
-      )
+      key(subtaskId, criterion.ref) {
+        AuditCriterionRow(
+          criterion,
+          Modifier.fillMaxWidth().sbBoxSegment(index, ordered.size, fill = SkillBillTheme.colors.bgInset),
+          subtaskId,
+        )
+      }
     }
   }
 }
@@ -137,44 +141,50 @@ private fun CurrentCriteriaBox(criteria: List<AuditCriterion>, subtaskId: Int) {
 private fun FailedCriteria(audit: SubtaskAuditResult, subtaskId: Int) {
   val unmet = audit.criteria.filterNot { it.met }
   val met = audit.criteria.filter { it.met }
-  var expanded by rememberSaveable(subtaskId) { mutableStateOf(false) }
   if (unmet.isEmpty() && met.isEmpty()) return
-  val totalRows = unmet.size + if (met.isNotEmpty()) 1 + if (expanded) met.size else 0 else 0
-  Column(Modifier.fillMaxWidth()) {
-    unmet.forEachIndexed { index, criterion ->
-      AuditCriterionRow(
-        criterion,
-        Modifier.fillMaxWidth().sbBoxSegment(index, totalRows, fill = SkillBillTheme.colors.bgInset),
-        subtaskId,
-      )
-    }
-    if (met.isNotEmpty()) {
-      val headerIndex = unmet.size
-      Row(
-        Modifier.fillMaxWidth().sbBoxSegment(headerIndex, totalRows, fill = SkillBillTheme.colors.bgInset)
-          .padding(horizontal = 12.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-      ) {
-        StatusDot(SkillBillTheme.colors.stDone)
-        BasicText(
-          "${met.size} ${if (met.size == 1) "criterion" else "criteria"} met",
-          Modifier.weight(1f),
-          style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgMuted),
-        )
-        SbButton(if (expanded) "Hide" else "Show", { expanded = !expanded }, variant = SbButtonVariant.Ghost)
-      }
-      if (expanded) {
-        met.forEachIndexed { index, criterion ->
+  key(subtaskId) {
+    var expanded by rememberSaveable(subtaskId) { mutableStateOf(false) }
+    val totalRows = unmet.size + if (met.isNotEmpty()) 1 + if (expanded) met.size else 0 else 0
+    Column(Modifier.fillMaxWidth()) {
+      unmet.forEachIndexed { index, criterion ->
+        key(subtaskId, criterion.ref) {
           AuditCriterionRow(
             criterion,
-            Modifier.fillMaxWidth().sbBoxSegment(
-              headerIndex + 1 + index,
-              totalRows,
-              fill = SkillBillTheme.colors.bgInset,
-            ),
+            Modifier.fillMaxWidth().sbBoxSegment(index, totalRows, fill = SkillBillTheme.colors.bgInset),
             subtaskId,
           )
+        }
+      }
+      if (met.isNotEmpty()) {
+        val headerIndex = unmet.size
+        Row(
+          Modifier.fillMaxWidth().sbBoxSegment(headerIndex, totalRows, fill = SkillBillTheme.colors.bgInset)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+          StatusDot(SkillBillTheme.colors.stDone)
+          BasicText(
+            "${met.size} ${if (met.size == 1) "criterion" else "criteria"} met",
+            Modifier.weight(1f),
+            style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgMuted),
+          )
+          SbButton(if (expanded) "Hide" else "Show", { expanded = !expanded }, variant = SbButtonVariant.Ghost)
+        }
+        if (expanded) {
+          met.forEachIndexed { index, criterion ->
+            key(subtaskId, criterion.ref) {
+              AuditCriterionRow(
+                criterion,
+                Modifier.fillMaxWidth().sbBoxSegment(
+                  headerIndex + 1 + index,
+                  totalRows,
+                  fill = SkillBillTheme.colors.bgInset,
+                ),
+                subtaskId,
+              )
+            }
+          }
         }
       }
     }
@@ -188,10 +198,11 @@ private fun AuditCriterionRow(criterion: AuditCriterion, modifier: Modifier, sub
   val badgeLabel = if (criterion.met) "Met" else "Missing"
   val badgeColor = if (criterion.met) colors.stDone else colors.stFailed
   val hasDisclosure = criterion.fixedInAttempt != null
+  val onToggle = if (hasDisclosure) remember(subtaskId, criterion.ref) { { open = !open } } else null
   ExpandableResultRow(
     modifier = modifier,
     open = open,
-    onToggle = if (hasDisclosure) ({ open = !open }) else null,
+    onToggle = onToggle,
     toggleLabel = "Toggle ${criterion.ref}",
     ref = {
       BasicText(criterion.ref, style = SkillBillTheme.type.monoSm.copy(color = colors.fgMuted), maxLines = 1)

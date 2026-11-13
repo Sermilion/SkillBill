@@ -9,6 +9,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertDoesNotExist
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -199,6 +200,71 @@ class DetailPeekTest {
     onNodeWithContentDescription("Next subject").performClick()
     onNodeWithText("AC-001").performClick()
     onNodeWithText("fixed in attempt 3").assertExists()
+    onNodeWithText("fixed in attempt 1").assertDoesNotExist()
+  }
+
+  @Test
+  fun `inspector audit criterion disclosure survives in place criterion swap at same row`() = runComposeUiTest {
+    val initialAudit = SubtaskAuditResult(
+      AuditOutcome.Passed,
+      1,
+      1,
+      listOf(AuditCriterion("AC-001", "First criterion", true, 1)),
+      emptyList(),
+      1,
+    )
+    val detail = emptyDetail.copy(
+      stepPipeline = listOf("audit"),
+      subtasks = listOf(WorkSubtask(1, "First subtask", "completed", null, null, emptyList())),
+      phaseResults = listOf(
+        SubtaskPhaseResults(
+          1,
+          emptyList(),
+          null,
+          null,
+          auditResult = initialAudit,
+          phaseCards = listOf(finishCard("audit")),
+        ),
+      ),
+    )
+    val state = mutableStateOf(
+      DetailUiState(
+        workItem("goal"), SectionsUi.Loaded(detail, null, emptyMap(), emptySet()), false, epoch,
+        subtaskChoice = SubtaskChoice(SubtaskKey.Subtask(1)),
+        phaseChoice = mapOf(PhaseChoiceKey("goal", SubtaskKey.Subtask(1)) to PhaseDisclosure.Open("audit")),
+      ),
+    )
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        Box(Modifier.requiredSize(400.dp, 900.dp)) {
+          DetailsPane(state.value, remember { mutableStateOf(AssessmentOrder.Default) }, {}, {})
+        }
+      }
+    }
+
+    onNodeWithText("AC-001").performClick()
+    onNodeWithText("fixed in attempt 1").assertExists()
+    val refreshedAudit = initialAudit.copy(
+      criteria = listOf(AuditCriterion("AC-002", "Second criterion", true, 2)),
+    )
+    runOnIdle {
+      val refreshed = detail.copy(
+        phaseResults = listOf(
+          SubtaskPhaseResults(
+            1,
+            emptyList(),
+            null,
+            null,
+            auditResult = refreshedAudit,
+            phaseCards = listOf(finishCard("audit")),
+          ),
+        ),
+      )
+      state.value = state.value.copy(sections = SectionsUi.Loaded(refreshed, null, emptyMap(), emptySet()))
+    }
+    onNodeWithText("AC-002").performClick()
+    onNodeWithText("fixed in attempt 2").assertExists()
+    onNodeWithText("fixed in attempt 1").assertDoesNotExist()
   }
 
   @Test

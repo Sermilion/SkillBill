@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.key
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -56,7 +57,11 @@ internal fun VerifyFlagAuditReceipt(receipt: VerifyFlagAudit) {
 
 @Composable
 internal fun VerifyReviewReceipt(receipt: VerifyReviewSection, selectable: Boolean = false, trailing: @Composable (dev.skillbill.desktop.core.domain.model.VerifyReviewFinding) -> Unit = {}, extra: @Composable (dev.skillbill.desktop.core.domain.model.VerifyReviewFinding) -> Unit = {}, leading: @Composable (dev.skillbill.desktop.core.domain.model.VerifyReviewFinding) -> Unit = {}) {
-  receipt.items.forEach { finding -> VerifyFindingRow(finding, selectable, { trailing(finding) }, { extra(finding) }) { leading(finding) } }
+  receipt.items.forEach { finding ->
+    key(finding.ref, finding.location) {
+      VerifyFindingRow(finding, selectable, { trailing(finding) }, { extra(finding) }) { leading(finding) }
+    }
+  }
   VerifyRawFindings(receipt.findings)
 }
 

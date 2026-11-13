@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
@@ -39,15 +40,15 @@ fun ExpandableResultRow(
   disclosureInsetStart: Dp? = null,
 ) {
   val colors = SkillBillTheme.colors
-  val toggle = onToggle
+  val currentToggle = rememberUpdatedState(onToggle)
   val body = disclosure
-  val expandable = toggle != null && body != null
-  val toggleModifier = if (toggle != null && body != null) {
+  val expandable = onToggle != null && body != null
+  val toggleModifier = if (onToggle != null && body != null) {
     Modifier
       .clickable(
         role = Role.Button,
         onClickLabel = toggleLabel,
-        onClick = toggle,
+        onClick = { currentToggle.value?.invoke() },
       )
       .semantics { stateDescription = if (open) "Expanded" else "Collapsed" }
   } else Modifier

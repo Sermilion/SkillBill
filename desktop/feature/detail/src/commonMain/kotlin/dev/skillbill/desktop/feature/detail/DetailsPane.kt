@@ -63,7 +63,7 @@ internal fun DetailsPane(state: DetailUiState, assessmentOrder: MutableState<Ass
   val scrollStates = rememberSaveableStateHolder()
   Column(Modifier.fillMaxSize()) {
     SubjectHeader(item, detail, selected, onClose) { onAction(DetailAction.MoveSubtaskSelection(it)) }
-    scrollStates.SaveableStateProvider(if (selected == SubtaskKey.GoalFinish) "finish" else "subtask") {
+    scrollStates.SaveableStateProvider("${item.id}:${state.subtaskChoice.key}") {
       val listState = rememberLazyListState()
       LazyColumn(Modifier.weight(1f), state = listState, contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 32.dp)) {
         val sections = DetailSections(this, collapse, listState, assessmentOrder)
