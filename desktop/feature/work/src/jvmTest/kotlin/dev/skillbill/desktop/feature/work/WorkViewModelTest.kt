@@ -10,6 +10,7 @@ import dev.skillbill.desktop.core.domain.model.ArchiveInspectOutcome
 import dev.skillbill.desktop.core.domain.model.ImportOutcome
 import dev.skillbill.desktop.core.domain.model.OpenOutcome
 import dev.skillbill.desktop.core.domain.model.ReadProblem
+import dev.skillbill.desktop.core.domain.model.RunOptions
 import dev.skillbill.desktop.core.domain.model.SpecBundleRef
 import dev.skillbill.desktop.core.domain.model.SpecControlState
 import dev.skillbill.desktop.core.domain.model.SpecDeleteOutcome
@@ -96,6 +97,45 @@ class WorkViewModelTest {
     assertEquals(listOf(ControlCall("pauseAfterSubtask", goalB)), controls.calls)
     val expected = controlFeedback(ControlAction.PauseAfterSubtask, ControlOutcome.IntentRecorded, FeedbackSubject("SKILL-2", null, null))
     assertEquals(WorkEffect.ShowToast(expected), viewModel.effects.first())
+  }
+
+  @Test
+  fun `launch opens detail when the recorded agent is unavailable and launches supported agents directly`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val unresolved = workItem("SONA-19-unresolved")
+    val supported = workItem("SONA-19-supported")
+    val board = FakeWorkBoardRepository(loadedBoard(mapOf(BoardSectionKind.Goals to listOf(unresolved, supported))))
+    val details = FakeWorkDetailRepository(
+      mapOf(
+        unresolved.id to RunOptions(false, true, "Resume", null, listOf("claude", "codex"), null),
+        supported.id to RunOptions(false, true, "Resume", "codex", listOf("claude", "codex"), null),
+      ),
+    )
+    val controls = FakeWorkControlRepository()
+    val viewModel = WorkViewModel(
+      board,
+      details,
+      controls,
+      SelectionHolder(),
+      object : Clock { override fun now() = Instant.fromEpochMilliseconds(0) },
+      FakeArchiveFileChooser(),
+      TestSession,
+      EmptySpecRepository,
+    )
+    advanceUntilIdle()
+    viewModel.onAction(WorkAction.Focus(unresolved))
+    advanceUntilIdle()
+
+    viewModel.onAction(WorkAction.Launch(unresolved))
+    assertEquals(WorkEffect.OpenDetail(unresolved), viewModel.effects.first())
+    assertEquals(emptyList(), controls.calls)
+
+    viewModel.onAction(WorkAction.Focus(supported))
+    advanceUntilIdle()
+    viewModel.onAction(WorkAction.FocusedKey(RowKey.Launch))
+    advanceUntilIdle()
+
+    assertEquals(listOf(ControlCall("launch", supported, "codex")), controls.calls)
   }
 
   @Test

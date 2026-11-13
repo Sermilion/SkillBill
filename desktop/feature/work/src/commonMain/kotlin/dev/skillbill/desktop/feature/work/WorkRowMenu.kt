@@ -43,8 +43,8 @@ internal fun WorkRowMenu(
       )
       add(entry("Pause", LucideIcons.stop, "⇧ P", danger = true, enabled = state.canPauseNow(item)) { onAction(WorkAction.PauseNow(item)) })
     }
-    // Resume / Run again is listed only for resumable work (not active, not completed), as the prototype's row menu.
-    if (item.lifecycle != Lifecycle.Active && item.lifecycle != Lifecycle.Terminal) {
+    // The runtime may allow a completed standalone validation to run again.
+    if (item.lifecycle != Lifecycle.Active && (item.lifecycle != Lifecycle.Terminal || state.canLaunch(item))) {
       add(entry(options?.launchLabel ?: "Resume", LucideIcons.play, "R", enabled = state.canLaunch(item)) { onAction(WorkAction.Launch(item)) })
     }
     add(entry("Cancel", LucideIcons.x, danger = true, enabled = state.canCancel(item)) { onAction(WorkAction.Cancel(item)) })
