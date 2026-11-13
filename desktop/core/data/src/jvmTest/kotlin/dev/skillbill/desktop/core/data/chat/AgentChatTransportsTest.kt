@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
+import skillbill.infrastructure.launcher.process.cursor.AcpProvider
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.util.UUID
@@ -43,6 +44,7 @@ class AgentChatTransportsTest {
       CodexChatTransport(host, launcher, store, RecordingDiagnostics()),
       CursorChatTransport(host, store, RecordingDiagnostics(), liveLauncher = launcher),
       JunieChatTransport(host, store, RecordingDiagnostics(), liveLauncher = launcher),
+      DevinChatTransport(host, store, RecordingDiagnostics(), liveLauncher = launcher),
     )
     for (transport in transports) {
       val failure = assertIs<ChatEvent.Failed>(transport.run(request.copy(
@@ -54,6 +56,15 @@ class AgentChatTransportsTest {
       assertTrue(launcher.commands.isEmpty())
       assertEquals("saved-provider-thread", store.agentSession(request.sessionId))
     }
+  }
+
+  @Test
+  fun `devin turns launch devin acp and replay earlier exchanges with the new message`() {
+    assertEquals(listOf("devin", "acp"), acpCommand(AcpProvider.Devin, null))
+    assertEquals(listOf("junie", "--acp"), acpCommand(AcpProvider.Junie, null))
+    assertEquals(AcpProvider.Devin.id, DevinChatTransport(host, store, RecordingDiagnostics(), liveLauncher = NoLaunch()).agentId)
+    val prompt = replayPrompt("", listOf(ChatExchange("first question", "first answer")), "next question")
+    assertTrue(prompt.indexOf("first answer") in 0 until prompt.indexOf("next question"))
   }
 
   @Test

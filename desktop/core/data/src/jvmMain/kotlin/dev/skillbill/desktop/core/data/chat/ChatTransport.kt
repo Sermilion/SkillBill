@@ -65,4 +65,8 @@ interface ChatTransportBindings {
   @Provides
   @IntoSet
   fun junie(transport: JunieChatTransport): ChatTransport = transport
+
+  @Provides
+  @IntoSet
+  fun devin(transport: DevinChatTransport): ChatTransport = transport
 }
