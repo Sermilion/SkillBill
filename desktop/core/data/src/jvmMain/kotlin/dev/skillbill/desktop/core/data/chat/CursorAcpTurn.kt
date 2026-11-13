@@ -26,12 +26,15 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import skillbill.contracts.approval.ApprovalRequestRecord
 import skillbill.contracts.system.AgentHomeEnvironmentKeys
+import skillbill.install.model.AGENT_LAUNCHER_CLIS
+import skillbill.install.model.SupportedAgent
 import skillbill.infrastructure.launcher.process.cursor.AcpProvider
 import skillbill.infrastructure.launcher.process.cursor.CursorAcpEvent
 import skillbill.infrastructure.launcher.process.cursor.CursorAcpImage
 import skillbill.infrastructure.launcher.process.cursor.CursorAcpLaunch
 import skillbill.infrastructure.launcher.process.cursor.CursorAcpMcpDependency
 import skillbill.infrastructure.launcher.process.cursor.CursorAcpSession
+import skillbill.infrastructure.launcher.process.cursor.commandCarriesModel
 import skillbill.infrastructure.launcher.process.cursor.cursorAcpDependencyRefusal
 import skillbill.ports.approval.ApprovalOwnerEffects
 import skillbill.ports.approval.model.ApprovalDeliveryState
@@ -113,6 +116,39 @@ internal class CursorChatGeneration(
   }
 }
 
+/** The provider's own launcher executables with its ACP arguments. */
+internal fun acpCommand(provider: AcpProvider, shell: String?, model: String?): List<String> {
+  val aliases = AGENT_LAUNCHER_CLIS[SupportedAgent.fromWire(provider.id)]?.executables.orEmpty()
+  return agentCommand(aliases, provider.launchArguments(model), shell)
+}
+
+/** The process command and ACP launch for one turn; both take the model from the same request value. */
+internal fun acpTurnLaunch(
+  provider: AcpProvider,
+  shell: String?,
+  environment: Map<String, String>,
+  request: ChatTurnRequest,
+  saved: String?,
+  prompt: String,
+  dependency: CursorAcpMcpDependency,
+): Pair<ChatCommand, CursorAcpLaunch> {
+  val cursor = provider == AcpProvider.Cursor
+  val command = ChatCommand(acpCommand(provider, shell, request.agent.model), request.scope.repositoryRoot, environment, "")
+  return command to CursorAcpLaunch(
+    cwd = request.scope.repositoryRoot,
+    prompt = prompt,
+    model = request.agent.model?.let { model ->
+      request.agent.effort?.takeIf { cursor && "[effort=" !in model }?.let { "$model[effort=$it]" } ?: model
+    },
+    mode = if (cursor) "agent" else null,
+    savedSession = saved,
+    images = request.images.map { CursorAcpImage(Base64.getEncoder().encodeToString(it.bytes), it.mediaType) },
+    mcpDependency = dependency,
+    provider = provider,
+    modelOnCommandLine = commandCarriesModel(command.argv, request.agent.model),
+  )
+}
+
 internal fun cursorAcpTurn(
   live: LiveChatProcessLauncher,
   authority: ChatApprovalAuthority,
@@ -138,28 +174,21 @@ internal fun cursorAcpTurn(
       return@channelFlow
     }
   }
+  if (provider.exactModels && request.agent.effort != null) {
+    diagnostics.record("chat.${provider.seam}_effort_refused")
+    send(ChatEvent.Failed(ChatFailure.AgentUnsupported,
+      "${provider.name} selects exact model variants and takes no separate effort; choose a model variant instead. The chat was not started."))
+    return@channelFlow
+  }
   val inputs = Channel<ChatProcessInput>(Channel.UNLIMITED) { it.written.complete(false) }
   val outputs = Channel<ChatProcessOutput>(Channel.UNLIMITED)
   val events = Channel<ChatEvent>(Channel.UNLIMITED)
   val readerRef = AtomicReference<kotlinx.coroutines.Job?>()
-  val aliases = skillbill.install.model.AGENT_LAUNCHER_CLIS[
-    if (cursor) skillbill.install.model.SupportedAgent.CURSOR else skillbill.install.model.SupportedAgent.JUNIE,
-  ]?.executables.orEmpty()
+  val (command, launch) = acpTurnLaunch(provider, shell, environment, request, saved, prompt, dependency)
   // ACP streams text chunks without message ids, so a text run after a tool call starts a new message.
   var textOpen = false
   val protocol = CursorAcpSession(
-    CursorAcpLaunch(
-      cwd = request.scope.repositoryRoot,
-      prompt = prompt,
-      model = request.agent.model?.let { model ->
-        request.agent.effort?.takeIf { cursor && "[effort=" !in model }?.let { "$model[effort=$it]" } ?: model
-      },
-      mode = if (cursor) "agent" else null,
-      savedSession = saved,
-      images = request.images.map { CursorAcpImage(Base64.getEncoder().encodeToString(it.bytes), it.mediaType) },
-      mcpDependency = dependency,
-      provider = provider,
-    ),
+    launch,
     Clock.systemUTC(),
     writeLine = { inputs.writeAndAwaitBlocking(it) },
     saveSession = {
@@ -211,7 +240,6 @@ internal fun cursorAcpTurn(
     return@channelFlow
   }
   val generation = (opening as CursorChatApprovalOpening.Opened).generation
-  val command = ChatCommand(agentCommand(aliases, provider.acpArguments, shell), request.scope.repositoryRoot, environment, "")
   val reader = launch(start = CoroutineStart.LAZY) {
     try { live.openAcknowledged(command, inputs).collect { outputs.send(it) } }
     finally { outputs.close() }

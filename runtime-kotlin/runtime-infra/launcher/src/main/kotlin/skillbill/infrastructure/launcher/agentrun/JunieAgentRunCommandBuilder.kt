@@ -31,6 +31,8 @@ internal class JunieAgentRunCommandBuilder(
     diagnostics: RuntimeDiagnostics,
   ): ((AgentRunProcessResult) -> AgentRunProcessLaunchFields?)? = null
 
+  override fun launchRefusal(request: SkillRunRequest): String? = null
+
   override fun build(request: SkillRunRequest): AgentRunCommand {
     requireProcessLaunch(request, reviewIsolation)
     requireGovernedReviewLaunch(request, agent, governedReviewLaunchCapability)

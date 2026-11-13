@@ -1,5 +1,19 @@
 # Boundary History — runtime-kotlin/runtime-infra
 
+## [2026-11-12] SONA-12 subtask 2: Devin runtime phase workers
+Areas: runtime-infra/launcher (agentrun, process/cursor, process/launch, mcp); runtime-domain install model
+- DevinAgentRunCommandBuilder launches `devin acp [--model <UID>]` through the shared CursorAcpSession transport, using AcpProvider.Devin (no authMethod, exact models, login hint `devin auth login`) and AgentRunApprovalProtocol.DEVIN_ACP. It is registered in headlessAgentRunAdapters. SupportedAgent.DEVIN honours additional writable directories and loads runtime MCP headless.
+- reusable: CursorAcpLaunch gains optional mcpServers (AcpStdioMcpServer with list-shaped AcpEnvVariable env) and additionalDirectories, sent on session/new and session/load. Before any session request, sessionContextRefusal (AcpSessionContext) refuses a non-absolute command or root, and roots the agent has not advertised in sessionCapabilities.additionalDirectories. Cursor and Junie still send empty context.
+- reusable: acpRuntimeMcpServer (mcp/RuntimeMcpServer) builds the skill-bill stdio server from the binding's database, runtime MCP executable and validation invocation.
+- reusable: AgentRunCommandBuilder.launchRefusal runs after approvalRefusal and before build or spawn, returning UnsupportedAgentRunLaunch with outcome launch_assignment_unsupported. Every builder implements it. Devin refuses a separate effort or a missing runtime MCP executable or database.
+- Exact-model ACP providers skip resolveAcpModel, accept only an exactly advertised ID, and never copy the reported model from the set_model acknowledgement. Absent model metadata keeps the CLI assignment and records a model_metadata_absent diagnostic.
+- acpRejection classifies JSON-RPC errors by code and pending operation (auth -32000, model selection, session context, generic). It truncates provider detail to 500 characters and does not parse message text.
+- A session worker that exits nonzero on its own keeps its native exit code (ProcessWait.naturalExitStatus) instead of being normalized to 0 or 1.
+- Lifecycle, approval cards, cancellation and resume reuse the existing ACP and launch-assignment owners. A governed specialist request gets the typed LAUNCH_CAPABILITY refusal.
+- Limits: no Devin cases yet in AgentRunLauncherProcessTest, RecordedLaunchAssignmentResumeTest or PhaseRunCancellationTest. Desktop chat sends empty ACP session context. Authenticated Devin runs, live MCP and approval round trips were left to goal QA.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
+
 ## [2026-11-10] SKILL-529 provider approval match facts
 Areas: runtime-infra/launcher interaction, codex and cursor permission requests; desktop chat JVM adapter tests
 - Claude, Codex and Cursor approval registration fills matchFacts with trimmed command text or checkout-relative paths; fingerprints, classification and options stay unchanged.

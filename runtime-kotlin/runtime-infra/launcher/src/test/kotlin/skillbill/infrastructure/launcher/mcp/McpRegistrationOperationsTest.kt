@@ -1,6 +1,8 @@
 package skillbill.infrastructure.launcher.mcp
 
 import skillbill.contracts.JsonCodec
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.infrastructure.skills.install.mcp.McpJsonConfig
 import skillbill.infrastructure.skills.install.mcp.McpRegistrationOperations
 import skillbill.install.model.McpMutationResult
@@ -337,9 +339,11 @@ class McpRegistrationOperationsTest {
     Files.writeString(configPath, "{ not valid json")
 
     val error =
-      assertFailsWith<IllegalArgumentException> {
+      assertFailsWith<SkillBillRuntimeException> {
         McpRegistrationOperations.register("cursor", runtimeMcpBin, home, environment = emptyMap())
       }
+    assertEquals(InstallFailureCode.MALFORMED_MCP_CONFIG, error.code)
+    assertEquals("{ not valid json", Files.readString(configPath))
     assertTrue(error.message?.contains("mcp.json") == true)
     assertTrue(error.message?.contains("JSON") == true || error.message?.contains("json") == true)
   }

@@ -75,7 +75,13 @@ class HeadlessAgentRunAdapterTest {
       )
 
     assertEquals(
-      setOf(SupportedAgent.CLAUDE, SupportedAgent.CODEX, SupportedAgent.JUNIE, SupportedAgent.CURSOR),
+      setOf(
+        SupportedAgent.CLAUDE,
+        SupportedAgent.CODEX,
+        SupportedAgent.JUNIE,
+        SupportedAgent.CURSOR,
+        SupportedAgent.DEVIN,
+      ),
       adapters.keys,
     )
   }

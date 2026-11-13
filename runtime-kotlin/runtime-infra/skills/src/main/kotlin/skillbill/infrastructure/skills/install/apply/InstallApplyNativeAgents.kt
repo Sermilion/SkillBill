@@ -259,5 +259,12 @@ private val nativeAgentInstallers: List<NativeAgentInstaller> =
           link = InstallNativeAgentOperations::linkCursorAgents,
           unlink = InstallNativeAgentOperations::unlinkCursorAgents,
         )
+      NativeAgentProvider.Devin ->
+        NativeAgentInstaller(
+          agent = SupportedAgent.DEVIN,
+          provider = NativeAgentProviderId.DEVIN,
+          link = InstallNativeAgentOperations::linkDevinAgents,
+          unlink = InstallNativeAgentOperations::unlinkDevinAgents,
+        )
     }
   }

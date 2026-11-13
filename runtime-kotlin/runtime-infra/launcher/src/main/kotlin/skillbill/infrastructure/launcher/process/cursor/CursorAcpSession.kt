@@ -28,6 +28,9 @@ data class CursorAcpLaunch(
   val images: List<CursorAcpImage> = emptyList(),
   val mcpDependency: CursorAcpMcpDependency = CursorAcpMcpDependency.ProjectUserOnly,
   val provider: AcpProvider = AcpProvider.Cursor,
+  val mcpServers: List<AcpStdioMcpServer> = emptyList(),
+  val additionalDirectories: List<String> = emptyList(),
+  val modelOnCommandLine: Boolean = false,
 ) {
   constructor(
     cwd: String,
@@ -39,6 +42,11 @@ data class CursorAcpLaunch(
   ) : this(cwd, prompt, model, mode, savedSession, images, CursorAcpMcpDependency.ProjectUserOnly)
 }
 
+fun commandCarriesModel(
+  command: List<String>,
+  model: String?,
+): Boolean = model != null && command.windowed(2).any { it == listOf("--model", model) }
+
 enum class CursorAcpMcpDependency { ProjectUserOnly, TeamDashboardRequired }
 
 fun cursorAcpDependencyRefusal(dependency: CursorAcpMcpDependency): String? =
@@ -49,6 +57,15 @@ fun cursorAcpDependencyRefusal(dependency: CursorAcpMcpDependency): String? =
   }
 
 data class CursorAcpImage(val data: String, val mimeType: String)
+
+data class AcpStdioMcpServer(
+  val name: String,
+  val command: String,
+  val args: List<String>,
+  val env: List<AcpEnvVariable>,
+)
+
+data class AcpEnvVariable(val name: String, val value: String)
 
 sealed interface CursorAcpEvent {
   data class Text(val text: String) : CursorAcpEvent
@@ -157,16 +174,13 @@ class CursorAcpSession(
   private fun response(message: JsonObject) {
     val body =
       message.obj(K.RESULT)
-        ?: return stop("$providerName rejected $expectedMethod: ${message.obj(K.ERROR)?.text(K.MESSAGE).orEmpty()}")
+        ?: return stop(acpRejection(launch, expectedMethod, message.obj(K.ERROR), selectingModel()))
     when (expectedMethod) {
       K.INITIALIZE -> initialize(body)
       K.AUTHENTICATE -> acquireSession()
       K.SESSION_NEW, K.SESSION_LOAD -> acquired(body)
       K.SESSION_SET_CONFIG -> acceptConfiguration(body)
-      K.SESSION_SET_MODEL -> {
-        model = selectedModel
-        selectMode()
-      }
+      K.SESSION_SET_MODEL -> acceptLegacyModel(body)
       K.SESSION_SET_MODE -> prompt()
       K.SESSION_PROMPT -> {
         val reason = body.text(K.STOP_REASON)
@@ -193,6 +207,33 @@ class CursorAcpSession(
     }
   }
 
+  private fun acceptLegacyModel(body: JsonObject) {
+    if (!launch.provider.exactModels) {
+      model = selectedModel
+    } else if (selectedModel != null && body.text(K.MODEL_ID) == selectedModel) {
+      model = selectedModel
+      model?.let(onModel)
+    } else {
+      record("seam=$seam outcome=model_selected_unconfirmed reported_identity=unavailable")
+    }
+    selectMode()
+  }
+
+  private fun configUpdate(update: JsonObject) {
+    val value =
+      (update[K.CONFIG_OPTIONS] as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }
+        .firstOrNull { it.text(K.CATEGORY) == "model" }
+        ?.let { it.text(K.CURRENT_VALUE) ?: "" }
+        ?: return record("seam=$seam outcome=informational_update")
+    model = value.ifEmpty { null }
+    if (model == null) {
+      record("seam=$seam outcome=model_update_malformed reported_identity=unavailable")
+    } else if (model != selectedModel) {
+      record("seam=$seam outcome=model_changed_by_provider selected=$selectedModel reported=$model")
+    }
+    model?.let(onModel)
+  }
+
   private fun initialize(body: JsonObject) {
     if ((body[K.PROTOCOL_VERSION] as? JsonPrimitive)?.intOrNull != 1) {
       return stop("$providerName ACP protocol version 1 is required; no prompt was sent.")
@@ -206,6 +247,10 @@ class CursorAcpSession(
     }
     if (launch.images.isNotEmpty() && capabilities.obj(K.PROMPT_CAPABILITIES)?.flag(K.IMAGE) != true) {
       return stop("$providerName did not advertise image prompts; no prompt was sent.")
+    }
+    sessionContextRefusal(launch, capabilities)?.let { reason ->
+      record("seam=$seam outcome=session_context_unsupported")
+      return stop(reason)
     }
     login(body)
   }
@@ -225,7 +270,10 @@ class CursorAcpSession(
       if (launch.savedSession == null) K.SESSION_NEW else K.SESSION_LOAD,
       buildJsonObject {
         put(K.CWD, launch.cwd)
-        put(K.MCP_SERVERS, JsonArray(emptyList()))
+        put(K.MCP_SERVERS, acpMcpServers(launch.mcpServers))
+        if (launch.additionalDirectories.isNotEmpty()) {
+          put(K.ADDITIONAL_DIRECTORIES, JsonArray(launch.additionalDirectories.map(::JsonPrimitive)))
+        }
         launch.savedSession?.let { put(K.SESSION_ID, it) }
       },
     )
@@ -259,8 +307,23 @@ class CursorAcpSession(
       model?.let(onModel)
       return selectMode()
     }
+    if (config == null && launch.provider.exactModels && setup.obj(K.MODELS) == null) {
+      if (!launch.modelOnCommandLine) {
+        record("seam=$seam outcome=model_metadata_absent_unconfirmed")
+        return stop(
+          "$providerName did not report its models, so the selected model '$requested' could not be confirmed; " +
+            "no prompt was sent.",
+        )
+      }
+      record("seam=$seam outcome=model_metadata_absent reported_identity=unavailable")
+      return selectMode()
+    }
     if (config == null) selectLegacyModel(requested) else configureModel(config, requested)
   }
+
+  private fun selectingModel(): Boolean =
+    expectedMethod == K.SESSION_SET_MODEL ||
+      (expectedMethod == K.SESSION_SET_CONFIG && !pendingConfigIsMode && !selectingBypass)
 
   private fun configureModel(
     config: JsonObject,
@@ -318,7 +381,12 @@ class CursorAcpSession(
     requested: String,
     advertised: List<String>,
   ): String? {
-    val selected = resolveAcpModel(requested, advertised) ?: return null
+    val selected =
+      if (launch.provider.exactModels) {
+        requested.takeIf { it in advertised }
+      } else {
+        resolveAcpModel(requested, advertised)
+      } ?: return null
     if (selected != requested) {
       record("seam=$seam outcome=model_variant_resolved requested=$requested selected=$selected")
     }
@@ -426,6 +494,8 @@ class CursorAcpSession(
         permissions?.observeTool(update)
         onEvent(CursorAcpEvent.Tool(update))
       }
+      K.CONFIG_OPTION_UPDATE ->
+        if (launch.provider.exactModels) configUpdate(update) else record("seam=$seam outcome=informational_update")
       else -> record("seam=$seam outcome=informational_update")
     }
   }
