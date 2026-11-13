@@ -51,6 +51,7 @@ import dev.skillbill.desktop.core.ui.changes.ChangesSource
 import dev.skillbill.desktop.core.domain.settings.NewTaskChatLayout
 import dev.skillbill.desktop.feature.chat.ChatApprovalActions
 import dev.skillbill.desktop.feature.chat.ChatTranscript
+import dev.skillbill.desktop.feature.chat.StartCardContext
 import dev.skillbill.desktop.feature.chat.chipText
 import dev.skillbill.desktop.feature.chat.resumableDrafts
 import kotlin.time.Instant
@@ -141,6 +142,7 @@ private fun ColumnScope.NewTaskChatContent(
         modifier = Modifier.weight(1f).align(Alignment.CenterHorizontally).widthIn(max = COMPOSER_MAX_WIDTH),
         allowStartActions = host.onStart != null,
         startIssueKey = draft.acceptedIssueKey,
+        startContext = StartCardContext(draft.repository?.name, chat.baseBranch, offer.starting),
         allowSuggestedActions = !offer.starting,
         footer = if (offer.prefixKind != null) {
           {

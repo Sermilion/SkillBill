@@ -189,7 +189,7 @@
   /* ---------- rendering ---------- */
   function docBar() {
     return `<div class="doc-bar">${S.BrandMark(18)}<span class="doc-bar-ti">Sona</span><span class="doc-bar-sub">Linear study</span>
-      <span class="l-grow"></span>${S.Segmented({ act: 'mode', value: st.mode, items: [{ id: 'prototype', label: 'Prototype' }, { id: 'states', label: 'States' }, { id: 'components', label: 'Components' }, { id: 'foundations', label: 'Foundations' }] })}</div>`;
+      <span class="l-grow"></span>${S.Segmented({ act: 'mode', value: st.mode, items: [{ id: 'prototype', label: 'Prototype' }, { id: 'states', label: 'States' }, { id: 'components', label: 'Components' }, { id: 'foundations', label: 'Foundations' }, { id: 'tour', label: 'Tour' }] })}</div>`;
   }
   function body() {
     if (st.mode === 'components') return L.components();
@@ -579,6 +579,7 @@
       ...X.SECTIONS.map(([id, label, state]) => ({ id: 'section:' + id, lead: S.StatusIcon(state, 0.5), label: `Go to ${label}` })),
       { id: 'nav:history', icon: 'history', label: 'Go to History', kbd: 'G H' }, { id: 'nav:settings', icon: 'sliders', label: 'Go to Settings', kbd: 'G ,' },
       { id: 'mode:components', icon: 'layers', label: 'Open component library' },
+      { id: 'mode:tour', icon: 'play', label: 'Show tour' },
     ] });
     groups.push({ head: 'Panes', items: [
       { id: 'specs', icon: 'fileText', label: st.specsOpen ? 'Close specs pane' : 'Open specs pane', kbd: 'G S' },
@@ -985,7 +986,7 @@
       if (location.hash === '#' + name) { st.mode = 'prototype'; applyRoute({ view: name }); render(); }
       else location.hash = name;
     },
-    mode(m) { st.mode = m; st.popover = null; history.replaceState(null, '', '#' + m); render(); const sc = root.querySelector('[data-scroll="lib"],[data-scroll="found"]'); if (sc) sc.scrollTop = 0; },
+    mode(m) { if (m === 'tour') { location.href = '../onboarding/index.html'; return; } st.mode = m; st.popover = null; history.replaceState(null, '', '#' + m); render(); const sc = root.querySelector('[data-scroll="lib"],[data-scroll="found"]'); if (sc) sc.scrollTop = 0; },
     anchor(id) { const el = document.getElementById(id); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); },
     nav(v) { go(v, v === 'work' ? { section: null } : {}); },
     section(id) { go('work', { section: id }); },

@@ -295,7 +295,7 @@
     track('PropertyList');
     return `<dl class="sb-props">${join(rows.map((r) => r && `<div class="sb-prop"><dt class="${r.mono ? 'mono' : ''}" title="${esc(r.label)}">${esc(r.label)}</dt><dd class="${r.act ? 'is-btn' : ''}"${act(r.act, r.arg)}${tipAttrs(r.tip, r.kbd)}>${r.value}</dd>${r.sub ? `<div class="sb-prop-sub">${r.sub}</div>` : ''}</div>`))}</dl>`;
   }
-  /* A count broken down by key (phase runs per phase, relaunch causes): one 22px row per key, the key in mono 11.5 faint,
+  /* A count broken down by key (phase runs per phase, relaunch causes): one 22px row per key, readable sans labels within 192px,
    * the count right-aligned and tabular, largest first. At most `max` rows (default 4), then a "+N more" ghost toggle. */
   function Breakdown(o) {
     track('Breakdown');
@@ -303,7 +303,7 @@
     const rows = o.rows.filter((r) => r[1] > 0).sort((a, b) => b[1] - a[1]);
     const shown = o.open ? rows : rows.slice(0, max);
     const more = rows.length > max ? `<button type="button" class="sb-bd-more"${act(o.act, o.arg)} aria-expanded="${!!o.open}">${o.open ? 'Show less' : `+${rows.length - max} more`}</button>` : '';
-    return `<div class="sb-bd">${shown.map(([k, n]) => `<div class="sb-bd-row"><span class="mono" title="${esc(k)}">${esc(k)}</span><b>${n}</b></div>`).join('')}${more}</div>`;
+    return `<div class="sb-bd">${shown.map(([k, n]) => `<div class="sb-bd-row"><span title="${esc(k)}">${esc(k)}</span><b>${n}</b></div>`).join('')}${more}</div>`;
   }
 
   /* ---------- Menu ---------- */
@@ -841,6 +841,17 @@
   /* One transcript entry. role 'operator' is a right-aligned bubble, 'agent' reads under the agent's Avatar and name with its
    * suggested actions, 'notice' is a centered faint line ("Stopped."). `streaming` adds a caret; main.js writes the growing text
    * into [data-stream] without a re-render. */
+  /* A goal or plan the agent proposes (ChatActionButtons): a target tile, the change it names, then kind · issue key ·
+   * repository and base branch, and Start goal or Start plan. An untitled start falls back to "New goal" or "New plan".
+   * `starting` swaps the button for a spinner and "Starting…" while the start is in flight; `tip` is the instruction it sends. */
+  function StartCard(o) {
+    track('StartCard');
+    const goal = o.kind !== 'plan';
+    const end = o.starting
+      ? `<span class="sb-startcard-go"><span class="sb-startcard-spin" aria-hidden="true"></span>Starting…</span>`
+      : Button({ label: goal ? 'Start goal' : 'Start plan', variant: 'primary', size: 'sm', act: o.act, arg: o.arg, disabled: o.disabled });
+    return `<div class="${cx('sb-startcard', o.starting && 'is-starting', o.disabled && !o.starting && 'is-disabled')}"${o.tip ? ` data-tip="${esc(o.tip)}"` : ''}><span class="sb-startcard-ic">${Icon('target')}</span><span class="sb-startcard-tx"><span class="t">${esc(o.title || (goal ? 'New goal' : 'New plan'))}</span><span class="s">${esc(o.sub)}</span></span>${end}</div>`;
+  }
   function ChatMessage(o) {
     track('ChatMessage');
     if (o.role === 'notice') return `<div class="sb-msg-notice">${esc(o.text)}</div>`;
@@ -1862,7 +1873,7 @@
     PhasePeek, AuditResult, PeekPart, PeekSignal, PeekCmd, PeekCells, PeekStats, PeekOutput, PeekCheck, PeekFacts,
     PaneSection, DetailsPanel, MenuHead, QaFrame, Counts, LiveText, Dot, Note, InspectorSection, InspectorLine, PhaseBlock, PickerButton, Range, ShellPrompt, AppShell, WorkArea, ScrollArea, DetailSplit, ChangeStrip, ChangesFrame, DiffView, InlineComposer, CommentThread, KeyHints, WindowSheet, Breakdown, TreeRow, SettingsHeader, SettingsGroup, SettingRow, TierBadge,
     ConfigRow, TrayPopover,
-    ChatStatusMark, ChatTabs, SuggestionChip, ChatMessage, ChatTranscript, ChatPill, Composer, StepLine, NewTaskHome,
+    ChatStatusMark, ChatTabs, SuggestionChip, StartCard, ChatMessage, ChatTranscript, ChatPill, Composer, StepLine, NewTaskHome,
     InboxList, InboxRow, FilterBar, TargetPicker, QueuedRow, QueuePanel, ChatChangesPill, ChatChangeRow, ChatChangesPanel, ResumeRow, ResumePalette,
     QaVerdict, QaItem, QaFold, QaResults, QaLive, QaPreview, QaStageList, QaShots, QaRounds, ReportText, DeviceSwitcher, DeviceOption, DevicePanel,
     SegmentBar, CheckTally, RunOutcome, CheckRow, StepTimeline, WorkSummary, VerifyContext, SelectAll, SelectionBar,

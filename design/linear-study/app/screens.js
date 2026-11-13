@@ -2674,12 +2674,22 @@
     const p = ntPrimary(c);
     return S.Button({ label: p.label, variant: 'primary', size: 'sm', kbd: '↵', act: 'chat-send', disabled: p.disabled, id: 'composer-send' });
   }
+  /* An agent action: a goal or plan start renders as a StartCard (kind · repository from base branch), anything else as a chip.
+   * An action is its label, or { label, title } when the agent named the change. */
+  function ntAction(c, a, j) {
+    const label = typeof a === 'string' ? a : a.label;
+    const start = /^Run phase:(goal|plan)\b/.exec(label);
+    if (!start) return S.SuggestionChip({ label, primary: j === 0, act: 'chat-suggested', arg: label });
+    const where = c.repo ? `${c.repo}${baseBranch(c) ? ` from ${baseBranch(c)}` : ''}` : '';
+    const sub = [start[1] === 'goal' ? 'Goal' : 'Plan', where].filter(Boolean).join(' · ');
+    return S.StartCard({ kind: start[1], title: typeof a === 'string' ? '' : a.title, sub, act: 'chat-suggested', arg: label, tip: label });
+  }
   function ntTranscript(c) {
     const avatar = S.Avatar({ name: c.agent, initials: agentOf(c.agent).initials, color: agentOf(c.agent).color, size: 'sm' });
     const messages = c.lines.map((l) => S.ChatMessage({
       role: l.role, text: l.text, agent: c.agent, avatar,
       images: l.images && l.images.length ? l.images.map((f) => S.ChatPill({ icon: 'image', text: f })).join('') : null,
-      actions: (l.actions || []).map((a, j) => S.SuggestionChip({ label: a, primary: j === 0, act: 'chat-suggested', arg: a })),
+      actions: (l.actions || []).map((a, j) => ntAction(c, a, j)),
     }));
     if (c.stream) messages.push(S.ChatMessage({ role: 'agent', agent: c.agent, avatar, text: c.stream.full.slice(0, c.stream.shown), streaming: true, streamId: c.id }));
     return S.ChatTranscript({ scroll: 'chat-' + c.id, messages });

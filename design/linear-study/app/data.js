@@ -1075,7 +1075,7 @@ Stopped the desktop app and private display processes. Stopped the Gradle and Ko
     saved('plan-subtasks', 'claude', 262, 'Plan detail misses the subtask list', 'skill-bill', null, said('plan detail misses the subtask list', 'The plan detail reads the manifest before the subtask specs are written, so the list is empty until you reopen it.'), { images: [SHOT('081402')] }),
     saved('token-cost', 'claude', 600, 'Token cost per phase on the run page', 'skill-bill', null, [
       { role: 'operator', text: 'what do you think about showing the token cost per phase on the run page?' },
-      { role: 'agent', text: 'The data is there: each phase record already stores input and output tokens. A small column on the phase list would cost little. I would show totals per phase and keep per-call detail in the inspector.', actions: ['Run phase:goal', 'Use SKILL-514'] },
+      { role: 'agent', text: 'The data is there: each phase record already stores input and output tokens. A small column on the phase list would cost little. I would show totals per phase and keep per-call detail in the inspector.', actions: [{ label: 'Run phase:goal', title: 'Show token cost per phase on the run page' }, 'Use SKILL-514'] },
     ]),
     saved('planning-context', 'claude', 660, 'Planning phase context budget', 'skill-bill', null, said('I want to discuss Planning phase and how much context it gets', 'Planning gets the intake, AGENTS.md and the files it asks for. It does not get earlier specs unless the intake names them.')),
     saved('restart-483', 'claude', 1380, 'Restart SKILL-483', 'skill-bill', null, said('lets restart SKILL-483', 'SKILL-483 is paused after subtask 2. Resume picks up at subtask 3 with the same branch.')),
