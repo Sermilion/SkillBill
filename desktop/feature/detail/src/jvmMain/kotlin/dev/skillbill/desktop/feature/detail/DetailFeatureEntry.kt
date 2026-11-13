@@ -100,6 +100,7 @@ class DetailFeatureEntry(
       chatPaneOpen = shellPanes.chatOpen,
       chatShortcut = CHAT_SHORTCUT,
       onToggleChat = { chat.toggleChat(item) },
+      onOpenParkedVerify = { adjust -> chat.openParkedVerify(item, adjust) },
     )
     SideEffect { viewModel.onAction(DetailAction.SetQaPreviewVisible(host.detailsPaneVisible)) }
     DisposableEffect(viewModel) {

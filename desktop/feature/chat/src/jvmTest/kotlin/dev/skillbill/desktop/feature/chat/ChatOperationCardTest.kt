@@ -344,6 +344,41 @@ class ChatOperationCardTest {
   }
 
   @Test
+  fun `a parked verify card opens its run`() = runTest {
+    val runs = RecordingRunOpener()
+    val coordinator = OperationCardCoordinator(FakeWorkControlRepository(), backgroundScope, { null }, runs = runs)
+    val thread = ChatThread(Clock.System)
+    thread.showOperationCard(verify())
+
+    coordinator.actions(thread).onOpenRun("verify-token")
+    runCurrent()
+
+    assertEquals(listOf("verify-token"), runs.opened)
+  }
+
+  @Test
+  fun `a chat adjusts a card another chat parked through the shared requests`() = runTest {
+    val original = verify()
+    val controls = FakeWorkControlRepository().apply {
+      operationCards[original.launchId] = original
+      newTaskOutcome = NewTaskStartOutcome.Refused("unused")
+    }
+    val requests = OperationCardRequests()
+    val request = NewTaskStart("/repo", "", null, "codex", NewTaskKind.Verify, null, null, target = "WE-1", branch = "feat/we-1")
+    OperationCardCoordinator(controls, backgroundScope, { request }, requests = requests).remember(original.launchId, request)
+    val runChat = OperationCardCoordinator(controls, backgroundScope, { request }, requests = requests)
+    val thread = ChatThread(Clock.System)
+    thread.showOperationCard(original)
+
+    assertEquals(true, runChat.actions(thread).canAdjust(original.token))
+    runChat.actions(thread).onAdjust(original.token)
+    runChat.submitAdjustment(thread, "Only the first criterion")
+    runCurrent()
+
+    assertEquals(request.copy(proposalChanges = "Only the first criterion"), controls.newTaskRequests.single())
+  }
+
+  @Test
   fun `only a verify card past confirmation offers its run`() {
     val offered = OperationCardState.entries.filter { state ->
       val thread = ChatThread(Clock.System)

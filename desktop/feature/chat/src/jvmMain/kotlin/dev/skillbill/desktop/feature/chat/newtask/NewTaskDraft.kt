@@ -30,6 +30,7 @@ import dev.skillbill.desktop.feature.chat.ChatMessage
 import dev.skillbill.desktop.feature.chat.ChatOperationCardActions
 import dev.skillbill.desktop.feature.chat.ChatThread
 import dev.skillbill.desktop.feature.chat.OperationCardCoordinator
+import dev.skillbill.desktop.feature.chat.OperationCardRequests
 import dev.skillbill.desktop.feature.chat.RunOpener
 import dev.skillbill.desktop.feature.chat.START_AGAIN_SUFFIX
 import dev.skillbill.desktop.feature.chat.UnavailableApprovalFeed
@@ -78,6 +79,7 @@ class NewTaskDraft internal constructor(
   private val changesRepository: ChatChangesRepository = UnavailableChatChanges,
   private val diagnostics: Diagnostics,
   private val runs: RunOpener = UnavailableRunOpener,
+  cardRequests: OperationCardRequests = OperationCardRequests(),
 ) {
   private val scope = windowScope.scope
   private val cardOwners = IdentityHashMap<ChatThread, NewTaskChat>()
@@ -104,7 +106,7 @@ class NewTaskDraft internal constructor(
     }
   }, { thread ->
     synchronized(cardOwners) { cardOwners[thread] }?.persist()?.also { if (it) refreshSaved() } ?: false
-  }, runs = runs)
+  }, runs = runs, requests = cardRequests)
   private val chatState = MutableStateFlow<NewTaskChat?>(null)
   private val offerState = MutableStateFlow(NewTaskOffer())
   private var previewTracker: Pair<String, NewTaskChatChanges>? = null
@@ -146,7 +148,8 @@ class NewTaskDraft internal constructor(
   internal val chat: StateFlow<NewTaskChat?> = chatState.asStateFlow()
 
   /** The Confirm, Dismiss, Adjust and option callbacks of the operation cards in [current]'s transcript. */
-  internal fun operationCardActions(current: NewTaskChat): ChatOperationCardActions = cards.actions(current.thread)
+  internal fun operationCardActions(current: NewTaskChat): ChatOperationCardActions =
+    cards.actions(current.thread).copy(handOffVerify = true)
 
   internal val offer: StateFlow<NewTaskOffer> = offerState.asStateFlow()
 

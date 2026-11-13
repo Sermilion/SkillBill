@@ -68,6 +68,7 @@ internal class DetailScreenHost(
   val chatPaneOpen: Boolean = false,
   val chatShortcut: String = "",
   val onToggleChat: () -> Unit = {},
+  val onOpenParkedVerify: (adjust: Boolean) -> Unit = {},
 ) {
   val detailsPaneVisible: Boolean get() = detailsPaneOpen && !specsOpen && !chatPaneOpen
 }
@@ -183,7 +184,7 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
             val verifyRun = loaded?.detail?.verifyRun
             if (verifyRun != null) VerifyHeader(verifyRun, onAction) {
               if (state.sections != SectionsUi.Gone) {
-                VerifyHeaderActions(state, verifyRun, view, recoverFocus, onAction) { if (!host.chatOpen) host.onToggleChat() }
+                VerifyHeaderActions(state, verifyRun, view, recoverFocus, onAction, host.onOpenParkedVerify)
               }
             } else DetailHeader(item, state.stale, { onAction(DetailAction.RevealFolder) }, { onAction(DetailAction.OpenBranch) }, qa = if (qaRow) QaHeaderFacts(qaView?.testedCommit, qaView?.criteriaSource) else null, validation = validationRow, planReady = item.isStandalonePlan() && planFinished(item, loaded?.detail), planBlocked = item.isStandalonePlan() && hasBlockedSubtasks(loaded?.detail?.standalonePlan)) {
               if (state.sections != SectionsUi.Gone) {

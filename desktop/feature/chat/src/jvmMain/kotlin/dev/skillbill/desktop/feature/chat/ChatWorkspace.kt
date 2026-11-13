@@ -23,6 +23,12 @@ import dev.skillbill.desktop.core.domain.model.NewTaskActionKind
 import dev.skillbill.desktop.core.domain.model.NewTaskKind
 import dev.skillbill.desktop.core.domain.model.NewTaskStart
 import dev.skillbill.desktop.core.domain.model.NewTaskStartOutcome
+import dev.skillbill.desktop.core.domain.model.OperationCardDetailsView
+import dev.skillbill.desktop.core.domain.model.OperationCardView
+import dev.skillbill.desktop.core.domain.model.VerifyQaChoice
+import dev.skillbill.desktop.core.domain.model.VerifyReviewModeChoice
+import dev.skillbill.desktop.core.domain.model.VerifyRunDetails
+import dev.skillbill.desktop.core.domain.model.VerifyStartChoices
 import dev.skillbill.desktop.core.domain.model.toNewTaskKind
 import dev.skillbill.desktop.core.domain.repository.ApprovalFeedRepository
 import dev.skillbill.desktop.core.domain.repository.ExecutionChatRepository
@@ -55,6 +61,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.collect
@@ -128,6 +135,7 @@ class ChatWorkspace(
   private val newTask: NewTaskChats,
   private val approvals: ApprovalFeedRepository = UnavailableApprovalFeed,
   private val diagnostics: Diagnostics,
+  private val runs: RunOpener = UnavailableRunOpener,
 ) : ChatCommands {
   internal val cursorMcpDependencies = mutableStateMapOf<String, CursorMcpDependency>()
   private val scope = windowScope.scope
@@ -221,6 +229,61 @@ class ChatWorkspace(
 
   override fun openChat(item: WorkItem) = open(item)
 
+  /**
+   * Opens [item]'s chat with its parked verify card. With [adjust] the chat skips the opening turn and asks how to change the
+   * proposal, as the card's Adjust does.
+   */
+  override fun openParkedVerify(item: WorkItem, adjust: Boolean) {
+    setPaneOpen(true)
+    val existing = tabState.value.tabs.firstOrNull { it.executionId == item.id }
+    if (existing == null) start(item, item.id, opening = !adjust) else activate(existing.id)
+    val session = sessions[existing?.id ?: item.id] ?: return
+    scope.launch(session.job) {
+      session.busyState.first { !it }
+      val token = parkedVerifyToken(session) ?: attachParkedVerify(session, turns.accept(session, turns.freshRead(session.item)))
+      if (adjust && token != null) cards(session).actions(session.thread).onAdjust(token)
+    }
+  }
+
+  private fun parkedVerifyToken(session: ChatSession): String? =
+    session.transcript.value.filterIsInstance<ChatMessage.OperationCard>()
+      .lastOrNull { it.card.token == session.item.id && it.card.state.decidable }?.card?.token
+
+  /**
+   * Shows the card a parked verify run waits on, and returns its token. A card some other chat started keeps that chat's
+   * request for Adjust; otherwise the request is rebuilt from the run.
+   */
+  private suspend fun attachParkedVerify(session: ChatSession, read: ExecutionRead?): String? {
+    val run = read?.detail?.verifyRun ?: return null
+    val card = controls.operationCard(run.workflowId)?.takeIf { it.state.decidable } ?: return null
+    if (card.launchId !in newTask.cardRequests) {
+      verifyRequest(run, card, read)?.let { newTask.cardRequests.remember(card.launchId, it) }
+    }
+    return card.token.takeIf { cards(session).show(session.thread, card.launchId) }
+  }
+
+  private suspend fun verifyRequest(run: VerifyRunDetails, card: OperationCardView, read: ExecutionRead): NewTaskStart? {
+    val intake = run.intake?.takeIf(String::isNotBlank) ?: return null
+    val details = card.details as? OperationCardDetailsView.Verify ?: return null
+    val agent = chat.resolveAgent(read.header, read.detail, read.runOptions) ?: return null
+    return NewTaskStart(
+      repoRoot = run.repoRoot?.takeIf(String::isNotBlank) ?: read.header.repositoryRoot,
+      requirements = intake,
+      baseBranch = null,
+      agentId = agent.agentId,
+      profile = agent.profile,
+      kind = NewTaskKind.Verify,
+      keyChoice = run.issueKey,
+      expectedDatabaseSessionId = (databaseSession.state.value as? DatabaseSessionState.Open)?.sessionId,
+      target = intake,
+      branch = run.target?.takeIf(String::isNotBlank),
+      verify = VerifyStartChoices(
+        VerifyQaChoice.entries.firstOrNull { it.wire == details.qa },
+        VerifyReviewModeChoice.entries.firstOrNull { it.wire == details.mode },
+      ),
+    )
+  }
+
   override fun runReviewAction(item: WorkItem, action: ReviewFindingsAction) {
     val instruction = reviewActionInstruction(item, action) ?: return
     actOnItemChat(item, instruction)
@@ -283,6 +346,7 @@ class ChatWorkspace(
     session.stoppableState.value = opening
     launchTurn(session) {
       val read = turns.accept(session, turns.freshRead(item)) ?: return@launchTurn
+      attachParkedVerify(session, read)
       if (opening) {
         turns.turn(session, read, openingInstruction(classify(read.header)))
       } else {
@@ -806,7 +870,7 @@ class ChatWorkspace(
             checkoutRoot = session.item.workingRoot(),
           )
         }
-      }, { turns.operationCardChanged(session) })
+      }, { turns.operationCardChanged(session) }, runs = runs, requests = newTask.cardRequests)
     }
 
   private fun enqueue(id: String, message: QueuedChatMessage) {
