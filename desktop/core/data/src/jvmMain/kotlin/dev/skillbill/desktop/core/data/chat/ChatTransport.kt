@@ -76,5 +76,8 @@ interface ChatTransportBindings {
   @Provides
   @IntoSet
   fun openCode(transport: OpenCodeChatTransport): ChatTransport = transport
+
+  @Provides
+  @IntoSet
   fun devin(transport: DevinChatTransport): ChatTransport = transport
 }
