@@ -19,6 +19,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -51,6 +52,7 @@ import dev.skillbill.desktop.core.domain.model.OperationCardView
 import dev.skillbill.desktop.core.domain.model.VerifyQaChoice
 import dev.skillbill.desktop.core.domain.model.VerifyReviewModeChoice
 import dev.skillbill.desktop.core.domain.model.VerifyStartChoices
+import kotlinx.coroutines.flow.StateFlow
 
 private val SUMMARY_MAX_HEIGHT = 220.dp
 
@@ -58,7 +60,8 @@ private val SUMMARY_MAX_HEIGHT = 220.dp
  * What an operation card can do. Each callback is a click the operator made on that card: [onConfirm] is the only way to
  * start the parked continuation, and [onAdjust] asks for a replacement proposal instead of confirming the old one.
  * [onChangeVerify] replaces a verify proposal with one using other QA or review mode choices. With [handOffVerify] a verify
- * card only reports that the run started and links to it; the run's own chat holds the decision.
+ * card only reports that the run started and links to it; the run's own chat holds the decision. Adjust stays off while
+ * [busy], since the chat's next message would be taken as the requested change.
  */
 internal data class ChatOperationCardActions(
   val onChooseOption: (token: String, ordinal: String, optionId: String) -> Unit,
@@ -67,6 +70,7 @@ internal data class ChatOperationCardActions(
   val onDismiss: (token: String) -> Unit,
   val onAdjust: (token: String) -> Unit,
   val canAdjust: (token: String) -> Boolean,
+  val busy: StateFlow<Boolean>,
   val onOpenRun: (token: String) -> Unit = {},
   val onChangeVerify: (token: String, choices: VerifyStartChoices) -> Unit = { _, _ -> },
   val handOffVerify: Boolean = false,
@@ -359,7 +363,8 @@ private fun OperationCardControls(message: ChatMessage.OperationCard, actions: C
   val sharedActionsEnabled = sharedActionOffReason == null && actions != null
   val isPrReviewFix = card.details is OperationCardDetailsView.PrReviewFix
   val missing = message.missingChoiceText()
-  val adjustable = actions?.canAdjust?.invoke(card.token) == true
+  val busy = actions?.busy?.collectAsState()?.value == true
+  val adjustable = !busy && actions?.canAdjust?.invoke(card.token) == true
   Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
       (card.details as? OperationCardDetailsView.Verify)?.let { details ->
@@ -396,7 +401,7 @@ private fun OperationCardControls(message: ChatMessage.OperationCard, actions: C
         enabled = sharedActionsEnabled,
       )
     }
-    val note = offReason ?: missing ?: ADJUST_UNAVAILABLE.takeUnless { adjustable }
+    val note = offReason ?: missing ?: ADJUST_UNAVAILABLE.takeUnless { adjustable || busy }
     note?.let { BasicText(it, style = type.tSm.copy(color = colors.fgMuted)) }
   }
 }

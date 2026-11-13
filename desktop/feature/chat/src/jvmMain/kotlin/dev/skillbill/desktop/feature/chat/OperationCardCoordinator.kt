@@ -117,7 +117,8 @@ internal class OperationCardCoordinator(
       onDismiss = { token -> dismiss(thread, token) },
       onAdjust = { token -> adjust(thread, token) },
       onChangeVerify = { token, choices -> changeVerify(thread, token, choices) },
-      canAdjust = { token -> !thread.busy.value && thread.operationCard(token)?.card?.launchId?.let { it in requests } == true },
+      canAdjust = { token -> thread.operationCard(token)?.card?.launchId?.let { it in requests } == true },
+      busy = thread.busy,
       onOpenRun = { token -> openRun(thread, token) },
     )
 
@@ -197,6 +198,7 @@ internal class OperationCardCoordinator(
   }
 
   private fun adjust(thread: ChatThread, token: String) {
+    if (thread.busy.value) return
     val message = thread.operationCard(token) ?: return
     if (message.card.launchId !in requests) {
       thread.operationCardSubmitting(token, false, ADJUST_UNAVAILABLE_TEXT)

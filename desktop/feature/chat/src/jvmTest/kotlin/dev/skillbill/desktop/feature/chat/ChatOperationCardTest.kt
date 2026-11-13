@@ -1,5 +1,11 @@
 package dev.skillbill.desktop.feature.chat
 
+import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.runComposeUiTest
+import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
 import dev.skillbill.desktop.core.domain.model.NewTaskKind
 import dev.skillbill.desktop.core.domain.model.NewTaskStart
@@ -15,6 +21,8 @@ import dev.skillbill.desktop.core.domain.model.VerifyQaChoice
 import dev.skillbill.desktop.core.domain.model.VerifyReviewModeChoice
 import dev.skillbill.desktop.core.domain.model.VerifyStartChoices
 import dev.skillbill.desktop.core.testing.FakeWorkControlRepository
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -376,6 +384,28 @@ class ChatOperationCardTest {
     runCurrent()
 
     assertEquals(request.copy(proposalChanges = "Only the first criterion"), controls.newTaskRequests.single())
+  }
+
+  @OptIn(ExperimentalTestApi::class)
+  @Test
+  fun `a card shown during the opening turn enables Adjust once the turn ends`() = runComposeUiTest {
+    val original = verify()
+    val request = NewTaskStart("/repo", "", null, "codex", NewTaskKind.Verify, null, null, target = "WE-1")
+    val coordinator = OperationCardCoordinator(FakeWorkControlRepository(), CoroutineScope(Job()), { request })
+    coordinator.remember(original.launchId, request)
+    val thread = ChatThread(Clock.System)
+    thread.busyState.value = true
+    thread.showOperationCard(original)
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        ChatOperationCard(thread.operationCard(original.token)!!, coordinator.actions(thread))
+      }
+    }
+    onNodeWithText("Adjust").assertIsNotEnabled()
+
+    thread.busyState.value = false
+
+    onNodeWithText("Adjust").assertIsEnabled()
   }
 
   @Test
