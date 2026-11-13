@@ -645,13 +645,8 @@ public class IdeStatusProjector(
       } else {
         candidate.lifecycleState
       }
-    val summary =
-      if (lifecycle == IdeStatusLifecycleState.IDLE && candidate.lifecycleState == IdeStatusLifecycleState.ACTIVE) {
-        val subject = candidate.issueKey?.let { "${wireFamily.wireValue} $it" } ?: wireFamily.wireValue
-        "$subject stopped reporting progress at $stepLabel and is treated as abandoned."
-      } else {
-        familySummary(wireFamily, candidate.issueKey, lifecycle, stepLabel)
-      }
+    val awaitingCriteriaConfirmation =
+      family == WorkflowFamily.VERIFY && lifecycle == IdeStatusLifecycleState.PAUSED
     return IdeStatusSnapshot(
       repositoryIdentity = context.repositoryIdentity,
       branchCorrelation = context.branchCorrelation,
@@ -661,6 +656,9 @@ public class IdeStatusProjector(
       workflowFamily = wireFamily,
       execution = candidate.execution,
       lifecycleState = lifecycle,
+      pauseReason =
+        IdeStatusPauseReason.of(IdeStatusPauseReasonCode.AWAITING_OPERATOR_DECISION, AWAITING_CRITERIA_CONFIRMATION)
+          .takeIf { awaitingCriteriaConfirmation },
       currentStep = IdeStatusStep(id = stepId, label = stepLabel),
       progress = progress,
       startedAt = startedAt,
@@ -668,9 +666,26 @@ public class IdeStatusProjector(
       lastAgentActivityLabel = activityLabel,
       updatedAt = updatedAt,
       freshness = IdeStatusFreshnessClassifier.classify(updatedAt, context.observedAt),
-      summary = summary,
+      summary = workflowSummary(candidate, wireFamily, lifecycle, stepLabel, awaitingCriteriaConfirmation),
       title = workflowTitle(candidate, context, family),
     )
+  }
+
+  private fun workflowSummary(
+    candidate: IdeStatusCandidate,
+    wireFamily: IdeStatusWorkflowFamily,
+    lifecycle: IdeStatusLifecycleState,
+    stepLabel: String,
+    awaitingCriteriaConfirmation: Boolean,
+  ): String {
+    val subject = candidate.issueKey?.let { "${wireFamily.wireValue} $it" } ?: wireFamily.wireValue
+    val abandoned =
+      lifecycle == IdeStatusLifecycleState.IDLE && candidate.lifecycleState in IdeStatusPolicy.VERIFY_OPEN_LIFECYCLES
+    return when {
+      abandoned -> "$subject stopped reporting progress at $stepLabel and is treated as abandoned."
+      awaitingCriteriaConfirmation -> "$subject is waiting for you to confirm its acceptance criteria."
+      else -> familySummary(wireFamily, candidate.issueKey, lifecycle, stepLabel)
+    }
   }
 
   private fun workflowTitle(
@@ -701,6 +716,8 @@ public class IdeStatusProjector(
       primaryRepositoryRoot = candidate.primaryRepositoryRoot,
     )
 }
+
+private const val AWAITING_CRITERIA_CONFIRMATION = "Confirm or adjust the acceptance criteria in Chat."
 
 internal val GOAL_ASSESSMENT_STEPS =
   listOf(
