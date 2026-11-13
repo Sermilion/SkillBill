@@ -47,15 +47,16 @@ internal fun verifyScoreNotes(run: VerifyRunDetails): Map<String, String> {
   val grades = run.criteria.mapNotNull { criterion -> run.completenessAudit?.grades?.firstOrNull { it.number == criterion.number } }
   val ungraded = run.criteria.size - grades.size
   fun tally(values: List<String>) = values.groupingBy { it.lowercase() }.eachCount().entries.joinToString(" · ") { "${it.value} ${it.key}" }
-  val partial = grades.count { it.status.equals("PARTIAL", true) }
-  val missing = grades.count { it.status.equals("FAIL", true) }
+  val partial = grades.count { it.gap && it.status == "PARTIAL" }
+  val missing = grades.count { it.gap && it.status == "FAIL" }
+  val resolved = grades.count { it.resolution != null }
   return mapOf(
     "Criteria" to when {
       run.completenessAudit == null -> "not audited"
       run.criteria.isEmpty() -> "no criteria"
-      else -> listOfNotNull("$partial partial".takeIf { partial > 0 }, "$missing missing".takeIf { missing > 0 }, "$ungraded ungraded".takeIf { ungraded > 0 }).joinToString(" · ").ifEmpty { "all met" }
+      else -> listOfNotNull("$partial partial".takeIf { partial > 0 }, "$missing missing".takeIf { missing > 0 }, "$ungraded ungraded".takeIf { ungraded > 0 }, "$resolved resolved".takeIf { resolved > 0 }).joinToString(" · ").ifEmpty { "all met" }
     },
-    "Review" to (run.reviewFindings?.let { tally(it.items.map { row -> row.severity }).ifEmpty { "clean" } } ?: if (run.steps.any { it.stepId == "code_review" && it.status == "running" }) "running" else "not run"),
+    "Review" to (run.reviewFindings?.let { review -> tally(review.items.map { row -> if (row.open) row.severity else row.status?.label().orEmpty() }).ifEmpty { "clean" } } ?: if (run.steps.any { it.stepId == "code_review" && it.status == "running" }) "running" else "not run"),
     "Tests" to (run.unitTestValue?.let { tally(it.rows.map { row -> row.verdict }).ifEmpty { "no tests changed" } } ?: "not run"),
     "QA" to (run.qa?.let { qa -> "${qa.assertions.count { it.outcome == QaAssertionOutcome.Passed }} of ${qa.assertions.size} checks passed" } ?: "not run"),
     "Flag audit" to (run.flagAudit?.flagName ?: if (run.flagAudit != null) "no flag required" else "not run"),

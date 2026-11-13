@@ -2,6 +2,7 @@ package dev.skillbill.desktop.core.data.runtime
 
 import dev.skillbill.desktop.core.domain.model.VerifyCompletenessAudit
 import dev.skillbill.desktop.core.domain.model.VerifyCriterionGrade
+import dev.skillbill.desktop.core.domain.model.VerifyCriterionResolution
 import dev.skillbill.desktop.core.domain.model.VerifyFlagAudit
 import dev.skillbill.desktop.core.domain.model.VerifyFlagCheck
 import dev.skillbill.desktop.core.domain.model.VerifyReviewFinding
@@ -21,11 +22,12 @@ internal fun RuntimeVerifyRunDetails.toDomain() = VerifyRunDetails(
   steps.map { VerifyRunStep(it.stepId, it.status, it.attemptCount) }, criteria.map { VerifyRunCriterion(it.number, it.text) },
   criteriaRaw, nonGoals, technicalConstraints, rolloutExpectation,
   completenessAudit?.let { audit -> VerifyCompletenessAudit(audit.verdict, audit.findings, audit.grades.map { grade ->
-    VerifyCriterionGrade(grade.number, grade.status.name, grade.text, grade.evidence, grade.missing, grade.notFound, grade.locations)
+    VerifyCriterionGrade(grade.number, grade.status.name, grade.text, grade.evidence, grade.missing, grade.notFound, grade.locations,
+      grade.resolution?.let { VerifyCriterionResolution(it.evidence, it.recordedAt.toKotlinInstant()) })
   }) },
   reviewFindings?.let { review -> VerifyReviewSection(review.verdict, review.findings, review.items.map {
-    VerifyReviewFinding(it.ref, it.severity, it.confidence, it.location, it.description, it.specialists, it.locations)
-  }) },
+    VerifyReviewFinding(it.ref, it.severity, it.confidence, it.location, it.description, it.specialists, it.locations, it.status?.toDomain())
+  }, review.reviewRunId) },
   flagAudit?.let { flag -> VerifyFlagAudit(flag.verdict, flag.findings, flag.skipReason, flag.flagName, flag.pattern, flag.issues, flag.checks.map { VerifyFlagCheck(it.passed, it.text) }) },
   unitTestValue?.let { tests -> VerifyUnitTestValue(tests.verdict, tests.findings, tests.skipReason, tests.overall, tests.summary,
     tests.rows.map { VerifyTestValueRow(it.area, it.verdict, it.confidence, it.files, it.why, it.action, it.locations) }, tests.keep, tests.rewrite, tests.delete, tests.missingCases) },

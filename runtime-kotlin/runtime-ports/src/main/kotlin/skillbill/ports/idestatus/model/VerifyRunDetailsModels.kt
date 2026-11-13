@@ -1,5 +1,6 @@
 package skillbill.ports.idestatus.model
 
+import skillbill.review.model.ReviewFindingStatus
 import skillbill.workflow.taskruntime.model.qa.QaRunDetails
 import java.time.Instant
 
@@ -57,14 +58,18 @@ data class VerifyCriterionGrade(
   val missing: String?,
   val notFound: String?,
   val locations: List<String>,
+  val resolution: VerifyCriterionResolution? = null,
 )
 
 enum class VerifyGradeStatus { PASS, PARTIAL, FAIL }
+
+data class VerifyCriterionResolution(val criterionNumber: Int, val evidence: String, val recordedAt: Instant)
 
 data class VerifyReviewSection(
   val verdict: String?,
   val findings: List<String>,
   val items: List<VerifyReviewFinding>,
+  val reviewRunId: String? = null,
 )
 
 data class VerifyReviewFinding(
@@ -75,6 +80,7 @@ data class VerifyReviewFinding(
   val description: String,
   val specialists: List<String>,
   val locations: List<String>,
+  val status: ReviewFindingStatus? = null,
 )
 
 data class VerifyFlagAudit(

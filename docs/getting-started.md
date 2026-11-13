@@ -297,6 +297,7 @@ Workflow state:
 | `sona verify-workflow show`     | Show one verify workflow, including full durable state |
 | `sona verify-workflow resume`   | Build a verify resume/recovery explanation |
 | `sona verify-workflow continue` | Reopen a resumable verify workflow and emit compact continuation guidance |
+| `sona verify-workflow resolve-criterion` | Record evidence that a criterion a finished verify run graded PARTIAL or FAIL is now met |
 
 Authoring and install:
 

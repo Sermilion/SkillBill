@@ -201,6 +201,13 @@ The CLI exposes the recovery and activation surface through:
 - `sona verify-workflow show <workflow-id>`
 - `sona verify-workflow resume <workflow-id>`
 - `sona verify-workflow continue <workflow-id>`
+- `sona verify-workflow resolve-criterion <workflow-id> --criterion <n> --evidence <text>`
+
+A finished verify run is immutable. Work done after it is recorded beside it and
+shown over its frozen results: `resolve-criterion` marks a PARTIAL or FAIL
+criterion as met, and `record-feedback --event fix_applied` against the run's
+review (the most recent review run imported under the verify session id) marks a
+code-review finding fixed. A new verify run is still the way to re-audit.
 
 For decomposed feature parents, `sona goal` is the goal-continuation
 entry: it starts or resumes only the selected runnable subtask, derives the

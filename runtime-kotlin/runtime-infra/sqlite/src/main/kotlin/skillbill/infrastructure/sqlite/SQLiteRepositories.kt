@@ -13,6 +13,7 @@ import skillbill.infrastructure.sqlite.diagnostics.FileRejectedOutputDiagnosticP
 import skillbill.infrastructure.sqlite.diagnostics.SqliteRejectedOutputDiagnosticRepository
 import skillbill.infrastructure.sqlite.goal.UnaddressedFindingsRuntime
 import skillbill.infrastructure.sqlite.idestatus.SqliteWorkBoardReadModelStore
+import skillbill.infrastructure.sqlite.idestatus.VerifyCriterionResolutionStore
 import skillbill.infrastructure.sqlite.operation.SqliteOperationCardStore
 import skillbill.infrastructure.sqlite.operation.SqliteOperationProposalStore
 import skillbill.infrastructure.sqlite.review.accounting.loadReviewAccounting
@@ -70,6 +71,7 @@ import skillbill.ports.idestatus.StandalonePhaseStatusRepository
 import skillbill.ports.idestatus.WorkBoardReadModelRepository
 import skillbill.ports.idestatus.WorktreeEditJournalRepository
 import skillbill.ports.idestatus.monitor.MonitorCiCycleRepository
+import skillbill.ports.idestatus.verify.VerifyCriterionResolutionRepository
 import skillbill.ports.learning.LearningRepository
 import skillbill.ports.learning.model.LearningResolution
 import skillbill.ports.operation.OperationCardRepository
@@ -160,6 +162,8 @@ internal class SQLiteUnitOfWork(
   override val worktreeEditJournal: WorktreeEditJournalRepository =
     WorktreeEditJournalStore(connection)
   override val monitorCiCycles: MonitorCiCycleRepository = MonitorCiCycleStore(connection)
+  override val verifyCriterionResolutions: VerifyCriterionResolutionRepository =
+    VerifyCriterionResolutionStore(connection)
   override val agentBuildRuns: AgentBuildRunRepository =
     SqliteAgentBuildRunStore(connection, diagnostics, transactionActive)
   override val standalonePhaseStatuses: StandalonePhaseStatusRepository =
@@ -581,6 +585,9 @@ internal class SQLiteReviewRepository(
 
   override fun fetchFindingStatuses(runId: String): Map<String, ReviewFindingStatus> =
     ReviewRuntime.fetchFindingStatuses(connection, runId)
+
+  override fun latestSessionReviewRunId(sessionId: String): String? =
+    ReviewRuntime.latestSessionReviewRunId(connection, sessionId)
 
   override fun findingExists(
     runId: String,

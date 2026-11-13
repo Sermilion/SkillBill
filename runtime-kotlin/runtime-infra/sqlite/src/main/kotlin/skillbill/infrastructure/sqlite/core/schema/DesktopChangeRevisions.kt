@@ -356,6 +356,12 @@ private val DESKTOP_CHANGE_TABLES =
     ),
     DesktopChangeTable("monitor_ci_cycles", PHASE_TOPICS, keys = column(WORKFLOW_ID), installedLater = true),
     DesktopChangeTable(
+      "verify_criterion_resolutions",
+      PHASE_TOPICS,
+      keys = column(WORKFLOW_ID),
+      installedLater = true,
+    ),
+    DesktopChangeTable(
       AgentBuildRunsKeys.TABLE,
       DesktopReadSchema.TOPICS,
       keys = { row ->

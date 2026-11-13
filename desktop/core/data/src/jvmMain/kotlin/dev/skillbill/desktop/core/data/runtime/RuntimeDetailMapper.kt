@@ -550,7 +550,7 @@ private fun RuntimeAssessmentVerification.toDomain(): GoalAssessmentVerification
   RuntimeAssessmentVerification.NOT_REQUIRED -> GoalAssessmentVerification.NotRequired
 }
 
-private fun RuntimeReviewFindingStatus.toDomain(): ReviewFindingStatus = when (this) {
+internal fun RuntimeReviewFindingStatus.toDomain(): ReviewFindingStatus = when (this) {
   RuntimeReviewFindingStatus.OPEN -> ReviewFindingStatus.Open
   RuntimeReviewFindingStatus.FIXED -> ReviewFindingStatus.Fixed
   RuntimeReviewFindingStatus.ACCEPTED -> ReviewFindingStatus.Accepted
