@@ -124,7 +124,7 @@ Resolve the effective spec-source mode with the runtime, which encapsulates the 
 `service: arg > config spec_type > local` and loud-fails on a malformed `.skill-bill/config.yaml`:
 
 ```bash
-skill-bill config resolve-spec-type --arg <service-arg-or-empty>
+sona config resolve-spec-type --arg <service-arg-or-empty>
 ```
 
 - Pass the value after `service:` as `--arg` (for example `--arg linear` or `--arg local`).
@@ -292,7 +292,7 @@ For decomposed goals, the runtime creates or amends the active subtask commit be
 Return the next command as:
 
 ```bash
-skill-bill goal <issue_key>
+sona goal <issue_key>
 ```
 
 ## Handoff Contract Inputs

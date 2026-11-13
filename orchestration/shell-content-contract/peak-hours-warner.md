@@ -1,13 +1,12 @@
 # Peak-Hours Warner
 
-This sidecar applies to `/skill-bill` and the feature-task runtime launch
+This sidecar applies to `/sona` and the feature-task runtime launch
 surface.
 
 After any required update check and before intake, confirmation, workflow open,
 or child continuation, read the optional peak-hours operator config from the
-machine-global config at the default skill-bill config file under the user config
-directory (or the
-`SKILL_BILL_CONFIG_PATH` override).
+machine-global config at `$HOME/.config/skill-bill/config.json`, or the path set by
+`SKILL_BILL_CONFIG_PATH`.
 
 If the config file is absent, or if it does not contain a `peak_hours` section,
 skip this warning silently. Do not print a notice, infer fallback defaults, or

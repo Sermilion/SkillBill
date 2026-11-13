@@ -696,7 +696,54 @@ LAUNCHER="$FAKE_HOME/.local/bin/sona"
 assert_file_exists "launcher exists" "$LAUNCHER"
 assert_file_exists "legacy launcher remains available" "$FAKE_HOME/.local/bin/skill-bill"
 assert_file_exists "Sona MCP launcher is published" "$FAKE_HOME/.local/bin/sona-mcp"
-assert_file_exists "legacy MCP launcher remains available" "$FAKE_HOME/.local/bin/skill-bill-mcp"
+assert_file_absent "obsolete legacy MCP launcher is removed" "$FAKE_HOME/.local/bin/skill-bill-mcp"
+
+LEGACY_RUNTIME="$FAKE_HOME/.skill-bill/runtime/runtime-cli/bin/runtime-cli"
+LEGACY_RUNTIME_BACKUP="$FAKE_HOME/runtime-cli.backup"
+LEGACY_CALL_LOG="$FAKE_HOME/runtime-calls.log"
+LEGACY_SENTINEL="$FAKE_HOME/legacy-argument-sentinel"
+LEGACY_NOTICE_EXPECTED="$FAKE_HOME/legacy-expected"
+LEGACY_STDOUT="$FAKE_HOME/legacy-stdout"
+LEGACY_STDERR="$FAKE_HOME/legacy-stderr"
+printf '%s\n' 'skill-bill has been renamed to sona. Run sona instead.' > "$LEGACY_NOTICE_EXPECTED"
+mv "$LEGACY_RUNTIME" "$LEGACY_RUNTIME_BACKUP"
+legacy_args_array=()
+for legacy_runtime_mode in absent trap; do
+  if [[ "$legacy_runtime_mode" == trap ]]; then
+    cat > "$LEGACY_RUNTIME" <<'TRAP'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$SKILL_BILL_TEST_LEGACY_CALL_LOG"
+TRAP
+    chmod +x "$LEGACY_RUNTIME"
+  fi
+  for legacy_case in empty help version update goal phase operation arbitrary; do
+    case "$legacy_case" in
+      empty) legacy_args_array=() ;;
+      help) legacy_args_array=(--help) ;;
+      version) legacy_args_array=(--version) ;;
+      update) legacy_args_array=(update --release 'v 1') ;;
+      goal) legacy_args_array=(goal SONA-5) ;;
+      phase) legacy_args_array=(phase implement) ;;
+      operation) legacy_args_array=(operation verify) ;;
+      arbitrary) legacy_args_array=('$(touch "$LEGACY_SENTINEL")' 'two words') ;;
+    esac
+    legacy_status=0
+    SKILL_BILL_TEST_LEGACY_CALL_LOG="$LEGACY_CALL_LOG" LEGACY_SENTINEL="$LEGACY_SENTINEL" \
+      "$FAKE_HOME/.local/bin/skill-bill" "${legacy_args_array[@]+"${legacy_args_array[@]}"}" \
+      >"$LEGACY_STDOUT" 2>"$LEGACY_STDERR" || legacy_status=$?
+    [[ "$legacy_status" -eq 0 ]] || fail "legacy launcher returned $legacy_status for $legacy_case with $legacy_runtime_mode runtime"
+    cmp "$LEGACY_NOTICE_EXPECTED" "$LEGACY_STDOUT" || fail "legacy launcher output changed for $legacy_case with $legacy_runtime_mode runtime"
+    [[ ! -s "$LEGACY_STDERR" ]] || fail "legacy launcher wrote stderr for $legacy_case with $legacy_runtime_mode runtime"
+  done
+  [[ ! -e "$LEGACY_CALL_LOG" ]] || fail "legacy launcher called the runtime"
+  [[ ! -e "$LEGACY_SENTINEL" ]] || fail "legacy launcher evaluated arbitrary arguments"
+  if [[ "$legacy_runtime_mode" == absent ]]; then
+    [[ ! -e "$LEGACY_RUNTIME" ]] || fail "legacy launcher created a runtime"
+  fi
+done
+rm -f "$LEGACY_RUNTIME"
+mv "$LEGACY_RUNTIME_BACKUP" "$LEGACY_RUNTIME"
+pass "legacy launcher prints a fixed notice and exits 0 without runtime calls or argument effects"
 
 LAUNCHER_VERSION="$(HOME="$FAKE_HOME" "$LAUNCHER" --home "$FAKE_HOME" version 2>/dev/null || true)"
 if [[ "$LAUNCHER_VERSION" == *"skill-bill"* ]]; then
@@ -948,8 +995,10 @@ for state_file in "${STATE_FILES[@]}"; do
   printf 'retained data for %s\n' "$state_file" > "$STATE_FIXTURE/$state_file"
 done
 cp -R "$STATE_FIXTURE/." "$FAKE_HOME/.skill-bill/"
+ln -s "$FAKE_HOME/.skill-bill/runtime/runtime-mcp/bin/runtime-mcp" "$FAKE_HOME/.local/bin/skill-bill-mcp"
 for install_attempt in 1 2; do
   run_install "$FAKE_HOME"
+  [[ ! -e "$FAKE_HOME/.local/bin/skill-bill-mcp" && ! -L "$FAKE_HOME/.local/bin/skill-bill-mcp" ]] || fail "reinstall $install_attempt retained the owned legacy MCP link"
   for state_file in "${STATE_FILES[@]}"; do
     cmp "$STATE_FIXTURE/$state_file" "$FAKE_HOME/.skill-bill/$state_file" || fail "reinstall $install_attempt changed $state_file"
   done
@@ -988,6 +1037,7 @@ SHIM
 chmod +x "$PUBLICATION_SHIM/mv"
 printf 'unrelated bytes\n' > "$FAKE_HOME/.local/bin/unrelated-entry"
 ln -s "$FAKE_HOME/.local/bin/unrelated-entry" "$FAKE_HOME/.local/bin/unrelated-link"
+printf 'keep this file\n' > "$FAKE_HOME/.local/bin/skill-bill-mcp"
 PUBLICATION_STATUS=0
 PUBLICATION_OUTPUT="$(run_install "$FAKE_HOME" "PATH=$PUBLICATION_SHIM:$PATH" "SKILL_BILL_TEST_SYSTEM_MV=$SYSTEM_MV" "SKILL_BILL_TEST_MIGRATION_MARKER=$PUBLICATION_SHIM/prepared")" || PUBLICATION_STATUS=$?
 [[ "$PUBLICATION_STATUS" -ne 0 && "$PUBLICATION_OUTPUT" == *"Launcher publication failed"* ]] || fail "publication failure was not reported"
@@ -1002,6 +1052,7 @@ run_install "$FAKE_HOME"
 [[ "$(cat "$FAKE_HOME/.local/bin/unrelated-entry")" == 'unrelated bytes' ]] || fail "retry changed unrelated bytes"
 [[ "$(readlink "$FAKE_HOME/.local/bin/unrelated-link")" == "$FAKE_HOME/.local/bin/unrelated-entry" ]] || fail "retry changed unrelated target"
 [[ -L "$FAKE_HOME/.local/bin/sona-mcp" ]] || fail "retry did not publish MCP entry"
+[[ "$(cat "$FAKE_HOME/.local/bin/skill-bill-mcp")" == 'keep this file' ]] || fail "retry removed an unrelated legacy MCP path"
 "$FAKE_HOME/.local/bin/sona" version >/dev/null || fail "retry did not publish a working CLI"
 for state_file in "${STATE_FILES[@]}"; do
   cmp "$STATE_FIXTURE/$state_file" "$FAKE_HOME/.skill-bill/$state_file" || fail "retry changed $state_file"

@@ -18,7 +18,7 @@ Put every temporary copy, file, or directory this session creates under `$TMPDIR
 that directory and deletes it when the session ends. Never create them under `~/.cache`, the
 skill-bill state directory, or beside the checkout.
 
-Do not recurse into `skill-bill phase validation`. Keep repairing in this session.
+Do not recurse into `sona phase validation`. Keep repairing in this session.
 Name the checks you ran and how each ended. If discovery finds no applicable commands, print a warning and complete the step.
 Do not treat unreadable configuration or failed discovery as an empty check list.
 

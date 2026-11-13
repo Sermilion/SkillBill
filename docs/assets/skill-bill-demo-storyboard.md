@@ -1,7 +1,7 @@
-# Skill Bill demo storyboard — `/skill-bill` (spec → PR)
+# Skill Bill demo storyboard — `/sona` (spec → PR)
 
 This is the shot-by-shot plan for the front-door demo. It captures **one** concrete
-flow: running `/skill-bill` against a small spec and watching it walk
+flow: running `/sona` against a small spec and watching it walk
 all the way from a design doc to a merged-ready PR, with durable workflow state and
 telemetry visible along the way.
 
@@ -19,12 +19,12 @@ and swapped in for the static placeholder
 
 | # | Time | Scene | On-screen action | Caption / overlay text |
 |---|------|-------|------------------|------------------------|
-| 1 | 0:00–0:02 | Clean terminal in the cloned repo | Cursor blinking at an empty prompt; repo name visible in the title bar | `skill-bill` |
+| 1 | 0:00–0:02 | Clean terminal in the cloned repo | Cursor blinking at an empty prompt; repo name visible in the title bar | `sona` |
 | 2 | 0:02–0:05 | Show the spec | `bat spec.md` (or open it) revealing a short feature spec with acceptance criteria | "Start with a spec." |
-| 3 | 0:05–0:07 | Invoke the workflow | Type and run `/skill-bill spec.md` in the agent | "One command." |
+| 3 | 0:05–0:07 | Invoke the workflow | Type and run `/sona spec.md` in the agent | "One command." |
 | 4 | 0:07–0:11 | Phase ladder | Phase lines stream in: assess → branch → pre-plan → plan → implement → review → audit → quality-check (fast-forward the slow gaps) | "Each phase runs in its own subagent." |
-| 5 | 0:11–0:14 | Durable state | A line confirming the runtime's durable workflow update at a phase boundary; briefly show `skill-bill feature-task status` or `skill-bill goal status` | "Durable state — crash anywhere, resume cleanly." |
-| 6 | 0:14–0:17 | Telemetry tree | Show the parent/child telemetry rollup (e.g. `skill-bill feature-task-stats` or `skill-bill goal-stats`) | "Structured telemetry, parent → child." |
+| 5 | 0:11–0:14 | Durable state | A line confirming the runtime's durable workflow update at a phase boundary; briefly show `sona feature-task status` or `sona goal status` | "Durable state — crash anywhere, resume cleanly." |
+| 6 | 0:14–0:17 | Telemetry tree | Show the parent/child telemetry rollup (e.g. `sona feature-task-stats` or `sona goal-stats`) | "Structured telemetry, parent → child." |
 | 7 | 0:17–0:21 | PR handoff | Generated PR title + description + QA steps printed; "PR ready" line | "Spec → merged-ready PR." |
 | 8 | 0:21–0:24 | Logo rest frame | Fade to the Skill Bill hero mark | "Skill Bill" |
 
