@@ -39,9 +39,9 @@ import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
+import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
-import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeFailureDisposition
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationFailureSubject
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateProgress
 import skillbill.workflow.taskruntime.model.validation.ValidationGateRunOutcome
@@ -101,7 +101,7 @@ class FeatureTaskRuntimeBuildGateCoordinatorCycleTest {
         }
       val recorded = mutableListOf<FeatureTaskRuntimeValidationGateProgress>()
 
-      executeOrderedBuild(declaration, runner, request, admitted, recorded)
+      executeOrderedBuild(runner, request, admitted, recorded)
 
       val progress = recorded.last()
       assertEquals(2, runner.calls)
@@ -170,7 +170,6 @@ class FeatureTaskRuntimeBuildGateCoordinatorCycleTest {
       val recorded = mutableListOf<FeatureTaskRuntimeValidationGateProgress>()
 
       executeOrderedBuild(
-        declaration,
         runner,
         request,
         admitted,
@@ -488,7 +487,7 @@ class FeatureTaskRuntimeBuildGateCoordinatorCycleTest {
           ),
         )
       val recorded = mutableListOf<FeatureTaskRuntimeValidationGateProgress>()
-      executeOrderedBuild(declaration, runner, request, admitted, recorded)
+      executeOrderedBuild(runner, request, admitted, recorded)
       assertOrderedBuildDispatch(runner, recorded)
     } finally {
       root.toFile().deleteRecursively()
@@ -524,7 +523,6 @@ class FeatureTaskRuntimeBuildGateCoordinatorCycleTest {
   ).frozen()
 
   private fun executeOrderedBuild(
-    declaration: ValidationGateDeclaration,
     runner: ValidationGateRunner,
     request: FeatureTaskRuntimeRunRequest,
     admitted: AdmittedFeatureTaskRuntimeExecution?,
@@ -535,7 +533,7 @@ class FeatureTaskRuntimeBuildGateCoordinatorCycleTest {
       },
   ) {
     buildFeatureTaskRuntimeBuildGateCoordinator(
-      declaredResolver(declaration),
+      declaredResolver(declarationWithBuild()),
       runner,
       repoLocalConfig(),
       NoopRuntimeDiagnostics,

@@ -1,7 +1,6 @@
 package skillbill.engine.featuretask.slot.attempt
 
 import skillbill.application.decomposition.baseBranch
-import skillbill.contracts.config.projectchecks.ProjectCheckCommandSnapshot
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.lifecycle.branch.baseBranchOrDefault
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairRunState

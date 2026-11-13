@@ -1,4 +1,4 @@
-package skillbill.engine.featuretask.slot.qualitygate
+package skillbill.engine.featuretask.validation.projectchecks
 
 import skillbill.contracts.config.projectchecks.ProjectCheckCommand
 import kotlin.test.Test

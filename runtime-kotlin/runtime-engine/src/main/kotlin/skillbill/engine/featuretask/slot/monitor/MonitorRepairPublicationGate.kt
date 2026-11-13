@@ -2,13 +2,14 @@ package skillbill.engine.featuretask.slot.monitor
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.config.projectchecks.ProjectCheckCommand
+import skillbill.contracts.config.projectchecks.ProjectCheckCommandSnapshot
 import skillbill.engine.featuretask.lifecycle.branch.baseBranchOrDefault
 import skillbill.engine.featuretask.model.execution.ValidationGateCyclePhase
 import skillbill.engine.featuretask.model.phase.ValidationCommandLaunchTransport
 import skillbill.engine.featuretask.slot.PhaseStepOutputCheck
-import skillbill.engine.featuretask.slot.qualitygate.QualityGateCommandRendering
 import skillbill.engine.featuretask.validation.FeatureTaskRuntimeBuildGateProjectConfig
 import skillbill.engine.featuretask.validation.SavedProjectConfigRun
+import skillbill.engine.featuretask.validation.projectchecks.QualityGateCommandRendering
 import skillbill.error.core.catchingNonCancellation
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.validation.ValidationGateRunner
@@ -68,60 +69,66 @@ public class RuntimeMonitorRepairPublicationGate(
 
   private fun savedValidationVerdict(request: MonitorRepairPublicationGateRequest): MonitorRepairPublicationVerdict {
     val transport = request.validationTransport
-    val snapshot = when (transport) {
-      is ValidationCommandLaunchTransport.Commands -> transport.snapshot
-      is ValidationCommandLaunchTransport.KnownEmpty -> transport.snapshot
-      is ValidationCommandLaunchTransport.LegacyCommands, null -> null
-    }
-    val commands = when (transport) {
-      is ValidationCommandLaunchTransport.Commands -> transport.snapshot.validationCommandList
-      is ValidationCommandLaunchTransport.KnownEmpty -> emptyList()
-      is ValidationCommandLaunchTransport.LegacyCommands -> transport.postRepairCommands
-      null -> emptyList()
-    }
+    val snapshot =
+      when (transport) {
+        is ValidationCommandLaunchTransport.Commands -> transport.snapshot
+        is ValidationCommandLaunchTransport.KnownEmpty -> transport.snapshot
+        is ValidationCommandLaunchTransport.LegacyCommands, null -> null
+      }
+    val commands =
+      when (transport) {
+        is ValidationCommandLaunchTransport.Commands -> transport.snapshot.validationCommandList
+        is ValidationCommandLaunchTransport.KnownEmpty -> emptyList()
+        is ValidationCommandLaunchTransport.LegacyCommands -> transport.postRepairCommands
+        null -> emptyList()
+      }
     val category = snapshot?.validationCommands
     return when {
       transport == null ->
         refused(
-          "Monitor repair publication requires an accepted validation command source for this repair cycle.",
+          "Monitor repair publication requires an accepted validation command snapshot or legacy command source " +
+            "for this repair cycle.",
         )
-      (transport is ValidationCommandLaunchTransport.Commands ||
-        transport is ValidationCommandLaunchTransport.KnownEmpty) && category == null ->
+      snapshot != null && category == null ->
         refused("Required validation commands were not frozen for this repair or validation launch.")
-      transport is ValidationCommandLaunchTransport.KnownEmpty || commands.isEmpty() -> {
+      commands.isEmpty() -> {
         diagnostics.warning(
           "seam=monitor_repair_full_gate value_expected=saved_validation_commands value_actual=known_empty " +
             "cause=explicit_empty_validation repo_root=${request.repoRoot}",
         )
         MonitorRepairPublicationVerdict.Publishable
       }
-      else ->
-        catchingNonCancellation {
-          FeatureTaskRuntimeBuildGateProjectConfig.runSavedCommands(
-            runner,
-            request.repoRoot,
-            snapshot,
-            commands,
-            ValidationGateCyclePhase.POST_REPAIR_VERIFY,
-            null,
-          )
-        }.fold(
-          onSuccess = { result ->
-            when (result) {
-              is SavedProjectConfigRun.Completed -> aggregateVerdict(result.result, commands)
-              is SavedProjectConfigRun.LaunchBlocked ->
-                refused(launchBlockedReason(result.failure, result.findings))
-            }
-          },
-          onFailure = { error ->
-            refused(
-              "The runtime could not run the saved validation commands before publishing the monitor repair: " +
-                (error.message ?: error.javaClass.simpleName),
-            )
-          },
-        )
+      else -> runValidationCommands(request.repoRoot, snapshot, commands)
     }
   }
+
+  private fun runValidationCommands(
+    repoRoot: Path,
+    snapshot: ProjectCheckCommandSnapshot?,
+    commands: List<ProjectCheckCommand>,
+  ): MonitorRepairPublicationVerdict =
+    catchingNonCancellation {
+      FeatureTaskRuntimeBuildGateProjectConfig.runSavedCommands(
+        runner,
+        repoRoot,
+        snapshot,
+        commands,
+        ValidationGateCyclePhase.POST_REPAIR_VERIFY,
+      )
+    }.fold(
+      onSuccess = { result ->
+        when (result) {
+          is SavedProjectConfigRun.Completed -> aggregateVerdict(result.result, commands)
+          is SavedProjectConfigRun.LaunchBlocked -> refused(launchBlockedReason(result.failure, result.findings))
+        }
+      },
+      onFailure = { error ->
+        refused(
+          "The runtime could not run the saved validation commands before publishing the monitor repair: " +
+            (error.message ?: error.javaClass.simpleName),
+        )
+      },
+    )
 
   private fun launchBlockedReason(
     failure: Throwable,

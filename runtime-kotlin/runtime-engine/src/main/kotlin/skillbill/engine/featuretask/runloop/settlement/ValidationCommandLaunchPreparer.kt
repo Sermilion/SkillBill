@@ -2,13 +2,14 @@ package skillbill.engine.featuretask.runloop.settlement
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.config.projectchecks.ProjectCheckCategory
+import skillbill.contracts.config.projectchecks.ProjectCheckCommand
 import skillbill.contracts.config.projectchecks.ProjectCheckCommandSnapshot
 import skillbill.contracts.config.projectchecks.wireValue
-import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
+import skillbill.engine.featuretask.lifecycle.execution.executionPlanSupportsProjectCheckCommands
 import skillbill.engine.featuretask.model.execution.ValidationGateCyclePhase
 import skillbill.engine.featuretask.model.phase.ValidationCommandLaunchTransport
-import skillbill.contracts.config.projectchecks.ProjectCheckCommand
+import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.qualitygate.RuntimeQualityGateCycles
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteKind
@@ -18,6 +19,7 @@ import skillbill.engine.featuretask.validation.projectchecks.ProjectCheckCommand
 import skillbill.engine.featuretask.validation.projectchecks.ProjectCheckCommandResolverRequest
 import skillbill.engine.featuretask.validation.projectchecks.ProjectCheckCommandSnapshotAdmission
 import skillbill.engine.featuretask.validation.projectchecks.ProjectCheckConfigAccessSnapshot
+import skillbill.engine.featuretask.validation.projectchecks.QualityGateCommandRendering
 import skillbill.ports.config.RepoLocalConfigPort
 import skillbill.ports.config.model.ReadRepoLocalConfigRequest
 import skillbill.ports.db.DatabaseSessionFactory
@@ -36,7 +38,7 @@ public class ValidationCommandLaunchPreparer(
   private val gitOperations: WorkflowGitOperations,
   private val repoLocalConfig: RepoLocalConfigPort,
   private val diagnostics: RuntimeDiagnostics,
-  private val executionPlans: FeatureTaskRuntimeExecutionPlanResolver? = null,
+  private val executionPlans: FeatureTaskRuntimeExecutionPlanResolver,
 ) {
   internal fun prepareValidation(
     run: PhaseRun,
@@ -67,17 +69,19 @@ public class ValidationCommandLaunchPreparer(
     attempt: Int,
   ): Pair<RequiredPhaseWrite, ValidationCommandLaunchTransport?> {
     val legacy = admittedLegacyTransport(run)
-    load(identity)?.let { saved ->
-      if (legacy != null && (saved.validationCommands?.commands != legacy.initialCommands)) {
-        return rejection(
-          run,
-          attempt,
-          "Saved monitor validation commands conflict with the accepted legacy gate. Restore the recorded snapshot " +
-            "or recover the execution plan before retrying this repair.",
-        )
+    val saved = load(identity)
+    if (saved != null) {
+      return when {
+        legacy != null && saved.validationCommands?.commands != legacy.initialCommands ->
+          rejection(
+            run,
+            attempt,
+            "Saved monitor validation commands conflict with the accepted legacy gate. Restore the recorded snapshot " +
+              "or recover the execution plan before retrying this repair.",
+          ).let { (write, snapshot) -> write to snapshot?.let(::transport) }
+        legacy != null -> RequiredPhaseWrite.Acknowledged to legacy
+        else -> RequiredPhaseWrite.Acknowledged to transport(saved)
       }
-      if (legacy != null) return RequiredPhaseWrite.Acknowledged to legacy
-      return RequiredPhaseWrite.Acknowledged to transport(saved)
     }
     acceptedValidationTransport(run)?.let { saved ->
       return persist(identity, requireNotNull(saved.snapshotOrNull()), run, attempt)
@@ -92,10 +96,11 @@ public class ValidationCommandLaunchPreparer(
         "Monitor repair requires a validation command configuration.",
         MONITOR_LAUNCH_SEAM,
       )
-    if (write is RequiredPhaseWrite.Rejected || frozen == null) {
-      return write to frozen?.let(::transport)
+    return if (write is RequiredPhaseWrite.Rejected || frozen == null) {
+      write to frozen?.let(::transport)
+    } else {
+      persist(identity, frozen, run, attempt).let { (write, snapshot) -> write to snapshot?.let(::transport) }
     }
-    return persist(identity, frozen, run, attempt).let { (write, snapshot) -> write to snapshot?.let(::transport) }
   }
 
   private fun acceptedValidationTransport(run: PhaseRun): ValidationCommandLaunchTransport? =
@@ -104,24 +109,35 @@ public class ValidationCommandLaunchPreparer(
   private fun admittedLegacyTransport(run: PhaseRun): ValidationCommandLaunchTransport.LegacyCommands? {
     val acceptedPlan = run.request.acceptedGoalQualityExecutionPlan
     val admitted = run.request.admittedExecution
-    val inputs = when {
-      acceptedPlan != null ->
-        requireNotNull(executionPlans) { "accepted goal-quality legacy commands require recorded plan resolution" }
-          .resolveRecordedInputs(run.request.repoRoot, acceptedPlan)
-      admitted != null -> admitted.effectiveInputs
-      else -> return null
-    }
+    val plan = acceptedPlan ?: admitted?.plan
+    if (plan == null || executionPlanSupportsProjectCheckCommands(plan.sourceContractVersion)) return null
+    val inputs =
+      if (acceptedPlan != null) {
+        executionPlans.resolveRecordedInputs(run.request.repoRoot, acceptedPlan)
+      } else {
+        requireNotNull(admitted).effectiveInputs
+      }
     val initial = inputs.commandArgv(ValidationGateCyclePhase.INITIAL_DISCOVERY) ?: return null
     val postRepair = inputs.commandArgv(ValidationGateCyclePhase.POST_REPAIR_VERIFY) ?: initial
     val initialCommands = listOf(ProjectCheckCommand(initial, "."))
-    return FeatureTaskRuntimeRunLoopValidationScope.legacyValidationLaunchTransport(
+    return ValidationCommandLaunchTransport.LegacyCommands(
       initialCommands,
       listOf(ProjectCheckCommand(postRepair, ".")),
+      QualityGateCommandRendering.renderCommands(initialCommands),
     )
   }
 
-  private fun transport(snapshot: ProjectCheckCommandSnapshot): ValidationCommandLaunchTransport =
-    FeatureTaskRuntimeRunLoopValidationScope.validationLaunchTransport(snapshot)
+  private fun transport(snapshot: ProjectCheckCommandSnapshot): ValidationCommandLaunchTransport {
+    val category =
+      requireNotNull(snapshot.validationCommands) {
+        "validation launch transport requires a frozen validation category."
+      }
+    return if (category.commands.isEmpty()) {
+      ValidationCommandLaunchTransport.KnownEmpty(snapshot)
+    } else {
+      ValidationCommandLaunchTransport.Commands(snapshot, QualityGateCommandRendering.renderCommands(category.commands))
+    }
+  }
 
   private fun ValidationCommandLaunchTransport.snapshotOrNull(): ProjectCheckCommandSnapshot? =
     when (this) {

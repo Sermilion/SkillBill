@@ -120,7 +120,9 @@ public interface PhaseQualityGateStepBinding : PhaseAcceptedStepExecution {
     call: PhaseStepCall,
   ): PhaseOutcome
 
-  public fun prepareValidationSnapshotForLaunch(run: PhaseRun): Pair<RequiredPhaseWrite, ValidationCommandLaunchTransport?>
+  public fun prepareValidationSnapshotForLaunch(
+    run: PhaseRun,
+  ): Pair<RequiredPhaseWrite, ValidationCommandLaunchTransport?>
 }
 
 public interface PhaseCommitStepBinding : PhaseAcceptedStepExecution {

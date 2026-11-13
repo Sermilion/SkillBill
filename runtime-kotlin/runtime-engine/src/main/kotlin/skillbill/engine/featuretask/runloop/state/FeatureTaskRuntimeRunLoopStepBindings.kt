@@ -2,7 +2,6 @@ package skillbill.engine.featuretask.runloop.state
 
 import skillbill.application.diagnostics.RejectedOutputDiagnosticService
 import skillbill.application.review.model.ParallelCodeReviewResult
-import skillbill.contracts.config.projectchecks.ProjectCheckCommandSnapshot
 import skillbill.engine.featuretask.lifecycle.checkpoint.FeatureTaskRuntimeCheckpointMessage
 import skillbill.engine.featuretask.lifecycle.continuation.GoalReviewPassCompletionRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBriefing

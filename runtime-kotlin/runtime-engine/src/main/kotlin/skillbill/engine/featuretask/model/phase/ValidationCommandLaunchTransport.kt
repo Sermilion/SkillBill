@@ -1,7 +1,7 @@
 package skillbill.engine.featuretask.model.phase
 
-import skillbill.contracts.config.projectchecks.ProjectCheckCommandSnapshot
 import skillbill.contracts.config.projectchecks.ProjectCheckCommand
+import skillbill.contracts.config.projectchecks.ProjectCheckCommandSnapshot
 
 public sealed class ValidationCommandLaunchTransport {
   public data class Commands(

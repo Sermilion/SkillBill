@@ -3,11 +3,10 @@ package skillbill.engine.featuretask.runloop.settlement
 import skillbill.contracts.config.projectchecks.ProjectCheckCommand
 import skillbill.contracts.config.projectchecks.ProjectCheckCommandSnapshot
 import skillbill.engine.featuretask.model.execution.ValidationGateCyclePhase
-import skillbill.engine.featuretask.model.phase.ValidationCommandLaunchTransport
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.core.RepositoryCheckpointResolutionArgs
-import skillbill.engine.featuretask.slot.qualitygate.QualityGateCommandRendering
 import skillbill.engine.featuretask.validation.model.ValidationGateResolution
+import skillbill.engine.featuretask.validation.projectchecks.QualityGateCommandRendering
 import skillbill.error.featuretask.PhaseValidationScopeError
 import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 
@@ -33,26 +32,6 @@ internal object FeatureTaskRuntimeRunLoopValidationScope {
 
   internal fun packValidationCommand(snapshot: ProjectCheckCommandSnapshot): String? =
     snapshot.validationCommandList.takeIf { it.isNotEmpty() }?.let(::renderSavedCommands)
-
-  internal fun validationLaunchTransport(snapshot: ProjectCheckCommandSnapshot): ValidationCommandLaunchTransport {
-    val category = snapshot.validationCommands
-    require(category != null) { "validation launch transport requires a frozen validation category." }
-    return if (category.commands.isEmpty()) {
-      ValidationCommandLaunchTransport.KnownEmpty(snapshot)
-    } else {
-      ValidationCommandLaunchTransport.Commands(snapshot, renderSavedCommands(category.commands))
-    }
-  }
-
-  internal fun legacyValidationLaunchTransport(
-    initialCommands: List<ProjectCheckCommand>,
-    postRepairCommands: List<ProjectCheckCommand>,
-  ): ValidationCommandLaunchTransport.LegacyCommands =
-    ValidationCommandLaunchTransport.LegacyCommands(
-      initialCommands,
-      postRepairCommands,
-      renderSavedCommands(initialCommands),
-    )
 
   internal fun admittedValidationSnapshot(run: PhaseRun): ProjectCheckCommandSnapshot? =
     run.request.acceptedGoalQualityExecutionPlan?.projectCheckCommands?.takeIf { it.validationCommands != null }

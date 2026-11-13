@@ -1603,15 +1603,33 @@ private fun defaultQualityGateCycles(): RuntimeQualityGateCycles {
 fun validationCommandLaunchPreparerForTests(
   gitOperations: WorkflowGitOperations,
   qualityGateCycles: RuntimeQualityGateCycles,
-): ValidationCommandLaunchPreparer =
-  ValidationCommandLaunchPreparer(
-    RuntimeFakeDatabaseSessionFactory(InMemoryRuntimeWorkflowRepository()),
-    projectCheckCommandResolverForTests(),
+): ValidationCommandLaunchPreparer {
+  val database = RuntimeFakeDatabaseSessionFactory(InMemoryRuntimeWorkflowRepository())
+  val commands = projectCheckCommandResolverForTests()
+  val fixture = ExecutionPlanAdmissionFixture()
+  val executionPlans =
+    FeatureTaskRuntimeExecutionPlanResolver(
+      fixture.strategies,
+      fixture.codec,
+      fixture.validator,
+      ValidationGateResolver { listOf(kotlinPackWithValidationGate()) },
+      gitOperations,
+      defaultRepoLocalConfigPort(),
+      database,
+      fixture.compatibility,
+      commands,
+      NoopRuntimeDiagnostics,
+    )
+  return ValidationCommandLaunchPreparer(
+    database,
+    commands,
     qualityGateCycles,
     gitOperations,
     defaultRepoLocalConfigPort(),
     NoopRuntimeDiagnostics,
+    executionPlans,
   )
+}
 
 val RUNNER_TEST_STORE_ROOT: Path = Files.createTempDirectory("skillbill-runner-project-store")
 

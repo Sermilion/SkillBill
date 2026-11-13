@@ -192,3 +192,5 @@ ledger expects must be regenerated in the subtask that the ledger names.
   changes only those four output files.
 - SKILL-514 (task-runtime `timed_out`): the workflow state contract is 0.4, so both goal-child
   `workflow-snapshot.json` files record `contract_version` 0.4. Every other file is unchanged.
+- SONA-17 records each saved validation command with its working directory and quoted argv.
+  Regeneration changes only `goal-child-validate/prompts/validate.txt`.

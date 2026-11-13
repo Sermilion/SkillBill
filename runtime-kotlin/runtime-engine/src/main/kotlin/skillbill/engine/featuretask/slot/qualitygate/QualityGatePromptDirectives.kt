@@ -2,6 +2,7 @@ package skillbill.engine.featuretask.slot.qualitygate
 
 import skillbill.engine.featuretask.model.phase.ValidationCommandLaunchTransport
 import skillbill.engine.featuretask.model.phase.ValidationFindingSetProjection
+import skillbill.engine.featuretask.validation.projectchecks.QualityGateCommandRendering
 
 private const val MACHINE_BUILD_SETTINGS_DIRECTIVE: String =
   "Run build tools with the machine's own settings and shared caches. Do not point a build tool at a " +
@@ -39,8 +40,11 @@ internal fun savedValidationAgentDirective(
     }
     is ValidationCommandLaunchTransport.LegacyCommands -> {
       val directive =
-        if (triage) validateGateTriagePhaseTask(transport.rendered)
-        else runtimeOwnedValidateAgentPhaseTask(transport.rendered)
+        if (triage) {
+          validateGateTriagePhaseTask(transport.rendered)
+        } else {
+          runtimeOwnedValidateAgentPhaseTask(transport.rendered)
+        }
       directive to false
     }
     null -> {
@@ -56,7 +60,7 @@ internal fun savedValidationAgentDirective(
 
 internal fun runtimeOwnedValidateAgentKnownEmptyPhaseTask(): String =
   "You are the validation agent for this step — do not spawn delegated subagents. " +
-    "The admitted validation command list is explicitly empty after completed discovery. " +
+    "The admitted saved validation command list is explicitly empty after completed discovery. " +
     "Do not run any validation commands or invent checks. " +
     MACHINE_BUILD_SETTINGS_DIRECTIVE +
     "Print a warning that no validation commands were found, then settle completed " +
@@ -66,7 +70,7 @@ internal fun runtimeOwnedValidateAgentKnownEmptyPhaseTask(): String =
 
 internal fun validateGateTriageKnownEmptyPhaseTask(): String =
   "You are triaging an unparseable validation gate failure blob before the first repair turn — do not spawn " +
-    "delegated subagents. The admitted validation command list is explicitly empty after completed discovery; " +
+    "delegated subagents. The admitted saved validation command list is explicitly empty after completed discovery; " +
     "there is no saved command boundary to triage beyond confirming the known-empty outcome. " +
     "Do not execute checks during triage. " +
     "Reply with a short prose repair plan only if the gate blob still implies actionable failures; " +
@@ -78,15 +82,15 @@ internal fun runtimeOwnedValidateAgentPhaseTask(packValidationCommand: String?):
   val gateLine =
     when {
       packValidationCommand.isNullOrBlank() ->
-        "Run only the admitted validation command list and its recorded working directories. " +
+        "Run only the admitted saved validation command list and its recorded working directories. " +
           rediscoveryPolicy
       else ->
-        "Run only the admitted validation command records below, in listed order and from each " +
+        "Run only the admitted saved validation command records below, in listed order and from each " +
           "recorded working directory:\n${QualityGateCommandRendering.markdownCodeBlock(packValidationCommand)} " +
           rediscoveryPolicy
     }
   return "You are the validation agent for this step — do not spawn delegated subagents. $gateLine " +
-    "Do not run commands outside the admitted validation command list. Every runnable command in that list " +
+    "Do not run commands outside the admitted saved validation command list. Every runnable command in that list " +
     "is allowed, regardless of executable. " +
     MACHINE_BUILD_SETTINGS_DIRECTIVE +
     "Never reuse another worktree's mutable state; the machine's shared tool caches are not worktree state. " +

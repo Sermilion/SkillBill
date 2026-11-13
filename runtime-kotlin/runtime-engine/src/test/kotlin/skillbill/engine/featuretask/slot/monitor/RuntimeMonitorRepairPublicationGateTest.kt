@@ -3,6 +3,7 @@ package skillbill.engine.featuretask.slot.monitor
 import skillbill.contracts.config.projectchecks.ProjectCheckCategoryConfig
 import skillbill.contracts.config.projectchecks.ProjectCheckCommand
 import skillbill.contracts.config.projectchecks.ProjectCheckCommandSnapshot
+import skillbill.engine.featuretask.model.phase.ValidationCommandLaunchTransport
 import skillbill.engine.featuretask.validation.ScriptedGateRunner
 import skillbill.engine.featuretask.validation.failedEmptyFindings
 import skillbill.engine.featuretask.validation.neverRunsGate
@@ -102,7 +103,7 @@ class RuntimeMonitorRepairPublicationGateTest {
     val verdict = gate(runner = ScriptedGateRunner(listOf(failed))).verify(request(repoRoot, publicationSnapshot()))
 
     val again = assertIs<MonitorRepairPublicationVerdict.RepairAgain>(verdict)
-    assertTrue("echo collect-all-full" in again.correction, again.correction)
+    assertTrue("argv: 'echo' 'collect-all-full'" in again.correction, again.correction)
     assertTrue("DatabaseMigrationsTest: expected 42 tables (Db.kt:7)" in again.correction, again.correction)
     assertTrue("BUILD FAILED in 3s" in again.correction, again.correction)
   }
@@ -266,7 +267,18 @@ class RuntimeMonitorRepairPublicationGateTest {
     repoRoot: Path,
     snapshot: ProjectCheckCommandSnapshot? = publicationSnapshot(),
     baseBranch: String? = "main",
-  ): MonitorRepairPublicationGateRequest = MonitorRepairPublicationGateRequest(repoRoot, baseBranch, snapshot)
+  ): MonitorRepairPublicationGateRequest =
+    MonitorRepairPublicationGateRequest(
+      repoRoot,
+      baseBranch,
+      snapshot?.let {
+        if (it.validationCommandList.isEmpty()) {
+          ValidationCommandLaunchTransport.KnownEmpty(it)
+        } else {
+          ValidationCommandLaunchTransport.Commands(it, "saved validation commands")
+        }
+      },
+    )
 
   private fun publicationSnapshot(vararg argv: List<String>): ProjectCheckCommandSnapshot {
     val commands =
