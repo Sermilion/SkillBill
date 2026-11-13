@@ -18,14 +18,14 @@ class ConfigPageInteractionTest {
   @OptIn(ExperimentalTestApi::class)
   fun `model agent tabs disable unsupported agents and select a supported agent`() = runComposeUiTest {
     val selected = mutableStateOf("claude")
-    val agents = listOf(ConfigAgent("junie", modelCapable = false), ConfigAgent("cursor", modelCapable = true))
+    val agents = listOf(ConfigAgent("retired-agent", modelCapable = false), ConfigAgent("cursor", modelCapable = true))
     setContent {
       SkillBillTheme(reducedMotion = false) {
         ModelAgentTabs(agents, selected.value, enabled = true) { selected.value = it }
       }
     }
 
-    onNodeWithContentDescription("junie").assertIsNotEnabled()
+    onNodeWithContentDescription("retired-agent").assertIsNotEnabled()
     onNodeWithContentDescription("cursor").performClick()
 
     runOnIdle { assertEquals("cursor", selected.value) }

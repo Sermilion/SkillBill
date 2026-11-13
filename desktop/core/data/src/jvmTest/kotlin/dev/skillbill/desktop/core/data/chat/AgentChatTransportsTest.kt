@@ -5,6 +5,8 @@ import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatFailure
 import dev.skillbill.desktop.core.domain.model.ChatImage
+import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
+import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
 import dev.skillbill.desktop.core.domain.model.CursorMcpDependency
 import dev.skillbill.desktop.core.testing.RecordingDiagnostics
 import kotlinx.coroutines.flow.Flow
@@ -48,7 +50,6 @@ class AgentChatTransportsTest {
     val transports = listOf(
       CodexChatTransport(host, launcher, store, RecordingDiagnostics()),
       CursorChatTransport(host, store, RecordingDiagnostics(), liveLauncher = launcher),
-      JunieChatTransport(host, store, RecordingDiagnostics(), liveLauncher = launcher),
       DevinChatTransport(host, store, RecordingDiagnostics(), liveLauncher = launcher),
     )
     for (transport in transports) {
@@ -64,13 +65,11 @@ class AgentChatTransportsTest {
   }
 
   @Test
-  fun `devin turns launch devin acp and replay earlier exchanges with the new message`() {
+  fun `devin turns launch devin acp and replay earlier chat lines with the new message`() {
     assertEquals(listOf("devin", "acp"), acpCommand(AcpProvider.Devin, null, null))
     assertEquals(listOf("devin", "acp", "--model", "swe-2-high"), acpCommand(AcpProvider.Devin, null, "swe-2-high"))
-    assertEquals(listOf("junie", "--acp"), acpCommand(AcpProvider.Junie, null, null))
-    assertEquals(listOf("junie", "--acp"), acpCommand(AcpProvider.Junie, null, "some-model"))
     assertEquals(AcpProvider.Devin.id, DevinChatTransport(host, store, RecordingDiagnostics(), liveLauncher = NoLaunch()).agentId)
-    val prompt = replayPrompt("", listOf(ChatExchange("first question", "first answer")), "next question")
+    val prompt = replayPrompt("", listOf(ChatHistoryLine(ChatHistoryRole.Operator, "first question"), ChatHistoryLine(ChatHistoryRole.Agent, "first answer")), "next question")
     assertTrue(prompt.indexOf("first answer") in 0 until prompt.indexOf("next question"))
   }
 

@@ -4,16 +4,16 @@ import dev.skillbill.desktop.core.common.Diagnostics
 import dev.skillbill.desktop.core.common.HostEnvironment
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatFailure
+import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
+import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
 import dev.skillbill.desktop.core.domain.model.ChatScope
 import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.onCompletion
-import kotlinx.coroutines.flow.onEach
+import skillbill.contracts.system.AgentHomeEnvironmentKeys
 import skillbill.infrastructure.launcher.process.cursor.AcpProvider
 import java.util.concurrent.ConcurrentHashMap
 
@@ -22,7 +22,7 @@ private const val PROMPT_LIMIT = 120_000
 
 /**
  * Runs each turn as one ACP process whose permission requests reach approval cards. Each turn opens a new ACP session
- * and sends the earlier turns of this chat, kept in [ChatStore], with the new message.
+ * and sends earlier conversation lines already saved in [ChatStore] with the new message.
  */
 abstract class FreshAcpChatTransport(
   private val host: HostEnvironment,
@@ -46,28 +46,27 @@ abstract class FreshAcpChatTransport(
     }
     val history = if (request.scope is ChatScope.NewTask) {
       store.newTaskHistory(request.sessionId)
-    } else if (request.firstTurn) emptyList() else store.exchanges(request.sessionId)
+    } else if (request.firstTurn) emptyList() else store.replayHistory(request.sessionId)
     val prompt = replayPrompt(scopeSystemPrompt(request.scope), history, request.prompt)
     val environment = host.variables + mapOf("HOME" to (host.variables["HOME"] ?: host.userHome))
-    val reply = StringBuilder()
     val job = currentCoroutineContext()[Job]
     if (job != null) turns[request.sessionId] = job
     try {
-      emitAll(
-        cursorAcpTurn(live, authority, store, diagnostics, host.variables["SHELL"], environment, request,
-          saved = null, binding = null, prompt = prompt, provider = provider).onEach { event ->
-          when (event) {
-            is ChatEvent.TextDelta -> reply.append(event.text)
-            ChatEvent.Completed ->
-              store.saveExchanges(request.sessionId, history + ChatExchange(request.prompt, reply.toString().trim()))
-            else -> Unit
-          }
-        }.onCompletion { cause ->
-          if (cause is CancellationException && reply.isNotBlank() && request.scope !is ChatScope.NewTask) {
-            store.saveExchanges(request.sessionId, history + ChatExchange(request.prompt, reply.toString().trim()))
-          }
+      emitAll(acpTurn(
+        live,
+        authority,
+        store,
+        diagnostics,
+        launchFactory = { dependency ->
+          acpTurnLaunch(provider, host.variables["SHELL"], environment, request, null, prompt, dependency)
         },
-      )
+        provider = provider,
+        profileIdentity = environment[AgentHomeEnvironmentKeys.CURSOR_CONFIG_DIR]
+          .takeIf { provider == AcpProvider.Cursor } ?: environment["HOME"].orEmpty(),
+        request = request,
+        saved = null,
+        binding = null,
+      ))
     } finally {
       if (job != null) turns.remove(request.sessionId, job)
     }
@@ -76,15 +75,19 @@ abstract class FreshAcpChatTransport(
   override fun end(sessionId: String) { turns.remove(sessionId)?.cancel(); deleteChatImages(sessionId) }
 }
 
-/** The scope, then as many of the latest exchanges as fit, then the new message. */
-internal fun replayPrompt(scope: String, history: List<ChatExchange>, prompt: String): String {
+/** The scope, then as much of the latest conversation history as fits, then the new message. */
+internal fun replayPrompt(scope: String, history: List<ChatHistoryLine>, prompt: String): String {
   val fixed = withScope(scope, prompt)
   var budget = PROMPT_LIMIT - fixed.length
-  val kept = history.asReversed().takeWhile { exchange ->
-    budget -= exchange.operator.length + exchange.agent.length + 32
+  val conversation = history.filter { it.role == ChatHistoryRole.Operator || it.role == ChatHistoryRole.Agent }
+  val kept = conversation.asReversed().takeWhile { line ->
+    budget -= line.text.length + 16
     budget >= 0
   }.asReversed()
   if (kept.isEmpty()) return fixed
-  val transcript = kept.joinToString("\n\n") { "Operator:\n${it.operator}\n\nYou:\n${it.agent}" }
+  val transcript = kept.joinToString("\n\n") {
+    val speaker = if (it.role == ChatHistoryRole.Operator) "Operator" else "You"
+    "$speaker:\n${it.text}"
+  }
   return withScope(scope, "Earlier in this chat:\n\n$transcript\n\n---\n\nThe operator's new message:\n\n$prompt")
 }

@@ -96,12 +96,12 @@ class ConfigPageStateTest {
   }
 
   @Test
-  fun junieCannotBeSelectedForModelDirectives() {
-    val agents = listOf(ConfigAgent("junie", modelCapable = false), ConfigAgent("cursor", modelCapable = true))
+  fun agentWithoutModelSupportCannotBeSelectedForModelDirectives() {
+    val agents = listOf(ConfigAgent("retired-agent", modelCapable = false), ConfigAgent("cursor", modelCapable = true))
 
     assertFalse(modelAgentSelectable(agents.first()))
     assertTrue(modelAgentSelectable(agents.last()))
-    assertEquals(null, modelAgentSelection("claude", "junie", agents, enabled = true))
+    assertEquals(null, modelAgentSelection("claude", "retired-agent", agents, enabled = true))
     assertEquals("cursor", modelAgentSelection("claude", "cursor", agents, enabled = true))
   }
 

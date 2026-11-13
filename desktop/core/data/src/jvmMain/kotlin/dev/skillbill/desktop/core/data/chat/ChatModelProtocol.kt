@@ -30,15 +30,6 @@ internal object ChatModelKeys {
   const val LIMIT = "limit"
   const val CLIENT_INFO = "clientInfo"
   const val VERSION = "version"
-  const val PROTOCOL_VERSION = "protocolVersion"
-  const val CLIENT_CAPABILITIES = "clientCapabilities"
-  const val CWD = "cwd"
-  const val MCP_SERVERS = "mcpServers"
-  const val AVAILABLE_MODELS = "availableModels"
-  const val MODEL_ID = "modelId"
-  const val CONFIG_OPTIONS = "configOptions"
-  const val CATEGORY = "category"
-  const val OPTIONS = "options"
 }
 
 internal fun modelRpc(id: Int, method: String, params: JsonObject) = buildJsonObject {
@@ -55,19 +46,6 @@ internal fun parseChatModels(entries: JsonArray, idKey: String, labelKey: String
     ChatModel(id, row.string(labelKey)?.takeIf(String::isNotBlank) ?: id)
   }
   return models.distinctBy { it.id }
-}
-
-internal fun acpChatModels(body: JsonObject): List<ChatModel>? {
-  val entries = body.obj(ChatModelKeys.MODELS)?.get(ChatModelKeys.AVAILABLE_MODELS) as? JsonArray
-  if (entries != null) return parseChatModels(entries, ChatModelKeys.MODEL_ID, ChatModelKeys.NAME)
-  val options = (body[ChatModelKeys.CONFIG_OPTIONS] as? JsonArray)?.filterIsInstance<JsonObject>()
-    ?.firstOrNull { it.string(ChatModelKeys.CATEGORY) == ChatModelKeys.MODEL }
-    ?.get(ChatModelKeys.OPTIONS) as? JsonArray ?: return null
-  fun flatten(rows: JsonArray): JsonArray = JsonArray(rows.flatMap { row ->
-    val nested = (row as? JsonObject)?.get(ChatModelKeys.OPTIONS) as? JsonArray
-    if (nested == null) listOf(row) else flatten(nested).toList()
-  })
-  return parseChatModels(flatten(options), ChatModelKeys.VALUE, ChatModelKeys.NAME)
 }
 
 internal fun cursorChatModels(output: String): List<ChatModel> = output.lineSequence().mapNotNull { line ->

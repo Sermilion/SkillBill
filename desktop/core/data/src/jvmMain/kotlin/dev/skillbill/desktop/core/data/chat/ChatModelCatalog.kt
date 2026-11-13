@@ -53,15 +53,15 @@ class ChatModelCatalog(
       "claude" -> profiles.claude(agent.profile ?: settings.settings.first().claudeConfigDir).environment
       "codex" -> codexEnvironment(host.variables, agent.profile)
       "cursor" -> cursorEnvironment(host.variables, agent.profile)
-      "junie", "devin" -> host.variables
-      else -> return ChatModelsRead.Failed("This agent does not expose a model list.")
+      "devin" -> host.variables
+      else -> return ChatModelsRead.Loaded(emptyList())
     }
     val arguments = when (agent.agentId) {
       "claude" -> listOf("-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--no-session-persistence")
       "codex" -> listOf("app-server")
       "cursor" -> listOf("--list-models")
       "devin" -> listOf("models", "list", "--format", "json")
-      else -> listOf("--acp")
+      else -> return ChatModelsRead.Loaded(emptyList())
     }
     val binaries = if (agent.agentId == "cursor") listOf("cursor-agent", "agent") else listOf(agent.agentId)
     val command = ChatCommand(agentCommand(binaries, arguments, host.variables["SHELL"]), root, environment, "")
@@ -74,7 +74,7 @@ class ChatModelCatalog(
       when (agent.agentId) {
         "claude" -> claude(connection)
         "codex" -> codex(connection)
-        else -> junie(connection, root)
+        else -> ChatModelsRead.Loaded(emptyList())
       }
     } finally {
       withContext(NonCancellable) { connection.close() }
@@ -101,7 +101,6 @@ class ChatModelCatalog(
     val output = StringBuilder()
     var exit: Int? = null
     var failure: String? = null
-    // Stopping early cancels the flow, which ends the owned process before it reports an exit.
     processes.run(command).takeWhile { event ->
       when (event) {
         is ChatProcessOutput.Line -> output.appendLine(event.text)
@@ -161,19 +160,6 @@ class ChatModelCatalog(
       if (cursor != null && (!cursors.add(cursor) || cursors.size > 100)) return unavailable()
     } while (cursor != null)
     return ChatModelsRead.Loaded(models.distinctBy { it.id })
-  }
-
-  private suspend fun junie(connection: BoundedProtocolConnection, root: String): ChatModelsRead {
-    val params = buildJsonObject {
-      put(ChatModelKeys.PROTOCOL_VERSION, 1)
-      put(ChatModelKeys.CLIENT_CAPABILITIES, JsonObject(emptyMap()))
-    }
-    if (call(connection, 1, "initialize", params) == null) return unavailable()
-    val session = call(connection, 2, "session/new", buildJsonObject {
-      put(ChatModelKeys.CWD, root)
-      put(ChatModelKeys.MCP_SERVERS, JsonArray(emptyList()))
-    }) ?: return unavailable()
-    return acpChatModels(session)?.let(ChatModelsRead::Loaded) ?: unavailable()
   }
 
   private suspend fun call(connection: BoundedProtocolConnection, id: Int, method: String, params: JsonObject): JsonObject? {

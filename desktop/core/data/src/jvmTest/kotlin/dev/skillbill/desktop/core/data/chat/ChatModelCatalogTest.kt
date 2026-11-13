@@ -76,15 +76,20 @@ class ChatModelCatalogTest {
   }
 
   @Test
-  fun `junie discovery reads grouped ACP model options`() = runTest {
-    val connection = ModelConnection(listOf(
-      """{"id":1,"result":{"protocolVersion":1}}""",
-      """{"id":2,"result":{"sessionId":"discovery-only","configOptions":[{"category":"model","options":[{"group":"Provider","options":[{"value":"new-model","name":"New model"}]}]}]}}""",
-    ))
-    val read = catalog(connection).read(ChatAgent("junie", null, null), "/repo")
-    assertEquals(listOf(ChatModel("new-model", "New model")), assertIs<ChatModelsRead.Loaded>(read).models)
-    assertEquals(listOf("initialize", "session/new"), connection.sent.map { it.string("method") })
-    assertTrue(connection.closed)
+  fun `unsupported agent model lookup returns empty without launching either process path`() = runTest {
+    val connection = ModelConnection(emptyList())
+    val diagnostics = RecordingDiagnostics()
+    var processStarted = false
+    val read = catalog(connection, diagnostics, onStart = { processStarted = true }, devin = {
+      processStarted = true
+      flowOf(ChatProcessOutput.Exited(0, ""))
+    }).read(ChatAgent("retired-agent", null, null), "/repo")
+
+    assertEquals(ChatModelsRead.Loaded(emptyList()), read)
+    assertEquals(false, processStarted)
+    assertEquals(emptyList(), diagnostics.categories)
+    assertEquals(emptyList(), connection.sent)
+    assertEquals(false, connection.closed)
   }
 
   @Test

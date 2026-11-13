@@ -70,7 +70,7 @@ data class UsageSidebarState(
   val demandEligible: Boolean = false,
   val popupDismissalToken: Long = 0,
   /**
-   * The open chat or run uses this agent, which has no usage source (Cursor, Junie). The card shows only its name and the
+   * The open chat or run uses this agent, which has no usage source (Cursor). The card shows only its name and the
    * popup still offers provider tabs and the default agent; [provider] and [result] stay for when a usage agent returns.
    */
   val nameOnlyAgent: String? = null,

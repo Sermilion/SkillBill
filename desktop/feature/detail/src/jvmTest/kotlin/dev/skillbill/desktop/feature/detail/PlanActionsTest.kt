@@ -273,7 +273,7 @@ class PlanActionsTest {
 
     assertEquals("Choose agent", runActionsView(state).agent?.label)
     assertEquals("Agent: Codex", runActionsView(state.copy(defaultAgentId = "codex")).agent?.label)
-    assertEquals("Choose agent", runActionsView(state.copy(defaultAgentId = "junie")).agent?.label)
+    assertEquals("Choose agent", runActionsView(state.copy(defaultAgentId = "retired-agent")).agent?.label)
     assertEquals("Agent: Claude", runActionsView(finishedPlanState(planOptions(goalStarted = false)).copy(defaultAgentId = "codex")).agent?.label)
   }
 

@@ -49,9 +49,6 @@ private const val CHATS_PER_EXECUTION = 20
 private val ORPHAN_AGE = 7.days
 private val safeSessionId = Regex("[A-Za-z0-9._-]+")
 
-/** One Junie exchange; Junie cannot resume a session, so each turn replays these. */
-internal data class ChatExchange(val operator: String, val agent: String)
-
 private object ChatStoreKeys {
   const val SESSION_ID = "session_id"
   const val EXECUTION_ID = "execution_id"
@@ -66,9 +63,6 @@ private object ChatStoreKeys {
   const val AGENT_SESSION = "agent_session"
   const val CURSOR_PROFILE_IDENTITY = "cursor_profile_identity"
   const val CURSOR_WORKING_DIRECTORY = "cursor_working_directory"
-  const val EXCHANGES = "exchanges"
-  const val OPERATOR = "operator"
-  const val AGENT = "agent"
   const val NEW_TASK_ROOT = "new_task_repository_root"
   const val NEW_TASK_BASE_BRANCH = "new_task_base_branch"
   const val NEW_TASK_SESSION_ESTABLISHED = "new_task_session_established"
@@ -117,7 +111,6 @@ private data class StoredChat(
   val agentSession: String? = null,
   val cursorProfileIdentity: String? = null,
   val cursorWorkingDirectory: String? = null,
-  val exchanges: List<ChatExchange> = emptyList(),
   val newTask: ChatNewTaskContext? = null,
   val summary: String? = null,
   val summarySourceUpdatedAt: Instant? = null,
@@ -154,17 +147,12 @@ class ChatStore(host: HostEnvironment, private val diagnostics: Diagnostics, pri
       )
     }
 
-  internal fun exchanges(sessionId: String): List<ChatExchange> = read(sessionId)?.let { chat ->
-    if (chat.newTask != null) chat.lines.toExchanges() else chat.exchanges
-  }.orEmpty()
+  internal fun replayHistory(sessionId: String): List<ChatHistoryLine> = read(sessionId)?.lines.orEmpty()
 
-  internal fun newTaskHistory(sessionId: String): List<ChatExchange> = read(sessionId)?.let { chat ->
+  internal fun newTaskHistory(sessionId: String): List<ChatHistoryLine> = read(sessionId)?.let { chat ->
     val context = chat.newTask ?: return@let emptyList()
-    chat.lines.take(context.pendingTurnLineIndex ?: chat.lines.size).toExchanges()
+    chat.lines.take(context.pendingTurnLineIndex ?: chat.lines.size)
   }.orEmpty()
-
-  internal fun saveExchanges(sessionId: String, exchanges: List<ChatExchange>) =
-    update(sessionId) { stored, _ -> stored.copy(exchanges = exchanges) }
 
   internal fun saveChat(entry: ChatHistoryEntry): Boolean {
     val saved = update(entry.sessionId) { stored, exists ->
@@ -294,31 +282,6 @@ private fun StoredChat.toEntry(): ChatHistoryEntry? {
 private fun StoredChat.needsSummary(): Boolean =
   toEntry() != null && summarySourceUpdatedAt?.toEpochMilliseconds() != updatedAt?.toEpochMilliseconds()
 
-private fun List<ChatHistoryLine>.toExchanges(): List<ChatExchange> = buildList {
-  var index = 0
-  while (index < this@toExchanges.size) {
-    val line = this@toExchanges[index]
-    if (line.role != ChatHistoryRole.Operator && line.role != ChatHistoryRole.Agent) {
-      index++
-      continue
-    }
-    if (line.role == ChatHistoryRole.Operator && this@toExchanges.getOrNull(index + 1)?.role == ChatHistoryRole.Agent) {
-      add(ChatExchange(line.text, this@toExchanges[index + 1].text))
-      index += 2
-    } else {
-      add(
-        when (line.role) {
-          ChatHistoryRole.Operator -> ChatExchange(line.text, "")
-          ChatHistoryRole.Agent -> ChatExchange("", line.text)
-          ChatHistoryRole.Notice, ChatHistoryRole.Error, ChatHistoryRole.Approval, ChatHistoryRole.OperationCard ->
-            error("Non-conversation line reached exchange conversion")
-        },
-      )
-      index++
-    }
-  }
-}
-
 private fun encode(chat: StoredChat): JsonObject = buildJsonObject {
   put(ChatStoreKeys.SESSION_ID, chat.sessionId)
   chat.executionId?.let { put(ChatStoreKeys.EXECUTION_ID, it) }
@@ -364,17 +327,6 @@ private fun encode(chat: StoredChat): JsonObject = buildJsonObject {
   chat.summary?.let { put(ChatStoreKeys.SUMMARY, it) }
   chat.summarySourceUpdatedAt?.let { put(ChatStoreKeys.SUMMARY_SOURCE_UPDATED_AT, it.toEpochMilliseconds()) }
   chat.executionCheckoutRoot?.let { put(ChatStoreKeys.EXECUTION_CHECKOUT_ROOT, it) }
-  put(
-    ChatStoreKeys.EXCHANGES,
-    buildJsonArray {
-      chat.exchanges.forEach { exchange ->
-        add(buildJsonObject {
-          put(ChatStoreKeys.OPERATOR, exchange.operator)
-          put(ChatStoreKeys.AGENT, exchange.agent)
-        })
-      }
-    },
-  )
 }
 
 private fun decode(root: JsonObject, fallbackSessionId: String, diagnostics: Diagnostics): StoredChat {
@@ -406,10 +358,6 @@ private fun decode(root: JsonObject, fallbackSessionId: String, diagnostics: Dia
     agentSession = root.string(ChatStoreKeys.AGENT_SESSION),
     cursorProfileIdentity = root.string(ChatStoreKeys.CURSOR_PROFILE_IDENTITY),
     cursorWorkingDirectory = root.string(ChatStoreKeys.CURSOR_WORKING_DIRECTORY),
-    exchanges = root.objects(ChatStoreKeys.EXCHANGES).mapNotNull { exchange ->
-      val operator = exchange.string(ChatStoreKeys.OPERATOR) ?: return@mapNotNull null
-      exchange.string(ChatStoreKeys.AGENT)?.let { ChatExchange(operator, it) }
-    },
     newTask = root.string(ChatStoreKeys.NEW_TASK_ROOT)?.let {
       ChatNewTaskContext(
         it,

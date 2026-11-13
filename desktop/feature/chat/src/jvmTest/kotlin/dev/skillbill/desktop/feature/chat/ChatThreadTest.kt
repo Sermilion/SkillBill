@@ -128,13 +128,13 @@ class ChatThreadTest {
   }
 
   @Test
-  fun `unsupported Junie reason and historical prose restore without a runnable approval`() {
+  fun `unsupported agent reason and historical prose restore without a runnable approval`() {
     val thread = ChatThread(Clock.System)
-    thread.append(ChatMessage.Agent("Earlier Junie prose", false, emptyList()))
-    val reason = "Junie ACP permission-request coverage remains unverified. " + "Full explanation. ".repeat(1000)
-    thread.show(ChatAgent("junie", null, null), ChatEvent.Failed(ChatFailure.ApprovalUnsupported, reason))
+    thread.append(ChatMessage.Agent("Earlier agent prose", false, emptyList()))
+    val reason = "ACP permission-request coverage remains unverified. " + "Full explanation. ".repeat(1000)
+    thread.show(ChatAgent("retired-agent", null, null), ChatEvent.Failed(ChatFailure.ApprovalUnsupported, reason))
     val lines = thread.historyLines()
-    assertEquals("Earlier Junie prose", lines[0].text)
+    assertEquals("Earlier agent prose", lines[0].text)
     assertEquals(ChatHistoryRole.Error, lines[1].role)
     assertEquals(reason, lines[1].text)
     assertEquals(ChatMessage.Error(ChatFailure.ApprovalUnsupported, reason), restored(lines[1]))
