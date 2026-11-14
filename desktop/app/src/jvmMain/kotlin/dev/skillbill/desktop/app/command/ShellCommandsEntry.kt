@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.vector.ImageVector
 import dev.skillbill.desktop.app.keyboard.TerminalTriggers
 import dev.skillbill.desktop.app.navigation.WindowNavigator
+import dev.skillbill.desktop.app.onboarding.OnboardingTourState
 import dev.skillbill.desktop.app.shell.ShellBoardState
 import dev.skillbill.desktop.app.shell.sectionLabel
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
@@ -49,6 +50,7 @@ class ShellCommandsEntry(
   private val boardState: ShellBoardState,
   private val session: DatabaseSessionController,
   private val workImportRequests: WorkImportRequests,
+  private val onboardingTour: OnboardingTourState,
 ) : FeatureEntry {
   override fun renders(route: AppRoute): Boolean = false
 
@@ -64,7 +66,8 @@ class ShellCommandsEntry(
         ShellCommand(CommandItem("section:${kind.name}", "Go to ${sectionLabel(kind)}", lead = { StatusIcon(boardSectionLead(kind), boardSectionLeadFill(kind)) })) { navigator.navigate(WorkRoute(kind)) }
       } +
       go("nav:history", "Go to History", LucideIcons.history, "G H", HistoryRoute) +
-      go("nav:settings", "Go to Settings", LucideIcons.sliders, "G ,", SettingsRoute(SettingsPageId.App))
+      go("nav:settings", "Go to Settings", LucideIcons.sliders, "G ,", SettingsRoute(SettingsPageId.App)) +
+      ShellCommand(CommandItem("tour:show", "Show tour", LucideIcons.play)) { onboardingTour.show() }
     val paneCommands = listOf(
       ShellCommand(CommandItem("specs", if (shellPanes.specsOpen) "Close plans pane" else "Open plans pane", LucideIcons.fileText, "G S")) {
         shellPanes.specsOpen = !shellPanes.specsOpen

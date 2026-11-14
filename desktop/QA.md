@@ -50,6 +50,7 @@ All state lives under `desktop/app/build/source-run/`:
 - `runtime/` holds the staged `runtime-cli` install image.
 - `app-resources/` holds the staged app resources and the app's build identity record.
 - `home/` is the scratch home. The task deletes and recreates it on every launch, so nothing carries over between runs.
+- Source runs open the first-run tour on each launch because the scratch home is new. Close it with Esc twice. The first Esc shows the outro; the second closes the tour.
 
 ## Overrides
 

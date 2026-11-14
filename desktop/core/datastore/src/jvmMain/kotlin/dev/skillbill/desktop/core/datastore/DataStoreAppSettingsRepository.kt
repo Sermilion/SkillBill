@@ -163,6 +163,17 @@ class DataStoreAppSettingsRepository(
     Outcome.Failure(SettingsRejection.ReadFailed)
   }
 
+  override suspend fun readOnboardingTourSeen(): Outcome<Boolean, SettingsRejection> = try {
+    Outcome.Success(store.data.first()[AppPreferenceKeys.ONBOARDING_TOUR_SEEN] ?: false)
+  } catch (_: IOException) {
+    diagnostics.record("desktop_settings_unreadable")
+    Outcome.Failure(SettingsRejection.ReadFailed)
+  }
+
+  override suspend fun markOnboardingTourSeen(): Outcome<Unit, SettingsRejection> = edit {
+    it[AppPreferenceKeys.ONBOARDING_TOUR_SEEN] = true
+  }
+
   override suspend fun setDefaultAgent(agentId: String?) = edit {
     if (agentId.isNullOrBlank()) it.remove(AppPreferenceKeys.DEFAULT_AGENT) else it[AppPreferenceKeys.DEFAULT_AGENT] = agentId.trim()
   }

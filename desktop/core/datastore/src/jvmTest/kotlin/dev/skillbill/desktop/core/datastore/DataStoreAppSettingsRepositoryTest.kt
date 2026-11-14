@@ -16,6 +16,9 @@ import dev.skillbill.desktop.core.domain.qa.QaDevicePick
 import dev.skillbill.desktop.core.domain.qa.QaDevicePickKind
 import dev.skillbill.desktop.core.testing.RecordingDiagnostics
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.runTest
@@ -31,6 +34,45 @@ import java.io.IOException
 class DataStoreAppSettingsRepositoryTest {
   @TempDir
   lateinit var directory: File
+
+  @Test
+  fun `missing tour preference reads false and leaves existing and future settings intact`() = runTest {
+    val store = PreferenceDataStoreFactory.create(scope = backgroundScope) { File(directory, "tour-missing.preferences_pb") }
+    val repository = DataStoreAppSettingsRepository(store, RecordingDiagnostics())
+    val futureKey = androidx.datastore.preferences.core.stringPreferencesKey("future_setting")
+    store.edit {
+      it[AppPreferenceKeys.DATABASE_PATH] = "/tmp/previous.db"
+      it[AppPreferenceKeys.CHAT_WIDTH_DP] = 640
+      it[futureKey] = "preserve"
+    }
+
+    assertEquals(Outcome.Success(false), repository.readOnboardingTourSeen())
+    assertEquals("/tmp/previous.db", repository.settings.first().databasePath)
+    assertEquals(640, repository.settings.first().chatWidthDp)
+    assertEquals("preserve", store.data.first()[futureKey])
+  }
+
+  @Test
+  fun `marking tour seen twice persists and preserves other preferences`() = runTest {
+    val file = File(directory, "tour-mark.preferences_pb")
+    val futureKey = androidx.datastore.preferences.core.stringPreferencesKey("future_setting")
+    val owner = Job(backgroundScope.coroutineContext[Job])
+    val firstStore = PreferenceDataStoreFactory.create(scope = CoroutineScope(backgroundScope.coroutineContext + owner)) { file }
+    val firstRepository = DataStoreAppSettingsRepository(firstStore, RecordingDiagnostics())
+    firstStore.edit {
+      it[AppPreferenceKeys.DATABASE_PATH] = "/tmp/previous.db"
+      it[futureKey] = "preserve"
+    }
+    assertEquals(Outcome.Success(Unit), firstRepository.markOnboardingTourSeen())
+    assertEquals(Outcome.Success(Unit), firstRepository.markOnboardingTourSeen())
+    owner.cancelAndJoin()
+
+    val secondStore = PreferenceDataStoreFactory.create(scope = backgroundScope) { file }
+    val secondRepository = DataStoreAppSettingsRepository(secondStore, RecordingDiagnostics())
+    assertEquals(Outcome.Success(true), secondRepository.readOnboardingTourSeen())
+    assertEquals("/tmp/previous.db", secondStore.data.first()[AppPreferenceKeys.DATABASE_PATH])
+    assertEquals("preserve", secondStore.data.first()[futureKey])
+  }
 
   @Test
   fun `a database path of only spaces is refused and the stored path stays`() = runTest {

@@ -2,6 +2,8 @@ package dev.skillbill.desktop.app.command
 
 import dev.skillbill.desktop.app.keyboard.TerminalTriggers
 import dev.skillbill.desktop.app.navigation.WindowNavigator
+import dev.skillbill.desktop.app.onboarding.OnboardingTourState
+import dev.skillbill.desktop.app.shell.ShellBoardState
 import dev.skillbill.desktop.core.domain.model.ExportOutcome
 import dev.skillbill.desktop.core.domain.model.ExportPreflightOutcome
 import dev.skillbill.desktop.core.domain.model.ExportRefusalCategory
@@ -9,6 +11,8 @@ import dev.skillbill.desktop.core.domain.session.DatabaseSessionController
 import dev.skillbill.desktop.core.domain.session.DatabaseSessionState
 import dev.skillbill.desktop.core.testing.FakeArchiveFileChooser
 import dev.skillbill.desktop.core.testing.FakeWorkControlRepository
+import dev.skillbill.desktop.core.testing.FakeWorkBoardRepository
+import dev.skillbill.desktop.core.testing.FakeAppSettingsRepository
 import dev.skillbill.desktop.core.testing.workItem
 import dev.skillbill.desktop.core.ui.feedback.ToastQueue
 import dev.skillbill.desktop.core.ui.navigation.CommandContext
@@ -16,8 +20,10 @@ import dev.skillbill.desktop.core.ui.navigation.CommandSection
 import dev.skillbill.desktop.core.ui.navigation.ShellCommand
 import dev.skillbill.desktop.core.designsystem.overlay.CommandItem
 import dev.skillbill.desktop.core.ui.navigation.WindowCoroutineScope
+import dev.skillbill.desktop.core.ui.navigation.WorkImportRequests
 import dev.skillbill.desktop.core.ui.pane.PaneCommands
 import dev.skillbill.desktop.core.ui.selection.SelectionHolder
+import dev.skillbill.desktop.core.ui.shell.ShellPanes
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runCurrent
@@ -25,9 +31,34 @@ import kotlinx.coroutines.test.runTest
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class CommandCatalogTest {
+  @Test
+  fun `show tour is the last navigation command and opens the tour`() = runTest {
+    val scope = WindowCoroutineScope(backgroundScope)
+    val session = TestSession()
+    val tour = OnboardingTourState(FakeAppSettingsRepository(), scope)
+    val board = FakeWorkBoardRepository()
+    val entry = ShellCommandsEntry(
+      WindowNavigator(session, SelectionHolder()),
+      ShellPanes(),
+      TerminalTriggers(TestPaneCommands()),
+      board,
+      ShellBoardState(board, scope),
+      session,
+      WorkImportRequests(),
+      tour,
+    )
+
+    val command = entry.commands(CommandContext(null, null)).first { it.head == "Navigation" }.commands.last()
+    assertEquals("Show tour", command.item.label)
+    command.run()
+    assertTrue(tour.open)
+    assertEquals(0, tour.step)
+  }
+
   @Test
   fun `spec section is optional and follows the current item section`() = runTest {
     val catalog = catalog(FakeWorkControlRepository(), FakeArchiveFileChooser(), ToastQueue(), backgroundScope)
