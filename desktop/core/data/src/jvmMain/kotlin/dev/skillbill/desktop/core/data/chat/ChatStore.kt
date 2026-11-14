@@ -12,6 +12,7 @@ import dev.skillbill.desktop.core.domain.model.ChatHistoryRead
 import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
 import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
 import dev.skillbill.desktop.core.domain.model.ChatNewTaskContext
+import dev.skillbill.desktop.core.domain.model.hasSameConversationIdentity
 import dev.skillbill.desktop.core.domain.model.ChatStoreRead
 import dev.skillbill.desktop.core.domain.model.ChatStoreReadFailure
 import dev.skillbill.desktop.core.domain.model.ChatRecoveryEntry
@@ -254,7 +255,7 @@ class ChatStore(host: HostEnvironment, private val diagnostics: Diagnostics, pri
           (stored.agentSession != null && stored.agent?.agentId != "devin") ||
           (stored.agent != null && (stored.agent.agentId != "devin" || stored.agent.profile != history.agent.profile)) ||
           (stored.executionId != null && stored.executionId != history.executionId) ||
-          (stored.newTask != null && stored.newTask != history.newTask) ||
+          (stored.newTask != null && !stored.newTask.hasSameConversationIdentity(history.newTask)) ||
           ((stored.executionCheckoutRoot ?: stored.newTask?.workingDirectory) != null &&
             !sameDirectory(stored.executionCheckoutRoot ?: stored.newTask?.workingDirectory,
               history.executionCheckoutRoot ?: history.newTask?.workingDirectory)) ||
@@ -700,7 +701,7 @@ private fun StoredChat.toDraftEntry(): ChatHistoryEntry? {
 private fun sameDevinIdentity(left: ChatHistoryEntry, right: ChatHistoryEntry): Boolean =
   left.sessionId == right.sessionId && left.executionId == right.executionId &&
     left.agent.agentId == right.agent.agentId && left.agent.effort == right.agent.effort && left.agent.profile == right.agent.profile &&
-    left.newTask == right.newTask &&
+    left.newTask.hasSameConversationIdentity(right.newTask) &&
     sameDirectory(left.executionCheckoutRoot ?: left.newTask?.workingDirectory,
       right.executionCheckoutRoot ?: right.newTask?.workingDirectory)
 

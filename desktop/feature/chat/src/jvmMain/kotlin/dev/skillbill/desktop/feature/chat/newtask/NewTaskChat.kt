@@ -16,6 +16,7 @@ import dev.skillbill.desktop.core.domain.model.ChatScope
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
 import dev.skillbill.desktop.core.domain.model.ChatSessionAcquisition
+import dev.skillbill.desktop.core.domain.model.hasSameConversationIdentity
 import dev.skillbill.desktop.core.domain.model.CursorMcpDependency
 import dev.skillbill.desktop.core.domain.repository.ApprovalFeedRepository
 import dev.skillbill.desktop.core.domain.repository.ExecutionChatRepository
@@ -621,8 +622,11 @@ internal class NewTaskChat(
           val saved = acquisition.entry
           val expected = historyEntry(sessionId)
           val savedRoot = saved.executionCheckoutRoot ?: saved.newTask?.workingDirectory
+          val contextMatches = if (agent.agentId == "devin") {
+            saved.newTask.hasSameConversationIdentity(expected.newTask)
+          } else saved.newTask == expected.newTask
           if (saved.agent.agentId != agent.agentId || saved.agent.effort != agent.effort || saved.agent.profile != agent.profile ||
-            saved.newTask != expected.newTask || savedRoot == null || !sameDirectory(savedRoot, repositoryRoot)) {
+            !contextMatches || savedRoot == null || !sameDirectory(savedRoot, repositoryRoot)) {
             recoveryOnly = true
             thread.append(ChatMessage.Notice("This ${agent.agentId} conversation no longer matches its saved provider, settings, or checkout. Keep the saved source unchanged or start a separate new chat."))
             onRejected?.invoke()

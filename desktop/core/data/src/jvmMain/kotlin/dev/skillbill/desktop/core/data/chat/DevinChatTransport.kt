@@ -9,6 +9,7 @@ import dev.skillbill.desktop.core.domain.model.ChatFailure
 import dev.skillbill.desktop.core.domain.model.ChatScope
 import dev.skillbill.desktop.core.domain.model.ChatStopSettlement
 import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
+import dev.skillbill.desktop.core.domain.model.hasSameConversationIdentity
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
@@ -97,7 +98,7 @@ class DevinChatTransport(
         is DevinSavedState.Readable -> {
           val savedRoot = state.checkoutRoot
           val identityMatches = state.agent?.agentId == "devin" && state.agent.profile == request.agent.profile &&
-            state.executionId == history?.executionId && state.newTask == history?.newTask &&
+            state.executionId == history?.executionId && state.newTask.hasSameConversationIdentity(history?.newTask) &&
             savedRoot != null && canonicalDirectory(savedRoot) == cwd &&
             (state.entry == null || savedIdentityMatches(state.entry, history, cwd, request))
           if ((state.agent != null || state.executionId != null || state.newTask != null || state.handle != null) && !identityMatches) {
@@ -202,7 +203,7 @@ private fun savedIdentityMatches(
   val savedRoot = saved.executionCheckoutRoot ?: saved.newTask?.workingDirectory
   if (savedRoot == null || canonicalDirectory(savedRoot) != cwd) return false
   if (history == null) return !request.firstTurn
-  return saved.executionId == history.executionId && saved.newTask == history.newTask &&
+  return saved.executionId == history.executionId && saved.newTask.hasSameConversationIdentity(history.newTask) &&
     saved.agent.agentId == history.agent.agentId && saved.agent.profile == history.agent.profile
 }
 

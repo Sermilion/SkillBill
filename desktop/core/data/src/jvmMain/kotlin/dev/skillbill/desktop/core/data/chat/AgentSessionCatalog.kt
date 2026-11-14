@@ -7,6 +7,7 @@ import dev.skillbill.desktop.core.data.usage.cursorEnvironment
 import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
+import dev.skillbill.desktop.core.domain.model.hasSameConversationIdentity
 import dev.skillbill.desktop.core.domain.model.SessionMoveResult
 import dev.skillbill.desktop.core.domain.model.SavedChatProjection
 import dev.skillbill.desktop.core.domain.settings.AppSettingsRepository
@@ -78,7 +79,7 @@ class AgentSessionCatalog(
       val root = entry.executionCheckoutRoot ?: entry.newTask?.workingDirectory
       val storedRoot = saved?.executionCheckoutRoot ?: saved?.newTask?.workingDirectory
       if (saved == null || state !is DevinSavedState.Readable || state.handle.isNullOrBlank() ||
-        saved.executionId != entry.executionId || saved.agent != entry.agent || saved.newTask != entry.newTask ||
+        saved.executionId != entry.executionId || saved.agent != entry.agent || !saved.newTask.hasSameConversationIdentity(entry.newTask) ||
         root == null || root != storedRoot || !File(root).isDirectory
       ) {
         diagnostics.record("chat.devin_saved_open_refused")
