@@ -21,8 +21,14 @@ fun gateStdoutExcerpt(
 ): String? {
   val trimmed = stdout.trim().takeIf { it.isNotEmpty() } ?: return null
   if (trimmed.length <= maxChars) return trimmed
-  val headChars = maxChars / 2
-  val tailChars = maxChars - headChars
+  // The marker counts against maxChars. Sizing it for trimmed.length gives an upper bound on
+  // its width, because the omitted count is always smaller than the full length.
+  val keptChars = maxChars - omittedMarker(trimmed.length).length
+  if (keptChars <= 0) return trimmed.take(maxChars)
+  val headChars = keptChars / 2
+  val tailChars = keptChars - headChars
   val omitted = trimmed.length - headChars - tailChars
-  return trimmed.take(headChars) + "\n…[$omitted chars omitted]…\n" + trimmed.takeLast(tailChars)
+  return trimmed.take(headChars) + omittedMarker(omitted) + trimmed.takeLast(tailChars)
 }
+
+private fun omittedMarker(omitted: Int): String = "\n…[$omitted chars omitted]…\n"
