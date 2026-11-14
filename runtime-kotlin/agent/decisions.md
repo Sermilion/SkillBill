@@ -6,7 +6,7 @@ Alternatives considered: Decoder-only filtering loses original inputs and cannot
 
 ## [2026-11-13] Append launch normalization after vocabulary narrowing
 Context: A populated store can already have applied launch-id normalization while a wider agent vocabulary was supported.
-Decision: Keep a follow-on migration using the existing normalization operation before desktop projection. The current ledger assigns the two steps to 129 and 130, with desktop read readiness at 130. Normalize only unsupported non-null standalone launch ids.
+Decision: Keep a follow-on migration using the existing normalization operation before desktop projection. The current ledger assigns the two steps to 132 and 133, with desktop read readiness at 133. Normalize only unsupported non-null standalone launch ids.
 Reason: The ledger skips completed migrations, so vocabulary narrowing cannot rerun the first step. A new transactional entry handles already-upgraded stores while preserving identity, completed work and evidence. Operation launch context retains its original value because card identity depends on it.
 Alternatives considered: Editing an applied migration alone misses already-upgraded stores. Resetting stores or rewriting quality proof loses persisted work or evidence.
 

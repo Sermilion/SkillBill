@@ -1,7 +1,7 @@
 ## [2026-11-13] SONA-19 saved-data compatibility and agent removal
 Areas: runtime-domain, runtime-contracts, runtime-ports, runtime-application, runtime-cli, runtime-goalrunner, runtime-infra/sqlite, launcher and skills, orchestration/contracts
 - MEDIUM feature removes the retired fourth agent from vocabulary, launch adapters, install and uninstall targets, MCP registration, native-agent rendering and schemas. OpenCode and Devin remain supported alongside Claude, Codex and Cursor.
-- The current migration ledger assigns unsupported launch-id normalization to 129 and 130; DesktopReadSchema is 130. Both use the supported vocabulary at application time and preserve supported and null standalone launch ids.
+- The current migration ledger assigns unsupported launch-id normalization to 132 and 133; DesktopReadSchema is 133. Both use the supported vocabulary at application time and preserve supported and null standalone launch ids.
 - reusable: GoalQualityRetainedMatrix preserves textual matrix keys for persistence and fingerprints while execution uses a supported-only projection. Projection mismatches fail integrity checks; current and historical reads emit bounded normalization diagnostics.
 - Native-agent inventories prune unsupported textual providers before schema validation. Malformed providers still fail; reads preserve inventory bytes and linked files until an ordinary inventory write.
 - Compatibility preserves run identity, completed work, commits, history, migration records and original quality proof. Strict agent parsers and user execution_matrix configuration validation remain strict.
