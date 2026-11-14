@@ -36,6 +36,8 @@ internal object ProcessLauncherRules {
     "feature/detail/src/jvmMain/kotlin/dev/skillbill/desktop/feature/detail/RepositoryBrowserLauncher.kt",
     "app/src/jvmMain/kotlin/dev/skillbill/desktop/app/motion/OsReducedMotionReader.kt",
     "app/src/jvmMain/kotlin/dev/skillbill/desktop/app/host/ShellEnvironment.kt",
+    // Registers the release-health shutdown hook. It never launches a process.
+    "app/src/jvmMain/kotlin/dev/skillbill/desktop/app/reporting/ReleaseHealth.kt",
     "feature/terminal/src/jvmMain/kotlin/dev/skillbill/desktop/feature/terminal/PtyShellLauncher.kt",
     "app/src/jvmMain/kotlin/dev/skillbill/desktop/app/tray/KdeDisplayLayout.kt",
     "core/data/src/jvmMain/kotlin/dev/skillbill/desktop/core/data/chat/ChatProcessLauncher.kt",

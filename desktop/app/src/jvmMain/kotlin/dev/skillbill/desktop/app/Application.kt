@@ -19,6 +19,7 @@ import dev.skillbill.desktop.app.tray.TrayHost
 import dev.skillbill.desktop.app.motion.OsReducedMotionReader
 import dev.skillbill.desktop.app.motion.ReducedMotionRead
 import dev.skillbill.desktop.app.shell.MainWindow
+import dev.skillbill.desktop.app.reporting.DesktopCrashReporting
 import dev.skillbill.desktop.core.common.DiagnosticsSwitch
 import dev.skillbill.desktop.core.common.HostEnvironment
 import dev.skillbill.desktop.core.ui.navigation.DetailRoute
@@ -26,6 +27,8 @@ import dev.skillbill.desktop.core.ui.navigation.SettingsPageId
 import dev.skillbill.desktop.core.ui.navigation.SettingsRoute
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
+import dev.skillbill.desktop.core.domain.session.DatabaseSessionState
 
 /** The app entry the launcher starts inside the class loader that holds the installed runtime's jars. */
 fun main() {
@@ -35,7 +38,12 @@ fun main() {
   val environment = withShellEnvironment(System.getenv(), System.getProperty("os.name", ""))
   val host = HostEnvironment(environment, System.getProperty("user.home"), System.getProperty("user.dir"))
   val component = AppComponent::class.create(host, diagnostics)
+  DesktopCrashReporting.start(environment, System.getProperty("compose.application.resources.dir"), component.runtimeConfigRepository::telemetryLevel)
   component.databaseSessionManager.start()
+  component.applicationCoroutineScope.scope.launch {
+    component.databaseSessionManager.state.first { it is DatabaseSessionState.Open }
+    DesktopCrashReporting.startSession()
+  }
   component.startAtLoginSync.start()
   val reducedMotion = when (val read = OsReducedMotionReader().read()) {
     is ReducedMotionRead.Known -> read.reduced
@@ -65,6 +73,7 @@ fun main() {
           if (window.chat.closeChatsSafely()) {
             window.detailsPaneWidth.close()
             component.providerUsageRepository.closeUsage()
+            DesktopCrashReporting.endSession()
             exitApplication()
           } else {
             mainVisible = true
@@ -73,6 +82,7 @@ fun main() {
         } catch (cancelled: kotlinx.coroutines.CancellationException) {
           throw cancelled
         } catch (failure: Exception) {
+          DesktopCrashReporting.capture(failure)
           System.getLogger("dev.skillbill.desktop").log(System.Logger.Level.WARNING, "desktop:quit-chat-close-failed", failure)
           mainVisible = true
           focusRequest++

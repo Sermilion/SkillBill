@@ -17,6 +17,7 @@ import dev.skillbill.desktop.core.data.session.DatabaseSessionManager
 import dev.skillbill.desktop.core.data.usage.ProviderUsageRepository
 import dev.skillbill.desktop.core.domain.settings.AppSettingsRepository
 import dev.skillbill.desktop.core.domain.repository.SpecRepository
+import dev.skillbill.desktop.core.domain.repository.RuntimeConfigRepository
 import dev.skillbill.desktop.core.domain.repository.WorkBoardRepository
 import dev.skillbill.desktop.core.domain.repository.WorkControlRepository
 import dev.skillbill.desktop.core.domain.repository.WorkDetailRepository
@@ -58,6 +59,7 @@ abstract class AppComponent(
   abstract val changesWindows: ChangesWindows
   abstract val changesWindowViewModel: (ChangesSource, ChangeScope, String?) -> ChangesWindowViewModel
   abstract val specRepository: SpecRepository
+  abstract val runtimeConfigRepository: RuntimeConfigRepository
   abstract val windowComponentFactory: WindowComponent.Factory
 }
 
