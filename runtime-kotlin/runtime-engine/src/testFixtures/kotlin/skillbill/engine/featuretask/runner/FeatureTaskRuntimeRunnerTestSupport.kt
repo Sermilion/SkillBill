@@ -1659,7 +1659,11 @@ open class TestFeatureTaskRuntimeRunLoopEntry(
     diffResolver,
     implementationChecklistStore,
     commitPushManifestCompletion,
-    FeatureTaskRuntimePhaseRunFactory(stepLaunchResolver, projectStore),
+    FeatureTaskRuntimePhaseRunFactory(
+      stepLaunchResolver,
+      projectStore,
+      ExecutionPlanAdmissionFixture().creationResolver(),
+    ),
   ) {
   private var delegate: FeatureTaskRuntimeRunLoopEntry? = null
 

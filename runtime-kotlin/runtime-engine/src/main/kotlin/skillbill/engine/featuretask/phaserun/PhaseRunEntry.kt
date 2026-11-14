@@ -1,12 +1,14 @@
 package skillbill.engine.featuretask.phaserun
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.config.model.WorkflowAgentAssignmentPolicyMode
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.phaserun.monitor.MonitorAttemptTarget
 import skillbill.engine.featuretask.phaserun.monitor.MonitorPreparation
 import skillbill.engine.featuretask.phaserun.monitor.MonitorPreparationRequest
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
+import skillbill.engine.featuretask.runloop.qualitygate.goalBuildDefinitionId
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.catchingNonCancellation
 import skillbill.error.core.failureCodeLabel
@@ -649,16 +651,31 @@ public class PhaseRunEntry(
   private fun validateQualityRoutingReference(request: PhaseRunRequest, workflowId: String) {
     val hasReference = request.agentAssignmentsWorkflowId != null || request.agentAssignmentsFingerprint != null
     if (!hasReference) {
-      if (request.workflowAgentAssignments != null || request.workflowAgentAssignmentsFingerprint != null) {
-        invalidQualityRoutingReference()
+      val assignments = request.workflowAgentAssignments
+      if (assignments != null || request.workflowAgentAssignmentsFingerprint != null) {
+        val legacyCompatible =
+          assignments != null &&
+            assignments.policyMode == WorkflowAgentAssignmentPolicyMode.LEGACY &&
+            assignments.admissionWorkflowId == workflowId &&
+            !request.workflowAgentAssignmentsFingerprint.isNullOrBlank()
+        if (!legacyCompatible) {
+          invalidQualityRoutingReference()
+        }
+        RuntimeDiagnosticsBestEffortWarning.record(
+          diagnostics,
+          "seam=workflow_agent_assignment phase=${request.definitionId.take(MAX_DIAGNOSTIC_ID)} " +
+            "reason=legacy_record_use outcome=compatible",
+        )
       }
       return
     }
+    val assignments = request.workflowAgentAssignments
     if (request.agentAssignmentsWorkflowId.isNullOrBlank() ||
       request.agentAssignmentsWorkflowId != workflowId ||
       request.agentAssignmentsFingerprint.isNullOrBlank() ||
-      request.workflowAgentAssignments?.admissionWorkflowId != request.agentAssignmentsWorkflowId ||
-      request.workflowAgentAssignments?.policyMode != skillbill.config.model.WorkflowAgentAssignmentPolicyMode.FROZEN ||
+      assignments == null ||
+      assignments.admissionWorkflowId != request.agentAssignmentsWorkflowId ||
+      assignments.policyMode != WorkflowAgentAssignmentPolicyMode.FROZEN ||
       request.workflowAgentAssignmentsFingerprint != request.agentAssignmentsFingerprint
     ) {
       invalidQualityRoutingReference()
@@ -799,6 +816,7 @@ private data class PhaseRunSetup(
 private fun newInvocationId(): String = "$INVOCATION_ID_PREFIX${UUID.randomUUID()}"
 
 private const val INVOCATION_ID_PREFIX = "phr-"
+private const val MAX_DIAGNOSTIC_ID = 128
 
 private data class SourceMatch(
   val phaseId: String,

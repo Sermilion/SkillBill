@@ -16,6 +16,7 @@ import skillbill.engine.featuretask.phaserun.PhaseRunResult
 import skillbill.engine.goal.GoalRunnerManifestState
 import skillbill.engine.goalrunner.assessment.GoalAssessmentStageResult
 import skillbill.engine.goalrunner.assessment.GoalRunnerAssessmentGate
+import skillbill.engine.goalrunner.execution.support.GoalFinalizationRoutingBinder
 import skillbill.engine.goalrunner.execution.support.GoalPullRequestFactSection
 import skillbill.engine.goalrunner.execution.support.GoalSpecScratchCleanup
 import skillbill.engine.goalrunner.execution.support.goalRunnerRepositoryContentIdentity
@@ -91,6 +92,7 @@ public class GoalRunnerFinalization(
   private val pauseBoundary: GoalRunnerPauseBoundary,
   private val finalHistoryWriter: GoalRunnerFinalHistoryWriter,
   private val publication: GoalRunnerPullRequests,
+  private val finalizationRouting: GoalFinalizationRoutingBinder,
 ) {
   internal fun requireCompletedChildrenHaveDrafts(state: GoalRunnerManifestState) {
     state.manifest.subtasks
@@ -402,16 +404,18 @@ public class GoalRunnerFinalization(
   ): GoalRunnerRunReport? {
     val (writerInput, invocationId, preWriterContentFingerprint) = write
     val branch = state.manifest.featureBranch.orEmpty().ifBlank { state.manifest.branchForFinalPullRequest() }
+    val routing = finalizationRouting.bind(state.parentWorkflowId, request)
     val result =
       finalHistoryWriter.run(
         PhaseRunRequest(
           definitionId = SkeletonDefinition.GOAL_HISTORY.id,
           repoRoot = request.repoRoot,
           invokedAgentId = request.invokedAgentId,
-          workflowAgentAssignments = request.workflowAgentAssignments,
-          workflowAgentAssignmentsFingerprint = request.workflowAgentAssignmentsFingerprint,
-          agentAssignmentsWorkflowId = request.workflowAgentAssignments?.admissionWorkflowId,
-          agentAssignmentsFingerprint = request.workflowAgentAssignmentsFingerprint,
+          workflowAgentAssignments = routing.workflowAgentAssignments,
+          workflowAgentAssignmentsFingerprint = routing.workflowAgentAssignmentsFingerprint,
+          agentAssignmentsWorkflowId = routing.agentAssignmentsWorkflowId,
+          agentAssignmentsFingerprint = routing.agentAssignmentsFingerprint,
+          openCodeIdentity = routing.openCodeIdentity,
           intake = request.issueKey,
           timeout = request.timeout,
           agentAddonSelection = request.agentAddonSelection,
@@ -798,6 +802,7 @@ public class GoalRunnerPullRequests(
   private val unaddressedFindingsLedgerService: UnaddressedFindingsLedgerService?,
   private val diagnostics: RuntimeDiagnostics,
   private val pullRequestWriter: GoalRunnerPullRequestWriter,
+  private val finalizationRouting: GoalFinalizationRoutingBinder,
 ) {
   internal fun openPullRequest(
     state: GoalRunnerManifestState,
@@ -828,9 +833,10 @@ public class GoalRunnerPullRequests(
     val head = fallback.headBranch.takeIf(String::isNotBlank) ?: return null
     if (pullRequestIdentityLookup.lookup(request.repoRoot, head) != PullRequestIdentity.Absent) return null
     val instructions = state.manifest.pullRequestDescriptionInstructions(fallback, facts)
+    val phaseRequest = goalPullRequestPhaseRequest(state.parentWorkflowId, request, instructions)
     val writerResult =
       catchingNonCancellation {
-        pullRequestWriter.run(goalPullRequestPhaseRequest(request, instructions), state.parentWorkflowId, head)
+        pullRequestWriter.run(phaseRequest, state.parentWorkflowId, head)
       }.getOrElse { failure ->
         val contained = containableFailure(failure)
         warnPullRequestWriter("failed: ${contained.javaClass.simpleName}: ${contained.message}")
@@ -853,17 +859,20 @@ public class GoalRunnerPullRequests(
   }
 
   private fun goalPullRequestPhaseRequest(
+    parentWorkflowId: String,
     request: GoalRunnerRunRequest,
     instructions: String,
-  ): PhaseRunRequest =
-    PhaseRunRequest(
+  ): PhaseRunRequest {
+    val routing = finalizationRouting.bind(parentWorkflowId, request)
+    return PhaseRunRequest(
       definitionId = SkeletonDefinition.GOAL_PR.id,
       repoRoot = request.repoRoot,
       invokedAgentId = request.invokedAgentId,
-      workflowAgentAssignments = request.workflowAgentAssignments,
-      workflowAgentAssignmentsFingerprint = request.workflowAgentAssignmentsFingerprint,
-      agentAssignmentsWorkflowId = request.workflowAgentAssignments?.admissionWorkflowId,
-      agentAssignmentsFingerprint = request.workflowAgentAssignmentsFingerprint,
+      workflowAgentAssignments = routing.workflowAgentAssignments,
+      workflowAgentAssignmentsFingerprint = routing.workflowAgentAssignmentsFingerprint,
+      agentAssignmentsWorkflowId = routing.agentAssignmentsWorkflowId,
+      agentAssignmentsFingerprint = routing.agentAssignmentsFingerprint,
+      openCodeIdentity = routing.openCodeIdentity,
       intake = request.issueKey,
       instructions = PhaseInstructions(instructions, setOf(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PR)),
       timeout = request.timeout,
@@ -871,6 +880,7 @@ public class GoalRunnerPullRequests(
       modelAssignment = request.modelAssignment,
       agentAssignment = request.agentAssignment,
     )
+  }
 
   private fun warnPullRequestWriter(message: String) {
     RuntimeDiagnosticsBestEffortWarning.record(

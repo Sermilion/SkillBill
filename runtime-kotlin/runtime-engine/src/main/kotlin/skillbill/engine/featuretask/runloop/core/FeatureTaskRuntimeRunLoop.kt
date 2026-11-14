@@ -10,6 +10,7 @@ import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeAgentResolv
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeLifecycleTelemetry
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeModelResolver
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeResumeLaunchAssignment
+import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeStepLaunchResolver
 import skillbill.engine.featuretask.lifecycle.execution.StepLaunchAssignmentInputs
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeResolvedPhaseAgent
@@ -318,6 +319,7 @@ public open class FeatureTaskRuntimeRunLoopEntry(
 public class FeatureTaskRuntimePhaseRunFactory(
   private val stepLaunchResolver: FeatureTaskRuntimeStepLaunchResolver,
   private val projectStore: ProjectStorePort,
+  private val executionPlans: FeatureTaskRuntimeExecutionPlanResolver,
 ) {
   internal fun verifySelectedLaunch(
     run: PhaseRun,
@@ -331,6 +333,7 @@ public class FeatureTaskRuntimePhaseRunFactory(
         modelAssignment = run.request.modelAssignment,
         workflowAgentAssignments = run.request.workflowAgentAssignments,
         agentAddonSelection = run.request.agentAddonSelection.persisted,
+        legacyPausedStepAssignments = legacyPausedStepAssignments(run.request),
       )
     val environmentKind =
       if (run.request.goalContinuation == null) LaunchEnvironmentKind.INHERITED else LaunchEnvironmentKind.GOVERNED_CHILD
@@ -365,6 +368,18 @@ public class FeatureTaskRuntimePhaseRunFactory(
         diagnostics,
       )
     }
+  }
+
+  private fun legacyPausedStepAssignments(request: FeatureTaskRuntimeRunFacts): Map<String, String> {
+    val assignments =
+      request.workflowAgentAssignments
+        ?.takeIf { it.policyMode == WorkflowAgentAssignmentPolicyMode.LEGACY }
+        ?: return emptyMap()
+    if (request.workflowId.isBlank()) return emptyMap()
+    val pausedStepIds = executionPlans.inspectResumeEvidence(request.workflowId).pausedStepIds
+    return assignments.phaseAssignments
+      .filterKeys { it in pausedStepIds }
+      .mapValues { (_, phase) -> phase.agentId.wireValue }
   }
 
   internal fun build(

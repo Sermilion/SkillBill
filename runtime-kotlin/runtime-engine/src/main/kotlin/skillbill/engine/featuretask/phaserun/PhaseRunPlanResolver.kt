@@ -377,7 +377,7 @@ public class PhaseRunPlanResolver(
         "sona goal fresh-quality <issue-key> --reason \"<why>\".",
     )
 
-  internal fun invalidQualityPlan(detail: String? = null): Nothing =
+  public fun invalidQualityPlan(detail: String? = null): Nothing =
     throw SkillBillRuntimeException(
       WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION,
       "The admitted goal-quality execution plan is unsupported or corrupt." + (detail?.let { " $it" } ?: ""),
@@ -409,6 +409,7 @@ public class PhaseRunPlanResolver(
           modelAssignment = facts.modelAssignment,
           workflowAgentAssignments = request.workflowAgentAssignments,
           agentAddonSelection = request.agentAddonSelection.persisted,
+          legacyPausedStepAssignments = legacyPausedStepAssignments(request, workflowId),
         ),
         diagnostics,
       )
@@ -433,10 +434,26 @@ public class PhaseRunPlanResolver(
         modelAssignment = facts.modelAssignment,
         workflowAgentAssignments = request.workflowAgentAssignments,
         agentAddonSelection = request.agentAddonSelection.persisted,
+        legacyPausedStepAssignments = legacyPausedStepAssignments(request, facts.workflowId),
       )
     plan.stepLaunchAssignments.values.forEach { assignment ->
       stepLaunchResolver.verifySelectedLaunch(assignment, LaunchEnvironmentKind.INHERITED, inputs, diagnostics)
     }
+  }
+
+  private fun legacyPausedStepAssignments(
+    request: PhaseRunRequest,
+    workflowId: String,
+  ): Map<String, String> {
+    val assignments =
+      request.workflowAgentAssignments
+        ?.takeIf { it.policyMode == WorkflowAgentAssignmentPolicyMode.LEGACY }
+        ?: return emptyMap()
+    if (workflowId.isBlank()) return emptyMap()
+    val pausedStepIds = executionPlanResolver.inspectResumeEvidence(workflowId).pausedStepIds
+    return assignments.phaseAssignments
+      .filterKeys { it in pausedStepIds }
+      .mapValues { (_, phase) -> phase.agentId.wireValue }
   }
 
   internal fun currentBranch(request: PhaseRunRequest): FeatureTaskRuntimeResolvedBranch? =

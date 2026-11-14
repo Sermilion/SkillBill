@@ -16,12 +16,14 @@ import skillbill.engine.featuretask.slot.validJsonOutput
 import skillbill.engine.goal.GoalRunnerManifestState
 import skillbill.engine.goalrunner.RecordingOutcomeStore
 import skillbill.engine.goalrunner.execution.core.testActivityStampWriter
+import skillbill.engine.goalrunner.execution.core.testGoalFinalizationRoutingBinder
 import skillbill.engine.goalrunner.manifest
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.monitoring.DefaultGoalRunnerCiMonitor
 import skillbill.infrastructure.workflow.git.GitWorkflowGitOperations
 import skillbill.ports.agentrun.model.AgentRunLaunchModelRequest
 import skillbill.ports.agentrun.passThroughResolvedLaunchModel
+import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.goalrunner.runner.PullRequestChecksLookup
 import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
 import skillbill.ports.goalrunner.runner.model.CheckBucket
@@ -544,6 +546,7 @@ class PhaseMonitorRunTest {
         outcomes,
         clock,
         testActivityStampWriter(),
+        testGoalFinalizationRoutingBinder(database, clock, NoopRuntimeDiagnostics),
       )
     val result =
       monitor.monitor(

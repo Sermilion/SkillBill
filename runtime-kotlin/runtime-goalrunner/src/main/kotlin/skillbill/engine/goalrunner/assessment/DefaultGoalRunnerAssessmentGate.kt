@@ -5,6 +5,7 @@ import skillbill.application.idestatus.AgentActivityStampWriter
 import skillbill.engine.diagnostics.containableFailure
 import skillbill.engine.featuretask.phaserun.PhaseRunEntry
 import skillbill.engine.goal.GoalRunnerManifestState
+import skillbill.engine.goalrunner.execution.support.GoalFinalizationRoutingBinder
 import skillbill.engine.goalrunner.model.GoalAssessmentRecordRead
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
@@ -29,6 +30,7 @@ public class DefaultGoalRunnerAssessmentGate(
   clock: Clock,
   activityStampWriter: AgentActivityStampWriter,
   diagnostics: RuntimeDiagnostics,
+  finalizationRouting: GoalFinalizationRoutingBinder,
 ) : GoalRunnerAssessmentGate {
   private val assembler = GoalAssessmentInputAssembler(gitOperations, fileStore, projectStore, diagnostics)
   private val services =
@@ -38,6 +40,7 @@ public class DefaultGoalRunnerAssessmentGate(
       activityStampWriter,
       GoalAssessmentProgress(outcomeStore, clock, diagnostics),
       diagnostics,
+      finalizationRouting,
     )
   private val loop =
     GoalAssessmentLoop(services, GoalAssessmentFixStep(services, gitOperations), this::runRound)

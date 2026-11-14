@@ -24,6 +24,7 @@ import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseQuery
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.phaserun.PhaseRunResult
 import skillbill.engine.featuretask.phaserun.testStandalonePhasePublisher
+import skillbill.engine.featuretask.phaserun.testStandalonePhaseRegistration
 import skillbill.engine.featuretask.prepare.FeatureSpecPreparationWriter
 import skillbill.engine.featuretask.runloop.durable.WorktreeEditJournalWriter
 import skillbill.engine.featuretask.runloop.observability.AgentBuildObserverFactory
@@ -34,6 +35,7 @@ import skillbill.engine.goalrunner.GoalRunner
 import skillbill.engine.goalrunner.InMemoryGoalManifestStore
 import skillbill.engine.goalrunner.TestGoalQualityOutcomeStore
 import skillbill.engine.goalrunner.assessment.GoalRunnerAssessmentGate
+import skillbill.engine.goalrunner.execution.support.GoalFinalizationRoutingBinder
 import skillbill.engine.goalrunner.execution.support.GoalSpecScratchCleanup
 import skillbill.engine.goalrunner.findings.UnaddressedFindingsLedgerService
 import skillbill.engine.goalrunner.intake.GoalIntakeAdmissionService
@@ -115,6 +117,17 @@ import kotlin.random.Random
 import kotlin.time.TimeSource
 
 private const val GOAL_RUNNER_TEST_WORKFLOW_ID_SEED: Int = 20260923
+
+internal fun testGoalFinalizationRoutingBinder(
+  database: DatabaseSessionFactory,
+  clock: Clock,
+  diagnostics: RuntimeDiagnostics,
+): GoalFinalizationRoutingBinder =
+  GoalFinalizationRoutingBinder(
+    workflowAgentAssignmentStoreForTests(database),
+    testStandalonePhasePublisher(database, clock, diagnostics),
+    testStandalonePhaseRegistration(clock, diagnostics),
+  )
 
 internal fun testActivityStampWriter(
   database: DatabaseSessionFactory = TestGoalActivityStampDatabase,
@@ -279,6 +292,12 @@ internal fun testGoalRunner(wiring: GoalRunnerTestWiring): GoalRunner {
   val (executionPlans, crashReconciler) = goalRunnerExecutionPlans(wiring)
   val progressReader = GoalRunnerProgressReader(wiring.outcomeStore)
   val pauseBoundary = GoalRunnerPauseBoundary(wiring.manifestStore, wiring.clock)
+  val finalizationRouting =
+    testGoalFinalizationRoutingBinder(
+      wiring.goalDatabase ?: goalRunnerTestDatabase(wiring.manifestStore),
+      wiring.clock,
+      wiring.diagnostics,
+    )
   val finalization =
     GoalRunnerFinalization(
       finalizationTestOutcomes(wiring.outcomeStore),
@@ -299,7 +318,9 @@ internal fun testGoalRunner(wiring: GoalRunnerTestWiring): GoalRunner {
         wiring.unaddressedFindingsLedgerService,
         wiring.diagnostics,
         wiring.pullRequestWriter,
+        finalizationRouting,
       ),
+      finalizationRouting,
     )
   val intakePreparation = goalRunnerIntakePreparation(wiring)
   val perRunLoopAssembler =

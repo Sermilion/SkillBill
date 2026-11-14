@@ -447,7 +447,7 @@ public open class PhaseAttemptLaunchCollaborationScope internal constructor(
   override fun phaseSettlementTarget(iteration: Int): FeatureTaskRuntimePhaseSettlementTarget? =
     resolvePhaseSettlementTarget(iteration)
 
-  override fun verifyCurrentLaunchSelection() = verifySelectedLaunchForAcceptedAttempt(diagnostics)
+  override fun verifyCurrentLaunchSelection(): Unit = verifySelectedLaunchForAcceptedAttempt(diagnostics)
 
   internal fun writeRuntimeSubtaskCommit(
     branch: String,

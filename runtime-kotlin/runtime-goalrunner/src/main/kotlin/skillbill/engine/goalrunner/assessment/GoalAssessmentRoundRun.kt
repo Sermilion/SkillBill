@@ -8,6 +8,7 @@ import skillbill.engine.featuretask.phaserun.PhaseRunEntry
 import skillbill.engine.featuretask.phaserun.PhaseRunRequest
 import skillbill.engine.featuretask.phaserun.PhaseRunResult
 import skillbill.engine.goal.GoalRunnerManifestState
+import skillbill.engine.goalrunner.execution.support.GoalFinalizationRoutingBinder
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.error.core.catchingNonCancellation
@@ -39,6 +40,7 @@ internal class GoalAssessmentRunServices(
   val activityStampWriter: AgentActivityStampWriter,
   val progress: GoalAssessmentProgress,
   val diagnostics: RuntimeDiagnostics,
+  val finalizationRouting: GoalFinalizationRoutingBinder,
 ) {
   fun branchOf(state: GoalRunnerManifestState): String =
     state.manifest.featureBranch.orEmpty().ifBlank { state.manifest.branchForFinalPullRequest() }
@@ -62,15 +64,17 @@ internal class GoalAssessmentRunServices(
     request: GoalRunnerRunRequest,
     definition: SkeletonDefinition,
     instructions: PhaseInstructions?,
-  ): PhaseRunRequest =
-    PhaseRunRequest(
+  ): PhaseRunRequest {
+    val routing = finalizationRouting.bind(state.parentWorkflowId, request)
+    return PhaseRunRequest(
       definitionId = definition.id,
       repoRoot = request.repoRoot,
       invokedAgentId = request.invokedAgentId,
-      workflowAgentAssignments = request.workflowAgentAssignments,
-      workflowAgentAssignmentsFingerprint = request.workflowAgentAssignmentsFingerprint,
-      agentAssignmentsWorkflowId = request.workflowAgentAssignments?.admissionWorkflowId,
-      agentAssignmentsFingerprint = request.workflowAgentAssignmentsFingerprint,
+      workflowAgentAssignments = routing.workflowAgentAssignments,
+      workflowAgentAssignmentsFingerprint = routing.workflowAgentAssignmentsFingerprint,
+      agentAssignmentsWorkflowId = routing.agentAssignmentsWorkflowId,
+      agentAssignmentsFingerprint = routing.agentAssignmentsFingerprint,
+      openCodeIdentity = routing.openCodeIdentity,
       intake = request.issueKey,
       instructions = instructions,
       timeout = request.timeout,
@@ -81,6 +85,7 @@ internal class GoalAssessmentRunServices(
       activityOutput = progress.activityOutput(state, request),
       activityStampSink = activityStampWriter.sink(state.parentWorkflowId, parentWorkflowId = null),
     )
+  }
 
   fun warn(
     message: String,

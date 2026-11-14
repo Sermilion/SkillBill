@@ -599,8 +599,8 @@ public class WorkflowGoalRunnerQualityExecutionStore
         return GoalQualityExecutionRead.Ambiguous(
           sourceVersion,
           map.toMap(),
-          execution?.get(GoalQualityExecutionPayloadKeys.INVOCATION_ID) as? String,
-          execution?.get(GoalQualityExecutionPayloadKeys.STATUS) == GoalQualityExecutionStatus.RETIRED.wireValue,
+          execution[GoalQualityExecutionPayloadKeys.INVOCATION_ID] as? String,
+          execution[GoalQualityExecutionPayloadKeys.STATUS] == GoalQualityExecutionStatus.RETIRED.wireValue,
         )
       }
       if (sourceVersion !in setOf("0.1", "0.2", "0.3", "0.4", "0.5", "0.6")) {
@@ -694,17 +694,16 @@ public class WorkflowGoalRunnerQualityExecutionStore
         JsonCodec.anyToStringAnyMap(execution[keys.PROGRESS])
           ?: invalid("Historical quality execution has no authoritative phase progress.")
       val progress = oldProgress + (keys.BUILD_PROGRESS to GoalQualityPhaseProgress().toPersistenceWire())
+      val governingInputs =
+        retained.governingInputs
+          ?: invalid("Historical quality execution has no retained governing inputs.")
       val upgradedExecution =
         execution +
           mapOf(
             keys.EXECUTION_PLANS to plans,
             keys.PROGRESS to progress,
-            keys.GOVERNING_INPUTS to
-              retained.governingInputs?.toPersistenceWire()
-                ?: invalid("Historical quality execution has no retained governing inputs."),
-            keys.GOVERNING_INPUT_FINGERPRINT to
-              retained.governingInputs?.let(::governingInputFingerprint)
-                ?: invalid("Historical quality execution has no retained governing inputs."),
+            keys.GOVERNING_INPUTS to governingInputs.toPersistenceWire(),
+            keys.GOVERNING_INPUT_FINGERPRINT to governingInputFingerprint(governingInputs),
             keys.FINAL_VALIDATION_CONTENT_FINGERPRINT to
               execution[keys.FINAL_VALIDATION_CONTENT_FINGERPRINT] as? String,
             keys.PRE_QA_BUILD to GoalQualityPreQaBuildState.PENDING.wireValue,

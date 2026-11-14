@@ -8,6 +8,7 @@ import skillbill.engine.featuretask.phaserun.PhaseRunEntry
 import skillbill.engine.featuretask.phaserun.PhaseRunRequest
 import skillbill.engine.featuretask.phaserun.PhaseRunResult
 import skillbill.engine.goal.GoalRunnerManifestState
+import skillbill.engine.goalrunner.execution.support.GoalFinalizationRoutingBinder
 import skillbill.engine.goalrunner.model.GoalProgressEventDraft
 import skillbill.engine.goalrunner.model.GoalRunnerProgressEventRecordRequest
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
@@ -38,20 +39,23 @@ public class DefaultGoalRunnerCiMonitor(
   private val outcomeStore: GoalRunnerWorkflowOutcomeStore,
   private val clock: Clock,
   private val activityStampWriter: AgentActivityStampWriter,
+  private val finalizationRouting: GoalFinalizationRoutingBinder,
 ) : GoalRunnerCiMonitor {
   override fun monitor(
     state: GoalRunnerManifestState,
     request: GoalRunnerRunRequest,
-  ): PhaseRunResult =
-    phaseRunEntry.runForGoal(
+  ): PhaseRunResult {
+    val routing = finalizationRouting.bind(state.parentWorkflowId, request)
+    return phaseRunEntry.runForGoal(
       PhaseRunRequest(
         definitionId = SkeletonDefinition.MONITOR.id,
         repoRoot = request.repoRoot,
         invokedAgentId = request.invokedAgentId,
-        workflowAgentAssignments = request.workflowAgentAssignments,
-        workflowAgentAssignmentsFingerprint = request.workflowAgentAssignmentsFingerprint,
-        agentAssignmentsWorkflowId = request.workflowAgentAssignments?.admissionWorkflowId,
-        agentAssignmentsFingerprint = request.workflowAgentAssignmentsFingerprint,
+        workflowAgentAssignments = routing.workflowAgentAssignments,
+        workflowAgentAssignmentsFingerprint = routing.workflowAgentAssignmentsFingerprint,
+        agentAssignmentsWorkflowId = routing.agentAssignmentsWorkflowId,
+        agentAssignmentsFingerprint = routing.agentAssignmentsFingerprint,
+        openCodeIdentity = routing.openCodeIdentity,
         intake = request.issueKey,
         timeout = request.timeout,
         agentAddonSelection = request.agentAddonSelection,
@@ -64,6 +68,7 @@ public class DefaultGoalRunnerCiMonitor(
       state.parentWorkflowId,
       state.manifest.featureBranch.orEmpty(),
     )
+  }
 
   private fun record(
     state: GoalRunnerManifestState,

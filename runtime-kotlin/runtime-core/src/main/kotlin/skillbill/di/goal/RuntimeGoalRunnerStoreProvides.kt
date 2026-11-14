@@ -8,6 +8,7 @@ import skillbill.engine.featuretask.slot.intake.PlanSpecIntakePreparation
 import skillbill.engine.goalrunner.intake.GoalIntakePreparation
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.manifest.WorkflowGoalRunnerManifestStore
+import skillbill.engine.goalrunner.persist.GoalRunnerQualityExecutionStore
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.persist.WorkflowGoalRunnerOutcomeStore
 import skillbill.engine.goalrunner.planning.hydration.GoalChildPlanningHydratorPort
@@ -29,6 +30,9 @@ internal interface RuntimeGoalRunnerStoreProvides : RuntimeGoalRunnerProjectionP
 
   @Provides
   fun goalChildHistoryDraftWriter(store: WorkflowGoalRunnerOutcomeStore): GoalChildHistoryDraftWriter = store
+
+  @Provides
+  fun goalRunnerQualityExecutionStore(store: WorkflowGoalRunnerOutcomeStore): GoalRunnerQualityExecutionStore = store
 
   @Provides
   fun planSpecIntakePreparation(preparation: GoalIntakePreparation): PlanSpecIntakePreparation = preparation

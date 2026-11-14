@@ -4,6 +4,7 @@ import skillbill.agentaddon.model.PersistedAgentAddonSelectionEntry
 import skillbill.config.model.ExecutionMatrix
 import skillbill.config.model.ExecutionTier
 import skillbill.config.model.PhaseModelDirective
+import skillbill.contracts.JsonCodec
 import skillbill.contracts.review.ReviewVerificationSignalKeys
 import skillbill.contracts.system.OpenCodeEnvironmentSelection
 import skillbill.contracts.system.OpenCodeLaunchIdentity

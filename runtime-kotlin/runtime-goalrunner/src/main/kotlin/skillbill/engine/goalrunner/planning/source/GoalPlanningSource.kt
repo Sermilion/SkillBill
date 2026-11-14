@@ -296,7 +296,6 @@ public class PlanWorkflowGoalPlanningSource(
     invokedAgentId = request.invokedAgentId,
     agentAssignment = request.agentAssignment,
     workflowAgentAssignments = request.workflowAgentAssignments,
-    workflowAgentAssignmentsFingerprint = request.workflowAgentAssignmentsFingerprint,
     modelAssignment = request.modelAssignment,
     compactionSettings = request.compactionSettings,
     environment = emptyMap(),

@@ -46,6 +46,7 @@ import skillbill.engine.goalrunner.execution.core.GoalRunnerPullRequestWriter
 import skillbill.engine.goalrunner.execution.core.GoalRunnerPullRequests
 import skillbill.engine.goalrunner.execution.core.goalRunnerDefaultPhaseRecorder
 import skillbill.engine.goalrunner.execution.core.testActivityStampWriter
+import skillbill.engine.goalrunner.execution.core.testGoalFinalizationRoutingBinder
 import skillbill.engine.goalrunner.execution.support.GoalSpecScratchCleanup
 import skillbill.engine.goalrunner.execution.support.toPullRequestRequest
 import skillbill.engine.goalrunner.model.GoalQaSummary
@@ -540,6 +541,8 @@ class GoalQaRepairLoopTest {
       val events = mutableListOf<String>()
       var qualityResult: GoalQaGateResult? = null
       val cleanup = GoalSpecScratchCleanup(UnavailableSpecScratchStore, testProjectStore, NoopRuntimeDiagnostics)
+      val finalizationRouting =
+        testGoalFinalizationRoutingBinder(database, clock, NoopRuntimeDiagnostics)
       val publication =
         GoalRunnerPullRequests(
           progress,
@@ -549,6 +552,7 @@ class GoalQaRepairLoopTest {
           null,
           NoopRuntimeDiagnostics,
           GoalRunnerPullRequestWriter { _, _, _ -> error("Publication must follow the history boundary.") },
+          finalizationRouting,
         )
       val finalization =
         GoalRunnerFinalization(
@@ -569,6 +573,7 @@ class GoalQaRepairLoopTest {
             PhaseRunResult.Blocked("history", emptyList(), null, "write_history", "test history boundary")
           },
           publication,
+          finalizationRouting,
         )
 
       val report = finalization.finalizePublication(state, request, listOf(1))

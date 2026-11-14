@@ -28,7 +28,7 @@ import skillbill.engine.goalrunner.monitoring.GOAL_FINALIZATION_OPERATION_KIND
 import skillbill.engine.goalrunner.persist.GoalRunnerAttemptLedgerStore
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.persist.quality.GoalQualityExecutionRead
-import skillbill.engine.goalrunner.persist.quality.GoalQualityReadiness
+import skillbill.goalrunner.model.quality.GoalQualityReadiness
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.catchingNonCancellation
 import skillbill.error.core.failureCodeLabel

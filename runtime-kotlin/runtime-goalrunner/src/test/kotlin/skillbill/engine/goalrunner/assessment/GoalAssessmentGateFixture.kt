@@ -13,6 +13,7 @@ import skillbill.engine.featuretask.runner.facts
 import skillbill.engine.featuretask.slot.testPhaseStrategies
 import skillbill.engine.goal.GoalRunnerManifestState
 import skillbill.engine.goalrunner.execution.core.testActivityStampWriter
+import skillbill.engine.goalrunner.execution.core.testGoalFinalizationRoutingBinder
 import skillbill.engine.goalrunner.model.GoalAssessmentRecordRead
 import skillbill.engine.goalrunner.model.GoalRunnerProgressEventRecordRequest
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
@@ -183,6 +184,7 @@ internal class GoalAssessmentGateFixture(
       clock,
       testActivityStampWriter(),
       diagnostics,
+      testGoalFinalizationRoutingBinder(database, clock, diagnostics),
     )
   }
 
