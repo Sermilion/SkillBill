@@ -74,9 +74,9 @@ internal fun tourWorkTimeline(): TourTimeline<TourBoardState> {
 }
 
 @Composable
-internal fun TourWorkScene(step: Int, replayToken: Int) {
+internal fun TourWorkScene(step: Int, replayToken: Int, onEnd: () -> Unit) {
   val timeline = remember { tourWorkTimeline() }
-  val state by rememberTourTimeline(step, replayToken, timeline, LocalReducedMotion.current) {}
+  val state by rememberTourTimeline(step, replayToken, timeline, LocalReducedMotion.current, onEnd)
   TourStageFrame(state.chrome, state.overlay) {
     TourWorkBoard(state.newRow)
   }

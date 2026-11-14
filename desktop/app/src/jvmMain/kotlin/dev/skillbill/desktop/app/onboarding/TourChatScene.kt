@@ -105,9 +105,9 @@ internal fun tourChatTimeline(): TourTimeline<TourChatState> {
 }
 
 @Composable
-internal fun TourChatScene(step: Int, replayToken: Int) {
+internal fun TourChatScene(step: Int, replayToken: Int, onEnd: () -> Unit) {
   val timeline = remember { tourChatTimeline() }
-  val state by rememberTourTimeline(step, replayToken, timeline, LocalReducedMotion.current) {}
+  val state by rememberTourTimeline(step, replayToken, timeline, LocalReducedMotion.current, onEnd)
   TourStageFrame(
     state.chrome,
     state.overlay,
@@ -121,7 +121,7 @@ internal fun TourChatScene(step: Int, replayToken: Int) {
 }
 
 @Composable
-private fun TourUserBubble(text: String) {
+internal fun TourUserBubble(text: String) {
   val colors = SkillBillTheme.colors
   val shape = RoundedCornerShape(12.dp, 12.dp, 4.dp, 12.dp)
   Box(Modifier.fillMaxWidth()) {
@@ -137,7 +137,7 @@ private fun TourUserBubble(text: String) {
 }
 
 @Composable
-private fun TourAgentMessage(text: String) {
+internal fun TourAgentMessage(text: String) {
   val colors = SkillBillTheme.colors
   val type = SkillBillTheme.type
   Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -155,7 +155,7 @@ private fun TourAgentMessage(text: String) {
   }
 }
 
-private fun agentText(text: String, mono: FontFamily?) = buildAnnotatedString {
+internal fun agentText(text: String, mono: FontFamily?) = buildAnnotatedString {
   var i = 0
   while (i < text.length) {
     val open = text.indexOf('`', i)
@@ -169,7 +169,7 @@ private fun agentText(text: String, mono: FontFamily?) = buildAnnotatedString {
 }
 
 @Composable
-private fun TourThinkingDots() {
+internal fun TourThinkingDots() {
   val colors = SkillBillTheme.colors
   val reduced = LocalReducedMotion.current
   Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {

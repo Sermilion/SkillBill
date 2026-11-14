@@ -70,9 +70,6 @@ fun OnboardingTourOverlay(tour: OnboardingTourState, onStartFirstTask: () -> Uni
   val focusManager = LocalFocusManager.current
   val reduced = LocalReducedMotion.current
   var timelineEnded by remember(tour.step, tour.replayToken) { mutableStateOf(false) }
-  LaunchedEffect(tour.step, tour.replayToken) {
-    if (tour.step in 1..8) timelineEnded = true
-  }
   BoxWithConstraints(
     Modifier.fillMaxSize().background(colors.bgFrame)
       .focusRequester(focus).focusProperties { onExit = { cancelFocusChange() } }.focusGroup()
@@ -105,10 +102,14 @@ fun OnboardingTourOverlay(tour: OnboardingTourState, onStartFirstTask: () -> Uni
             val scale = tourFrameScale(maxWidth, maxHeight)
             ScaledTourFrame(scale) {
               when (tour.step) {
-                1 -> TourSidebarScene(tour.step, tour.replayToken)
-                2 -> TourChatScene(tour.step, tour.replayToken)
-                3 -> TourWorkScene(tour.step, tour.replayToken)
-                4 -> TourRunDetailScene(tour.step, tour.replayToken)
+                1 -> TourSidebarScene(tour.step, tour.replayToken, onEnd = { timelineEnded = true })
+                2 -> TourChatScene(tour.step, tour.replayToken, onEnd = { timelineEnded = true })
+                3 -> TourWorkScene(tour.step, tour.replayToken, onEnd = { timelineEnded = true })
+                4 -> TourRunDetailScene(tour.step, tour.replayToken, onEnd = { timelineEnded = true })
+                5 -> TourControlScene(tour.step, tour.replayToken, onEnd = { timelineEnded = true })
+                6 -> TourReviewScene(tour.step, tour.replayToken, onEnd = { timelineEnded = true })
+                7 -> TourFinishScene(tour.step, tour.replayToken, onEnd = { timelineEnded = true })
+                8 -> TourCommandsScene(tour.step, tour.replayToken, onEnd = { timelineEnded = true })
                 else -> EmptyStagedFrame(Modifier.fillMaxSize())
               }
             }

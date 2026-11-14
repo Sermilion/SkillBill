@@ -71,9 +71,9 @@ private fun TourSidebarState.spot(spotlight: Spotlight) = copy(overlay = overlay
 private val homePanelState = TourChatState()
 
 @Composable
-internal fun TourSidebarScene(step: Int, replayToken: Int) {
+internal fun TourSidebarScene(step: Int, replayToken: Int, onEnd: () -> Unit) {
   val timeline = remember { tourSidebarTimeline() }
-  val state by rememberTourTimeline(step, replayToken, timeline, LocalReducedMotion.current) {}
+  val state by rememberTourTimeline(step, replayToken, timeline, LocalReducedMotion.current, onEnd)
   TourStageFrame(state.chrome, state.overlay) {
     TourNewTaskPanel(homePanelState)
   }
@@ -226,7 +226,7 @@ internal fun TourComposer(
 }
 
 @Composable
-private fun TourCaret() {
+internal fun TourCaret() {
   val alpha = if (LocalReducedMotion.current) {
     1f
   } else {

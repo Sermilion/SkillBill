@@ -51,6 +51,54 @@ class TourScenesTest {
     assertNull(detail.overlay.spotlight)
   }
 
+  @Test
+  fun `steps five to eight land on their declared final states`() = runTest {
+    val control = played(tourControlTimeline())
+    assertNull(control.chrome.workAttention)
+    assertEquals(false, control.banner)
+    assertEquals(2, control.currentSubtask)
+    assertEquals(StatusKind.Completed, control.subs[0].status)
+    assertEquals(StatusKind.Completed, control.subs[1].status)
+    assertEquals(StatusKind.Active, control.subs[2].status)
+    assertEquals(true, control.subs[2].current)
+    assertEquals(TourDetailPill.Active, control.pill)
+    assertEquals(1, control.pipelineIndex)
+    assertEquals(TourFixture.logResumed, control.log.last().text)
+    assertEquals(6, control.log.size)
+    assertNull(control.overlay.keycap)
+    assertNull(control.overlay.spotlight)
+
+    val review = played(tourReviewTimeline())
+    assertEquals(TourFixture.csvFixedLine, review.rows[7].text)
+    assertEquals(TourClaudeReply.Replied, review.claude)
+    assertEquals("Sent to agent", review.youTag)
+    assertEquals("Review added", review.reviewLabel)
+    assertEquals(false, review.toastShown)
+    assertEquals(false, review.targetTint)
+    assertEquals(false, review.plusShown)
+    assertNull(review.draft)
+    assertNull(review.overlay.spotlight)
+    assertNull(review.overlay.cursor)
+
+    val finish = played(tourFinishTimeline())
+    finish.checks.forEach { assertEquals(StatusKind.Completed, it) }
+    assertEquals(TourFixture.finishSteps.size, finish.done)
+    assertEquals(-1, finish.running)
+    assertEquals(true, finish.prShown)
+    assertEquals(true, finish.prReady)
+    assertEquals(TourTarget.PrCard, finish.overlay.spotlight?.target)
+    assertEquals("Ready for you", finish.overlay.spotlight?.tip?.title)
+
+    val commands = played(tourCommandsTimeline())
+    assertEquals(true, commands.paletteOpen)
+    assertEquals(TourFixture.paletteQuery, commands.query)
+    assertEquals(0, commands.highlight)
+    assertEquals(
+      listOf("Pause after subtask", "Pause now"),
+      tourFilteredCommandGroups(commands.query).flatMap { it.items }.map { it.label },
+    )
+  }
+
   private suspend fun <S> played(timeline: TourTimeline<S>): S {
     var emitted: S? = null
     timeline.play(false) { emitted = it }

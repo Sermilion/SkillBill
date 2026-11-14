@@ -105,6 +105,7 @@ Each row is a feature the prototype shows, where it lives in the prototype, and 
 | Config, Telemetry and agents: level, proxy URL, batch size; detected agents | Settings, Runtime config | `telemetryService` / `TelemetryConfigStore.writeTelemetryLevel` exist; proxy and batch writes new (R5); agents from `installAgentService.detectAgentTargets(...)` |
 | Tray popover: Running, Needs you, Done 24h; Goals, Phases, Operations tabs; Open, Refresh, Settings, Quit | Components page, Surfaces | Same board read; `IdeStatusPolicy.arrange` counts and tray status |
 | OS notifications for six lifecycle transitions | Components page, Surfaces | App-owned, driven by board transitions (desktop `TransitionNotifications.kt`) |
+| First-run tour: welcome, eight steps and outro; shows once on first launch; Skip, Esc, ← →; reduced motion lands each step on its final state | Tour mode, `../onboarding/index.html`; command menu Show tour | App-owned DataStore preference; no runtime call |
 
 ### 4.2 Runtime capabilities not designed yet
 
