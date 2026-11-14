@@ -8,6 +8,7 @@ import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
 import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
 import dev.skillbill.desktop.core.domain.model.ChatImage
 import dev.skillbill.desktop.core.domain.model.ChatNewTaskContext
+import dev.skillbill.desktop.core.domain.model.ChatTitleUpdate
 import dev.skillbill.desktop.core.domain.repository.ExecutionChatRepository
 import dev.skillbill.desktop.core.domain.repository.WorkControlRepository
 import dev.skillbill.desktop.core.testing.FakeExecutionChatRepository
@@ -259,6 +260,37 @@ class NewTaskChatsTest {
     runCurrent()
 
     assertTrue(chats.saved.value.entries.any { it.sessionId == "saved-z" })
+    a.close()
+  }
+
+  // A title request fired before the second exchange, a written title that never reaches the tab, or a resumed chat
+  // whose stored title is lost.
+  @Test
+  fun `a chat asks for its title at the second exchange and written titles re-label open and resumed chats`() = runTest {
+    val chat = FakeExecutionChatRepository()
+    chat.events = { flowOf(ChatEvent.TextDelta("ok"), ChatEvent.Completed) }
+    val chats = testNewTaskChats(chat)
+    val a = chats.selected.value.ready()
+    a.text = "build export"
+    a.send()
+    runCurrent()
+
+    assertTrue(chat.titleRequests.isEmpty())
+
+    a.text = "and its tests"
+    a.send()
+    runCurrent()
+
+    val sessionId = checkNotNull(a.chat.value).sessionId
+    assertEquals(listOf(sessionId), chat.titleRequests.distinct())
+
+    chat.titleUpdateEvents.emit(ChatTitleUpdate(sessionId, "Build export"))
+    runCurrent()
+    assertEquals("Build export", chats.chatTitles.value[sessionId])
+
+    assertTrue(chats.resume(entry("saved-z").copy(generatedTitle = "Saved label")))
+    runCurrent()
+    assertEquals("Saved label", chats.chatTitles.value["saved-z"])
     a.close()
   }
 

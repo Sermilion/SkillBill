@@ -79,6 +79,9 @@ sealed interface ChatSteeringResult {
 
 data class ChatSteeringUpdate(val sessionId: String, val result: ChatSteeringResult)
 
+/** A generated chat title written for [sessionId]; emitted on the title-updates flow so open tabs can re-label. */
+data class ChatTitleUpdate(val sessionId: String, val title: String)
+
 enum class ChatSteeringPolicy { LegacySendNow, LiveWhenAvailable }
 
 /**
@@ -252,6 +255,8 @@ data class ChatHistoryEntry(
   val lines: List<ChatHistoryLine>,
   val newTask: ChatNewTaskContext? = null,
   val summary: String? = null,
+  /** The generated 2-3 word label shown on open chat tabs; written once by the summarizer, never by [ChatTurnRequest] saves. */
+  val generatedTitle: String? = null,
   /** The app session linked by a native listing; transient metadata, absent on stored app history and older callers. */
   val appSessionId: String? = null,
   /** The checkout where this provider conversation was established, when known. */

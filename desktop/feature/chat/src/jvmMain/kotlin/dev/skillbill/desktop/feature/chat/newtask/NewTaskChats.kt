@@ -149,6 +149,7 @@ class NewTaskChats(
   private val selectedState = MutableStateFlow(openState.value.first())
   private val pendingCloseState = MutableStateFlow<NewTaskDraft?>(null)
   private val resumedState = MutableSharedFlow<NewTaskDraft>(extraBufferCapacity = 1)
+  private val chatTitlesState = MutableStateFlow<Map<String, String>>(emptyMap())
 
   val open: StateFlow<List<NewTaskDraft>> = openState.asStateFlow()
   val selected: StateFlow<NewTaskDraft> = selectedState.asStateFlow()
@@ -174,10 +175,15 @@ class NewTaskChats(
 
   internal val saved: StateFlow<SavedChatProjection> = savedChats.saved
 
+  /** Generated chat titles by session id; open tabs and the chat rail show them over the first-line fallback. */
+  internal val chatTitles: StateFlow<Map<String, String>> = chatTitlesState.asStateFlow()
+
   init {
     refreshSaved()
     // A summary written in the background changes its Recent chats row.
     scope.launch { chats.summaryUpdates.collect { refreshSaved() } }
+    // A title written in the background re-labels its open tab and rail row.
+    scope.launch { chats.titleUpdates.collect { update -> chatTitlesState.update { it + (update.sessionId to update.title) } } }
   }
 
   /** Shows [draft]. It never ends, flushes, closes or stops any chat, so the others keep streaming. */
@@ -274,6 +280,7 @@ class NewTaskChats(
       }
       return false
     }
+    entry.generatedTitle?.let { title -> chatTitlesState.update { it + (entry.sessionId to title) } }
     if (entry.sessionId !in target.resumeSourceSessions.value) {
       pendingResumeRequests.remove(entry.sessionId)
       resumedState.tryEmit(target)
@@ -341,6 +348,7 @@ class NewTaskChats(
     if (index < 0) return
     if (pendingCloseState.value === draft) pendingCloseState.value = null
     draft.clearResumeSources()
+    draft.chat.value?.sessionId?.let { gone -> chatTitlesState.update { it - gone } }
     forget(draft)
     newReplyState.update { it - draft }
     if (drafts.size == 1) {

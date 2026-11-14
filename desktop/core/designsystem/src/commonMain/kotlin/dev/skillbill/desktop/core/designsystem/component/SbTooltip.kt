@@ -48,7 +48,7 @@ import kotlinx.coroutines.delay
 private const val TOOLTIP_DELAY_MS = 450L
 
 @Composable
-fun SbTooltip(text: String, shortcut: String? = null, content: @Composable () -> Unit) {
+fun SbTooltip(text: String, shortcut: String? = null, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
   val source = remember { MutableInteractionSource() }
   val hovered by source.collectIsHoveredAsState()
   var focused by remember { mutableStateOf(false) }
@@ -70,7 +70,7 @@ fun SbTooltip(text: String, shortcut: String? = null, content: @Composable () ->
     }
   }
   Box(
-    Modifier.hoverable(source)
+    modifier.hoverable(source)
       .onFocusChanged {
         focused = it.hasFocus
         if (!focused) {

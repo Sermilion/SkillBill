@@ -4,6 +4,7 @@ import dev.skillbill.desktop.core.domain.model.ChatSteeringPolicy
 import dev.skillbill.desktop.core.domain.model.ChatSteeringRequest
 import dev.skillbill.desktop.core.domain.model.ChatSteeringResult
 import dev.skillbill.desktop.core.domain.model.ChatSteeringUpdate
+import dev.skillbill.desktop.core.domain.model.ChatTitleUpdate
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.transform
 import kotlinx.coroutines.flow.update
@@ -171,4 +172,16 @@ class FakeExecutionChatRepository(
   val summaryUpdateEvents: MutableSharedFlow<String> = MutableSharedFlow(extraBufferCapacity = 16)
 
   override val summaryUpdates: Flow<String> get() = summaryUpdateEvents
+
+  /** Session ids passed to [requestTitle], in order. */
+  val titleRequests: MutableList<String> = Collections.synchronizedList(mutableListOf())
+
+  override fun requestTitle(sessionId: String) {
+    titleRequests += sessionId
+  }
+
+  /** Emit a title write to report it to open chats. */
+  val titleUpdateEvents: MutableSharedFlow<ChatTitleUpdate> = MutableSharedFlow(extraBufferCapacity = 16)
+
+  override val titleUpdates: Flow<ChatTitleUpdate> get() = titleUpdateEvents
 }

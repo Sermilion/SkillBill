@@ -58,6 +58,9 @@ import kotlin.time.Clock
 
 private const val COULD_NOT_SAVE_NOTICE = "This draft could not be saved. Keep it open and try again."
 
+/** A chat with this many operator messages gets a short generated tab title; the record's `chat_title` makes repeats free. */
+private const val TITLE_MIN_EXCHANGES = 2
+
 /**
  * A chat about work with no execution behind it. Its coroutines are children of the window scope, so navigation keeps it.
  * [started] means the agent session exists, so the next turn resumes it. [repositoryMissing] refuses every turn.
@@ -373,6 +376,7 @@ internal class NewTaskChat(
         }
         finishSaved = save()
         if (!finishSaved) thread.append(ChatMessage.Notice(COULD_NOT_SAVE_NOTICE))
+        else maybeRequestTitle()
         changesTracker.refresh()
       }
     } finally {
@@ -808,6 +812,11 @@ internal class NewTaskChat(
       action()
     }
     return true
+  }
+
+  /** Once the chat has a couple of exchanges, ask for its generated tab title; the record makes repeats free. */
+  private fun maybeRequestTitle() {
+    if (thread.transcript.value.count { it is ChatMessage.Operator } >= TITLE_MIN_EXCHANGES) chat.requestTitle(sessionId)
   }
 
   private suspend fun save(refresh: Boolean = true): Boolean = saveAs(sessionId, refresh)

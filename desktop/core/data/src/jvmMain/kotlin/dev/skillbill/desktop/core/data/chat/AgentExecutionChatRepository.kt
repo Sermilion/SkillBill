@@ -13,6 +13,7 @@ import dev.skillbill.desktop.core.domain.model.ChatSteeringPolicy
 import dev.skillbill.desktop.core.domain.model.ChatSteeringRequest
 import dev.skillbill.desktop.core.domain.model.ChatSteeringResult
 import dev.skillbill.desktop.core.domain.model.ChatSteeringUpdate
+import dev.skillbill.desktop.core.domain.model.ChatTitleUpdate
 import dev.skillbill.desktop.core.domain.model.Detail
 import dev.skillbill.desktop.core.domain.model.ChatModelsRead
 import dev.skillbill.desktop.core.domain.model.RunOptions
@@ -182,6 +183,10 @@ class AgentExecutionChatRepository(
   override fun requestSummary(sessionId: String) = summarizer.request(sessionId)
 
   override val summaryUpdates: Flow<String> get() = summarizer.updates
+
+  override fun requestTitle(sessionId: String) = summarizer.requestTitle(sessionId)
+
+  override val titleUpdates: Flow<ChatTitleUpdate> get() = summarizer.titleUpdates
 }
 
 private class ActiveTurn(val transport: ChatTransport) {

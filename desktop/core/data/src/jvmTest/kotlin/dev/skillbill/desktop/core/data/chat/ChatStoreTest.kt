@@ -588,6 +588,33 @@ class ChatStoreTest {
     assertEquals(listOf("old"), store.staleSummaries(1).map { it.sessionId })
   }
 
+  // A title write that bumps updated_at reorders the list, and one on a missing or deleted chat recreates nothing.
+  @Test
+  fun `a title keeps order and update time, reads once, and never recreates a removed chat`() {
+    val store = ChatStore(host, RecordingDiagnostics(), Clock.System)
+    store.saveChat(entry("titled", 1))
+
+    assertEquals("titled", store.missingTitleRead("titled").let { (it as? ChatStoreRead.Value)?.value?.sessionId })
+    assertTrue(store.saveTitle("titled", "Fix flaky CI"))
+
+    val entry = store.savedFor("titled")
+    assertEquals("Fix flaky CI", entry?.generatedTitle)
+    assertEquals(Instant.fromEpochMilliseconds(1), entry?.updatedAt)
+    assertEquals("Fix flaky CI", Json.parseToJsonElement(
+      File(host.userHome, "$CHAT_STORE_PATH/titled.json").readText()).jsonObject.getValue("chat_title").jsonPrimitive.content)
+    assertEquals(null, store.missingTitleRead("titled").let { (it as? ChatStoreRead.Value)?.value })
+    assertEquals(false, store.saveTitle("gone", "About nothing."))
+    assertEquals(false, File(host.userHome, "$CHAT_STORE_PATH/gone.json").exists())
+
+    val nextTurn = entry("titled", 2)
+    store.saveChat(nextTurn.copy(lines = nextTurn.lines + listOf(
+      ChatHistoryLine(ChatHistoryRole.Operator, "what changed?"),
+      ChatHistoryLine(ChatHistoryRole.Agent, "The deployment is fixed."),
+    )))
+
+    assertEquals("Fix flaky CI", store.savedFor("titled")?.generatedTitle)
+  }
+
   @Test
   fun `approval card json omits rule_pattern when null and round-trips when set`() {
     val diagnostics = RecordingDiagnostics()

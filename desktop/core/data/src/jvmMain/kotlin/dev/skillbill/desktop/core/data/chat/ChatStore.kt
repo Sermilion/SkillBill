@@ -146,6 +146,7 @@ private object ChatStoreKeys {
   const val REFUSAL = "refusal"
   const val SUMMARY = "summary"
   const val SUMMARY_SOURCE_UPDATED_AT = "summary_source_updated_at_ms"
+  const val CHAT_TITLE = "chat_title"
   const val EXECUTION_CHECKOUT_ROOT = "execution_checkout_root"
 }
 
@@ -164,6 +165,7 @@ private data class StoredChat(
   val newTask: ChatNewTaskContext? = null,
   val summary: String? = null,
   val summarySourceUpdatedAt: Instant? = null,
+  val chatTitle: String? = null,
   val executionCheckoutRoot: String? = null,
   val source: JsonObject = JsonObject(emptyMap()),
 )
@@ -458,21 +460,45 @@ class ChatStore(host: HostEnvironment, private val diagnostics: Diagnostics, pri
     (staleForSummaryRead(sessionId) as? ChatStoreRead.Value)?.value
 
   internal fun staleForSummaryRead(sessionId: String): ChatStoreRead<ChatHistoryEntry?> = synchronized(lock) {
-    val direct = fileFor(sessionId)?.let(::readFile) ?: ChatStoreRead.Failed(failureFor(sessionId, "invalid session identifier"))
-    val stored = when (direct) {
-      is ChatStoreRead.Failed -> return@synchronized direct
+    storedEntry(sessionId) { it.takeIf(StoredChat::needsSummary) }
+  }
+
+  /** The chat of [sessionId] when it is readable but has no generated title yet. */
+  internal fun missingTitleRead(sessionId: String): ChatStoreRead<ChatHistoryEntry?> = synchronized(lock) {
+    storedEntry(sessionId) { it.takeIf { stored -> stored.chatTitle == null } }
+  }
+
+  /** The stored record of [sessionId], found directly or by its agent session binding, gated by [wanted]. */
+  private fun storedEntry(sessionId: String, wanted: (StoredChat) -> StoredChat?): ChatStoreRead<ChatHistoryEntry?> {
+    val stored = when (val found = storedFor(sessionId)) {
+      is ChatStoreRead.Value -> found.value?.let(wanted)?.toEntry()
+      else -> return found as ChatStoreRead<ChatHistoryEntry?>
+    }
+    return ChatStoreRead.Value(stored)
+  }
+
+  private fun storedFor(sessionId: String): ChatStoreRead<StoredChat?> {
+    val direct = fileFor(sessionId)?.let(::readFile) ?: return ChatStoreRead.Failed(failureFor(sessionId, "invalid session identifier"))
+    return when (direct) {
+      is ChatStoreRead.Failed -> direct
       ChatStoreRead.Missing -> {
         val reads = allFiles().map(::readFile)
         when {
-          reads.any { it is ChatStoreRead.Failed } -> return@synchronized reads.first { it is ChatStoreRead.Failed } as ChatStoreRead.Failed
-          scanFailure != null -> return@synchronized ChatStoreRead.Failed(scanFailure!!)
-          else -> reads.filterIsInstance<ChatStoreRead.Value<StoredChat>>().firstOrNull { it.value.agentSession == sessionId }?.value
-            ?: return@synchronized ChatStoreRead.Value(null)
+          reads.any { it is ChatStoreRead.Failed } -> reads.first { it is ChatStoreRead.Failed }
+          scanFailure != null -> ChatStoreRead.Failed(scanFailure!!)
+          else -> ChatStoreRead.Value(reads.filterIsInstance<ChatStoreRead.Value<StoredChat>>().firstOrNull { it.value.agentSession == sessionId }?.value)
         }
       }
-      is ChatStoreRead.Value -> direct.value
+      is ChatStoreRead.Value -> direct
     }
-    ChatStoreRead.Value(stored.takeIf { it.needsSummary() }?.toEntry())
+  }
+
+  /** Writes [title] onto an existing record only, keeping `updated_at`, so a chat deleted during the call stays deleted. */
+  internal fun saveTitle(sessionId: String, title: String): Boolean = synchronized(lock) {
+    val file = fileFor(sessionId) ?: return@synchronized false
+    val stored = (readFile(file) as? ChatStoreRead.Value)?.value ?: return@synchronized false
+    if (stored.needsRecovery()) return@synchronized false
+    write(file, stored.copy(chatTitle = title))
   }
 
   /** Every chat that needs a summary, newest first, at most [limit]. */
@@ -684,6 +710,7 @@ private fun StoredChat.toEntry(): ChatHistoryEntry? {
     ?: if (agent?.agentId == "devin") "Devin conversation" else if (agent?.agentId == "opencode") "OpenCode conversation" else "Saved conversation"
   return ChatHistoryEntry(
     sessionId, executionId, agent ?: return null, updatedAt ?: Instant.DISTANT_PAST, title, lines, newTask, summary,
+    generatedTitle = chatTitle,
     executionCheckoutRoot = executionCheckoutRoot ?: cursorWorkingDirectory ?: openCodeBinding?.workingDirectory,
   )
 }
@@ -694,7 +721,7 @@ private fun StoredChat.toDraftEntry(): ChatHistoryEntry? {
   return ChatHistoryEntry(
     sessionId, executionId, agent, updatedAt ?: Instant.DISTANT_PAST,
     lines.firstOrNull { it.role == ChatHistoryRole.Operator }?.text ?: "New task draft",
-    lines, newTask, summary, executionCheckoutRoot = executionCheckoutRoot ?: newTask.workingDirectory,
+    lines, newTask, summary, generatedTitle = chatTitle, executionCheckoutRoot = executionCheckoutRoot ?: newTask.workingDirectory,
   )
 }
 
@@ -758,6 +785,7 @@ private val REWRITTEN_CHAT_KEYS = setOf(
     ChatStoreKeys.EXCHANGES,
     ChatStoreKeys.SUMMARY,
     ChatStoreKeys.SUMMARY_SOURCE_UPDATED_AT,
+    ChatStoreKeys.CHAT_TITLE,
     ChatStoreKeys.EXECUTION_CHECKOUT_ROOT,
     ChatStoreKeys.NEW_TASK_ROOT,
     ChatStoreKeys.NEW_TASK_CONTEXT_VERSION,
@@ -829,6 +857,7 @@ private fun encode(chat: StoredChat): JsonObject = buildJsonObject {
   }
   chat.summary?.let { put(ChatStoreKeys.SUMMARY, it) }
   chat.summarySourceUpdatedAt?.let { put(ChatStoreKeys.SUMMARY_SOURCE_UPDATED_AT, it.toEpochMilliseconds()) }
+  chat.chatTitle?.let { put(ChatStoreKeys.CHAT_TITLE, it) }
   chat.executionCheckoutRoot?.let { put(ChatStoreKeys.EXECUTION_CHECKOUT_ROOT, it) }
 }
 
@@ -894,6 +923,7 @@ private fun decode(root: JsonObject, fallbackSessionId: String, diagnostics: Dia
     },
     summary = root.string(ChatStoreKeys.SUMMARY)?.takeIf { it.isNotBlank() },
     summarySourceUpdatedAt = (root[ChatStoreKeys.SUMMARY_SOURCE_UPDATED_AT] as? JsonPrimitive)?.longOrNull?.let(Instant::fromEpochMilliseconds),
+    chatTitle = root.string(ChatStoreKeys.CHAT_TITLE)?.takeIf { it.isNotBlank() },
     executionCheckoutRoot = root.string(ChatStoreKeys.EXECUTION_CHECKOUT_ROOT),
     source = root,
   )

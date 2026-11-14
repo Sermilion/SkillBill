@@ -73,7 +73,7 @@ internal fun InboxRunRow(item: WorkItem, now: Instant, divider: Boolean, selecte
 internal fun InboxChatRow(entry: ChatHistoryEntry, selectedRoot: String?, now: Instant, divider: Boolean, open: Boolean, selected: Boolean, onResume: (ChatHistoryEntry) -> Unit, onDiscard: (ChatHistoryEntry) -> Unit) {
   val colors = SkillBillTheme.colors
   val title = remember(entry.title, entry.summary) { chatTitle(entry.title) }
-  val displayTitle = entry.summary ?: title.title
+  val displayTitle = entry.summary ?: entry.generatedTitle ?: title.title
   val repoLabel = chatRepoLabel(entry, selectedRoot)
   InboxRow(
     onClick = { onResume(entry) },

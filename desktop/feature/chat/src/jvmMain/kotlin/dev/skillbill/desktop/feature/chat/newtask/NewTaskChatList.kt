@@ -71,12 +71,15 @@ internal data class OpenChatItem(
 @Composable
 internal fun rememberOpenChatItems(chats: NewTaskChats): List<OpenChatItem> {
   val open by chats.open.collectAsState()
+  val titles by chats.chatTitles.collectAsState()
   return open.map { draft ->
     key(draft) {
       val chat by draft.chat.collectAsState()
       val transcript = chat?.thread?.transcript?.collectAsState()?.value.orEmpty()
+      val sessionId = chat?.sessionIdFlow?.collectAsState()?.value
       val status by remember(draft) { chats.status(draft) }.collectAsState(NewTaskChatStatus.Idle)
-      OpenChatItem(draft, newTaskChatTitle(transcript), draft.repository?.name, draft.selectedAgent?.let(::chipText) ?: draft.agentId?.let(::agentDisplayName).orEmpty(), status, chat != null)
+      val generated = sessionId?.let(titles::get)
+      OpenChatItem(draft, generated ?: newTaskChatTitle(transcript), draft.repository?.name, draft.selectedAgent?.let(::chipText) ?: draft.agentId?.let(::agentDisplayName).orEmpty(), status, chat != null)
     }
   }
 }

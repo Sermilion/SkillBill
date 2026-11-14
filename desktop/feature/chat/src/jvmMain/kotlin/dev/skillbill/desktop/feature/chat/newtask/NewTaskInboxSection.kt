@@ -87,7 +87,7 @@ internal fun RecentChatsSection(
       rows = chats,
       description = "Recent chats",
       keyOf = { it.sessionId },
-      titleOf = { it.summary ?: chatTitle(it.title).title },
+      titleOf = { it.summary ?: it.generatedTitle ?: chatTitle(it.title).title },
       onOpen = onResume,
       onDelete = { entry ->
         if (entry.sessionId in openSessionIds) false else {

@@ -11,6 +11,7 @@ import dev.skillbill.desktop.core.domain.model.ChatSteeringPolicy
 import dev.skillbill.desktop.core.domain.model.ChatSteeringRequest
 import dev.skillbill.desktop.core.domain.model.ChatSteeringResult
 import dev.skillbill.desktop.core.domain.model.ChatSteeringUpdate
+import dev.skillbill.desktop.core.domain.model.ChatTitleUpdate
 import dev.skillbill.desktop.core.domain.model.Detail
 import dev.skillbill.desktop.core.domain.model.RunOptions
 import dev.skillbill.desktop.core.domain.model.SessionMoveResult
@@ -116,4 +117,10 @@ interface ExecutionChatRepository {
 
   /** The session id of each summary written; a hot flow without replay. */
   val summaryUpdates: Flow<String> get() = emptyFlow()
+
+  /** Asks for a generated 2-3 word tab title for the saved chat of [sessionId]; returns at once, never throws, and is free once one exists. */
+  fun requestTitle(sessionId: String) {}
+
+  /** Each generated chat title written; a hot flow without replay. */
+  val titleUpdates: Flow<ChatTitleUpdate> get() = emptyFlow()
 }

@@ -6,6 +6,7 @@ import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
 import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
+import dev.skillbill.desktop.core.domain.model.ChatTitleUpdate
 import dev.skillbill.desktop.core.testing.FakeAppSettingsRepository
 import dev.skillbill.desktop.core.testing.RecordingDiagnostics
 import kotlinx.coroutines.CoroutineStart
@@ -31,10 +32,15 @@ class ChatSummarizerTest {
   private val diagnostics = RecordingDiagnostics()
   private val store = ChatStore(host, diagnostics, Clock.System)
   private val commands = mutableListOf<ChatCommand>()
+  private val acpCommands = mutableListOf<ChatCommand>()
 
   /** Answers every call with [reply]; [during] runs while the call is in flight. */
   private var reply: (ChatCommand) -> List<ChatProcessOutput> = { claudeReply("About CI.") }
   private var during: suspend () -> Unit = {}
+
+  /** The ACP frames an opencode label call receives, in order. */
+  private var acpScript: List<BoundedProtocolInput> = emptyList()
+  private var acpSent = mutableListOf<String>()
 
   private val launcher = ChatProcessLauncher { command ->
     flow {
@@ -44,8 +50,20 @@ class ChatSummarizerTest {
     }
   }
 
+  private val protocolLauncher = BoundedProtocolLauncher { command ->
+    acpCommands += command
+    BoundedProcessStart.Started(object : BoundedProtocolConnection {
+      private val inputs = ArrayDeque(acpScript)
+      override suspend fun sendLine(line: String): Boolean = acpSent.add(line)
+      override suspend fun receive(): BoundedProtocolInput = inputs.removeFirstOrNull() ?: BoundedProtocolInput.Exited
+      override fun beginResponseBudget() {}
+      override fun endResponseBudget() {}
+      override suspend fun close() {}
+    })
+  }
+
   private fun TestScope.summarizer() =
-    ChatSummarizer(host, FakeAppSettingsRepository(), launcher, store, diagnostics, ApplicationCoroutineScope(backgroundScope))
+    ChatSummarizer(host, FakeAppSettingsRepository(), launcher, protocolLauncher, store, diagnostics, ApplicationCoroutineScope(backgroundScope))
       .also { it.dispatcher = StandardTestDispatcher(testScheduler) }
 
   private fun entry(session: String, agent: String, at: Long) = ChatHistoryEntry(
@@ -53,30 +71,31 @@ class ChatSummarizerTest {
     listOf(ChatHistoryLine(ChatHistoryRole.Operator, "why is $session blocked?"), ChatHistoryLine(ChatHistoryRole.Agent, "CI failed.")),
   )
 
-  // A summary call that can edit files, run tools, resume the chat or bill the reasoning model costs the operator real work.
+  // A summary call that can edit files, run tools, resume the chat or bill a selected model costs the operator real work.
   @Test
-  fun `each agent uses native bypass on its cheap model in the summaries directory`() = runTest {
+  fun `each supported agent uses native bypass in the summaries directory on its default model`() = runTest {
     val summarizer = summarizer()
     listOf("claude", "codex", "cursor").forEachIndexed { index, agent -> store.saveChat(entry(agent, agent, index + 1L)) }
+    // A devin chat with no native session or checkout is recovery-only, so give this one its real shape.
+    val devin = entry("devin", "devin", 4L).copy(executionCheckoutRoot = createTempDirectory("devin-root").toString())
+    assertTrue(store.saveDevinSession("devin", "native-42", devin))
     reply = { command -> agentReply(command, "About CI.") }
 
-    listOf("claude", "codex", "cursor").forEach(summarizer::request)
+    listOf("claude", "codex", "cursor", "devin").forEach(summarizer::request)
     runCurrent()
 
     val forbidden = listOf(
-      "--session-id", "--resume", "--append-system-prompt", "--system-prompt",
+      "--session-id", "--resume", "--append-system-prompt", "--system-prompt", "--model",
     )
-    val expected = mapOf("claude" to "haiku", "codex" to "gpt-6-luna", "agent" to "gpt-5.4-nano-none")
-    assertEquals(3, commands.size)
+    assertEquals(4, commands.size)
     commands.forEach { command ->
-      val binary = expected.keys.first { it in command.argv }
-      assertTrue(expected.getValue(binary) in command.argv, "${command.argv}")
       assertTrue(forbidden.none { it in command.argv }, "${command.argv}")
       assertEquals(File(host.userHome, CHAT_SUMMARY_PATH).path, command.workingDirectory)
     }
     assertTrue(listOf("--dangerously-bypass-approvals-and-sandbox", "--ephemeral").all { it in commands.first { "codex" in it.argv }.argv })
     assertTrue(listOf("--force", "--trust", "--approve-mcps", "--sandbox", "disabled").all { it in commands.first { "agent" in it.argv }.argv })
     assertTrue(listOf("--dangerously-skip-permissions", "--tools", "", "--no-session-persistence").all { it in commands.first { "claude" in it.argv }.argv })
+    assertTrue(listOf("-p", "--respect-workspace-trust", "false").all { it in commands.first { "devin" in it.argv }.argv })
     listOf("claude", "cursor").forEach { agent ->
       val argv = commands.first { agent in it.argv || (agent == "cursor" && "agent" in it.argv) }.argv
       val outputFormat = argv.indexOf("--output-format")
@@ -86,6 +105,33 @@ class ChatSummarizerTest {
       val outputFormat = command.argv.indexOf("--output-format")
       if (outputFormat >= 0) assertTrue(command.argv.getOrNull(outputFormat + 1) != "text", "${command.argv}")
     }
+    assertEquals("About CI.", store.savedFor("devin")?.summary)
+  }
+
+  // `opencode run` closes stdout before the reply arrives, so the label call goes through one ACP turn instead.
+  @Test
+  fun `opencode labels run through one acp prompt on its anthropic small model`() = runTest {
+    val summarizer = summarizer()
+    store.saveChat(entry("oc1", "opencode", 1).copy(agent = ChatAgent("opencode", null, null)))
+    acpScript = listOf(
+      acpLine("""{"id":1,"result":{"protocolVersion":1}}"""),
+      acpLine("""{"id":2,"result":{"sessionId":"acp-9"}}"""),
+      acpLine("""{"id":3,"result":{}}"""),
+      acpLine("""{"method":"session/update","params":{"sessionId":"acp-9","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"Blocked CI"}}}}"""),
+      acpLine("""{"id":4,"result":{"stopReason":"end_turn"}}"""),
+    )
+
+    summarizer.request("oc1")
+    runCurrent()
+
+    assertEquals(0, commands.size)
+    assertEquals(1, acpCommands.size)
+    assertTrue("acp" in acpCommands.single().argv)
+    assertEquals(File(host.userHome, CHAT_SUMMARY_PATH).path, acpCommands.single().workingDirectory)
+    assertEquals(listOf("initialize", "session/new", "session/set_config_option", "session/prompt"),
+      acpSent.map { """"method":"([^"]+)"""".toRegex().find(it)!!.groupValues[1] })
+    assertTrue(acpSent[2].contains(""""value":"$OPENCODE_LABEL_MODEL""""))
+    assertEquals("Blocked CI", store.savedFor("oc1")?.summary)
   }
 
   // A multi-line or quoted reply makes an unreadable row, and stamping the newer save hides turns from re-summarizing.
@@ -112,7 +158,46 @@ class ChatSummarizerTest {
     assertEquals(listOf("s1"), updates)
   }
 
-  // An agent that ignores the length request must not fill a Recent chats row with a long sentence.
+  // A title is written once: a request on a titled chat launches nothing and emits nothing.
+  @Test
+  fun `a title request writes the tab label once and reports it`() = runTest {
+    val summarizer = summarizer()
+    store.saveChat(entry("t1", "claude", 1))
+    reply = { claudeReply("Fix flaky test") }
+    val updates = mutableListOf<ChatTitleUpdate>()
+    backgroundScope.launch(start = CoroutineStart.UNDISPATCHED) { summarizer.titleUpdates.collect { updates += it } }
+
+    summarizer.requestTitle("t1")
+    summarizer.requestTitle("t1")
+    runCurrent()
+
+    assertEquals(1, commands.size)
+    assertEquals("Fix flaky test", store.savedFor("t1")?.generatedTitle)
+    assertEquals(listOf(ChatTitleUpdate("t1", "Fix flaky test")), updates)
+
+    summarizer.requestTitle("t1")
+    runCurrent()
+
+    assertEquals(1, commands.size)
+    assertEquals(1, updates.size)
+  }
+
+  // A title is not a summary: each request kind writes only its own field.
+  @Test
+  fun `title and summary requests write their own fields`() = runTest {
+    val summarizer = summarizer()
+    store.saveChat(entry("both", "claude", 1))
+    reply = { claudeReply("Fix flaky test") }
+
+    summarizer.requestTitle("both")
+    runCurrent()
+
+    assertEquals("Fix flaky test", store.savedFor("both")?.generatedTitle)
+    assertEquals(null, store.savedFor("both")?.summary)
+    assertEquals("both", store.staleForSummary("both")?.sessionId)
+  }
+
+  // An overlong title or summary fills the tab or row with a sentence instead of a label.
   @Test
   fun `overlong generated titles stop at a whole word within eighty characters`() = runTest {
     val summarizer = summarizer()
@@ -206,6 +291,13 @@ class ChatSummarizerTest {
     assertEquals(listOf("s1"), store.staleSummaries(20).map { it.sessionId })
   }
 
+  private fun acpLine(frame: String) = BoundedProtocolInput.Line(frame)
+
+  private fun devinReply(text: String): List<ChatProcessOutput> = listOf(
+    ChatProcessOutput.Line(text),
+    ChatProcessOutput.Exited(0, ""),
+  )
+
   private fun codexReply(text: String): List<ChatProcessOutput> = listOf(
     ChatProcessOutput.Line("""{"type":"item.completed","item":{"type":"agent_message","text":"$text"}}"""),
     ChatProcessOutput.Line("""{"type":"turn.completed"}"""),
@@ -215,6 +307,7 @@ class ChatSummarizerTest {
   private fun agentReply(command: ChatCommand, text: String): List<ChatProcessOutput> = when {
     "codex" in command.argv -> codexReply(text)
     "agent" in command.argv -> cursorReply(text)
+    "devin" in command.argv -> devinReply(text)
     else -> claudeReply(text)
   }
 

@@ -50,9 +50,26 @@ internal object ChatModelKeys {
   const val SESSION_SET_CONFIG = "session/set_config_option"
   const val OPEN_CODE_MODEL_CONFIG = "model"
   const val SESSION_UPDATE_METHOD = "session/update"
+  const val SESSION_PROMPT = "session/prompt"
+  const val SESSION_REQUEST_PERMISSION = "session/request_permission"
+  const val PROMPT = "prompt"
+  const val TEXT = "text"
+  const val CONTENT = "content"
+  const val UPDATE = "update"
+  const val SESSION_UPDATE = "sessionUpdate"
+  const val AGENT_MESSAGE_CHUNK = "agent_message_chunk"
+  const val STOP_REASON = "stopReason"
+  const val OUTCOME = "outcome"
+  const val OPTION_ID = "optionId"
+  const val KIND = "kind"
+  const val ALLOW_ONCE = "allow_once"
+  const val SELECTED = "selected"
+  const val CANCELLED = "cancelled"
+  const val END_TURN = "end_turn"
 }
 
 internal object AcpErrorCodes {
+  const val METHOD_NOT_FOUND = -32601
   const val AUTHENTICATION_REQUIRED = -32000
 }
 

@@ -59,7 +59,7 @@ class AgentExecutionChatRepositoryTest {
     val store = ChatStore(host, diagnostics, Clock.System)
     val settings = FakeAppSettingsRepository()
     val config = Proxy.newProxyInstance(javaClass.classLoader, arrayOf(RuntimeConfigRepository::class.java)) { _, _, _ -> error("unused") } as RuntimeConfigRepository
-    val summarizer = ChatSummarizer(host, settings, { error("unused") }, store, diagnostics, ApplicationCoroutineScope(backgroundScope))
+    val summarizer = ChatSummarizer(host, settings, { error("unused") }, { error("unused") }, store, diagnostics, ApplicationCoroutineScope(backgroundScope))
     val catalog = AgentSessionCatalog(host, settings, store, diagnostics)
     val modelCatalog = ChatModelCatalog(
       host, { error("unused") }, { error("unused") }, dev.skillbill.desktop.core.data.usage.UsageProfileResolver(host), settings, diagnostics,
@@ -98,7 +98,7 @@ class AgentExecutionChatRepositoryTest {
       val host = HostEnvironment(emptyMap(), createTempDirectory("chat-home").toString(), "")
       val store = ChatStore(host, diagnostics, Clock.System)
       val settings = FakeAppSettingsRepository()
-      val summarizer = ChatSummarizer(host, settings, { error("unused") }, store, diagnostics, ApplicationCoroutineScope(backgroundScope))
+      val summarizer = ChatSummarizer(host, settings, { error("unused") }, { error("unused") }, store, diagnostics, ApplicationCoroutineScope(backgroundScope))
       val catalog = AgentSessionCatalog(host, settings, store, diagnostics)
       AgentExecutionChatRepository(setOf(claude), unusedConfig, store, catalog, diagnostics, summarizer,
         ChatModelCatalog(host, { error("unused") }, { error("unused") },
@@ -177,7 +177,7 @@ class AgentExecutionChatRepositoryTest {
     val diagnostics = RecordingDiagnostics()
     val store = ChatStore(host, diagnostics, Clock.System)
     val settings = FakeAppSettingsRepository()
-    val summarizer = ChatSummarizer(host, settings, { error("unused") }, store, diagnostics, ApplicationCoroutineScope(backgroundScope))
+    val summarizer = ChatSummarizer(host, settings, { error("unused") }, { error("unused") }, store, diagnostics, ApplicationCoroutineScope(backgroundScope))
     val catalog = AgentSessionCatalog(host, settings, store, diagnostics)
     val config = Proxy.newProxyInstance(javaClass.classLoader, arrayOf(RuntimeConfigRepository::class.java)) { _, _, _ ->
       error("unused")

@@ -113,7 +113,7 @@ fun SbButton(
       }
     }
   }
-  val wrapped: @Composable () -> Unit = { if (tooltip != null) SbTooltip(tooltip, tooltipShortcut, content) else content() }
+  val wrapped: @Composable () -> Unit = { if (tooltip != null) SbTooltip(tooltip, tooltipShortcut) { content() } else content() }
   androidx.compose.runtime.CompositionLocalProvider(LocalContentColor provides fg) { wrapped() }
 }
 
