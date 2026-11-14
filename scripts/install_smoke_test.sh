@@ -623,7 +623,7 @@ FAKE_HOME="$(mktemp -d)"
 INTERACTIVE_OUTPUT="$(run_interactive_install_with_blank_defaults "$FAKE_HOME")"
 pass "interactive install with blank defaults exited 0"
 
-if [[ "$INTERACTIVE_OUTPUT" == *"Agents:         claude, codex, cursor"$'\n'* ]]; then
+if [[ "$INTERACTIVE_OUTPUT" == *"Agents:         claude, codex, cursor, opencode, devin"$'\n'* ]]; then
   pass "blank agent selection defaults to all when none detected"
 else
   fail "blank agent selection summary unexpected"
@@ -654,7 +654,7 @@ FAKE_HOME="$(mktemp -d)"
 PIPED_OUTPUT="$(run_piped_install_with_eof_defaults "$FAKE_HOME")"
 pass "piped install with EOF defaults exited 0"
 
-if [[ "$PIPED_OUTPUT" == *"Agents:         claude, codex, cursor"$'\n'* ]]; then
+if [[ "$PIPED_OUTPUT" == *"Agents:         claude, codex, cursor, opencode, devin"$'\n'* ]]; then
   pass "piped EOF agent selection defaults to all when none detected"
 else
   fail "piped EOF agent selection summary unexpected"

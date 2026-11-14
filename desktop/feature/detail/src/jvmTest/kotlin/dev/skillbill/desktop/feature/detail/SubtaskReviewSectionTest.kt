@@ -34,7 +34,7 @@ class SubtaskReviewSectionTest {
       onNodeWithText("Pass 2").assertExists()
       onNodeWithText("· Reviewing").assertExists()
       onNodeWithText("· 1 of 2 lanes done").assertExists()
-      onNodeWithText("completed-only-lane").assertDoesNotExist()
+      onNodeWithText("completed-only-lane").assertExists()
       onNode(
         hasText("lane-finished") and
           SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Finished"),

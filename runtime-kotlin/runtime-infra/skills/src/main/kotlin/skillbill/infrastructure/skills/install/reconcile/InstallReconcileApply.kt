@@ -4,7 +4,6 @@ import skillbill.error.core.catchingNonCancellation
 import skillbill.error.shellcontent.reconciliationConflictError
 import skillbill.infrastructure.host.jvm.atomicMoveReplacing
 import skillbill.infrastructure.skills.install.plan.discoverPlatformManifests
-import skillbill.install.model.BaselineManifest
 import skillbill.install.model.ReconciliationPlan
 import skillbill.install.model.SkillReconciliationOutcome
 import skillbill.model.toPath
@@ -15,16 +14,17 @@ import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 
 internal fun applyReconciliation(
-  upstream: ReconcileSourceRoots,
-  local: ReconcileSourceRoots,
-  home: Path,
-  baseline: BaselineManifest,
-  environment: Map<String, String> = emptyMap(),
+  invocation: ReconcileInvocation,
+  context: ReconcileContext,
+  moveDirectory: (Path, Path) -> Unit = ::moveDir,
 ): ReconcileApplyOutput {
-  val upstreamSkills = enumerateSkills(upstream, home, ReconcileSourceSide.UPSTREAM, environment)
-  val localSkills = enumerateSkills(local, home, ReconcileSourceSide.LOCAL, environment)
-  val plan = classifyReconciliation(upstreamSkills, localSkills, baseline)
-  guardPruneAgainstEmptyUpstream(plan, upstreamSkills)
+  val upstream = invocation.upstream
+  val local = invocation.local
+  val home = invocation.home
+  val upstreamSkills = enumerateSkills(upstream, home, ReconcileSourceSide.UPSTREAM, context.environment)
+  val localSkills = enumerateSkills(local, home, ReconcileSourceSide.LOCAL, context.environment)
+  val plan = classifyReconciliation(upstreamSkills, localSkills, context.baseline, context.publishedSource)
+  guardReconciliationAgainstEmptyUpstream(plan, upstreamSkills)
 
   val installedPaths = mutableListOf<String>()
   plan.outcomes.forEach { outcome ->
@@ -39,7 +39,7 @@ internal fun applyReconciliation(
           reason = "apply requires the upstream skill dir but it was not enumerated.",
         )
     val liveDir = liveSkillDir(local, skillPath)
-    reconcileSkillDirectory(upstreamDir, liveDir)
+    reconcileSkillDirectory(upstreamDir, liveDir, moveDirectory)
     installedPaths.add(skillPath)
   }
 
@@ -50,23 +50,23 @@ internal fun applyReconciliation(
         deleteTreeRecursively(liveSkillDir(local, outcome.skillRelativePath))
         outcome.skillRelativePath
       }
-  adoptPlatformPackNonSkillFiles(upstream, local, upstreamSkills, home, environment)
+  adoptPlatformPackNonSkillFiles(upstream, local, localSkills + upstreamSkills, home, context.environment)
   return ReconcileApplyOutput(plan = plan, installedPaths = installedPaths, prunedPaths = prunedPaths)
 }
 
-private fun guardPruneAgainstEmptyUpstream(
+private fun guardReconciliationAgainstEmptyUpstream(
   plan: ReconciliationPlan,
   upstreamSkills: Map<String, ReconcileSkillEntry>,
 ) {
   if (upstreamSkills.isNotEmpty()) {
     return
   }
-  val pruned = plan.prunedPaths
-  if (pruned.isNotEmpty()) {
+  val existingSkills = plan.outcomes.filterNot { it.skillRelativePath.startsWith(AGENT_ADDONS_PREFIX) }
+  if (existingSkills.isNotEmpty()) {
     throw reconciliationConflictError(
-      skillRelativePath = pruned.first(),
+      skillRelativePath = existingSkills.first().skillRelativePath,
       reason =
-        "refusing to prune ${pruned.size} installed path(s) because the upstream source " +
+        "refusing to reconcile ${existingSkills.size} installed path(s) because the upstream source " +
           "tree enumerated no skills at all; the candidate source is missing or incomplete.",
     )
   }
@@ -75,7 +75,7 @@ private fun guardPruneAgainstEmptyUpstream(
 private fun adoptPlatformPackNonSkillFiles(
   upstream: ReconcileSourceRoots,
   local: ReconcileSourceRoots,
-  upstreamSkills: Map<String, ReconcileSkillEntry>,
+  knownSkills: Map<String, ReconcileSkillEntry>,
   home: Path,
   environment: Map<String, String>,
 ) {
@@ -84,7 +84,7 @@ private fun adoptPlatformPackNonSkillFiles(
     return
   }
   val packSkillDirs =
-    upstreamSkills.values
+    knownSkills.values
       .map { it.sourceDir }
       .toSet()
   val livePacks = local.platformPacksRoot.toAbsolutePath().normalize()
@@ -115,20 +115,20 @@ private fun adoptPlatformPackNonSkillFiles(
       }
     }
   }
-  deleteLivePackFilesAbsentUpstream(livePacks, local, upstreamSkills, desiredFiles)
+  deleteLivePackFilesAbsentUpstream(livePacks, local, knownSkills, desiredFiles)
 }
 
 private fun deleteLivePackFilesAbsentUpstream(
   livePacks: Path,
   local: ReconcileSourceRoots,
-  upstreamSkills: Map<String, ReconcileSkillEntry>,
+  knownSkills: Map<String, ReconcileSkillEntry>,
   desiredFiles: Set<String>,
 ) {
   if (!Files.isDirectory(livePacks)) {
     return
   }
   val liveSkillDirs =
-    upstreamSkills.keys
+    knownSkills.keys
       .filter { it.startsWith(PLATFORM_PACKS_PREFIX) }
       .map { liveSkillDir(local, it) }
   Files.walk(livePacks).use { stream ->
@@ -217,6 +217,7 @@ private fun liveSkillDir(
 private fun reconcileSkillDirectory(
   upstreamDir: Path,
   liveDir: Path,
+  moveDirectory: (Path, Path) -> Unit,
 ) {
   val parent =
     liveDir.toAbsolutePath().normalize().parent
@@ -230,26 +231,43 @@ private fun reconcileSkillDirectory(
   copyTreeDeep(upstreamDir, stagedSkill)
   val hasLive = Files.exists(liveDir, LinkOption.NOFOLLOW_LINKS)
   val backup = if (hasLive) Files.createTempDirectory(parent, ".reconcile-backup-") else null
+  var retainBackup = false
 
   backup?.let(Files::deleteIfExists)
+  var publicationFailure: Exception? = null
   try {
     if (hasLive && backup != null) {
-      moveDir(liveDir, backup)
+      moveDirectory(liveDir, backup)
     }
     try {
-      moveDir(stagedSkill, liveDir)
+      moveDirectory(stagedSkill, liveDir)
     } catch (error: IOException) {
       if (backup != null && Files.exists(backup, LinkOption.NOFOLLOW_LINKS) &&
         !Files.exists(liveDir, LinkOption.NOFOLLOW_LINKS)
       ) {
-        catchingNonCancellation { moveDir(backup, liveDir) }.onFailure(error::addSuppressed)
+        catchingNonCancellation { moveDirectory(backup, liveDir) }.onFailure { restoreError ->
+          retainBackup = true
+          val failure =
+            reconciliationConflictError(
+              skillRelativePath = liveDir.toString(),
+              reason = "publication and restoration failed; previous source remains at '$backup'.",
+              cause = error,
+            )
+          failure.addSuppressed(restoreError)
+          publicationFailure = failure
+        }
       }
-      throw error
+      if (publicationFailure == null) {
+        publicationFailure = error
+      }
     }
   } finally {
     deleteTreeRecursively(staged)
-    backup?.let(::deleteTreeRecursively)
+    if (!retainBackup) {
+      backup?.let(::deleteTreeRecursively)
+    }
   }
+  publicationFailure?.let { throw it }
 }
 
 private fun copyTreeDeep(

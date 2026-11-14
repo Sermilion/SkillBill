@@ -34,7 +34,7 @@ def install(args):
     home = Path.home()
     target = home / ".local/share/skill-bill-usb-display"
     unit = home / ".config/systemd/user" / SERVICE
-    cli = shutil.which("skill-bill")
+    cli = shutil.which("sona")
     if not cli:
         raise RuntimeError(
             "Install Skill Bill and add it to PATH before installing the display service"

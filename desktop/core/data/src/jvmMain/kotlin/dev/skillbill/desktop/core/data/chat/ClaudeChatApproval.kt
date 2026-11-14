@@ -106,11 +106,15 @@ class ChatApprovalAuthority(
     request: ApprovalOwnerOpenRequest,
     protocol: CursorAcpSession,
     stopProcess: () -> Unit,
+    expectedComponent: DatabaseSessionComponent? = null,
   ): CursorChatApprovalOpening {
     if (request.profileIdentity.isBlank()) return CursorChatApprovalOpening.Refused(
       "Cursor approval scope is unavailable because its profile identity is unknown.",
     )
     val component = sessions.sessions.value ?: return CursorChatApprovalOpening.Refused(NO_SESSION_REASON)
+    if ((expectedComponent != null && component !== expectedComponent) || !sessions.isCurrent(component)) {
+      return CursorChatApprovalOpening.Refused(SESSION_CHANGED_REASON)
+    }
     val generation = CursorChatGeneration(protocol, stopProcess, diagnostics)
     val refusal = openOwnerGeneration(component, request, generation, { owner, generations ->
       protocol.bind(owner)

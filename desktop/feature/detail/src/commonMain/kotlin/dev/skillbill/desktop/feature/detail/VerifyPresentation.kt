@@ -81,10 +81,10 @@ internal fun VerifyReportActions(state: DetailUiState, run: VerifyRunDetails, on
 }
 
 @Composable
-internal fun VerifyHeaderActions(state: DetailUiState, run: VerifyRunDetails, view: RunActionsView, recoverFocus: FocusRequester, onAction: (DetailAction) -> Unit, onOpenChat: () -> Unit) {
+internal fun VerifyHeaderActions(state: DetailUiState, run: VerifyRunDetails, view: RunActionsView, recoverFocus: FocusRequester, onAction: (DetailAction) -> Unit, onOpenParkedVerify: (adjust: Boolean) -> Unit) {
   if (verifyRunState(run) == VerifyRunState.Parked) {
-    SbButton("Review criteria in Chat", onOpenChat, enabled = run.criteria.isNotEmpty())
-    SbButton("Adjust intake in Chat", onOpenChat)
+    SbButton("Review criteria in Chat", { onOpenParkedVerify(false) }, enabled = run.criteria.isNotEmpty())
+    SbButton("Adjust intake in Chat", { onOpenParkedVerify(true) })
   }
   val choices = (state.sections as? SectionsUi.Loaded)?.runOptions?.agentChoices.orEmpty()
   RunActions(verifyRunActionsView(view, run), choices, state.controls.agentMenuOpen, recoverFocus, onAction)

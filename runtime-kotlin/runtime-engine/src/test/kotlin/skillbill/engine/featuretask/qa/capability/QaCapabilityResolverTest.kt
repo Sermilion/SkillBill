@@ -3,10 +3,10 @@ package skillbill.engine.featuretask.qa.capability
 import skillbill.engine.RecordingWorkflowGitOperations
 import skillbill.engine.featuretask.model.execution.QaDeclaredTarget
 import skillbill.engine.featuretask.validation.kotlinPackWithoutGate
-import skillbill.scaffold.model.CodeReviewBaselineLayer
-import skillbill.scaffold.model.CodeReviewComposition
-import skillbill.scaffold.model.CodeReviewCompositionMode
-import skillbill.scaffold.model.CodeReviewCompositionScope
+import skillbill.review.model.CodeReviewBaselineLayer
+import skillbill.review.model.CodeReviewComposition
+import skillbill.review.model.CodeReviewCompositionMode
+import skillbill.review.model.CodeReviewCompositionScope
 import skillbill.scaffold.model.QaCapabilityDeclaration
 import skillbill.scaffold.model.QaTargetKind
 import skillbill.scaffold.model.RoutingSignals

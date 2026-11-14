@@ -46,17 +46,36 @@ enum class SupportedAgent(
     honorsAdditionalWritableDirectories = false,
     loadsRuntimeMcpHeadless = false,
   ),
+  OPENCODE(
+    "opencode",
+    "opencode-agents",
+    "md",
+    ".opencode",
+    ".config/opencode/opencode.json",
+    false,
+    honorsAdditionalWritableDirectories = false,
+    loadsRuntimeMcpHeadless = false,
+  ),
+  DEVIN(
+    "devin",
+    "devin-agents",
+    "md",
+    null,
+    ".config/devin/mcp_config.json",
+    false,
+    honorsAdditionalWritableDirectories = true,
+    loadsRuntimeMcpHeadless = true,
+  ),
   ;
 
   val id: String get() = wireValue
 
   companion object {
-    val supportedEntries: List<SupportedAgent> = entries
-    val supportedIds: List<String> = supportedEntries.map(SupportedAgent::wireValue)
+    val supportedIds: List<String> = entries.map(SupportedAgent::wireValue)
 
     fun fromWireOrNull(id: String): SupportedAgent? {
       val normalized = id.trim().lowercase()
-      return supportedEntries.firstOrNull { agent -> agent.wireValue == normalized }
+      return entries.firstOrNull { agent -> agent.wireValue == normalized }
     }
 
     fun fromWire(id: String): SupportedAgent =

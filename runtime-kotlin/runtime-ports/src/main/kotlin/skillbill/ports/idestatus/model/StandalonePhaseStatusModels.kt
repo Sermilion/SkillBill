@@ -1,5 +1,6 @@
 package skillbill.ports.idestatus.model
 
+import skillbill.contracts.system.OpenCodeLaunchIdentity
 import skillbill.idestatus.model.IdeStatusLaunchScope
 import skillbill.ports.monitor.model.MonitorRetentionReason
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessIdentity
@@ -17,6 +18,7 @@ data class IdeStatusWorkflowRegistration(
   val startedAt: Instant,
   val agentEnvironment: Map<String, String> = emptyMap(),
   val primaryRepositoryRoot: String? = null,
+  val openCodeIdentity: OpenCodeLaunchIdentity? = null,
 )
 
 data class IdeStatusWorkflowExecution(
@@ -34,6 +36,7 @@ data class IdeStatusWorkflowExecution(
   val updatedAt: Instant,
   val agentEnvironment: Map<String, String> = emptyMap(),
   val primaryRepositoryRoot: String? = null,
+  val openCodeIdentity: OpenCodeLaunchIdentity? = null,
 )
 
 data class StandaloneMonitorTarget(
@@ -118,6 +121,7 @@ data class StandalonePhaseStatusRegistration(
   val launchScope: IdeStatusLaunchScope = IdeStatusLaunchScope.STANDALONE,
   val monitorTarget: StandaloneMonitorTarget? = null,
   val primaryRepositoryRoot: String? = null,
+  val openCodeIdentity: OpenCodeLaunchIdentity? = null,
 )
 
 data class StandalonePhaseStatusUpdate(
@@ -195,6 +199,7 @@ data class StandalonePhaseStatusRecord(
   val validationOutcome: StandaloneValidationOutcome? = null,
   val reportedModel: String? = null,
   val primaryRepositoryRoot: String? = null,
+  val openCodeIdentity: OpenCodeLaunchIdentity? = null,
 )
 
 const val STANDALONE_ELIGIBLE_PAGE_LIMIT: Int = 500

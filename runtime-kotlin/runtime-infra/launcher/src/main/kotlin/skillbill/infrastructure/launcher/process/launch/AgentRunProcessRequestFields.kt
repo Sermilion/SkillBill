@@ -24,6 +24,7 @@ data class AgentRunProcessLaunchFields(
   val continuation: ((AgentRunProcessResult) -> AgentRunProcessLaunchFields?)? = null,
   val flushOutputStreamOnEnd: Boolean = false,
   val session: AgentRunApprovalChannelOpening? = null,
+  val beforeStart: (() -> Unit)? = null,
 )
 
 data class AgentRunProcessTimingFields(
@@ -50,6 +51,8 @@ data class AgentRunProcessEnvironmentFields(
   val environment: Map<String, String> = emptyMap(),
   val inheritEnvironment: Boolean = true,
   val environmentPassthroughKeys: Set<String> = emptySet(),
+  val removedEnvironmentKeys: Set<String> = emptySet(),
+  val explicitEnvironment: Boolean = false,
 )
 
 data class AgentRunProcessReviewFields(
@@ -70,6 +73,7 @@ data class AgentRunProcessRequest(
   val environmentFields: AgentRunProcessEnvironmentFields = AgentRunProcessEnvironmentFields(),
   val review: AgentRunProcessReviewFields = AgentRunProcessReviewFields(),
   val approval: AgentRunProcessApprovalFields = AgentRunProcessApprovalFields(),
+  val processLifecycle: AgentRunProcessLifecycle? = null,
 ) {
   init {
     require(launch.command.isNotEmpty()) { "Agent run command is required." }

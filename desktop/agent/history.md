@@ -1,14 +1,15 @@
 ## [2026-11-13] SONA-19 unavailable-agent compatibility
 Areas: core/domain, core/data/chat, core/designsystem, feature/chat, feature/detail, feature/specs, app/usage, build-logic
 - MEDIUM feature retains saved chats with unsupported non-null agent ids as unavailable, preserving transcript, model, effort, profile, summary and session data. Ordinary saves persist the sentinel; normalization diagnostics omit raw ids and chat content.
-- reusable: agentDisplayName and neutral avatar presentation cover chips, transcripts, resume lists, run details, specs and usage. Claude, Codex and Cursor are the only registered chat transports and supported choices.
+- reusable: agentDisplayName and neutral avatar presentation cover chips, transcripts, resume lists, run details, specs and usage. Chat registers only Claude, Codex and Cursor; runtime-derived menus can also offer OpenCode and Devin.
 - Restored execution and New Task chats keep their saved lines and show one pick-an-agent notice. Support checks gate Send, Send now, admission and queue drain until the operator chooses a supported agent.
-- Removed retired transport and discovery paths, including Devin in final repairs. Legacy exchanges arrays are ignored on read and omitted by the next atomic save; remaining chat data stays intact.
+- Removed the retired fourth agent's transport and discovery paths. Legacy exchanges arrays are ignored on read and omitted by the next atomic save; remaining chat data stays intact.
 - reusable: compactLauncherClasspath moves the Linux packaged launcher's ordered dependencies into launcher-classpath.jar's manifest while preserving main class, JVM options and bundled jars.
 - Accepted QA repair gives both expected agent lists in PlanActionsTest an explicit nullable element type, matching the captured lists.
 - Limits: no startup bulk rewrite or retired-provider file cleanup. Validation changed code after QA settled, so QA does not cover the final tree. Native Debian/RPM packaging tools and macOS/Windows hosts were unavailable.
+- Acceptance discrepancy: runtime-derived agent choices still exceed the spec's three-agent set. Parent AC-002, AC-004 and AC-005 remain incomplete.
 Feature flag: N/A
-Acceptance criteria: 5/5 parent criteria implemented across the affected boundaries
+Acceptance criteria: 2/5 parent criteria implemented across the affected boundaries
 
 ## [2026-11-11] SKILL-538 rename desktop app to Sona
 Areas: desktop/app copy, tray and packaging; desktop/core/data and designsystem; desktop/feature/chat, config, settings, specs and tray; desktop/build-logic; docs/assets; root installer/uninstaller; scripts smoke and USB display; runtime-cli installer fixtures
@@ -17,7 +18,7 @@ Areas: desktop/app copy, tray and packaging; desktop/core/data and designsystem;
 - TrayIconRenderResult is reusable within tray consumers. It carries owned PNG bytes beside retained paths; macOS consumes bytes through JNI, keeps status dots and its native numeric title, and reports image failures through the existing fallback. Other platforms retain count badges.
 - Native update and disposal wait for main-thread completion; cleanup clears callbacks. Package metadata and readers agree on Sona.app/Contents/MacOS/Sona, Sona/Sona.exe and Sona/bin/Sona, with sona launchers and sona.desktop.
 - Activation and removal use current Sona targets and verified registrations. Linux ownership matches both Exec and Icon; staged registration writes and app backups restore prior outputs on failure. Historical apps, registrations and unrelated occupants remain outside cleanup.
-- Retained CLI/MCP and package identities, /skill-bill commands, environment names, saved state, bundle ID, Windows upgrade UUID and release archive names. Linux autostart keeps skill-bill-desktop.desktop with Name=Sona; no data migration.
+- Retained CLI/MCP and package identities, /sona commands, environment names, saved state, bundle ID, Windows upgrade UUID and release archive names. Linux autostart keeps skill-bill-desktop.desktop with Name=Sona; no data migration.
 - Existing prompt assertions and runtime-cli installer fixtures follow the new copy and package layouts. Regression coverage covers byte lifetime, bridge failures, coexistence, ownership refusal and registration rollback.
 - Limits: the supplied capability_absent warning leaves visual QA unclaimed. Native macOS AppKit behavior and macOS/Windows package execution remain unverified by the supplied material.
 - Renaming the package means an installed copy of the old app is not upgraded in place and has to be removed by hand.

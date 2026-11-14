@@ -1,14 +1,14 @@
 ---
 name: scaffold-payload
-description: Payload schema for the new-skill scaffolder (SKILL-15). Documents the JSON contract consumed by `skill-bill new --payload`, the `new_skill_scaffold` MCP tool, and desktop/runtime scaffold callers.
+description: Payload schema for the new-skill scaffolder (SKILL-15). Documents the JSON contract consumed by `sona new --payload`, the `new_skill_scaffold` MCP tool, and desktop/runtime scaffold callers.
 ---
 
 # Scaffold Payload Contract
 
 This is the canonical payload schema for scripted scaffold callers. The human
-CLI path is `skill-bill new`, which collects deterministic prompts and then
+CLI path is `sona new`, which collects deterministic prompts and then
 builds this same payload internally. Payload callers such as
-`skill-bill new --payload`, the `runtime-mcp` `new_skill_scaffold` tool, and
+`sona new --payload`, the `runtime-mcp` `new_skill_scaffold` tool, and
 desktop/runtime scaffold integrations must ship a payload that conforms to this
 schema. Mismatches raise specific named exceptions and abort the run; no silent
 coercion.
@@ -96,14 +96,14 @@ removable.
   missing referenced pack, missing referenced skill, unsupported `mode`,
   unsupported `scope`, self-reference to the new pack, and duplicate
   `platform` + `skill` layers are rejected.
-- `body` — advanced/scripted string for `add-on`. Normal `skill-bill new` and
+- `body` — advanced/scripted string for `add-on`. Normal `sona new` and
   desktop creation omit this field so the scaffolder writes a skeleton markdown
   file with a TODO body placeholder. When provided by a scripted payload, the
   scaffolder treats the value as present, including blank strings, and writes
   that markdown body to the target add-on file with the repo-standard trailing
   newline instead of rendering the skeleton.
 - `consumer_skill_dirs` — advanced/scripted list for `add-on`. Normal
-  `skill-bill new` and desktop creation omit this field so the scaffolder uses
+  `sona new` and desktop creation omit this field so the scaffolder uses
   the owning pack's baseline code-review skill when one exists, otherwise the
   pack's only manifest-declared skill directory. If the pack has no
   unambiguous default, add-on scaffold fails before mutation and scripted
@@ -145,7 +145,7 @@ scaffolder emits one provider-neutral source bundle at
 Provider-specific Claude markdown, Codex TOML, and Cursor markdown are
 self-contained install-cache outputs generated from those logical sources during
 install. Authors edit `native-agents/agents.yaml`, then run
-`skill-bill render` to validate source renderability. The scaffolder also
+`sona render` to validate source renderability. The scaffolder also
 injects a `## Subagent Spawn Runtime Notes` section into the
 orchestrator's `content.md` that documents how Claude, Codex,
 and Cursor resolve specialist spawns. Explicit `subagent_specialists` source
@@ -366,7 +366,7 @@ skills on shell contract `1.1`. The output contract is:
 
 - Every governed skill scaffold writes source `content.md` with canonical
   frontmatter and clean authored body sections.
-- `skill-bill render <skill>` produces deterministic `SKILL.md` wrapper
+- `sona render <skill>` produces deterministic `SKILL.md` wrapper
   stdout with generated `## Descriptor`, `## Execution`, and `## Ceremony`
   sections. It does not write wrappers or pointer files into source.
 - End-user creation flows may also provide `content_body` so governed

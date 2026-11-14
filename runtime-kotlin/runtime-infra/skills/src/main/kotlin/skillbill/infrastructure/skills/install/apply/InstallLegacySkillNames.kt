@@ -1,5 +1,7 @@
 package skillbill.infrastructure.skills.install.apply
 
+import skillbill.install.model.ListedSkillNames
+
 private val renamedSkillPairs: List<Pair<String, String>> =
   listOf(
     "bill-module-history" to "bill-boundary-history",
@@ -62,6 +64,7 @@ private val retiredSkillNames: List<String> =
 internal fun legacySkillBillCleanupNames(currentSkillNames: List<String>): List<String> =
   buildList {
     add(".bill-shared")
+    add(ListedSkillNames.DISPATCHER)
     currentSkillNames
       .filter { name -> name.startsWith("bill-") }
       .forEach { name -> add("mdp-${name.removePrefix("bill-")}") }

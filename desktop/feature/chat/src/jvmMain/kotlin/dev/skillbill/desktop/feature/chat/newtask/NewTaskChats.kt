@@ -2,6 +2,7 @@ package dev.skillbill.desktop.feature.chat.newtask
 
 import dev.skillbill.desktop.core.common.Diagnostics
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
+import dev.skillbill.desktop.core.domain.model.SavedChatProjection
 import dev.skillbill.desktop.core.domain.repository.ApprovalFeedRepository
 import dev.skillbill.desktop.core.domain.repository.ExecutionChatRepository
 import dev.skillbill.desktop.core.domain.repository.ChatChangesRepository
@@ -15,6 +16,7 @@ import dev.skillbill.desktop.core.ui.feedback.ToastQueue
 import dev.skillbill.desktop.core.ui.feedback.ToastTone
 import dev.skillbill.desktop.core.ui.navigation.WindowCoroutineScope
 import dev.skillbill.desktop.feature.chat.UnavailableApprovalFeed
+import dev.skillbill.desktop.feature.chat.OperationCardRequests
 import dev.skillbill.desktop.feature.chat.RunOpener
 import dev.skillbill.desktop.feature.chat.UnavailableRunOpener
 import kotlinx.coroutines.CoroutineDispatcher
@@ -56,17 +58,25 @@ internal class NewTaskSavedChats(
   private val chats: ExecutionChatRepository,
   private val scope: CoroutineScope,
   private val toasts: ToastQueue,
+  private val currentSessionIds: () -> Set<String> = { emptySet() },
 ) {
-  private val savedState = MutableStateFlow<List<ChatHistoryEntry>>(emptyList())
+  private val savedState = MutableStateFlow(SavedChatProjection())
   private var savedRead: Job? = null
   private val pendingDiscards = mutableMapOf<String, PendingDiscard>()
 
-  val saved: StateFlow<List<ChatHistoryEntry>> = savedState.asStateFlow()
+  val saved: StateFlow<SavedChatProjection> = savedState.asStateFlow()
 
   fun refresh() {
     scope.launch {
       savedRead?.cancel()
-      savedRead = launch { savedState.value = chats.savedNewTaskDrafts().filterNot { it.sessionId in pendingDiscards } }
+      savedRead = launch {
+        val projection = chats.savedNewTaskDrafts()
+        val excluded = currentSessionIds()
+        savedState.value = projection.copy(
+          entries = projection.entries.filterNot { it.sessionId in pendingDiscards || (it.agent.agentId == "opencode" && it.sessionId in excluded) },
+          recoveries = projection.recoveries.filterNot { it.sessionId in excluded },
+        )
+      }
     }
   }
 
@@ -83,7 +93,7 @@ internal class NewTaskSavedChats(
       }
     }
     pendingDiscards[entry.sessionId] = PendingDiscard.Undoable(job)
-    savedState.value = savedState.value.filterNot { it.sessionId == entry.sessionId }
+    savedState.value = savedState.value.copy(entries = savedState.value.entries.filterNot { it.sessionId == entry.sessionId })
     job.start()
     toasts.show(ToastData(
       title = "Discarded ${chatTitle(entry.title).title}",
@@ -118,7 +128,10 @@ class NewTaskChats(
   private val runs: RunOpener = UnavailableRunOpener,
 ) {
   private val scope = windowScope.scope
-  private val savedChats = NewTaskSavedChats(chats, scope, toasts)
+  private val savedChats = NewTaskSavedChats(chats, scope, toasts) {
+    openState.value.mapNotNull { it.chat.value?.sessionId }.toSet()
+  }
+  internal val cardRequests = OperationCardRequests()
 
   internal var chatDispatcher: CoroutineDispatcher = Dispatchers.IO
     set(value) {
@@ -154,7 +167,7 @@ class NewTaskChats(
   /** A draft that [resume] loaded a saved chat into, so the composer can re-read its agent and branches. */
   internal val resumed: SharedFlow<NewTaskDraft> = resumedState.asSharedFlow()
 
-  internal val saved: StateFlow<List<ChatHistoryEntry>> = savedChats.saved
+  internal val saved: StateFlow<SavedChatProjection> = savedChats.saved
 
   init {
     // A summary written in the background changes its Recent chats row.
@@ -237,6 +250,22 @@ class NewTaskChats(
       select(it)
       return true
     }
+    if (entry.agent.agentId == "opencode") {
+      scope.launch {
+        try {
+          val lines = chats.openSavedChat(entry)
+          resumeValidated(entry.copy(lines = lines))
+        } catch (failure: Exception) {
+          toasts.show(ToastMessage(ToastTone.Problem, failure.message ?: "This OpenCode chat needs recovery before it can be opened."))
+          refreshSaved()
+        }
+      }
+      return true
+    }
+    return resumeValidated(entry)
+  }
+
+  private fun resumeValidated(entry: ChatHistoryEntry): Boolean {
     val previous = selectedState.value
     val target = if (previous.chat.value == null && previous.text.isBlank() && previous.images.isEmpty()) previous else newChat()
     if (!target.resume(entry)) {
@@ -293,7 +322,7 @@ class NewTaskChats(
 
   // A fresh read, not the cached list, so a delete from Recent chats after the close is seen.
   private fun reopen(sessionId: String) = scope.launch {
-    val entry = chats.savedNewTaskDrafts().firstOrNull { it.sessionId == sessionId }
+    val entry = chats.savedNewTaskDrafts().entries.firstOrNull { it.sessionId == sessionId }
     if (entry != null) resume(entry) else toasts.show(ToastMessage(ToastTone.Problem, "That chat is no longer in Recent chats."))
   }
 
@@ -337,7 +366,7 @@ class NewTaskChats(
   }
 
   private fun create(): NewTaskDraft {
-    val draft = NewTaskDraft(chats, workControls, databaseSession, toasts, windowScope, clock, approvals, savedChats, changesRepository, diagnostics, runs)
+    val draft = NewTaskDraft(chats, workControls, databaseSession, toasts, windowScope, clock, approvals, savedChats, changesRepository, diagnostics, runs, cardRequests)
     draft.chatDispatcher = chatDispatcher
     replyWatches[draft] = watchReplies(draft)
     return draft

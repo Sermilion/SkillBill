@@ -658,7 +658,7 @@ class ParallelCodeReviewCursorDelegatedLaunchTest {
                 "cursor",
                 "/missing",
                 "managed inventory entry is missing",
-                "skill-bill install apply",
+                "sona install apply",
               ),
             )
           },

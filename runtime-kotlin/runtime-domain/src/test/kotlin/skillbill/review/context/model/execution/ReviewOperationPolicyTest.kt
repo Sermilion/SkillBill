@@ -39,6 +39,12 @@ class ReviewOperationPolicyTest {
     assertEquals("build_test_fact_discovery", category(ReviewOperationKind.SHELL_COMMAND, "./gradlew check"))
   }
 
+  @Test fun `both public command names retain authoring discovery prohibition`() {
+    listOf("sona validate", "sona show", "sona explain").forEach { command ->
+      assertEquals("platform_pack_and_addon_resolution", category(ReviewOperationKind.SHELL_COMMAND, command))
+    }
+  }
+
   @Test fun `guidance traversal is forbidden`() {
     assertEquals("project_guidance_traversal", category(ReviewOperationKind.FILE_READ, "AGENTS.md"))
     assertEquals("project_guidance_traversal", category(ReviewOperationKind.FILE_READ, "src/nested/CLAUDE.md"))

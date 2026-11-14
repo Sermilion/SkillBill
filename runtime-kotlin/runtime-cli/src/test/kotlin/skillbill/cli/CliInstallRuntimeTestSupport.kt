@@ -178,13 +178,14 @@ internal fun mcpCases(): List<McpCase> =
       assertRegistered = { raw ->
         assertContains(raw, "[profile.default]")
         assertContains(raw, "[mcp_servers.other]")
-        assertContains(raw, "[mcp_servers.skill-bill]")
+        assertContains(raw, "[mcp_servers.sona]")
         assertContains(raw, "command = \"/tmp/runtime-mcp\"")
       },
       assertUnregistered = { raw ->
         assertContains(raw, "[profile.default]")
         assertContains(raw, "[mcp_servers.other]")
         assertFalse("[mcp_servers.skill-bill]" in raw)
+        assertFalse("[mcp_servers.sona]" in raw)
       },
     ),
   )
@@ -216,7 +217,7 @@ internal fun mcpJsonCase(
       }
       val servers = settings["mcpServers"] as Map<*, *>
       assertTrue("other" in servers)
-      val skillBill = servers["skill-bill"] as Map<*, *>
+      val skillBill = servers["sona"] as Map<*, *>
       assertEquals("/tmp/runtime-mcp", skillBill["command"])
     },
     assertUnregistered = { raw ->
@@ -226,6 +227,7 @@ internal fun mcpJsonCase(
       }
       assertTrue("other" in (settings["mcpServers"] as Map<*, *>))
       assertFalse("skill-bill" in (settings["mcpServers"] as Map<*, *>))
+      assertFalse("sona" in (settings["mcpServers"] as Map<*, *>))
     },
   )
 

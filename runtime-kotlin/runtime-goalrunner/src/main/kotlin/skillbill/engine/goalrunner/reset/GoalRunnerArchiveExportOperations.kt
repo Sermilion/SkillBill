@@ -524,7 +524,7 @@ public class GoalRunnerArchiveExportOperations(
     siblings: List<String>,
   ): ExportRefusal? {
     siblings.firstOrNull()?.let { sibling ->
-      val exportHint = sibling.replace("skill-bill goal purge", "skill-bill goal export")
+      val exportHint = sibling.replace("sona goal purge", "sona goal export")
       return ExportRefusal("Goal '$issueKey' has sibling worktree workflows; export refused. $exportHint")
     }
     unclassified.firstOrNull()?.let { leftover ->

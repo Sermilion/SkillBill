@@ -8,6 +8,7 @@ import skillbill.engine.featuretask.phaserun.PhaseRunResult
 import skillbill.engine.featuretask.phaserun.phaseRunDatabase
 import skillbill.engine.featuretask.phaserun.phaseRunEntry
 import skillbill.engine.featuretask.phaserun.plans
+import skillbill.engine.featuretask.phaserun.testStandalonePhaseRegistration
 import skillbill.engine.featuretask.qa.capability.QaCapabilityResolver
 import skillbill.engine.featuretask.qa.report.FeatureTaskQaOutcomeRecorder
 import skillbill.engine.featuretask.runner.BranchSetupTestConfig
@@ -392,21 +393,29 @@ class DefaultGoalRunnerQaGateTest {
       phasePlans,
       outcomes,
       git,
-      object : FeatureTaskRuntimeRunInvariantsSource {
-        override fun read(specPath: Path) =
-          invariants ?: FeatureTaskRuntimeRunInvariantsRead.Read(
-            FeatureTaskRuntimeRunInvariants(
-              specReference = "SKILL-431",
-              acceptanceCriteria = listOf("The goal completes its requested quality checks."),
-              mandatesAndOverrides = emptyList(),
-            ),
-          )
-      },
+      GoalQualityPreparation(
+        diagnostics,
+        phasePlans,
+        requests,
+        outcomes,
+        git,
+        object : FeatureTaskRuntimeRunInvariantsSource {
+          override fun read(specPath: Path) =
+            invariants ?: FeatureTaskRuntimeRunInvariantsRead.Read(
+              FeatureTaskRuntimeRunInvariants(
+                specReference = "SKILL-431",
+                acceptanceCriteria = listOf("The goal completes its requested quality checks."),
+                mandatesAndOverrides = emptyList(),
+              ),
+            )
+        },
+        testProjectStore,
+        testStandalonePhaseRegistration(clock, diagnostics),
+      ),
       requests,
       GoalQualityBuildBoundary(phaseEntry, phasePlans, outcomes, git, requests, diagnostics),
       FeatureTaskQaOutcomeRecorder(database, clock),
       QaCapabilityResolver(git) { manifests },
-      testProjectStore,
       diagnostics,
     )
   }

@@ -57,6 +57,7 @@ import skillbill.infrastructure.sqlite.core.migration.area.operation.OperationPr
 import skillbill.infrastructure.sqlite.core.migration.area.operation.addOperationConfirmationExecutions
 import skillbill.infrastructure.sqlite.core.migration.area.operation.addOperationLaunchRetention
 import skillbill.infrastructure.sqlite.core.migration.area.operation.addOperationProposalCards
+import skillbill.infrastructure.sqlite.core.migration.area.operation.retiredUnsupportedLaunchAgentMigrations
 import skillbill.infrastructure.sqlite.core.migration.area.optionalRepairEvidenceColumn
 import skillbill.infrastructure.sqlite.core.migration.area.rebuildGoalPlanningPlansForPhaseOutputVersion2
 import skillbill.infrastructure.sqlite.core.migration.area.rebuildGoalPlanningPlansForPhaseOutputVersion4
@@ -78,7 +79,6 @@ import skillbill.infrastructure.sqlite.core.migration.rekeyProducerOutputEvidenc
 import skillbill.infrastructure.sqlite.core.schema.installDesktopReadCompatibility
 import skillbill.infrastructure.sqlite.core.schema.recordLaunchAgentEnvironment
 import skillbill.infrastructure.sqlite.core.schema.recordStandalonePhaseLaunchScope
-import skillbill.infrastructure.sqlite.core.schema.retireUnsupportedLaunchAgents
 import skillbill.infrastructure.sqlite.core.schema.saveStandalonePhaseLaunch
 import skillbill.infrastructure.sqlite.core.schema.separateAgentActivityRevisions
 import skillbill.infrastructure.sqlite.core.schema.separateDesktopChangeSignals
@@ -1186,13 +1186,6 @@ internal val databaseMigrations: List<DatabaseMigration> =
       name = "fence-goal-planning-checkout-recovery",
       operation = ::addGoalPlanningCheckoutRecovery,
     ) +
-    DatabaseMigration(
-      version = 127,
-      name = "retire-unsupported-agent-ids",
-      operation = ::retireUnsupportedLaunchAgents,
-    ) +
-    DatabaseMigration(
-      version = 128,
-      name = "normalize-launch-agents-after-vocabulary-change",
-      operation = ::retireUnsupportedLaunchAgents,
-    )
+    skillbill.infrastructure.sqlite.core.migration.area.operation.openCodeLaunchIdentityMigration() +
+    skillbill.infrastructure.sqlite.core.migration.area.idestatus.verifyCriterionResolutionsMigration() +
+    retiredUnsupportedLaunchAgentMigrations()

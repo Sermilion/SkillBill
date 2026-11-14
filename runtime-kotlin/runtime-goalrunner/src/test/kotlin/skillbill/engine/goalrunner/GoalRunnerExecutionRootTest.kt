@@ -318,7 +318,7 @@ class GoalRunnerExecutionRootTest {
     assertEquals(GoalRunnerStopReason.BLOCKED, stopped.stop.reason)
     assertEquals(
       "Goal 'SKILL-56' needs branch 'feat/SKILL-56-goal', which is checked out at $holder. " +
-        "Switch that checkout to another branch, then run skill-bill goal SKILL-56 again.",
+        "Switch that checkout to another branch, then run sona goal SKILL-56 again.",
       stopped.stop.blockedReason,
     )
     assertTrue(launcher.requests.isEmpty())

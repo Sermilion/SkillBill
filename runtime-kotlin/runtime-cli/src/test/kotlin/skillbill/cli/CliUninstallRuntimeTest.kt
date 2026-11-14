@@ -22,8 +22,8 @@ class CliUninstallRuntimeTest {
     assertEquals(
       "uninstall_status: dry_run\n" +
         "state_root: ${fixture.stateRoot}\n" +
-        "agent_targets: 6\n" +
-        "skill_names: 1\n",
+        "agent_targets: 8\n" +
+        "skill_names: 3\n",
       result.stdout,
     )
     assertTrue(Files.exists(fixture.stateRoot))

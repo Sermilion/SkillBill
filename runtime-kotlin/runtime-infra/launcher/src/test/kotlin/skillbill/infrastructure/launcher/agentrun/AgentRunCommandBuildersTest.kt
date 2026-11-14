@@ -400,6 +400,8 @@ class AgentRunCommandBuildersTest {
         ClaudeAgentRunCommandBuilder(),
         CodexAgentRunCommandBuilder(),
         CursorAgentRunCommandBuilder(),
+        OpenCodeAgentRunCommandBuilder(),
+        DevinAgentRunCommandBuilder(),
       )
 
     assertEquals(MODEL_DIRECTIVE_CAPABLE_AGENTS, builders.map { it.agent }.toSet())

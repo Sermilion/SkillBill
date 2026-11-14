@@ -2,6 +2,7 @@ package dev.skillbill.desktop.core.data.chat
 
 import dev.skillbill.desktop.core.common.di.AppScope
 import dev.skillbill.desktop.core.domain.model.ChatEvent
+import dev.skillbill.desktop.core.domain.model.ChatStopSettlement
 import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
 import dev.skillbill.desktop.core.domain.model.ChatSteeringPolicy
 import dev.skillbill.desktop.core.domain.model.ChatSteeringRequest
@@ -36,6 +37,12 @@ interface ChatTransport {
   fun retireSteering(sessionId: String, deliveryId: String) = Unit
 
   fun run(request: ChatTurnRequest): Flow<ChatEvent>
+
+  /** Signals and awaits this session's active turn when supported; legacy transports retain collector cancellation. */
+  suspend fun stopAndAwait(sessionId: String): ChatStopSettlement {
+    end(sessionId)
+    return ChatStopSettlement.CollectorCancellationRequired
+  }
 
   /** Replies the agent starts on its own between turns; a transport that runs one process per turn has none. */
   fun unprompted(sessionId: String): Flow<ChatEvent> = emptyFlow()

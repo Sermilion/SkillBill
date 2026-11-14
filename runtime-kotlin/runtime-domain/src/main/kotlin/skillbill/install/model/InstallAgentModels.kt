@@ -33,6 +33,16 @@ val AGENT_LAUNCHER_CLIS: Map<SupportedAgent, AgentLauncherCli> =
         executables = listOf("agent", "${SupportedAgent.CURSOR.wireValue}-agent"),
         installHint = "install the Cursor Agent CLI (curl https://cursor.com/install -fsS | bash)",
       ),
+    SupportedAgent.OPENCODE to
+      AgentLauncherCli(
+        executables = listOf(SupportedAgent.OPENCODE.wireValue),
+        installHint = "install the OpenCode CLI (https://opencode.ai/docs/)",
+      ),
+    SupportedAgent.DEVIN to
+      AgentLauncherCli(
+        executables = listOf(SupportedAgent.DEVIN.wireValue),
+        installHint = "install the Devin CLI (https://docs.devin.ai/cli)",
+      ),
   )
 
 fun unavailableAgentLauncherReason(
@@ -42,8 +52,10 @@ fun unavailableAgentLauncherReason(
   val normalized = agentId?.trim()?.lowercase()?.takeIf(String::isNotBlank) ?: return null
   val agent = SupportedAgent.entries.firstOrNull { candidate -> candidate.wireValue == normalized }
   val launcher = agent?.let(AGENT_LAUNCHER_CLIS::get) ?: return null
-  if (launcher.executables.any(onPath)) return null
-  return agentLauncherUnavailableMessage(agent, launcher.executables.first(), launcher.installHint)
+  return when {
+    launcher.executables.any(onPath) -> null
+    else -> agentLauncherUnavailableMessage(agent, launcher.executables.first(), launcher.installHint)
+  }
 }
 
 fun agentLauncherUnavailableMessage(
@@ -60,6 +72,8 @@ val MODEL_DIRECTIVE_CAPABLE_AGENTS: Set<SupportedAgent> =
     SupportedAgent.CLAUDE,
     SupportedAgent.CODEX,
     SupportedAgent.CURSOR,
+    SupportedAgent.OPENCODE,
+    SupportedAgent.DEVIN,
   )
 
 fun supportsModelDirective(agentId: String?): Boolean {
@@ -74,6 +88,7 @@ object InvokingAgentContextResolver {
       InvokingAgentContextSignal(SupportedAgent.CLAUDE, listOf("CLAUDECODE", "CLAUDE_CODE", "CLAUDE_CODE_ENTRYPOINT")),
       InvokingAgentContextSignal(SupportedAgent.CODEX, listOf("CODEX_SANDBOX", "CODEX_SANDBOX_ENV")),
       InvokingAgentContextSignal(SupportedAgent.CURSOR, listOf("CURSOR_AGENT", "CURSOR_INVOKED_AS")),
+      InvokingAgentContextSignal(SupportedAgent.OPENCODE, listOf("OPENCODE")),
     )
 
   fun detect(environment: Map<String, String>): SupportedAgent? =

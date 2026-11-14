@@ -50,8 +50,8 @@ internal sealed interface FixItem {
 }
 
 internal fun verifyFixItems(run: VerifyRunDetails, marks: Map<Int, CriterionMark>): List<FixItem> = buildList {
-  run.reviewFindings?.items.orEmpty().forEach { add(FixItem.Finding(it)) }
-  run.completenessAudit?.grades.orEmpty().filter { it.status == "PARTIAL" || it.status == "FAIL" }.forEach { grade ->
+  run.reviewFindings?.items.orEmpty().filter { it.open }.forEach { add(FixItem.Finding(it)) }
+  run.completenessAudit?.grades.orEmpty().filter { it.gap }.forEach { grade ->
     val text = run.criteria.firstOrNull { it.number == grade.number }?.text ?: grade.text
     add(FixItem.Criterion(grade, text, marks[grade.number]))
   }

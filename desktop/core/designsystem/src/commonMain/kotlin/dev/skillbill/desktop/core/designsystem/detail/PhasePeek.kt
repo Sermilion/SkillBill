@@ -24,6 +24,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.LayoutDirection
 import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
@@ -58,23 +59,25 @@ fun PhasePeek(
   val chosenTone = tone ?: state
   val toneColor = peekTone(chosenTone)
   Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(SkillBillRadius.md)).background(colors.bgRaised).border(1.dp, colors.border, RoundedCornerShape(SkillBillRadius.md)).semantics { contentDescription = title }) {
-    Row(Modifier.fillMaxWidth().drawBehind { val x = if (layoutDirection == LayoutDirection.Ltr) 0f else size.width - 2.dp.toPx(); drawRect(toneColor, Offset(x, 0f), Size(2.dp.toPx(), size.height)) }.padding(start = 10.dp, end = 10.dp, top = 9.dp, bottom = 8.dp), verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    Row(Modifier.fillMaxWidth().drawBehind { val x = if (layoutDirection == LayoutDirection.Ltr) 0f else size.width - 2.dp.toPx(); drawRect(toneColor, Offset(x, 0f), Size(2.dp.toPx(), size.height)) }.padding(start = 14.dp, end = 12.dp, top = 10.dp, bottom = 10.dp), verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
       StatusIcon(peekStatus(state), null)
-      Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-          Box(Modifier.weight(1f)) { dev.skillbill.desktop.core.designsystem.component.SbTooltip(title) { BasicText(title, Modifier.fillMaxWidth(), style = SkillBillTheme.type.tSmMedium.copy(color = colors.fg), maxLines = 1, overflow = TextOverflow.Ellipsis) } }
-          dev.skillbill.desktop.core.designsystem.component.SbTooltip(phaseId) { BasicText(phaseId, style = SkillBillTheme.type.monoSm.copy(color = colors.fgFaint), maxLines = 1, overflow = TextOverflow.Ellipsis) }
+      Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        FlowRow(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+          dev.skillbill.desktop.core.designsystem.component.SbTooltip(title) {
+            BasicText(title, style = SkillBillTheme.type.tBaseMedium.copy(color = colors.fg), maxLines = 1, overflow = TextOverflow.Ellipsis)
+          }
+          BasicText(phaseId, style = SkillBillTheme.type.monoSm.copy(fontSize = 10.5.sp, color = colors.fgFaint), maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        FlowRow(verticalArrangement = Arrangement.spacedBy(2.dp), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+        FlowRow(verticalArrangement = Arrangement.spacedBy(2.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
           agentId?.let { Avatar(it, small = true) }
-          model?.let { BasicText(it, style = SkillBillTheme.type.t2xs.copy(color = colors.fgMuted), maxLines = 2, overflow = TextOverflow.Ellipsis) }
-          round?.let { BasicText(it, style = SkillBillTheme.type.t2xs.copy(color = colors.fgMuted)) }
-          startLabel?.let { BasicText(it, style = SkillBillTheme.type.t2xs.copy(color = colors.fgMuted)) }
+          model?.let { BasicText(it, style = SkillBillTheme.type.tXs.copy(fontWeight = FontWeight.Normal, color = colors.fgMuted), maxLines = 2, overflow = TextOverflow.Ellipsis) }
+          round?.let { BasicText(it, style = SkillBillTheme.type.tXs.copy(fontWeight = FontWeight.Normal, color = colors.fgMuted)) }
+          startLabel?.let { BasicText(it, style = SkillBillTheme.type.tXs.copy(fontWeight = FontWeight.Normal, color = colors.fgMuted)) }
         }
       }
       Column(horizontalAlignment = Alignment.End) {
         BasicText(word ?: peekWord(state), style = SkillBillTheme.type.tXs.copy(color = toneColor, fontWeight = FontWeight.Medium), maxLines = 1)
-        durationLabel?.let { BasicText(it, style = SkillBillTheme.type.t2xs.copy(color = colors.fgFaint), maxLines = 1) }
+        durationLabel?.let { BasicText(it, style = SkillBillTheme.type.tXs.copy(fontWeight = FontWeight.Normal, color = colors.fg2), maxLines = 1) }
       }
     }
     endControl?.let { control ->

@@ -6,6 +6,7 @@ import skillbill.infrastructure.contracts.locator.NativeAgentLinkInventorySchema
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 
 class NativeAgentLinkInventorySchemaContractVersionTest {
   @Test
@@ -21,5 +22,13 @@ class NativeAgentLinkInventorySchemaContractVersionTest {
       schema.path("properties").path("contract_version").path("const").asText(),
     )
     assertEquals(NativeAgentLinkInventorySchemaPaths.EXPECTED_SCHEMA_ID, schema.path("\$id").asText())
+    assertTrue(
+      schema.path("properties").path("entries").path("items").path("properties")
+        .path("provider").path("enum").any { provider -> provider.asText() == "opencode" },
+    )
+    assertTrue(
+      schema.path("properties").path("entries").path("items").path("properties")
+        .path("provider").path("enum").any { provider -> provider.asText() == "devin" },
+    )
   }
 }

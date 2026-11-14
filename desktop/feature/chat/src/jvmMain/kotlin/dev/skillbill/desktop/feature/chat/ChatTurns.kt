@@ -163,20 +163,16 @@ internal class ChatTurns(
 
   /** Follows a removed checkout, then ends the agent session when its root differs from the next turn's root. */
   suspend fun followRoot(session: ChatSession) {
-    session.worktreeMoveLock.withLock {
-      val replacing = relocationSource(session.item)?.let { it != session.item.workingRoot() } == true ||
-        session.started && session.startedRoot != session.item.workingRoot()
-      if (replacing && session.thread.hasDeliveryClaim()) {
-        session.steering?.detach { chat.end(session.sessionId) } ?: chat.end(session.sessionId)
-        if (session.thread.deferDestructiveAction("change the chat checkout")) {
-          session.recoveryOnly = true
-          return
+    followWorktree(session)
+    if (session.item.goalWorktree != null && session.started && session.startedRoot != session.item.workingRoot()) {
+      if (session.agentState.value?.agentId == "opencode") {
+        if (!session.openCodeCheckoutChangedNoticed) {
+          chat.end(session.sessionId)
+          session.openCodeCheckoutChangedNoticed = true
+          session.append(ChatMessage.Notice("This OpenCode conversation is bound to its saved checkout. Start a new chat to continue from the current checkout."))
         }
-      }
-      followWorktreeWhileLocked(session)
-      if (session.started && session.startedRoot != session.item.workingRoot()) {
+      } else {
         chat.end(session.sessionId)
-        session.thread.clearBackgroundCommands()
         session.restart(UUID.randomUUID().toString())
       }
     }
@@ -203,6 +199,7 @@ internal class ChatTurns(
 
   internal suspend fun followWorktreeWhileLocked(session: ChatSession) {
     if (session.thread.hasDeliveryClaim() || session.thread.delivery.value != null) return
+    session.recoveryOnly = false
     val item = session.item
     if (!session.worktreeRemovedNoticed) {
       val source = relocationSource(item)
@@ -317,7 +314,18 @@ internal class ChatTurns(
   ): Boolean {
     val root = header.workingRoot()
     val scope = ChatScope.Execution(header.id, header.kind, header.issueKey, header.title, root)
-    val request = ChatTurnRequest(session.sessionId, !session.started, agent, scope, ChatPermissionMode.Act, prompt, images, cursorMcpDependency)
+    val savedHistory = if (agent.agentId == "opencode") savedHistory(session, agent) else null
+    val request = ChatTurnRequest(
+      session.sessionId,
+      !session.started,
+      agent,
+      scope,
+      ChatPermissionMode.Act,
+      prompt,
+      images,
+      cursorMcpDependency,
+      savedHistory,
+    )
     var delivered = false
     try {
       chat.send(request).collect { event ->
@@ -375,7 +383,7 @@ internal class ChatTurns(
     session.append(ChatMessage.Notice(STOPPED_NOTICE))
     val agent = session.agentState.value
     when {
-      !session.started -> session.restart(UUID.randomUUID().toString())
+      !session.started && agent?.agentId != "opencode" -> session.restart(UUID.randomUUID().toString())
       agent != null -> save(session, agent)
     }
   }
@@ -405,13 +413,12 @@ internal class ChatTurns(
   }
 
   internal suspend fun save(session: ChatSession, agent: ChatAgent) {
+    chat.saveChat(savedHistory(session, agent))
+  }
+
+  private fun savedHistory(session: ChatSession, agent: ChatAgent): ChatHistoryEntry {
     val lines = session.historyLines()
     val title = lines.firstOrNull { it.role == ChatHistoryRole.Operator }?.text.orEmpty()
-    chat.saveChat(
-      ChatHistoryEntry(
-        session.sessionId, session.item.id, agent, clock.now(), title, lines,
-        executionCheckoutRoot = session.startedRoot,
-      ),
-    )
+    return ChatHistoryEntry(session.sessionId, session.item.id, agent, clock.now(), title, lines)
   }
 }

@@ -9,12 +9,12 @@
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-BIN="${SKILL_BILL_BIN:-$HOME/.local/bin/skill-bill}"
+BIN="${SKILL_BILL_BIN:-$HOME/.local/bin/sona}"
 RUNTIME_ROOT="${SKILL_BILL_RUNTIME_ROOT:-$HOME/.skill-bill/runtime}"
 MCP_BIN="$RUNTIME_ROOT/runtime-mcp/bin/runtime-mcp"
 if [[ $# -gt 0 ]]; then AGENTS=("$@"); else AGENTS=(claude codex cursor); fi
 
-[[ -x "$BIN" ]] || { echo "FATAL: skill-bill not executable at $BIN" >&2; exit 2; }
+[[ -x "$BIN" ]] || { echo "FATAL: sona not executable at $BIN" >&2; exit 2; }
 [[ -d "$RUNTIME_ROOT" ]] || { echo "FATAL: no installed runtime at $RUNTIME_ROOT (run ./install.sh first)" >&2; exit 2; }
 [[ -x "$MCP_BIN" ]] || echo "WARN: mcp bin missing at $MCP_BIN — MCP checks will report failure" >&2
 
@@ -87,7 +87,7 @@ try:
     responses = {response["id"]: response for response in map(json.loads, completed.stdout.splitlines())}
     checks = []
     checks.append(("process_exit_0", completed.returncode == 0))
-    checks.append(("initialize", responses["initialize"]["result"]["serverInfo"]["name"] == "skill-bill"))
+    checks.append(("initialize", responses["initialize"]["result"]["serverInfo"]["name"] == "sona"))
     names = [tool["name"] for tool in responses["list"]["result"]["tools"]]
     prose_tools = [
         n for n in names

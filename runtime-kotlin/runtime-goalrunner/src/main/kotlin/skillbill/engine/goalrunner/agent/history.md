@@ -377,7 +377,7 @@ Acceptance criteria: 8/8 implemented
 
 ## [2026-08-24] SKILL-200 subtask 4 — Runtime-owned preflight and add-on resolution
 Areas: runtime-application/{goalrunner,featuretask,decomposition,workflow}, runtime-domain, runtime-cli/goal, runtime-infra-{fs,sqlite}, runtime-ports, orchestration/contracts
-- Added read-only `skill-bill goal preflight` projections for continuation verdicts, the confirmation gate, and missing Linear spec rehydration targets without launch-side effects.
+- Added read-only `sona goal preflight` projections for continuation verdicts, the confirmation gate, and missing Linear spec rehydration targets without launch-side effects.
 - Reused continuation classification and resolved raw ordered add-on slugs inside `goal`, while preserving structured source-identity and content-digest verification.
 - Pattern: keep pre-launch decisions in a read-only runtime projection and share classification and selection seams with launch. reusable
 - Limitation: Linear fetching remains agent-side; preflight reports missing targets but does not retrieve them.

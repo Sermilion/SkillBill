@@ -6,10 +6,12 @@ import skillbill.infrastructure.skills.install.nativeagent.uninstallCodexAgentTo
 import skillbill.infrastructure.skills.install.nativeagent.uninstallCursorAgentMarkdown
 import skillbill.infrastructure.skills.install.plan.CLAUDE_AGENTS_KIND
 import skillbill.infrastructure.skills.install.plan.CURSOR_AGENTS_KIND
+import skillbill.infrastructure.skills.install.plan.DEVIN_AGENTS_KIND
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentProvider
 import skillbill.infrastructure.skills.nativeagent.support.agentPathExists
 import skillbill.infrastructure.skills.scaffold.platformpack.catalog.PlatformPackCatalogLoader
 import skillbill.install.model.AgentTarget
+import skillbill.install.model.SupportedAgent
 import skillbill.ports.repository.toFileLocation
 import java.nio.file.Path
 
@@ -34,6 +36,8 @@ data class NativeAgentLinkRequest(
   val overrides: NativeAgentLinkOverrides = NativeAgentLinkOverrides(),
   val environment: Map<String, String> = emptyMap(),
   val catalogLoader: PlatformPackCatalogLoader? = null,
+  val nativeAgentLogicalNames: Set<String>? = null,
+  val includeAllSourceRoots: Boolean = false,
 )
 
 object InstallNativeAgentOperations {
@@ -52,10 +56,7 @@ object InstallNativeAgentOperations {
   }
 
   fun unlinkClaudeAgents(request: NativeAgentLinkRequest): List<Path> =
-    unlinkProviderAgents(
-      provider = NativeAgentProvider.Claude,
-      request = resolveNativeAgentLinkRequest(request),
-    )
+    unlinkAgentsResult(SupportedAgent.CLAUDE, request).removed
 
   fun linkCodexAgents(request: NativeAgentLinkRequest): NativeAgentLinkOutcome {
     val resolvedRequest = resolveNativeAgentLinkRequest(request)
@@ -70,22 +71,8 @@ object InstallNativeAgentOperations {
     )
   }
 
-  fun unlinkCodexAgents(request: NativeAgentLinkRequest): List<Path> {
-    val resolvedRequest = resolveNativeAgentLinkRequest(request)
-    val agentDirs = NativeAgentProvider.Codex.homeAgentDirs(resolvedRequest.home!!, resolvedRequest.environment)
-    val unlinkedFromCache =
-      unlinkProviderAgents(
-        provider = NativeAgentProvider.Codex,
-        request = resolvedRequest,
-        agentDirs = agentDirs,
-      )
-    return uninstallCodexAgentTomls(
-      resolvedRequest.platformPacksRoot,
-      resolvedRequest.skillsRoot,
-      resolvedRequest.selectedPlatforms,
-      agentDirs,
-    ) + unlinkedFromCache
-  }
+  fun unlinkCodexAgents(request: NativeAgentLinkRequest): List<Path> =
+    unlinkAgentsResult(SupportedAgent.CODEX, request).removed
 
   fun linkCursorAgents(request: NativeAgentLinkRequest): NativeAgentLinkOutcome {
     val resolvedRequest = resolveNativeAgentLinkRequest(request)
@@ -108,16 +95,73 @@ object InstallNativeAgentOperations {
     )
   }
 
-  fun unlinkCursorAgents(request: NativeAgentLinkRequest): List<Path> {
+  fun unlinkCursorAgents(request: NativeAgentLinkRequest): List<Path> =
+    unlinkAgentsResult(SupportedAgent.CURSOR, request).removed
+
+  fun linkDevinAgents(request: NativeAgentLinkRequest): NativeAgentLinkOutcome {
     val resolvedRequest = resolveNativeAgentLinkRequest(request)
-    val unlinkedFromCache = unlinkProviderAgents(provider = NativeAgentProvider.Cursor, request = resolvedRequest)
-    return uninstallCursorAgentMarkdown(
-      resolvedRequest.platformPacksRoot,
-      resolvedRequest.home,
-      resolvedRequest.skillsRoot,
-      resolvedRequest.selectedPlatforms,
-    ) +
-      unlinkedFromCache
+    return linkProviderAgents(
+      provider = NativeAgentProvider.Devin,
+      request = resolvedRequest,
+      detectTargets = { home ->
+        NativeAgentProvider.Devin.activeHomeAgentDirs(home, resolvedRequest.environment).map { path ->
+          AgentTarget(DEVIN_AGENTS_KIND, path.toFileLocation())
+        }
+      },
+    )
+  }
+
+  fun unlinkDevinAgents(request: NativeAgentLinkRequest): List<Path> =
+    unlinkAgentsResult(SupportedAgent.DEVIN, request).removed
+
+  fun linkOpenCodeAgents(request: NativeAgentLinkRequest): NativeAgentLinkOutcome {
+    val resolvedRequest = resolveNativeAgentLinkRequest(request)
+    return linkProviderAgents(
+      provider = NativeAgentProvider.OpenCode,
+      request = resolvedRequest,
+      detectTargets = { home ->
+        NativeAgentProvider.OpenCode.homeAgentDirs(home, resolvedRequest.environment).map {
+          AgentTarget(NativeAgentProvider.OpenCode.directoryName, it.toFileLocation())
+        }
+      },
+    )
+  }
+
+  fun unlinkOpenCodeAgents(request: NativeAgentLinkRequest): List<Path> =
+    unlinkAgentsResult(SupportedAgent.OPENCODE, request).removed
+
+  internal fun unlinkAgentsResult(
+    provider: SupportedAgent,
+    request: NativeAgentLinkRequest,
+    journal: ProviderMutationJournal? = null,
+  ): NativeAgentRemovalOutcome {
+    val resolvedRequest = resolveNativeAgentLinkRequest(request)
+    val outcome =
+      unlinkProviderAgents(
+        NativeAgentProvider.forSupportedAgent(provider),
+        resolvedRequest,
+        sharedJournal = journal,
+      )
+    if (journal != null) return outcome
+    val legacyRemoved =
+      when (provider) {
+        SupportedAgent.CODEX ->
+          uninstallCodexAgentTomls(
+            resolvedRequest.platformPacksRoot,
+            resolvedRequest.skillsRoot,
+            resolvedRequest.selectedPlatforms,
+            NativeAgentProvider.Codex.homeAgentDirs(requireNotNull(resolvedRequest.home), resolvedRequest.environment),
+          )
+        SupportedAgent.CURSOR ->
+          uninstallCursorAgentMarkdown(
+            resolvedRequest.platformPacksRoot,
+            resolvedRequest.home,
+            resolvedRequest.skillsRoot,
+            resolvedRequest.selectedPlatforms,
+          )
+        SupportedAgent.CLAUDE, SupportedAgent.OPENCODE, SupportedAgent.DEVIN -> emptyList()
+      }
+    return outcome.copy(removed = legacyRemoved + outcome.removed)
   }
 }
 

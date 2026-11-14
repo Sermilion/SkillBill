@@ -139,5 +139,5 @@ internal fun readOnlyFullStateCommand(
 ): String {
   val quotedDbPath = "'${dbPath.replace("'", "'\"'\"'")}'"
   val quotedWorkflowId = "'${workflowId.replace("'", "'\"'\"'")}'"
-  return "skill-bill --db $quotedDbPath verify-workflow show $quotedWorkflowId --format json"
+  return "sona --db $quotedDbPath verify-workflow show $quotedWorkflowId --format json"
 }

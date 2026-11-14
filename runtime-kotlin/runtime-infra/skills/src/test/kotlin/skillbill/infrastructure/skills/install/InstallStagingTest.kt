@@ -5,6 +5,7 @@ import skillbill.error.core.SkillBillRuntimeException
 import skillbill.infrastructure.skills.install.identity.isContentManagedSkill
 import skillbill.infrastructure.skills.install.plan.InstallContext
 import skillbill.infrastructure.skills.install.plan.installSkill
+import skillbill.infrastructure.skills.install.staging.InstallContentHashInputs
 import skillbill.infrastructure.skills.install.staging.StagedSymlinkTargetInput
 import skillbill.infrastructure.skills.install.staging.applicablePointers
 import skillbill.infrastructure.skills.install.staging.authoredFilesFor
@@ -148,6 +149,39 @@ class InstallStagingTest {
   }
 
   @Test
+  fun `dispatcher staging adapts legacy commands without changing source and is stable on reuse`() {
+    val repoRoot = Files.createTempDirectory("skillbill-dispatcher-staging-repo").also(tempDirs::add)
+    val home = Files.createTempDirectory("skillbill-dispatcher-staging-home").also(tempDirs::add)
+    val skillDir = repoRoot.resolve("skills/skill-bill")
+    Files.createDirectories(skillDir)
+    SkillClassFixtures.seedShippedSkillClasses(repoRoot)
+    val authored =
+      "---\nname: skill-bill\ndescription: Legacy dispatcher.\n---\n\n" +
+        "Use `sona phase review SONA-5` and keep local guidance.\n" +
+        "Call mcp__skill-bill__update_check first.\n"
+    Files.writeString(skillDir.resolve("content.md"), authored)
+    supportingFileTargets(repoRoot).values
+      .filter { target -> target.startsWith(repoRoot.resolve("orchestration")) }
+      .forEach { target ->
+        Files.createDirectories(target.parent)
+        Files.writeString(target, "supporting target\n")
+      }
+    val sourceBytes = Files.readAllBytes(skillDir.resolve("content.md"))
+
+    val first = stageInstalledSkill(repoRoot, skillDir, home)
+    val firstBytes = Files.readAllBytes(first.renderedSkillFile.toPath())
+    val second = stageInstalledSkill(repoRoot, skillDir, home)
+
+    assertTrue(String(firstBytes, StandardCharsets.UTF_8).contains("name: sona"))
+    assertTrue(String(firstBytes, StandardCharsets.UTF_8).contains("Use `sona phase review SONA-5`"))
+    assertTrue(String(firstBytes, StandardCharsets.UTF_8).contains("keep local guidance."))
+    assertTrue(String(firstBytes, StandardCharsets.UTF_8).contains("Call mcp__sona__update_check first."))
+    assertContentEquals(firstBytes, Files.readAllBytes(second.renderedSkillFile.toPath()))
+    assertContentEquals(sourceBytes, Files.readAllBytes(skillDir.resolve("content.md")))
+    assertEquals(first.contentHash, second.contentHash)
+  }
+
+  @Test
   fun `platform pointer files are materialized as installed sidecar content`() {
     val fixture = setupFixture()
 
@@ -201,6 +235,10 @@ class InstallStagingTest {
     }
 
     val rendered = stageInstalledSkill(repoRoot, skillDir, home)
+
+    assertTrue(Files.readString(rendered.renderedSkillFile.toPath()).contains("name: sona"))
+    assertTrue(rendered.stagingDir.fileName.startsWith("skill-bill-"))
+    assertFalse(Files.exists(rendered.stagingDir.resolve("content.md").toPath(), LinkOption.NOFOLLOW_LINKS))
 
     requiredSupportingFilesForSkill("skill-bill", repoRoot).forEach { fileName ->
       val sourceSidecar = skillDir.resolve(fileName)
@@ -298,6 +336,34 @@ class InstallStagingTest {
   }
 
   @Test
+  fun `staging re-renders instead of reusing a cache entry hashed by the previous renderer revision`() {
+    val fixture = setupFixture()
+    val pointers = applicablePointers(fixture.repoRoot, fixture.skillDir)
+    val authored = authoredFilesFor(fixture.skillDir, pointers)
+    val previousHash =
+      computeInstallContentHash(
+        InstallContentHashInputs(
+          sourceSkillDir = fixture.skillDir,
+          authored = authored,
+          applicablePointers = pointers,
+          rendererRevision = "install-renderer-v1",
+        ),
+      )
+    val staleDir = installedSkillStagingDir(fixture.home, fixture.skillDir, previousHash)
+    Files.createDirectories(staleDir)
+    Files.writeString(staleDir.resolve("SKILL.md"), "stale render\n")
+    Files.writeString(staleDir.resolve(".content-hash"), previousHash)
+
+    val rendered = stageInstalledSkill(fixture.repoRoot, fixture.skillDir, fixture.home)
+
+    assertEquals(computeInstallContentHash(fixture.skillDir, authored, pointers), rendered.contentHash)
+    assertTrue(rendered.contentHash != previousHash)
+    assertTrue(rendered.stagingDir.toPath().toAbsolutePath().normalize() != staleDir.toAbsolutePath().normalize())
+    assertTrue(Files.readString(rendered.renderedSkillFile.toPath()) != "stale render\n")
+    assertEquals("stale render\n", Files.readString(staleDir.resolve("SKILL.md")))
+  }
+
+  @Test
   fun `install fails closed when content_md frontmatter is malformed`() {
     val fixture = setupFixture()
     Files.writeString(fixture.skillDir.resolve("content.md"), "no frontmatter here\n")
@@ -357,10 +423,13 @@ class InstallStagingTest {
   }
 
   @Test
-  fun `prune does not delete unrelated skills whose slug shares the current slug as a prefix`() {
+  fun `fresh staging preserves the prior linked payload and unrelated skills with the same slug prefix`() {
     val fixture = setupFixture()
 
     val first = stageInstalledSkill(fixture.repoRoot, fixture.skillDir, fixture.home)
+    val activeLink = fixture.home.resolve("active-skill")
+    Files.createSymbolicLink(activeLink, first.stagingDir.toPath())
+    val firstWrapper = Files.readString(activeLink.resolve("SKILL.md"))
     val cacheRoot = installedSkillsCacheRoot(fixture.home)
 
     val firstSlug = first.stagingDir.fileName.substringBeforeLast('-')
@@ -382,10 +451,11 @@ class InstallStagingTest {
       "prune mutated an unrelated skill's staging dir contents",
     )
 
-    assertFalse(
+    assertTrue(
       Files.isDirectory(first.stagingDir.toPath(), LinkOption.NOFOLLOW_LINKS),
-      "expected prior same-slug staging dir ${first.stagingDir} to be pruned by ${second.stagingDir}",
+      "staging ${second.stagingDir} must retain the prior usable payload ${first.stagingDir}",
     )
+    assertEquals(firstWrapper, Files.readString(activeLink.resolve("SKILL.md")))
   }
 
   @Test
@@ -440,7 +510,7 @@ class InstallStagingTest {
     Files.createDirectories(unrelated)
     Files.writeString(
       feature.resolve("content.md"),
-      "---\nname: skill-bill\ndescription: Skill Bill router.\n---\n\nBody.\n",
+      "---\nname: sona\ndescription: Sona dispatcher.\n---\n\nBody.\n",
     )
     Files.writeString(unrelated.resolve("content.md"), "---\nname: bill-unrelated\ndescription: Other.\n---\n\nBody.\n")
     Files.createDirectories(feature.resolve("references"))
@@ -652,7 +722,7 @@ class InstallStagingTest {
     val frontmatter =
       """
       |---
-      |name: skill-bill
+      |name: sona
       |description: Run governed work.
       |---
       """.trimMargin() + "\n\nAuthored review guidance.\n"

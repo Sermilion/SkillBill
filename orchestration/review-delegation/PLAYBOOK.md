@@ -8,7 +8,7 @@ description: Single source of truth for agent-specific delegated code-review exe
 ## Mode vocabulary
 
 `delegated` is the experimental full-depth review mode, reached only by an
-explicit `mode:delegated` on `skill-bill phase review` (or `skill-bill code-review
+explicit `mode:delegated` on `sona phase review` (or `sona code-review
 --execution-mode delegated`). Goal and feature-task runs always review inline
 and never select it. The invoking agent fans the review out to
 specialist subagents inside its own harness and merges their findings. `inline`

@@ -146,7 +146,7 @@ internal object InlineReviewDirective {
           )
         }
         appendLine(
-          "Do not launch `skill-bill phase review`, delegated review subagents, or an isolated review process.",
+          "Do not launch `sona phase review`, delegated review subagents, or an isolated review process.",
         )
         appendLine("Fix every finding, including Minor and Nit, in this same session before you emit.")
         appendLine("You may edit files. A finding you could not fix stays open and goes to verification and repair.")
@@ -155,7 +155,7 @@ internal object InlineReviewDirective {
           "Criterion-gap detection remains exclusive to audit. Do not report unsatisfied acceptance criteria.",
         )
         appendLine(
-          "Do not run `./gradlew check`, the pack collect-all gate, or `skill-bill phase validation`; " +
+          "Do not run `./gradlew check`, the pack collect-all gate, or `sona phase validation`; " +
             "validate owns those.",
         )
         appendLine()

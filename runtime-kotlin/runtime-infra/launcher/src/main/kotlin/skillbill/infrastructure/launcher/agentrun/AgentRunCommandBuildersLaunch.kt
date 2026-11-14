@@ -16,7 +16,7 @@ import java.nio.file.Path
 
 internal fun launchPrompt(request: SkillRunRequest): String =
   requireNotNull(request.promptOverride) {
-    "launchPrompt requires a promptOverride; goal-continuation runs spawn skill-bill directly."
+    "launchPrompt requires a promptOverride; goal-continuation runs spawn sona directly."
   }
 
 internal fun governedReviewConversationIsolation(request: SkillRunRequest): ReviewConversationIsolation? =

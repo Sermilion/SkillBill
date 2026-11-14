@@ -11,6 +11,8 @@ enum class NativeAgentLinkProvider {
   CLAUDE,
   CODEX,
   CURSOR,
+  OPENCODE,
+  DEVIN,
 }
 
 data class NativeAgentLinkOverrides(
@@ -26,6 +28,7 @@ data class NativeAgentLinkRequest(
   val selectedPlatforms: List<String>? = null,
   val overrides: NativeAgentLinkOverrides = NativeAgentLinkOverrides(),
   val environment: Map<String, String> = emptyMap(),
+  val nativeAgentLogicalNames: Set<String>? = null,
 )
 
 data class NativeAgentLinkOutcome(

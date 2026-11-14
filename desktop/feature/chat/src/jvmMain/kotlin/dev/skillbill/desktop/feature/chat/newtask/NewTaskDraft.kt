@@ -7,6 +7,7 @@ import androidx.compose.runtime.setValue
 import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatChangesBaseline
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
+import dev.skillbill.desktop.core.domain.model.SavedChatProjection
 import dev.skillbill.desktop.core.domain.model.ChatImage
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.CursorMcpDependency
@@ -30,6 +31,7 @@ import dev.skillbill.desktop.feature.chat.ChatMessage
 import dev.skillbill.desktop.feature.chat.ChatOperationCardActions
 import dev.skillbill.desktop.feature.chat.ChatThread
 import dev.skillbill.desktop.feature.chat.OperationCardCoordinator
+import dev.skillbill.desktop.feature.chat.OperationCardRequests
 import dev.skillbill.desktop.feature.chat.RunOpener
 import dev.skillbill.desktop.feature.chat.START_AGAIN_SUFFIX
 import dev.skillbill.desktop.feature.chat.UnavailableApprovalFeed
@@ -78,6 +80,7 @@ class NewTaskDraft internal constructor(
   private val changesRepository: ChatChangesRepository = UnavailableChatChanges,
   private val diagnostics: Diagnostics,
   private val runs: RunOpener = UnavailableRunOpener,
+  cardRequests: OperationCardRequests = OperationCardRequests(),
 ) {
   private val scope = windowScope.scope
   private val cardOwners = IdentityHashMap<ChatThread, NewTaskChat>()
@@ -104,7 +107,7 @@ class NewTaskDraft internal constructor(
     }
   }, { thread ->
     synchronized(cardOwners) { cardOwners[thread] }?.persist()?.also { if (it) refreshSaved() } ?: false
-  }, runs = runs)
+  }, runs = runs, requests = cardRequests)
   private val chatState = MutableStateFlow<NewTaskChat?>(null)
   private val offerState = MutableStateFlow(NewTaskOffer())
   private var previewTracker: Pair<String, NewTaskChatChanges>? = null
@@ -155,7 +158,7 @@ class NewTaskDraft internal constructor(
   internal var cursorMcpDependency by mutableStateOf(CursorMcpDependency.ProjectUserOnly)
 
   /** Every repository's saved drafts, newest first, as of the latest [refreshSaved]. */
-  internal val saved: StateFlow<List<ChatHistoryEntry>> = savedChats.saved
+  internal val saved: StateFlow<SavedChatProjection> = savedChats.saved
 
   internal fun addPastedImage(image: ChatImage) {
     if (closing) return

@@ -5,6 +5,9 @@ import skillbill.config.model.ExecutionMatrix
 import skillbill.config.model.ExecutionTier
 import skillbill.config.model.PhaseModelDirective
 import skillbill.contracts.review.ReviewVerificationSignalKeys
+import skillbill.contracts.system.OpenCodeEnvironmentSelection
+import skillbill.contracts.system.OpenCodeLaunchIdentity
+import skillbill.contracts.system.OpenCodeLaunchIdentityKeys
 import skillbill.contracts.workflow.goal.GOAL_QUALITY_EXECUTION_CONTRACT_VERSION
 import skillbill.contracts.workflow.goal.GoalQualityExecutionPayloadKeys
 import skillbill.contracts.workflow.identity.evidence.ValidationEvidencePayloadKeys
@@ -60,32 +63,60 @@ internal fun GoalQualityExecutionRecord.toPersistenceWire(): Map<String, Any?> =
 
 internal fun GoalQualityExecutionInputs.toPersistenceWire(): Map<String, Any?> {
   val keys = GoalQualityExecutionPayloadKeys
+  val wire =
+    mapOf(
+      keys.ISSUE_KEY to issueKey,
+      keys.INTAKE to intake,
+      keys.REPO_ROOT to repoRoot,
+      keys.INVOKED_AGENT_ID to invokedAgentId,
+      keys.CONFIGURED_AGENT_OVERRIDE_ID to configuredAgentOverrideId,
+      keys.TIMEOUT_MILLIS to timeoutMillis,
+      keys.QA_SELECTION to qaSelection.wireValue,
+      keys.PARENT_SPEC_PATH to parentSpecPath,
+      keys.ACCEPTANCE_CRITERIA to acceptanceCriteria,
+      keys.ACCEPTANCE_CRITERIA_READ_FAILURE to acceptanceCriteriaReadFailure,
+      keys.BRANCH to branch,
+      keys.MODEL_DIRECTIVES to modelDirectives.toSortedMap().mapValues { (_, value) -> value.toPersistenceWire() },
+      keys.MODEL_MATRIX to (retainedModelMatrix?.toPersistenceWire() ?: modelMatrix?.toPersistenceWire()),
+      keys.ADDONS to
+        addons.map { addon ->
+          mapOf(
+            keys.SLUG to addon.persisted.slug,
+            keys.SOURCE_IDENTITY to addon.persisted.sourceIdentity,
+            keys.CONTENT_SHA256 to addon.persisted.contentSha256,
+            keys.DESCRIPTION to addon.description,
+            keys.CONTENT to addon.content,
+          )
+        },
+    )
+  return openCodeIdentity?.let { wire + (keys.OPEN_CODE_IDENTITY to it.toPersistenceWire()) } ?: wire
+}
+
+private fun OpenCodeLaunchIdentity.toPersistenceWire(): Map<String, Any?> {
+  val keys = OpenCodeLaunchIdentityKeys
   return mapOf(
-    keys.ISSUE_KEY to issueKey,
-    keys.INTAKE to intake,
-    keys.REPO_ROOT to repoRoot,
-    keys.INVOKED_AGENT_ID to invokedAgentId,
-    keys.CONFIGURED_AGENT_OVERRIDE_ID to configuredAgentOverrideId,
-    keys.TIMEOUT_MILLIS to timeoutMillis,
-    keys.QA_SELECTION to qaSelection.wireValue,
-    keys.PARENT_SPEC_PATH to parentSpecPath,
-    keys.ACCEPTANCE_CRITERIA to acceptanceCriteria,
-    keys.ACCEPTANCE_CRITERIA_READ_FAILURE to acceptanceCriteriaReadFailure,
-    keys.BRANCH to branch,
-    keys.MODEL_DIRECTIVES to modelDirectives.toSortedMap().mapValues { (_, value) -> value.toPersistenceWire() },
-    keys.MODEL_MATRIX to (retainedModelMatrix?.toPersistenceWire() ?: modelMatrix?.toPersistenceWire()),
-    keys.ADDONS to
-      addons.map { addon ->
-        mapOf(
-          keys.SLUG to addon.persisted.slug,
-          keys.SOURCE_IDENTITY to addon.persisted.sourceIdentity,
-          keys.CONTENT_SHA256 to addon.persisted.contentSha256,
-          keys.DESCRIPTION to addon.description,
-          keys.CONTENT to addon.content,
-        )
-      },
+    keys.HOME to home.toPersistenceWire(),
+    keys.CONFIG_HOME to configHome.toPersistenceWire(),
+    keys.DATA_HOME to dataHome.toPersistenceWire(),
+    keys.CACHE_HOME to cacheHome.toPersistenceWire(),
+    keys.STATE_HOME to stateHome.toPersistenceWire(),
+    keys.CONFIG_DIRECTORY to configDirectory.toPersistenceWire(),
+    keys.CONFIG_FILE to configFile.toPersistenceWire(),
+    keys.DISABLE_PROJECT_CONFIG to disableProjectConfig.toPersistenceWire(),
+    keys.EFFECTIVE_HOME to effectiveHome,
+    keys.EFFECTIVE_CONFIG_HOME to effectiveConfigHome,
+    keys.EFFECTIVE_DATA_HOME to effectiveDataHome,
+    keys.EFFECTIVE_CACHE_HOME to effectiveCacheHome,
+    keys.EFFECTIVE_STATE_HOME to effectiveStateHome,
+    keys.EFFECTIVE_CONFIG_DIRECTORY to effectiveConfigDirectory,
+    keys.EFFECTIVE_CONFIG_FILE to effectiveConfigFile,
+    keys.INLINE_CONFIG_PRESENT to inlineConfigPresent,
+    keys.INLINE_CONFIG_FINGERPRINT to inlineConfigFingerprint,
   )
 }
+
+private fun OpenCodeEnvironmentSelection.toPersistenceWire(): Map<String, Any?> =
+  mapOf(OpenCodeLaunchIdentityKeys.SUPPLIED to supplied, OpenCodeLaunchIdentityKeys.VALUE to value)
 
 private fun PhaseModelDirective.toPersistenceWire(): Map<String, Any?> =
   mapOf(
@@ -148,7 +179,69 @@ internal fun decodeInputs(value: Any?): GoalQualityExecutionInputs? {
     modelMatrix = matrix?.executionProjection(),
     addons = addons,
     retainedModelMatrix = matrix,
+    openCodeIdentity = raw[keys.OPEN_CODE_IDENTITY]?.let(::decodeOpenCodeLaunchIdentity),
   )
+}
+
+private fun decodeOpenCodeLaunchIdentity(value: Any?): OpenCodeLaunchIdentity {
+  val raw = value as? Map<*, *> ?: invalidLegacy("Stored OpenCode launch identity is not an object.")
+  val keys = OpenCodeLaunchIdentityKeys
+  val present =
+    raw[keys.INLINE_CONFIG_PRESENT] as? Boolean ?: invalidLegacy("Stored OpenCode inline identity is invalid.")
+  val fingerprint = identityString(raw, keys.INLINE_CONFIG_FINGERPRINT, nullable = true)
+  if (present != (fingerprint != null) || fingerprint != null && !fingerprint.matches(Regex("[0-9a-f]{64}"))) {
+    invalidLegacy("Stored OpenCode inline identity is inconsistent.")
+  }
+  return OpenCodeLaunchIdentity(
+    home = identitySelection(raw, keys.HOME),
+    configHome = identitySelection(raw, keys.CONFIG_HOME),
+    dataHome = identitySelection(raw, keys.DATA_HOME),
+    cacheHome = identitySelection(raw, keys.CACHE_HOME),
+    stateHome = identitySelection(raw, keys.STATE_HOME),
+    configDirectory = identitySelection(raw, keys.CONFIG_DIRECTORY),
+    configFile = identitySelection(raw, keys.CONFIG_FILE),
+    disableProjectConfig = identitySelection(raw, keys.DISABLE_PROJECT_CONFIG),
+    effectiveHome = identityRequiredString(raw, keys.EFFECTIVE_HOME),
+    effectiveConfigHome = identityRequiredString(raw, keys.EFFECTIVE_CONFIG_HOME),
+    effectiveDataHome = identityRequiredString(raw, keys.EFFECTIVE_DATA_HOME),
+    effectiveCacheHome = identityRequiredString(raw, keys.EFFECTIVE_CACHE_HOME),
+    effectiveStateHome = identityRequiredString(raw, keys.EFFECTIVE_STATE_HOME),
+    effectiveConfigDirectory = identityRequiredString(raw, keys.EFFECTIVE_CONFIG_DIRECTORY),
+    effectiveConfigFile = identityString(raw, keys.EFFECTIVE_CONFIG_FILE, nullable = true),
+    inlineConfigPresent = present,
+    inlineConfigFingerprint = fingerprint,
+  )
+}
+
+private fun identityRequiredString(
+  raw: Map<*, *>,
+  key: String,
+): String = identityString(raw, key) ?: invalidLegacy("Stored OpenCode identity field is missing.")
+
+private fun identityString(
+  raw: Map<*, *>,
+  key: String,
+  nullable: Boolean = false,
+): String? {
+  if (key !in raw) invalidLegacy("Stored OpenCode identity field is missing.")
+  val field = raw[key]
+  if (nullable && field == null) return null
+  return field as? String ?: invalidLegacy("Stored OpenCode identity field is invalid.")
+}
+
+private fun identitySelection(
+  raw: Map<*, *>,
+  key: String,
+): OpenCodeEnvironmentSelection {
+  val keys = OpenCodeLaunchIdentityKeys
+  val selection = raw[key] as? Map<*, *> ?: invalidLegacy("Stored OpenCode launch selection is not an object.")
+  val supplied = selection[keys.SUPPLIED] as? Boolean ?: invalidLegacy("Stored OpenCode selection is invalid.")
+  if (keys.VALUE !in selection) invalidLegacy("Stored OpenCode selection value is missing.")
+  val selected = selection[keys.VALUE]
+  if (selected != null && selected !is String || supplied != (selected != null)) {
+    invalidLegacy("Stored OpenCode selection presence is inconsistent.")
+  }
+  return OpenCodeEnvironmentSelection(supplied, selected)
 }
 
 private fun decodeDirective(value: Any?): PhaseModelDirective {

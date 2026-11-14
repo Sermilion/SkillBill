@@ -66,7 +66,7 @@ class ShellCommandsEntry(
       go("nav:history", "Go to History", LucideIcons.history, "G H", HistoryRoute) +
       go("nav:settings", "Go to Settings", LucideIcons.sliders, "G ,", SettingsRoute(SettingsPageId.App))
     val paneCommands = listOf(
-      ShellCommand(CommandItem("specs", if (shellPanes.specsOpen) "Close specs pane" else "Open specs pane", LucideIcons.fileText, "G S")) {
+      ShellCommand(CommandItem("specs", if (shellPanes.specsOpen) "Close plans pane" else "Open plans pane", LucideIcons.fileText, "G S")) {
         shellPanes.specsOpen = !shellPanes.specsOpen
       },
       ShellCommand(CommandItem("term", if (terminal.open) "Close terminal" else "Open terminal", LucideIcons.terminal, "⌃ `"), terminal::toggle),

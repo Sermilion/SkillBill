@@ -78,6 +78,8 @@ class HeadlessAgentRunAdapterTest {
       setOf(
         SupportedAgent.CLAUDE,
         SupportedAgent.CODEX,
+        SupportedAgent.OPENCODE,
+        SupportedAgent.DEVIN,
         SupportedAgent.CURSOR,
       ),
       adapters.keys,

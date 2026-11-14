@@ -211,7 +211,7 @@ internal fun hardResetAcceptanceWarning(
     records.forEach { record ->
       val command =
         listOf(
-          "skill-bill",
+          "sona",
           "goal",
           "accept",
           issueKey,

@@ -20,6 +20,7 @@ internal fun PhaseRun.stepFacts(
     configuredAgentOverrideId = resolvedAgent.configuredAgentOverrideId,
     modelOverride = launched.modelOverride,
     effortOverride = launched.effortOverride,
+    openCodeIdentity = request.openCodeIdentity,
     compaction = compaction,
     attempt = attempt,
     observeLaunch = true,

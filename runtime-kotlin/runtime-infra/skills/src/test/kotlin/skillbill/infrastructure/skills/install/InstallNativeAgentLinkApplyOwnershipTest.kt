@@ -14,6 +14,7 @@ import skillbill.install.model.McpRegistrationApplyStatus
 import skillbill.install.model.NativeAgentApplyStatus
 import skillbill.install.model.NativeAgentProviderId
 import skillbill.install.model.SupportedAgent
+import skillbill.model.toPath
 import skillbill.ports.repository.toFileLocation
 import java.nio.file.Files
 import java.nio.file.LinkOption
@@ -73,7 +74,7 @@ class InstallNativeAgentLinkApplyOwnershipTest : InstallNativeAgentLinkApplyTest
   @Test
   fun `missing inventory removes canonical dangling links across provider layouts`() {
     val fixture = setupApplyFixture()
-    listOf(".claude", ".codex", ".cursor")
+    listOf(".claude", ".codex", ".cursor", ".config/opencode", ".config/devin")
       .forEach { Files.createDirectories(fixture.home.resolve(it)) }
     val cacheRoot =
       fixture.home.resolve(
@@ -181,6 +182,8 @@ class InstallNativeAgentLinkApplyOwnershipTest : InstallNativeAgentLinkApplyTest
     Files.createDirectories(fixture.home.resolve(".claude"))
     Files.createDirectories(fixture.home.resolve(".codex"))
     Files.createDirectories(fixture.home.resolve(".cursor"))
+    Files.createDirectories(fixture.home.resolve(".config/opencode"))
+    Files.createDirectories(fixture.home.resolve(".config/devin"))
     val sourceBefore = snapshotSource(fixture.repoRoot)
     val plan =
       planInstallForTest(
@@ -210,10 +213,8 @@ class InstallNativeAgentLinkApplyOwnershipTest : InstallNativeAgentLinkApplyTest
       )
       assertTrue(skill.links.all { link -> link.status == InstallAgentLinkStatus.CREATED })
       assertTrue(
-        Files.isSymbolicLink(
-          fixture.home.resolve("agent-skill-targets/claude/${skill.skillName}"),
-        ),
-        "Claude should receive the skill link surface",
+        Files.isSymbolicLink(skill.links.single { it.agent == SupportedAgent.CLAUDE }.linkPath.toPath()),
+        "Claude should receive the skill link surface: ${skill.links}",
       )
     }
     assertEquals(
@@ -221,6 +222,8 @@ class InstallNativeAgentLinkApplyOwnershipTest : InstallNativeAgentLinkApplyTest
         NativeAgentProviderId.CLAUDE,
         NativeAgentProviderId.CODEX,
         NativeAgentProviderId.CURSOR,
+        NativeAgentProviderId.OPENCODE,
+        NativeAgentProviderId.DEVIN,
       ),
       result.nativeAgents
         .filter { native -> native.status == NativeAgentApplyStatus.LINKED }
@@ -287,6 +290,7 @@ class InstallNativeAgentLinkApplyOwnershipTest : InstallNativeAgentLinkApplyTest
         source = newSource,
         agentTarget = AgentTarget("claude", targetDir.toFileLocation()),
         managedSourceRoots = listOf(managedRoot),
+        ownership = NativeAgentLinkOwnership(foreignHome, NativeAgentProvider.Claude, "bill-worker", absentTarget),
       )
 
     assertTrue(result is InstallNativeAgentResult.Linked)
@@ -337,7 +341,13 @@ class InstallNativeAgentLinkApplyOwnershipTest : InstallNativeAgentLinkApplyTest
             source = currentSource,
             agentTarget = AgentTarget(provider.name, targetDir.toFileLocation()),
             managedSourceRoots = listOf(currentRoot),
-            ownership = NativeAgentLinkOwnership(home, provider, logicalName),
+            ownership =
+              NativeAgentLinkOwnership(
+                home,
+                provider,
+                logicalName,
+                provider.cacheArtifactPath(obsoleteRoot, logicalName),
+              ),
           )
 
         assertTrue(result is InstallNativeAgentResult.Linked)

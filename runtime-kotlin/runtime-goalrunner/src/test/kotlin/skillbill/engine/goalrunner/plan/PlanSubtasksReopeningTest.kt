@@ -24,6 +24,7 @@ import skillbill.engine.featuretask.phaserun.phaseRunDatabase
 import skillbill.engine.featuretask.prepare.FeatureSpecPreparationRuntime
 import skillbill.engine.featuretask.prepare.FeatureSpecPreparationWriter
 import skillbill.engine.featuretask.runner.RUNNER_TEST_PROJECT_STORE
+import skillbill.engine.featuretask.runner.testPreplanEvidenceStore
 import skillbill.engine.featuretask.testing.featureTaskRuntimeWireArtifactValidatorForTest
 import skillbill.engine.goalrunner.planning.outcome.proseRecordPayload
 import skillbill.engine.goalrunner.planning.source.findImportedSubtaskPlanWorkflowIds
@@ -491,7 +492,6 @@ class PlanSubtasksReopeningTest {
           feasibilityAdoption = true,
         )
       assertTrue(reopening.reopenWithRebasedBundle(replan))
-
       val reopened = database.read { requireNotNull(it.workflowStates.get(WorkflowFamily.TASK_RUNTIME, selectedId)) }
       val family = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PLAN_BUNDLE_FEASIBILITY
       val state = codec.decode(family.value(reopened.artifacts), "test")
@@ -827,6 +827,7 @@ class PlanSubtasksReopeningTest {
       FileSystemFeatureSpecPathResolver(RUNNER_TEST_PROJECT_STORE),
       RUNNER_TEST_PROJECT_STORE,
       TestDecompositionManifestStore,
+      testPreplanEvidenceStore(),
     )
 
   private fun reopening(database: DatabaseSessionFactory): PlanSubtasksReopening =

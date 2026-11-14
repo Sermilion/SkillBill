@@ -51,6 +51,7 @@ import dev.skillbill.desktop.core.ui.changes.ChangesSource
 import dev.skillbill.desktop.core.domain.settings.NewTaskChatLayout
 import dev.skillbill.desktop.feature.chat.ChatApprovalActions
 import dev.skillbill.desktop.feature.chat.ChatTranscript
+import dev.skillbill.desktop.feature.chat.StartCardContext
 import dev.skillbill.desktop.feature.chat.chipText
 import dev.skillbill.desktop.feature.chat.resumableDrafts
 import kotlin.time.Instant
@@ -141,6 +142,7 @@ private fun ColumnScope.NewTaskChatContent(
         modifier = Modifier.weight(1f).align(Alignment.CenterHorizontally).widthIn(max = COMPOSER_MAX_WIDTH),
         allowStartActions = host.onStart != null,
         startIssueKey = draft.acceptedIssueKey,
+        startContext = StartCardContext(draft.repository?.name, chat.baseBranch, offer.starting),
         allowSuggestedActions = !offer.starting,
         footer = if (offer.prefixKind != null) {
           {
@@ -223,7 +225,7 @@ private fun NewTaskHomeBody(
     ) {
       val returning = state.home as? NewTaskHome.Returning
       val hasNeedsYouCard = returning != null && returning.needsYou.isNotEmpty()
-      val hasSections = recent.isNotEmpty() || returning != null
+      val hasSections = recent.entries.isNotEmpty() || recent.recoveries.isNotEmpty() || returning != null
       Column(Modifier.widthIn(max = CONTENT_MAX_WIDTH).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(if (hasSections) 32.dp else 40.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
           BasicText("What should we ship?", Modifier.semantics { heading() }, style = type.t2xl.copy(color = colors.fg))
@@ -233,9 +235,9 @@ private fun NewTaskHomeBody(
           )
         }
         StepLine(progress, preview)
-        if (recent.isNotEmpty()) {
+        if (recent.entries.isNotEmpty()) {
           RecentChatsSection(
-            chats = recent,
+            chats = recent.entries,
             selectedRoot = root,
             openSessionIds = openSessionIds,
             now = host.now,
@@ -246,6 +248,7 @@ private fun NewTaskHomeBody(
             nextCardFocusRequester = if (hasNeedsYouCard) needsYouFocusRequester else FocusRequester.Default,
           )
         }
+        SavedChatRecoverySection(recent.recoveries)
         if (returning != null) {
           NeedsYouSection(
             returning,

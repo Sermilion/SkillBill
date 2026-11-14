@@ -116,7 +116,7 @@ Rules:
 
 ### Run quality gate
 
-After all selected fixes land, invoke `skill-bill phase validation`. It auto-routes to whichever stack-specific quality skill the host repo's platform pack declares. Fix issues at the root cause; never use suppressions. Report initial vs final failure count.
+After all selected fixes land, invoke `sona phase validation`. It auto-routes to whichever stack-specific quality skill the host repo's platform pack declares. Fix issues at the root cause; never use suppressions. Report initial vs final failure count.
 
 If the routed quality skill is unavailable, fall back to the repo-native command (commonly `./gradlew check`, `npm test`, `pytest`, etc.) and say so.
 

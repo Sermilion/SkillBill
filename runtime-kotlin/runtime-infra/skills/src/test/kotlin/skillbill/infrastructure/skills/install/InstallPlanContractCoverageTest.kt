@@ -121,6 +121,29 @@ class InstallPlanContractCoverageTest {
   }
 
   @Test
+  fun `OpenCode manual target uses the configured skills root`() {
+    val fixture = setupPlanFixture()
+    val configuredRoot = fixture.home.resolve("custom-opencode")
+    val target =
+      InstallAgentTarget(
+        agent = SupportedAgent.OPENCODE,
+        path = configuredRoot.resolve("skills").toFileLocation(),
+        source = InstallAgentTargetSource.MANUAL,
+      )
+    val plan =
+      planInstallForTest(
+        fixture.request(
+          agentSelection = InstallAgentSelection(InstallAgentSelectionMode.MANUAL, setOf(SupportedAgent.OPENCODE)),
+          targetPaths = fixture.targetPaths(agentTargets = listOf(target)),
+          environment = installTestEnvironment(fixture.home) + ("OPENCODE_CONFIG_DIR" to configuredRoot.toString()),
+        ),
+      )
+
+    assertEquals(configuredRoot.resolve("skills"), plan.agents.single().path.toPath())
+    assertEquals(listOf(SupportedAgent.OPENCODE), plan.mcpRegistrationIntent.agents)
+  }
+
+  @Test
   fun `detection derived agent selection covers all supported agents without source mutation`() {
     val fixture = setupPlanFixture()
     Files.createDirectories(fixture.home.resolve(".claude"))
@@ -174,7 +197,7 @@ class InstallPlanContractCoverageTest {
 
       val plan =
         planInstallForTest(
-          fixture.request(telemetryLevel = level),
+          fixture.request().copy(telemetryLevel = level),
         )
 
       assertEquals(level, plan.telemetryLevel)
@@ -204,6 +227,7 @@ class InstallPlanContractCoverageTest {
 
   private fun setupPlanFixture(): PlanFixture {
     val repoRoot = Files.createTempDirectory("skillbill-install-plan-contract-repo").also(tempDirs::add)
+    Files.createDirectories(repoRoot.resolve(".git"))
     val home = Files.createTempDirectory("skillbill-install-plan-contract-home").also(tempDirs::add)
     seedBaseSkill(repoRoot, PACK_SIDECAR_PARENT_SKILL)
     seedBaseSkill(repoRoot, "bill-code-review")
@@ -316,25 +340,25 @@ class InstallPlanContractCoverageTest {
           manualAgents = setOf(SupportedAgent.CODEX),
         ),
       platformPackSelection: PlatformPackSelection = PlatformPackSelection(mode = PlatformPackSelectionMode.NONE),
-      telemetryLevel: InstallTelemetryLevel = InstallTelemetryLevel.ANONYMOUS,
       targetPaths: InstallationTargetPaths = targetPaths(),
       windowsSymlinkPreflight: WindowsSymlinkPreflight =
         WindowsSymlinkPreflight(
           state = WindowsSymlinkPreflightState.NOT_WINDOWS,
           decision = WindowsSymlinkDecision.NOT_REQUIRED,
         ),
+      environment: Map<String, String> = installTestEnvironment(home),
     ): InstallPlanRequest =
       InstallPlanRequest(
         repoRoot = repoRoot.toFileLocation(),
         home = home.toFileLocation(),
         agentSelection = agentSelection,
         platformPackSelection = platformPackSelection,
-        telemetryLevel = telemetryLevel,
+        telemetryLevel = InstallTelemetryLevel.ANONYMOUS,
         mcpRegistrationChoice = McpRegistrationChoice(register = true, runtimeMcpBin = runtimeMcpBin.toFileLocation()),
         runtimeDistributionInputs = RuntimeDistributionInputs(runtimeInstallRoot = runtimeInstallRoot.toFileLocation()),
         targetPaths = targetPaths,
         windowsSymlinkPreflight = windowsSymlinkPreflight,
-        environment = installTestEnvironment(home),
+        environment = environment,
       )
   }
 }

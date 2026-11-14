@@ -33,12 +33,12 @@ class CommandCatalogTest {
     val catalog = catalog(FakeWorkControlRepository(), FakeArchiveFileChooser(), ToastQueue(), backgroundScope)
     assertEquals(emptyList(), catalog.sections(CommandContext(null, null), null, emptySet()))
 
-    val specSection = CommandSection("SKILL-503", listOf(ShellCommand(CommandItem("spec-open", "Open spec")) {}))
+    val specSection = CommandSection("SKILL-503", listOf(ShellCommand(CommandItem("spec-open", "Open plan")) {}))
     val item = workItem("SKILL-503")
     val sections = catalog.sections(CommandContext(null, item), null, emptySet(), specSection)
 
     assertEquals(listOf(rowKey(item), "SKILL-503"), sections.take(2).map { it.head })
-    assertEquals("Open spec", sections[1].commands.single().item.label)
+    assertEquals("Open plan", sections[1].commands.single().item.label)
   }
 
   @Test

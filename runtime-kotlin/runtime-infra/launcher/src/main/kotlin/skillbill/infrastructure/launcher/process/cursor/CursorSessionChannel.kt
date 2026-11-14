@@ -30,6 +30,7 @@ internal class CursorSessionChannel(
   private val captureLock = Any()
   private val toolOutput = StringBuilder()
   private var deliveryFailed = false
+  private var captureIncomplete = false
   private var toolOutputTruncated = false
   private var captureFrozen = false
   private var frozenCapture: AgentRunSessionCapture? = null
@@ -47,7 +48,7 @@ internal class CursorSessionChannel(
           is CursorAcpEvent.Unsupported ->
             output.write(
               AgentRunOutputStream.STDERR,
-              "Unsupported Cursor request: ${event.method}\n${event.payload}\n",
+              "Unsupported $providerName request: ${event.method}\n${event.payload}\n",
             )
         }
       },
@@ -68,8 +69,9 @@ internal class CursorSessionChannel(
   override fun observe(chunk: String) {
     for (part in chunk.splitToSequence('\n').withIndex()) {
       if (part.index > 0) {
-        if (buffer.isNotEmpty()) protocol.observe(buffer.toString())
+        val frame = buffer.toString()
         buffer.setLength(0)
+        if (frame.isNotEmpty()) protocol.observe(frame)
       }
       if (protocol.outcome() != null) return
       if (buffer.length + part.value.length > MAX_FRAME) {
@@ -85,6 +87,7 @@ internal class CursorSessionChannel(
   override fun enforceOpening() = protocol.enforceOpening()
 
   override fun finish() {
+    noteIncompleteFrame()
     protocol.close()
     writer?.close()
     freezeCapture()
@@ -95,7 +98,17 @@ internal class CursorSessionChannel(
       AgentRunSessionOutcome(it.text, it.model, it.sessionId, it.failure == null, it.failure)
     }
 
-  override fun capture(): AgentRunSessionCapture = freezeCapture()
+  override fun capture(): AgentRunSessionCapture {
+    noteIncompleteFrame()
+    return freezeCapture()
+  }
+
+  private fun noteIncompleteFrame() {
+    if (buffer.isNotEmpty() && !captureFrozen) {
+      captureIncomplete = true
+      diagnostics.warning("seam=$seam outcome=incomplete_frame")
+    }
+  }
 
   private fun toolUpdate(update: JsonObject) {
     val record = "$providerName tool update: $update\n"
@@ -142,7 +155,7 @@ internal class CursorSessionChannel(
     synchronized(captureLock) {
       frozenCapture ?: AgentRunSessionCapture(
         text = protocol.textSnapshot(),
-        complete = !deliveryFailed && !toolOutputTruncated && !protocol.textCaptureTruncated(),
+        complete = !deliveryFailed && !captureIncomplete && !toolOutputTruncated && !protocol.textCaptureTruncated(),
         truncated = toolOutputTruncated || protocol.textCaptureTruncated(),
         deliveryFailed = deliveryFailed,
         providerDiagnostics = toolOutput.toString().takeIf(String::isNotBlank),

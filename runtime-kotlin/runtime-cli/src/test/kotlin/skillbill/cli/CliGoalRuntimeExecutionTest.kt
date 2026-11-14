@@ -73,7 +73,7 @@ class CliGoalRuntimeExecutionTest {
     assertContains(reset.stdout, "classification=incompatible_terminal")
     assertContains(
       reset.stdout,
-      "recovery_command: skill-bill goal reset SKILL-901 --hard --yes",
+      "recovery_command: sona goal reset SKILL-901 --hard --yes",
     )
     val status =
       CliRuntime.run(

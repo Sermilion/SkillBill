@@ -51,6 +51,8 @@ internal fun assertGovernedReviewLaunch(
     SupportedAgent.CLAUDE -> assertClaudeGovernedLaunch(built.command)
     SupportedAgent.CODEX -> assertCodexGovernedLaunch(built.command)
     SupportedAgent.CURSOR -> assertCursorGovernedLaunch(built, governed, rawFilesystemTools)
+    SupportedAgent.OPENCODE, SupportedAgent.DEVIN ->
+      error("${builder.agent.id} must not advertise governed review launch capabilities")
   }
 }
 

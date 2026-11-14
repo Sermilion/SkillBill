@@ -1,7 +1,6 @@
 package skillbill.engine.goalrunner.qa
 
 import me.tatarka.inject.annotations.Inject
-import skillbill.application.decomposition.resolvedParentSpecPath
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.diagnostics.containableFailure
 import skillbill.engine.featuretask.phaserun.PhaseRunEntry
@@ -28,8 +27,6 @@ import skillbill.goalrunner.model.quality.GoalQualityValidationDisposition
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskQaFailureKind
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
-import skillbill.ports.projectstore.ProjectStorePort
-import skillbill.ports.taskruntime.FeatureTaskRuntimeRunInvariantsSource
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeRunInvariantsRead
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
@@ -37,7 +34,6 @@ import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelecti
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
-import java.nio.file.Path
 import java.util.concurrent.atomic.AtomicReference
 
 @Inject
@@ -46,12 +42,11 @@ public class DefaultGoalRunnerQaGate(
   private val phasePlans: PhaseRunPlanResolver,
   private val outcomeStore: GoalRunnerWorkflowOutcomeStore,
   private val gitOperations: WorkflowGitOperations,
-  private val invariantsSource: FeatureTaskRuntimeRunInvariantsSource,
+  private val preparation: GoalQualityPreparation,
   private val phaseRequests: GoalQualityPhaseRequests,
   private val buildBoundary: GoalQualityBuildBoundary,
   private val qaOutcomes: FeatureTaskQaOutcomeRecorder,
   private val capabilities: QaCapabilityResolver,
-  private val projectStore: ProjectStorePort,
   private val diagnostics: RuntimeDiagnostics,
 ) : GoalRunnerQaGate {
   private val repairOutputs = GoalQualityRepairOutputs(outcomeStore)
@@ -193,7 +188,7 @@ public class DefaultGoalRunnerQaGate(
     request: GoalRunnerRunRequest,
     admitted: (String) -> Unit,
   ): GoalQaGateResult {
-    val (quality, parentInvariants) = prepareQuality(state, request)
+    val (quality, parentInvariants) = preparation.prepare(state, request)
     val execution = requireNotNull(quality.execution)
     admitted(execution.invocationId)
     val paused = buildBoundary.run(state, request, quality)
@@ -265,17 +260,6 @@ public class DefaultGoalRunnerQaGate(
         settleAfterQaOutcome(state, request, validation.quality, listOfNotNull(warning) + validation.warnings)
     }
   }
-
-  private fun prepareQuality(
-    state: GoalRunnerManifestState,
-    request: GoalRunnerRunRequest,
-  ): Pair<GoalQualityExecutionRecord, FeatureTaskRuntimeRunInvariantsRead> =
-    admitPreparedQuality(
-      PreparedQualityContext(diagnostics, phasePlans, phaseRequests, outcomeStore, this::readParentInvariants),
-      gitOperations,
-      state,
-      request,
-    )
 
   private fun reuseSettledQuality(
     state: GoalRunnerManifestState,
@@ -1163,18 +1147,6 @@ public class DefaultGoalRunnerQaGate(
         acceptedRunningBoundary
     return validationPlan.takeIf { reentryCandidate }
   }
-
-  private fun readParentInvariants(
-    state: GoalRunnerManifestState,
-    request: GoalRunnerRunRequest,
-  ): FeatureTaskRuntimeRunInvariantsRead =
-    invariantsSource.read(
-      resolvedParentSpecPath(
-        request.repoRoot,
-        Path.of(state.manifest.parentSpecPath),
-        projectStore.resolve(request.repoRoot),
-      ),
-    )
 
   private companion object {
     val INTEGRITY_FAILURES =

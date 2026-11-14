@@ -472,7 +472,7 @@ class FeatureTaskRuntimeCheckpointScopeTest {
   }
 
   @Test
-  fun `trackable skill-bill config is not treated as runtime-private`() {
+  fun `trackable sona config is not treated as runtime-private`() {
     assertFalse(isRuntimePrivatePath(".skill-bill/config.yaml"))
     assertTrue(isRuntimePrivatePath(".skill-bill/state.db"))
     assertTrue(

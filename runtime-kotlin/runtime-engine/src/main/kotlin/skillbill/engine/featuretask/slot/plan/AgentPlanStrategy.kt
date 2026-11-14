@@ -128,7 +128,7 @@ internal class AgentPlanStrategy :
     private val featureSpecDirective: String by lazy { directiveResource(FEATURE_SPEC_DIRECTIVE).trimEnd() }
 
     private const val UNRESOLVED_SPECS_ROOT: String =
-      "project store `<issue key>-<slug>/` (`skill-bill project path` prints the project store)"
+      "project store `<issue key>-<slug>/` (`sona project path` prints the project store)"
 
     private fun bundleLocation(
       target: PlanBundleTarget?,

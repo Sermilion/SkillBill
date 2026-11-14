@@ -41,7 +41,7 @@ private val GOAL_REVIEW_POLICY_ARTIFACT_KEY =
 
 class DatabaseMigrationsTest {
   @Test
-  fun `migration 127 rewrites only unsupported standalone launch agents and is repeatable`() {
+  fun `migration 129 rewrites only unsupported standalone launch agents and is repeatable`() {
     DriverManager.getConnection("jdbc:sqlite::memory:").use { connection ->
       connection.createStatement().use { statement ->
         statement.execute(
@@ -54,7 +54,7 @@ class DatabaseMigrationsTest {
         statement.execute("CREATE TABLE operation_launch_contexts (selected_agent TEXT)")
         statement.execute("INSERT INTO operation_launch_contexts VALUES ('retired-agent')")
       }
-      val migration = databaseMigrations.single { it.version == 127 }
+      val migration = databaseMigrations.single { it.version == 129 }
       migration.apply(connection, SqliteTestDiagnostics)
       migration.apply(connection, SqliteTestDiagnostics)
 
@@ -82,7 +82,7 @@ class DatabaseMigrationsTest {
   }
 
   @Test
-  fun `migration 128 preserves supported launch agents while retiring the previous provider`() {
+  fun `migration 130 preserves supported launch agents while retiring the previous provider`() {
     val previousProvider = charArrayOf('j', 'u', 'n', 'i', 'e').concatToString()
     val originalAgents =
       mapOf(
@@ -107,7 +107,7 @@ class DatabaseMigrationsTest {
           statement.executeUpdate()
         }
       }
-      val migration = databaseMigrations.single { it.version == 128 }
+      val migration = databaseMigrations.single { it.version == 130 }
       migration.apply(connection, SqliteTestDiagnostics)
       migration.apply(connection, SqliteTestDiagnostics)
 
@@ -2531,8 +2531,10 @@ private val expectedMigrationDefinitions =
     124 to "record-goal-planning-git-worktree-identity",
     125 to "track-legacy-plan-bundle-transfer",
     126 to "fence-goal-planning-checkout-recovery",
-    127 to "retire-unsupported-agent-ids",
-    128 to "normalize-launch-agents-after-vocabulary-change",
+    127 to "record-opencode-launch-identity",
+    128 to "record-verify-criterion-resolutions",
+    129 to "retire-unsupported-agent-ids",
+    130 to "normalize-launch-agents-after-vocabulary-change",
   )
 
 private object NoopMigrationDiagnostics : RuntimeDiagnostics {

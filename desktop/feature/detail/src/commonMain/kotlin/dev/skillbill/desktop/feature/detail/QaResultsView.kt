@@ -55,7 +55,14 @@ internal data class QaFindingRow(
 )
 
 /** A Not tested row, or one row of a list fold. */
-internal data class QaDetailRow(val title: String, val detail: String, val evidenceDirectory: String?, val evidencePaths: List<String> = emptyList())
+internal data class QaDetailRow(
+  val title: String,
+  val detail: String,
+  val evidenceDirectory: String?,
+  val evidencePaths: List<String> = emptyList(),
+  val expected: String? = null,
+  val steps: String? = null,
+)
 
 internal data class QaLeftRow(val title: String, val detail: String, val copyLabel: String, val copyText: String?)
 
@@ -161,7 +168,7 @@ internal fun qaResultsView(input: QaResultsInput): QaResultsView {
   val fixedFold = fixed.takeIf { it.isNotEmpty() }?.let { rows ->
     listFold(
       "Fixed by QA",
-      rows.map { QaDetailRow(if (it.title.isBlank()) it.id else "${it.id} ${it.title}", capitalized(it.observed.orEmpty()), it.evidenceDirectory ?: directory, it.evidencePaths) },
+      rows.map { QaDetailRow(if (it.title.isBlank()) it.id else "${it.id} ${it.title}", capitalized(it.observed.orEmpty()), it.evidenceDirectory ?: directory, it.evidencePaths, it.expected, it.steps) },
       rows.map { shortenPaths(it.title.ifBlank { it.id }, it.evidenceDirectory ?: directory) },
     )
   }

@@ -62,7 +62,7 @@ internal data class McpTool(
 
 internal object McpToolRegistry {
   private const val DIFF_COMMENT_DESKTOP_NOTE =
-    " for the skill-bill desktop Changes window. These are not GitHub PR comments."
+    " for the sona desktop Changes window. These are not GitHub PR comments."
 
   val tools: List<McpTool> =
     listOf(

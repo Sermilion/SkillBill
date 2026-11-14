@@ -1,5 +1,5 @@
 ## [2026-10-10] Hide top-level update-check instead of aliasing it
-Context: SKILL-414 subtask 3 makes `skill-bill operation update-check` canonical and removes the top-level update-check from root help while keeping old invocations working.
+Context: SKILL-414 subtask 3 makes `sona operation update-check` canonical and removes the top-level update-check from root help while keeping old invocations working.
 Decision: Keep UpdateCheckCommand registered with hiddenFromHelp = true. Do not add a SkillBillCommand.aliases() entry that maps update-check to operation update-check.
 Reason: operation update-check appends an `Operation invocation ID:` line. CliRuntimeUpdateTest and McpSystemToolsTest decode the top-level command's JSON payload, so an alias would change its output.
 Revisit when: operation output drops the invocation-ID line, or no caller decodes the top-level update-check payload.

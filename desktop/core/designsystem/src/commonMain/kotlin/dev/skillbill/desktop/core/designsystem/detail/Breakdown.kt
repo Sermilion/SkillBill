@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
@@ -49,23 +50,23 @@ fun breakdownRows(counts: Map<String, Int>, open: Boolean, max: Int = BREAKDOWN_
 }
 
 /**
- * `.sb-bd`: a total split by key under a property. 22 px rows with the key in 11.5 px mono `fg-faint` and the count right-aligned
- * in 12 px `fg-muted` tabular; past [BREAKDOWN_MAX_ROWS] keys a ghost toggle reads "+N more", or "Show less" while [open].
+ * A total split by key under a property. Rows stay within 192 dp, with readable sans labels and tabular counts.
+ * Past [BREAKDOWN_MAX_ROWS] keys a ghost toggle reads "+N more", or "Show less" while [open].
  */
 @Composable
 fun Breakdown(counts: Map<String, Int>, open: Boolean, onToggle: () -> Unit, modifier: Modifier = Modifier) {
   val colors = SkillBillTheme.colors
   val type = SkillBillTheme.type
   val rows = breakdownRows(counts, open)
-  Column(modifier.fillMaxWidth()) {
+  Column(modifier.widthIn(max = 192.dp).fillMaxWidth()) {
     rows.shown.forEach { (key, count) ->
       Row(Modifier.fillMaxWidth().height(SkillBillSize.breakdownRow), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
         BasicText(
           key, Modifier.weight(1f),
-          style = type.monoSm.copy(color = colors.fgFaint, fontSize = type.tXs.fontSize),
+          style = type.tSm.copy(color = colors.fgMuted),
           maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis,
         )
-        BasicText(count.toString(), style = type.tSm.tabular().copy(color = colors.fgMuted, fontWeight = FontWeight.Normal), maxLines = 1)
+        BasicText(count.toString(), style = type.tSm.tabular().copy(color = colors.fg2, fontWeight = FontWeight.Normal), maxLines = 1)
       }
     }
     if (rows.folds) GhostToggle(if (open) "Show less" else "+${rows.hidden} more", onToggle)

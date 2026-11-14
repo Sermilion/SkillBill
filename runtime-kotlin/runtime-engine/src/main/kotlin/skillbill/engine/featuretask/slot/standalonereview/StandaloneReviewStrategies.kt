@@ -819,6 +819,7 @@ public abstract class StandaloneReviewStrategy(
               launch.skillRunRequest.progressIdleTimeout
                 ?: READ_ONLY_PHASE_PROGRESS_IDLE_TIMEOUT_MINUTES.minutes,
             modelOverride = run.launchAssignment?.launch?.effectiveModel,
+            effortOverride = launch.skillRunRequest.effortOverride,
           )
         when (val outcome = delegatedRunner.run(request)) {
           is ParallelCodeReviewRunOutcome.PlanningFailed -> {

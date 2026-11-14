@@ -3,8 +3,12 @@ package skillbill.infrastructure.skills.skillremove
 import skillbill.error.core.catchingNonCancellation
 import skillbill.infrastructure.host.jvm.rollbackDeletePathEntry
 import skillbill.infrastructure.host.jvm.rollbackRestoreBytes
+import skillbill.infrastructure.skills.install.nativeagent.inventory.NativeAgentLinkInventory
+import skillbill.infrastructure.skills.install.nativeagent.inventory.NativeAgentLinkInventoryPaths
 import skillbill.infrastructure.skills.install.nativeagent.link.InstallNativeAgentOperations
 import skillbill.infrastructure.skills.install.nativeagent.link.NativeAgentLinkRequest
+import skillbill.infrastructure.skills.install.nativeagent.link.ProviderMutationJournal
+import skillbill.infrastructure.skills.nativeagent.rendering.nativeAgentCompositionRepoRoot
 import skillbill.install.model.SupportedAgent
 import skillbill.skillremove.SkillBillRollbackException
 import skillbill.skillremove.model.AppliedCascade
@@ -19,6 +23,7 @@ import java.nio.file.LinkOption
 import java.nio.file.Path
 import java.nio.file.SimpleFileVisitor
 import java.nio.file.attribute.BasicFileAttributes
+import java.util.Comparator
 import java.util.logging.Logger
 import kotlin.coroutines.cancellation.CancellationException
 
@@ -31,24 +36,25 @@ internal class SkillRemoveJvmFileSystemApply(
   ): AppliedCascade {
     val repoRoot = skillRemoveRepoRoot(request)
     val rollbackStash = mutableListOf<RollbackEntry>()
+    val nativeJournal = ProviderMutationJournal()
     log.info(
-      "skill-bill remove begin: target=${describeTargetForLog(request.target)} " +
+      "sona remove begin: target=${describeTargetForLog(request.target)} " +
         "cascadedSkills=${preview.cascadedSkillNames.size} " +
         "filesystemPaths=${preview.filesystemPaths.size}",
     )
     return try {
       catchingNonCancellation {
-        applyCascadeBody(request, preview, repoRoot, rollbackStash)
+        applyCascadeBody(request, preview, repoRoot, rollbackStash, nativeJournal)
       }.fold(
         onSuccess = { applied ->
           log.info(
-            "skill-bill remove success: removedPaths=${applied.removedPaths.size} " +
+            "sona remove success: removedPaths=${applied.removedPaths.size} " +
               "editedManifests=${applied.editedManifests.size} " +
               "unlinkedSymlinks=${applied.unlinkedSymlinks.size}",
           )
           applied
         },
-        onFailure = { error -> handleApplyCascadeFailure(error, rollbackStash) },
+        onFailure = { error -> handleApplyCascadeFailure(error, rollbackStash, nativeJournal) },
       )
     } catch (cancelled: CancellationException) {
       logApplyCascadeFailure(cancelled)
@@ -57,6 +63,7 @@ internal class SkillRemoveJvmFileSystemApply(
           SkillBillRollbackException("Skill removal was cancelled AND rollback could not fully restore the repo"),
         )
       }
+      nativeJournal.restore().forEach(cancelled::addSuppressed)
       throw cancelled
     } catch (interrupted: InterruptedException) {
       logApplyCascadeFailure(interrupted)
@@ -65,18 +72,16 @@ internal class SkillRemoveJvmFileSystemApply(
           SkillBillRollbackException("Skill removal was cancelled AND rollback could not fully restore the repo"),
         )
       }
+      nativeJournal.restore().forEach(interrupted::addSuppressed)
       throw interrupted
     }
   }
 
-  fun providerUnlink(provider: SupportedAgent): (NativeAgentLinkRequest) -> List<Path> =
-    when (provider) {
-      SupportedAgent.CLAUDE -> InstallNativeAgentOperations::unlinkClaudeAgents
-      SupportedAgent.CODEX -> InstallNativeAgentOperations::unlinkCodexAgents
-      SupportedAgent.CURSOR -> InstallNativeAgentOperations::unlinkCursorAgents
-    }
-
-  fun unlinkProviderAgents(request: SkillRemovalRequest): List<Path> {
+  fun unlinkProviderAgents(
+    request: SkillRemovalRequest,
+    logicalNames: Set<String>,
+    journal: ProviderMutationJournal,
+  ): List<Path> {
     val repoRoot = skillRemoveRepoRoot(request)
     val target = request.target
     val resolvedHome = skillRemoveUserHome(request, home)
@@ -96,17 +101,20 @@ internal class SkillRemoveJvmFileSystemApply(
         skillsRoot = skillsRoot,
         home = resolvedHome,
         selectedPlatforms = selectedPlatforms,
+        environment = request.environment,
+        nativeAgentLogicalNames = logicalNames,
       )
+    removePackReviewCatalog(request, baseRequest, journal)
     val unlinked = mutableListOf<Path>()
     val failures = mutableListOf<UnlinkFailure>()
     SupportedAgent.entries.forEach { provider ->
       try {
-        unlinked += providerUnlink(provider)(baseRequest)
+        unlinked += InstallNativeAgentOperations.unlinkAgentsResult(provider, baseRequest, journal).removed
       } catch (cancellation: CancellationException) {
         throw cancellation
       } catch (error: IOException) {
         log.warning(
-          "skill-bill remove unlink failed for ${provider.name}: ${error::class.simpleName.orEmpty()}",
+          "sona remove unlink failed for ${provider.name}: ${error::class.simpleName.orEmpty()}",
         )
         failures += UnlinkFailure(provider = provider, message = error.message.orEmpty())
       }
@@ -116,6 +124,38 @@ internal class SkillRemoveJvmFileSystemApply(
       throw SkillBillRollbackException("Agent symlink unlink failed for: $summary")
     }
     return unlinked
+  }
+
+  private fun removePackReviewCatalog(
+    request: SkillRemovalRequest,
+    nativeRequest: NativeAgentLinkRequest,
+    journal: ProviderMutationJournal,
+  ) {
+    val catalogSlug = (request.target as? SkillRemovalTarget.PlatformPack)?.platform ?: return
+    val resolvedHome = requireNotNull(nativeRequest.home)
+    val inventoryPath = NativeAgentLinkInventoryPaths.inventoryPath(resolvedHome)
+    if (!NativeAgentLinkInventory.inventoryPathExists(inventoryPath)) return
+    val entries = NativeAgentLinkInventory.read(resolvedHome, emptyList(), environment = request.environment)
+    val sourceRoot =
+      nativeAgentCompositionRepoRoot(nativeRequest.platformPacksRoot, nativeRequest.skillsRoot)
+        .toAbsolutePath().normalize()
+    entries.filter { entry ->
+      entry.sourceRoot.toAbsolutePath().normalize() == sourceRoot &&
+        entry.installedPath.parent.toAbsolutePath().normalize() in
+        NativeAgentLinkInventoryPaths.provider(entry.provider).homeAgentDirs(resolvedHome, request.environment)
+          .map { it.toAbsolutePath().normalize() }
+    }
+      .map { it.cacheTargetPath.parent.parent }
+      .distinct()
+      .forEach { cacheRoot ->
+        val catalogPack = cacheRoot.resolve("review-catalog/platform-packs").resolve(catalogSlug)
+        if (Files.exists(catalogPack, LinkOption.NOFOLLOW_LINKS)) {
+          Files.walk(catalogPack).use { paths -> paths.sorted().forEach(journal::beforeMutation) }
+          Files.walk(catalogPack).use { paths ->
+            paths.sorted(Comparator.reverseOrder()).forEach(Files::delete)
+          }
+        }
+      }
   }
 
   private data class UnlinkFailure(

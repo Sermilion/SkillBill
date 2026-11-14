@@ -211,7 +211,11 @@ class ReviewOperationPolicy(
         listOf("git diff", "git show", "git log") to "diff_recomputation",
         listOf("./gradlew", "gradle", "npm test", "npm run", "cargo test", "cargo build", "pytest", "go test")
           to "build_test_fact_discovery",
-        listOf("skill-bill validate", "skill-bill show", "skill-bill explain") to "platform_pack_and_addon_resolution",
+        listOf(
+          "sona validate",
+          "sona show",
+          "sona explain",
+        ) to "platform_pack_and_addon_resolution",
       )
 
     val MCP_REDISCOVERY: List<Pair<List<String>, String>> =

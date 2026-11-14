@@ -17,7 +17,7 @@ class WorkIncidentRemedyTest {
         GoalQualityReadiness.HISTORICAL_AMBIGUITY,
       ) { "SKILL-453" }
 
-    assertEquals("skill-bill goal fresh-quality SKILL-453 --reason \"<why>\"", command)
+    assertEquals("sona goal fresh-quality SKILL-453 --reason \"<why>\"", command)
     assertEquals("Run: $command", workIncidentRemedy(facts(unblockCommand = command)))
     assertNull(
       WorkIncidentUnblockCommands.freshQualityCommand(WorkflowStatus.BLOCKED, GoalQualityReadiness.CLEAN_UNSTARTED) {
@@ -33,11 +33,11 @@ class WorkIncidentRemedyTest {
   }
 
   @Test
-  fun `unreported skill-bill defect asks the operator to file an issue with the incident token`() {
+  fun `unreported sona defect asks the operator to file an issue with the incident token`() {
     val remedy = workIncidentRemedy(facts(category = BlockIncidentResponsibleCategory.SKILL_BILL_DEFECT))
 
     assertEquals(
-      "If this is a skill-bill bug, file an issue at $SKILL_BILL_NEW_ISSUE_URL and include incident bi_1.",
+      "If this is a sona bug, file an issue at $SKILL_BILL_NEW_ISSUE_URL and include incident bi_1.",
       remedy,
     )
     assertNull(

@@ -20,13 +20,13 @@ internal fun RepositoryEnclosingRootPort.governedSpecPathForCli(
     is FeatureTaskGovernedSpecPathResult.OutsideRepository ->
       throw UsageError(
         "Governed spec path must be beneath the project store specs root " +
-          "${projectStore.resolve(repositoryRoot).specsRoot} (`skill-bill project path` prints the project store), " +
+          "${projectStore.resolve(repositoryRoot).specsRoot} (`sona project path` prints the project store), " +
           "or beneath a legacy ${LegacyProjectStatePaths.FEATURE_SPECS_PREFIX} in the checkout " +
           "('${result.repositoryRoot}').",
       )
     FeatureTaskGovernedSpecPathResult.InvalidGovernedPath ->
       throw UsageError(
         "Governed spec path must be Markdown beneath the project store specs root " +
-          "${projectStore.resolve(repositoryRoot).specsRoot} (`skill-bill project path` prints the project store).",
+          "${projectStore.resolve(repositoryRoot).specsRoot} (`sona project path` prints the project store).",
       )
   }

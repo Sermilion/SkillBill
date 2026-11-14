@@ -211,6 +211,7 @@ class SettingsViewModelTest {
   private val runtimeConfig = object : RuntimeConfigRepository {
     override fun configDefaults(): dev.skillbill.desktop.core.domain.model.ConfigDefaults = error("unused")
     override suspend fun modelMatrix(): dev.skillbill.desktop.core.domain.repository.ModelMatrixRead = error("unused")
+    override suspend fun advertisedAgentChoices(request: dev.skillbill.desktop.core.domain.repository.AdvertisedAgentChoicesRequest): dev.skillbill.desktop.core.domain.model.AdvertisedAgentChoices = error("unused")
     override suspend fun machineConfig(): ConfigRead<MachineConfig> = error("unused")
     override suspend fun projectConfig(repoRoot: String): ConfigRead<ProjectConfig> = error("unused")
     override suspend fun writeMachineConfig(changes: List<MachineConfigChange>, expected: dev.skillbill.desktop.core.domain.model.ConfigFingerprint?): ConfigWriteOutcome = error("unused")

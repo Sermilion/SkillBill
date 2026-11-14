@@ -21,6 +21,17 @@ The repository should be easy to review and hard to drift:
 - installed agents see complete `SKILL.md` wrappers and support files without
   source directories carrying generated files
 
+The canonical `skill-bill` dispatcher keeps its authored source when an
+installation contains local guidance. `renderWrapper` maps its public
+frontmatter name to `sona` and adapts legacy `/sona` and executable
+`skill-bill` command references in the rendered execution body. It preserves
+arguments and other authored guidance, and logs when it changes a body. The
+same renderer serves authoring previews and installation, so both paths show
+the compatible command. Installation hashes include a renderer revision to
+replace wrappers cached before this adaptation; reconciliation hashes do not
+include that revision, so a generated renderer change cannot make an untouched
+authored source look locally edited.
+
 This is also a product UX rule, not just repository hygiene. Authors should see
 and edit only the material they own. Wrapper ceremony, runtime wiring, pointer
 files, and provider-specific agent artifacts are the system's responsibility.
@@ -114,8 +125,8 @@ routing walkthrough see
 
 A **listed** skill installs as a `SKILL.md` entry in each agent's `skills_dir`
 and is invocable by users via the Skill tool. The shipped catalog lists exactly
-one, `skill-bill`. A skill can
-instead be classified **internal**: its governed content still installs, but as
+one public entry, `sona`, sourced from canonical `skills/skill-bill/`. A skill
+can instead be classified **internal**: its governed content still installs, but as
 a markdown sidecar inside another (parent) skill's installed directory, and it
 is never listed or directly invocable. Internal skills exist because some
 governed content is a dispatch target selected by a parent router, not a user
@@ -139,14 +150,14 @@ platform-pack skills under `platform-packs/<slug>/` may carry the key; the only
 parent-side restriction is that the parent itself must be a **listed base
 skill** (`skills/<parent>/`), never a platform-pack skill and never another
 internal skill. One shared rule evaluator backs the authoring seam, the
-install-plan seam, and `skill-bill validate`, so the same declaration fails
+install-plan seam, and `sona validate`, so the same declaration fails
 identically everywhere it is read.
 
 ### Parent rules and loud-fail behavior
 
 The pipeline loud-fails with a typed, actionable error
 (`InvalidInternalSkillClassificationError`; the same rules surface as issues at
-`skill-bill validate` time) when an internal skill:
+`sona validate` time) when an internal skill:
 
 - has a **missing** value — the `internal-for` key is present with no value;
 - declares an **unknown** parent — no discovered skill matches the name;
@@ -158,13 +169,13 @@ The pipeline loud-fails with a typed, actionable error
 A separate collision guard (`InternalSkillSidecarCollisionError`) fails staging
 when an authored file in the parent's source directory already occupies a
 would-be sidecar name (e.g. an authored `skill-bill/bill-kotlin-code-review.md`);
-`skill-bill validate` surfaces the same collision before install. Validation
+`sona validate` surfaces the same collision before install. Validation
 also checks every `` `<skill-name>.md` `` sidecar reference inside a skill's
 content.md: the referenced skill must be internal and share the referencing
 skill's effective parent, or the reference would break at session time with a
 file-not-found.
 
-Direct installs of an internal skill are refused: `skill-bill link-skill`
+Direct installs of an internal skill are refused: `sona link-skill`
 against an internal skill's directory fails with the same typed error and
 directs to the parent, so an internal skill can never gain its own
 `skills_dir` entry through a side path.
@@ -260,20 +271,25 @@ standalone `skills_dir` path.
 
 ### Worked example: the single listed skill
 
-The catalog has one listed skill, `skill-bill`. Its full-run form calls the goal
+The catalog has one listed skill, invoked publicly as `/sona`; its canonical
+source name is `skill-bill`. The `sona` executable runs its full-run form via the goal
 runtime with requirements prefixed by a supplied key or the next local key
 from `.feature-specs/`, an existing spec key or path, or a tracker reference.
 Local key allocation is the default for requirements without a key and needs
-no tracker connection. The dispatcher searches local specs including ignored files
-and checks repository-matched persisted workflows before fetching a new tracker
-reference through its connected tracker. Existing work resumes without replacing
-its requirements. The runtime prepares a missing
+no tracker connection. This repository requires an actual Linear issue issued
+by the SONA team through `linear-sona`. Verify the connection's workspace and
+team, and read the linked issue before starting a goal. Do not reserve a local
+substitute key. Preserve existing run identities, issue keys, specs, and history.
+The SONA prefix applies only to new work. The dispatcher searches local specs,
+including ignored files, and checks repository-matched persisted workflows
+before fetching a new tracker reference through its connected tracker. Existing
+work resumes without replacing its requirements. The runtime prepares a missing
 spec and parent workflow before durable planning; the dispatcher never invokes
-`skill-bill phase plan` on its own.
+`sona phase plan` on its own.
 Standalone phases and operations are operator tools and require an explicit
-operator request. Its `phase:<name>` forms run `skill-bill phase <name>`
-and its `operation:<name>` forms run `skill-bill operation <name>`; there is no
-feature goal sidecar and no other listed entry. `skill-bill goal status` stays
+operator request. Its `phase:<name>` forms run `sona phase <name>`
+and its `operation:<name>` forms run `sona operation <name>`; there is no
+feature goal sidecar and no other listed entry. `sona goal status` stays
 CLI-only. An install over an old home removes the retired skills' links and
 installed copies (`InstallLegacySkillNames`). The runtime workflow identity,
 database constraint, telemetry `skill` values, the verify `workflow_name`, the
@@ -296,8 +312,8 @@ it composes three additional failure areas (`performance`, `testing`,
 `internal-for: skill-bill` and install as siblings inside
 `skill-bill/`'s staged directory; the nine stack entries do **not** become
 parents of their specialists (PD2 flatten rule). After install with all packs
-selected, the agent skill list shows only `skill-bill` and none of those
-internal sidecars. The review phase (`/skill-bill phase:review`) reads the
+selected, the agent skill list shows only `sona` and none of those
+internal sidecars. The review phase (`/sona phase:review`) reads the
 dominant pack's entry sidecar, which reads its
 specialist rubric sidecars as siblings. A Kotlin-only request selects Kotlin.
 Because KMP declares Kotlin as a required baseline, dependent-pack expansion
@@ -308,7 +324,7 @@ contribution is 12. The KMP pack declares
 `bill-kotlin-code-review` as a required baseline layer, so selecting KMP without
 Kotlin fails install planning with the typed baseline-co-presence error (PD8).
 Quality checks have no pack skill sidecars. A dominant pack's `validation_gate`
-owns its build and collect-all argv. `skill-bill phase validation` uses the same
+owns its build and collect-all argv. `sona phase validation` uses the same
 agent validation strategy as goal validate and discovers all required project
 checks from repository configuration. `bill-code-check` remains the pack gate
 `routed_skill` telemetry identity.
@@ -328,12 +344,12 @@ exposed to installed skills via generated support pointers.
 
 Preferred authoring paths:
 
-- `skill-bill show <skill>`
-- `skill-bill explain [skill]`
-- `skill-bill fill <skill> --body-file <file>`
-- `skill-bill fill <skill> --section <heading> --body-file <file>`
-- `skill-bill validate`
-- `skill-bill render <skill>` for read-only render checks
+- `sona show <skill>`
+- `sona explain [skill]`
+- `sona fill <skill> --body-file <file>`
+- `sona fill <skill> --section <heading> --body-file <file>`
+- `sona validate`
+- `sona render <skill>` for read-only render checks
 
 Manual edits to `content.md` are acceptable for maintainer work, but ordinary
 skill authoring should use the CLI so validation and rollback behavior stay in
@@ -356,7 +372,7 @@ Important rules:
 - Do not commit generated `SKILL.md` under `skills/`.
 - Do not edit generated `SKILL.md` during normal skill authoring.
 - Change renderer code and tests when wrapper shape changes.
-- Use `skill-bill render` to inspect generated output.
+- Use `sona render` to inspect generated output.
 - Install staging writes `SKILL.md` into the installed cache.
 
 ## Generated Support Pointers
@@ -528,9 +544,9 @@ The scaffolder is the supported way to create new governed source.
 
 Entrypoints:
 
-- `skill-bill new`
-- `skill-bill new --interactive`
-- `skill-bill new --payload <file>` for scripted automation
+- `sona new`
+- `sona new --interactive`
+- `sona new --payload <file>` for scripted automation
 
 Supported scaffold kinds:
 
@@ -555,11 +571,11 @@ removable.
 Scaffolding writes source files only. It does not stage generated `SKILL.md`
 wrappers or support pointer files into source.
 
-Use `skill-bill new --dry-run` for the guided path, or
-`skill-bill new --payload <file> --dry-run` for scripted payloads, to inspect
+Use `sona new --dry-run` for the guided path, or
+`sona new --payload <file> --dry-run` for scripted payloads, to inspect
 planned files and manifest edits before mutation. For platform-pack composition
 payloads, dry-run output includes a preview of the generated `platform.yaml` block. After
-creation, `skill-bill show <baseline-skill>` surfaces any manifest-declared
+creation, `sona show <baseline-skill>` surfaces any manifest-declared
 review composition so users and agents can understand which baseline review
 layers run. New platform-pack scaffolds are full packs; remove unwanted focus
 areas afterward through governed removal paths. Legacy platform-pack payloads
@@ -600,14 +616,14 @@ fails, it must not leave partial source changes.
 Use the normal authoring check before shipping authored content changes:
 
 ```bash
-skill-bill validate
+sona validate
 ```
 
 Use the full maintainer gate before shipping runtime, scaffold, contract, docs,
 or agent-config changes:
 
 ```bash
-skill-bill validate
+sona validate
 (cd runtime-kotlin && ./gradlew check)
 npx --yes agnix --strict .
 scripts/validate_agent_configs
@@ -656,7 +672,7 @@ the user-home `.skill-bill/native-agent-link-inventory.json`. Each entry records
 installed link, cache target, source root, and rendered-content digest. Install reconciliation uses
 the prior complete inventory to remove obsolete or dangling Skill Bill-managed links and preserves
 regular files and links outside managed cache roots. Delegated review preflight verifies the selected
-workers against this inventory before launch; its typed failure carries `skill-bill install apply` as
+workers against this inventory before launch; its typed failure carries `sona install apply` as
 the repair command.
 - validate after every source-shape or generation change
 
@@ -696,7 +712,7 @@ use `kind: "platform-pack"`.
 The manifest is strict: `contract_version: "1.0"`, a canonical `slug`, a
 single-line `description`, one or more `agent_ids`, and one or more supported
 `consumers`. Invocation is explicit, for example
-`/skill-bill SKILL-122 agent-addon:execution-budget`. The receiving agent must
+`/sona SKILL-122 agent-addon:execution-budget`. The receiving agent must
 be declared; `execution-budget` supports Codex only. With no `agent-addon:`
 token the feature workflow is unchanged.
 

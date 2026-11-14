@@ -606,7 +606,7 @@ public class GoalRunnerArchiveImportOperations(
         featureBranch = bundle.envelope.featureBranch,
         commitSha = bundle.envelope.commitSha,
         archivePath = archivePath,
-        retryHint = "Retry with the same import command: skill-bill goal import ${archivePath.fileName}",
+        retryHint = "Retry with the same import command: sona goal import ${archivePath.fileName}",
       )
     }
     val completed = completeSpecImport(context)

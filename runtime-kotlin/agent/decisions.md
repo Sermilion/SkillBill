@@ -5,10 +5,10 @@ Reason: Dropping keys before verification or later writes would alter governing 
 Alternatives considered: Decoder-only filtering loses original inputs and cannot preserve historical admission proof.
 
 ## [2026-11-13] Append launch normalization after vocabulary narrowing
-Context: A populated version-127 store may already have applied migration 127 while the wider agent vocabulary was supported.
-Decision: Append migration 128 using the existing normalization operation and advance desktop read readiness to 128. Preserve earlier migrations; normalize only unsupported non-null standalone launch ids.
-Reason: The ledger skips completed migrations, so vocabulary narrowing cannot rerun 127. A new transactional entry handles already-upgraded stores before projection while preserving identity, completed work and evidence. Operation launch context retains its original value because card identity depends on it.
-Alternatives considered: Editing 127 alone misses already-upgraded stores. Resetting stores or rewriting quality proof loses persisted work or evidence.
+Context: A populated store can already have applied launch-id normalization while a wider agent vocabulary was supported.
+Decision: Keep a follow-on migration using the existing normalization operation before desktop projection. The current ledger assigns the two steps to 129 and 130, with desktop read readiness at 130. Normalize only unsupported non-null standalone launch ids.
+Reason: The ledger skips completed migrations, so vocabulary narrowing cannot rerun the first step. A new transactional entry handles already-upgraded stores while preserving identity, completed work and evidence. Operation launch context retains its original value because card identity depends on it.
+Alternatives considered: Editing an applied migration alone misses already-upgraded stores. Resetting stores or rewriting quality proof loses persisted work or evidence.
 
 ## [2026-11-13] Prune unsupported inventory providers before schema validation
 Context: Saved native-agent inventories can contain textual provider ids outside the current supported set.

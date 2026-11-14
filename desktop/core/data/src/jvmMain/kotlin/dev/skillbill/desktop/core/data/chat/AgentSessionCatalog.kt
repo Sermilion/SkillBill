@@ -8,6 +8,7 @@ import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
 import dev.skillbill.desktop.core.domain.model.SessionMoveResult
+import dev.skillbill.desktop.core.domain.model.SavedChatProjection
 import dev.skillbill.desktop.core.domain.settings.AppSettingsRepository
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
@@ -47,7 +48,7 @@ class AgentSessionCatalog(
     root: String,
     currentSessionId: String,
     agentFor: suspend (String) -> ChatAgent,
-  ): List<ChatHistoryEntry> {
+  ): SavedChatProjection {
     val excluded = setOfNotNull(currentSessionId, store.agentSession(currentSessionId))
     val sessions = sessionsIn(root).filter { it.id !in excluded }.sortedByDescending { it.updatedAt }.take(LISTED_SESSIONS)
     sessions.forEach { listed[it.id] = it }
@@ -62,11 +63,29 @@ class AgentSessionCatalog(
         executionCheckoutRoot = root,
       )
     }
-    val appOnly = store.savedChats(executionId).filter { it.agent.agentId !in sessionStoreAgents && it.sessionId !in excluded }
-    return (native + appOnly).sortedByDescending { it.updatedAt }
+    val appSaved = store.savedChats(executionId)
+    val appOnly = appSaved.entries.filter {
+      it.agent.agentId !in sessionStoreAgents && it.sessionId !in excluded && store.agentSession(it.sessionId) !in excluded
+    }
+    val recoveries = appSaved.recoveries.filterNot { it.sessionId in excluded }
+    return SavedChatProjection((native + appOnly).sortedByDescending { it.updatedAt }, recoveries)
   }
 
   internal fun open(entry: ChatHistoryEntry): List<ChatHistoryLine> {
+    if (entry.agent.agentId == "opencode") {
+      val saved = store.savedEntry(entry.sessionId)
+      val state = store.openCodeSavedState(entry.sessionId)
+      if (saved == null || state !is OpenCodeSavedState.Readable || state.agentId != "opencode" ||
+        state.handle.isNullOrBlank() || state.binding == null || saved.executionId != entry.executionId ||
+        saved.agent != entry.agent || saved.newTask != entry.newTask) {
+        diagnostics.record("chat.opencode_saved_open_refused")
+        val path = (state as? OpenCodeSavedState.Unusable)?.path
+        throw IOException(
+          "The saved OpenCode chat cannot be resumed safely. ${path?.let { "Original data remains at $it. " }.orEmpty()}Preserve or repair the saved record, or start a separate new chat.",
+        )
+      }
+      return saved.lines
+    }
     if (entry.agent.agentId == "codex" && store.agentSession(entry.sessionId) == null) {
       if (!store.saveChat(entry) || !store.saveAgentSession(entry.sessionId, entry.sessionId)) {
         throw IOException("Could not save the provider thread for this chat. Try opening it again.")

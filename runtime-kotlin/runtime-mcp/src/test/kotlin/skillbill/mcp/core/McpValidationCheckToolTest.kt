@@ -68,7 +68,9 @@ class McpValidationCheckToolTest {
     val live = context(mapOf(RuntimeMcpEnvironmentKeys.VALIDATION_INVOCATION_ID to RUN))
     val database = live.runtimeComponent().databaseSession
     register(database, RUN, lifecycleState = "active")
-    assertEquals(VALIDATION_CHECK_PROTOCOL, initialize(live)["instructions"])
+    val validationInitialize = initialize(live)
+    assertEquals(VALIDATION_CHECK_PROTOCOL, validationInitialize["instructions"])
+    assertEquals("sona", validationInitialize.fieldMap("serverInfo")["name"])
     assertEquals(LiveChecksAvailability.AVAILABLE, liveChecks(database, RUN))
 
     val settled = context(mapOf(RuntimeMcpEnvironmentKeys.VALIDATION_INVOCATION_ID to SETTLED))
@@ -78,7 +80,7 @@ class McpValidationCheckToolTest {
     assertNull(liveChecks(settledDatabase, SETTLED))
   }
 
-  private fun initialize(context: McpRuntimeContext): Map<*, *> =
+  private fun initialize(context: McpRuntimeContext): Map<String, Any?> =
     decodeResponse(
       McpStdioServer.handleLine(
         """{"jsonrpc":"2.0","id":"init","method":"initialize","params":{}}""",

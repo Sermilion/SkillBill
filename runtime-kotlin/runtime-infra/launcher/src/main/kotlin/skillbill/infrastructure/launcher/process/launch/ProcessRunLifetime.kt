@@ -7,9 +7,47 @@ import skillbill.ports.agentrun.model.AgentRunProcessSample
 import skillbill.workflow.model.goalobservability.GoalProgressOutcome
 import java.io.Closeable
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
 import kotlin.coroutines.cancellation.CancellationException
+
+enum class AgentRunProcessExitState {
+  NOT_STARTED,
+  UNCONFIRMED,
+  CONFIRMED,
+}
+
+data class AgentRunProcessExitObservation internal constructor(
+  val state: AgentRunProcessExitState,
+  val processIds: List<Long>,
+)
+
+class AgentRunProcessLifecycle internal constructor() {
+  private val processes = ConcurrentHashMap<Long, Boolean>()
+
+  internal fun started(processId: Long) {
+    processes[processId] = false
+  }
+
+  internal fun exited(
+    processId: Long,
+    confirmed: Boolean,
+  ) {
+    processes.computeIfPresent(processId) { _, previous -> previous || confirmed }
+  }
+
+  internal fun observation(): AgentRunProcessExitObservation {
+    val snapshot = processes.toSortedMap()
+    val state =
+      when {
+        snapshot.isEmpty() -> AgentRunProcessExitState.NOT_STARTED
+        snapshot.values.all { it } -> AgentRunProcessExitState.CONFIRMED
+        else -> AgentRunProcessExitState.UNCONFIRMED
+      }
+    return AgentRunProcessExitObservation(state, snapshot.filterValues { !it }.keys.toList())
+  }
+}
 
 internal data class ProcessRunReleaseSnapshot(
   val interrupted: Boolean,
@@ -25,6 +63,7 @@ internal class ProcessRunLifetime(
   private val stdout: Utf8Drain,
   private val stderr: Utf8Drain,
   private val degradation: ProcessRunDegradationRecorder,
+  private val processLifecycle: AgentRunProcessLifecycle?,
 ) {
   @Volatile
   private var released = false
@@ -129,6 +168,7 @@ internal class ProcessRunLifetime(
 
   private fun recordProcessCleanup(): Boolean {
     val exited = treeHasExited("process_cleanup_exit_check")
+    processLifecycle?.exited(process.pid(), exited)
     if (!exited) {
       degradation.recordCleanupFailure(
         "process_cleanup",
@@ -291,3 +331,13 @@ internal class AgentRunProcessTree(
       observationComplete && (descendants + process.toHandle()).none(ProcessHandle::isAlive)
     }
 }
+
+internal inline fun <T> captureLaunchResourceOutcome(action: () -> T): Result<T> =
+  try {
+    catchingNonCancellation(action)
+  } catch (cancelled: CancellationException) {
+    Result.failure(cancelled)
+  } catch (interrupted: InterruptedException) {
+    Thread.currentThread().interrupt()
+    Result.failure(interrupted)
+  }

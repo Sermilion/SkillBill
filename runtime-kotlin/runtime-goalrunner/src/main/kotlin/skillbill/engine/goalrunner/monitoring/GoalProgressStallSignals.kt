@@ -1,7 +1,6 @@
-package skillbill.engine.goalrunner.status
+package skillbill.engine.goalrunner.monitoring
 
 import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
-import skillbill.engine.goalrunner.monitoring.isCiWaitingOperation
 import skillbill.goalrunner.ledger.parseInstantOrNull
 import skillbill.idestatus.model.WorktreeEditSummary
 import skillbill.workflow.model.goalobservability.GoalProgressEvent

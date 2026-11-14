@@ -77,7 +77,7 @@ if [[ "${SKILL_BILL_GOAL_CONTINUATION:-}" == "1" ]]; then
   exit 64
 fi
 
-declare -a SUPPORTED_AGENTS=(claude codex cursor)
+declare -a SUPPORTED_AGENTS=(claude codex cursor opencode devin)
 declare -a AGENT_NAMES=()
 declare -a AGENT_PATHS=()
 AGENT_TARGETS_EXPLICIT=0
@@ -1255,7 +1255,6 @@ adopt_non_skill_source_trees() {
 # Parse the line-oriented machine report (mirrors the SKILL-74 line protocol). FAIL-CLOSED:
 # if the `reconcile_summary:` line is absent or unparseable the caller MUST abort rather
 # than treat an empty report as a clean run.
-RECONCILE_FAILURE_KIND=""
 parse_reconcile_report() {
   local report="$1"
   local summary_line applied
@@ -1291,7 +1290,6 @@ parse_reconcile_report() {
 # is the sole writer of the live skill dirs.
 reconcile_and_commit_authored_source() {
   local report status
-  RECONCILE_FAILURE_KIND=""
   info "Reconciling staged source against existing copy and baseline manifest..."
   # Compute the per-skill plan against UPSTREAM=candidate, LOCAL=existing copy. The
   # upstream repo root, skills, and platform-packs all come from the one staged
@@ -1304,8 +1302,7 @@ reconcile_and_commit_authored_source() {
     --upstream-skills "$SKILL_BILL_CANDIDATE_SKILLS" \
     --upstream-platform-packs "$SKILL_BILL_CANDIDATE_PLATFORM_PACKS")" || status=$?
   if [[ -n "${status:-}" ]]; then
-    RECONCILE_FAILURE_KIND="compute"
-    err "Reconciliation failed; leaving the existing install untouched."
+    err "Reconciliation failed; copied source and baseline were preserved. Runtime data may already have been migrated."
     discard_authored_candidates
     return 1
   fi
@@ -1313,8 +1310,7 @@ reconcile_and_commit_authored_source() {
   # FAIL-CLOSED: a missing/unparseable summary line aborts the install rather than
   # treating an empty report as a clean run.
   if ! parse_reconcile_report "$report"; then
-    RECONCILE_FAILURE_KIND="parse"
-    err "Could not parse the reconcile machine report; aborting the install. Nothing was changed."
+    err "Could not parse the reconcile machine report; copied source and baseline were preserved. Runtime data may already have been migrated."
     discard_authored_candidates
     return 1
   fi
@@ -1333,7 +1329,6 @@ reconcile_and_commit_authored_source() {
     --upstream-platform-packs "$SKILL_BILL_CANDIDATE_PLATFORM_PACKS"
   )
   if ! run_runtime_cli "${apply_args[@]}" >/dev/null; then
-    RECONCILE_FAILURE_KIND="apply"
     err "Runtime reconcile apply failed; some skills may not have been updated."
     discard_authored_candidates
     return 1
@@ -1344,20 +1339,6 @@ reconcile_and_commit_authored_source() {
   # set (uninstall.sh preserve-mode). The runtime apply already refreshed it.
   discard_authored_candidates
   ok "Authored source reconciled and committed into $SKILL_BILL_STATE_DIR"
-}
-
-reconcile_and_commit_authored_source_with_recovery() {
-  if reconcile_and_commit_authored_source; then
-    return 0
-  fi
-  if [[ "$RECONCILE_FAILURE_KIND" != "compute" ]]; then
-    return 1
-  fi
-  warn "Reconciliation failed against the preserved copied source; retrying once with a clean copied-source reset."
-  warn "Durable workflow and review state DBs are preserved."
-  clean_install_state
-  copy_in_authored_source
-  reconcile_and_commit_authored_source
 }
 
 install_packaged_runtime_distributions() {
@@ -2919,7 +2900,7 @@ print_postinstall_agent_warning() {
   [[ "$AGENT_SELECTION_MODE" != "detected" && "$AGENT_TARGETS_EXPLICIT" -ne 1 ]] && return 0
   [[ ${#AGENT_NAMES[@]} -gt 0 ]] && return 0
   warn "No supported agents were detected — skills are not linked to any agent."
-  warn "  Install a supported agent (claude, codex, or cursor),"
+  warn "  Install a supported agent (claude, codex, cursor, opencode, or devin),"
   warn "  then re-run ./install.sh. Choose 'manual' to select your agent explicitly."
 }
 
@@ -2973,12 +2954,12 @@ run_full_install() {
     ok "Kotlin runtime installed$STAGED_RUNTIME_ORIGIN"
   fi
   copy_in_authored_source
-  reconcile_and_commit_authored_source_with_recovery
+  reconcile_and_commit_authored_source
 
   echo ""
   printf "${CYAN}━━━ Skill Bill Installer ━━━${NC}\n"
   echo ""
-  info "Supported agents: claude, codex, or cursor"
+  info "Supported agents: claude, codex, cursor, opencode, or devin"
   if [[ "$REUSE_LAST_SELECTION" -eq 1 ]]; then
     info "Install behavior: reuse saved choices, then delegate planning and apply to the Kotlin runtime."
   else

@@ -28,7 +28,7 @@ class GoalRunPresenter(
   fun emitStartupProvenance() {
     val commandPrefix =
       buildString {
-        append("skill-bill")
+        append("sona")
         dbOverride?.let { append(" --db ").append(shellQuote(it)) }
       }
     val rootArgument = "--repo-root ${shellQuote(repoRoot.toString())}"
@@ -245,7 +245,7 @@ private fun alreadyCompleteText(report: GoalRunnerRunReport.AlreadyComplete): St
     appendLine("; nothing to run.")
     appendLine(
       "To run it again, reset it first: " +
-        "skill-bill goal reset ${report.issueKey} --hard --confirm-issue-key ${report.issueKey}",
+        "sona goal reset ${report.issueKey} --hard --confirm-issue-key ${report.issueKey}",
     )
   }
 

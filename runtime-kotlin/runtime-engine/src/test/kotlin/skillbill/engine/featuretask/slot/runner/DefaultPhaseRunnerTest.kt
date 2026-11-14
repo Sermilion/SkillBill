@@ -167,7 +167,7 @@ class DefaultPhaseRunnerTest {
     val output = runner.run(input("release_notes"), PrepareOnlyPhaseRunState)
 
     assertEquals(stdout, output.stdout.text)
-    assertEquals(PhaseSettledEnvelopeRead.None, output.settledEnvelope)
+    assertEquals(PhaseSettledEnvelopeRead.NotRequired, output.settledEnvelope)
   }
 
   @Test

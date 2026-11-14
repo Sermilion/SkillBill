@@ -237,7 +237,7 @@ internal fun renderPlanningLog(log: GoalPlanningLog): String =
       attempt.rejectedOutputIdentity?.let { identity ->
         appendLine(
           "  rejected_output=$identity bytes=${attempt.rejectedOutputBytes ?: 0} " +
-            "(read it with: skill-bill feature-task rejected-output " +
+            "(read it with: sona feature-task rejected-output " +
             "--workflow ${log.parentWorkflowId} --phase ${attempt.phaseId} " +
             "--attempt ${attempt.attempt} --raw-output)",
         )

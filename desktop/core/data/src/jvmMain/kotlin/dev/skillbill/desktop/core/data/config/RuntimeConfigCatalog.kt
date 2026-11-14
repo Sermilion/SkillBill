@@ -45,7 +45,7 @@ internal fun runtimeConfigDefaults(
     }
     RuntimePhase(id, tier.toDomain(), group)
   }
-  val agents = SupportedAgent.supportedEntries.sortedBy { it !in MODEL_DIRECTIVE_CAPABLE_AGENTS }
+  val agents = SupportedAgent.entries.sortedBy { it !in MODEL_DIRECTIVE_CAPABLE_AGENTS }
     .map { ConfigAgent(it.id, it in MODEL_DIRECTIVE_CAPABLE_AGENTS) }
   return ConfigDefaults(
     phases, agents, CompactionSettings.DEFAULT.toDomain(), DEFAULT_TELEMETRY_BATCH_SIZE,
@@ -56,7 +56,7 @@ internal fun runtimeConfigDefaults(
 
 internal fun resolveModelMatrix(matrix: ExecutionMatrix?, defaults: ConfigDefaults): Map<String, AgentModels> {
   val value = matrix ?: ExecutionMatrix()
-  return SupportedAgent.supportedEntries.filter { it in MODEL_DIRECTIVE_CAPABLE_AGENTS }.associate { agent ->
+  return SupportedAgent.entries.filter { it in MODEL_DIRECTIVE_CAPABLE_AGENTS }.associate { agent ->
     agent.id to AgentModels(
       agent.id,
       ExecutionTier.entries.associate { it.toDomain() to value.agents[agent]?.get(it)?.toDomain() },

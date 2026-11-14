@@ -24,7 +24,7 @@ class DurableChildRecoveryClassTest {
   @Test
   fun `scoped recovery command is stable and explicit`() {
     assertEquals(
-      "skill-bill goal reset SKILL-143 --subtask 2 --delete-child-workflow",
+      "sona goal reset SKILL-143 --subtask 2 --delete-child-workflow",
       scopedChildRecoveryCommand("SKILL-143", 2),
     )
   }
@@ -32,7 +32,7 @@ class DurableChildRecoveryClassTest {
   @Test
   fun `in progress incompatible terminal child recommends hard reset`() {
     assertEquals(
-      "skill-bill goal reset SKILL-143 --hard --yes",
+      "sona goal reset SKILL-143 --hard --yes",
       recommendedDurableChildRecoveryCommand(
         "SKILL-143",
         2,

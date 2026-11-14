@@ -93,9 +93,9 @@ internal object GoalAssessmentPromptRenderer {
     val name = bundle.subtasks.firstOrNull { it.id == subtaskId }?.name.orEmpty()
     return "Assess subtask $subtaskId ($name): judge each of its criteria against its spec and the parent spec " +
       "in the code at the head commit, not at its own commit. Use its commit range to find what it changed. " +
-      "Report defects in the code it touched as it stands at the head commit, and tests it added that would " +
-      "still pass if the behavior they name broke. Report only material defects. $MATERIALITY_RULE " +
-      "Answer with `Finding:` and `Test value:` lines only; write `Finding: none` when you find no defect."
+      "Report defects in production code it touched as it stands at the head commit. " +
+      "Do not assess test value, test quality, or test coverage. Report only material defects. $MATERIALITY_RULE " +
+      "Answer with `Finding:` lines only; write `Finding: none` when you find no defect."
   }
 
   private fun verifierRole(candidates: List<GoalAssessmentVerifierCandidate>): String =

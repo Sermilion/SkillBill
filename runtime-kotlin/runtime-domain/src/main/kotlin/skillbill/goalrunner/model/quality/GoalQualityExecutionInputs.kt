@@ -4,6 +4,7 @@ import skillbill.agentaddon.model.PersistedAgentAddonSelectionEntry
 import skillbill.config.model.ExecutionMatrix
 import skillbill.config.model.ExecutionTier
 import skillbill.config.model.PhaseModelDirective
+import skillbill.contracts.system.OpenCodeLaunchIdentity
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
 
 data class GoalQualityHydratedAddonInput(
@@ -34,6 +35,7 @@ data class GoalQualityExecutionInputs(
   val modelMatrix: ExecutionMatrix?,
   val addons: List<GoalQualityHydratedAddonInput>,
   val retainedModelMatrix: GoalQualityRetainedMatrix? = null,
+  val openCodeIdentity: OpenCodeLaunchIdentity? = null,
 ) {
   val effectiveAgentId: String get() = configuredAgentOverrideId ?: invokedAgentId
 

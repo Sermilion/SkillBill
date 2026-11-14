@@ -1,5 +1,6 @@
 package skillbill.infrastructure.skills.install.plan
 
+import skillbill.infrastructure.host.jvm.JdkHostPlatformPort
 import skillbill.infrastructure.skills.scaffold.platformpack.catalog.PlatformPackCatalogLoader
 import skillbill.infrastructure.skills.scaffold.platformpack.packRootsBySlug
 import skillbill.install.model.InstallAgentDefaultTarget
@@ -19,6 +20,7 @@ import skillbill.model.toPath
 import skillbill.ports.install.InstallPlanWireValidator
 import skillbill.ports.install.plan.model.InstallPlanningFacts
 import skillbill.ports.repository.toFileLocation
+import skillbill.ports.system.HostPlatformPort
 import skillbill.review.plan.ReviewFallbackResolver
 import skillbill.scaffold.model.PlatformManifest
 import java.nio.file.Path
@@ -50,6 +52,7 @@ private fun buildInstallPolicyInput(
   platformManifests: List<PlatformManifest>,
   enforceContractVersion: Boolean,
   enforceGovernedReviewStructure: Boolean = true,
+  hostPlatform: HostPlatformPort = JdkHostPlatformPort,
 ): InstallPolicyInput {
   val baseSkills = discoverBaseSkills(request.targetPaths.skillsRoot.toPath())
   val resolvedReviewFallback =
@@ -93,7 +96,7 @@ private fun buildInstallPolicyInput(
         )
       },
     detectedAgentTargets =
-      detectAgents(request.home.toPath(), installPlanEnvironment(request)).map { target ->
+      detectAgents(request.home.toPath(), installPlanEnvironment(request), hostPlatform).map { target ->
         InstallAgentTarget(
           agent = SupportedAgent.fromId(target.name),
           path = target.path,
@@ -101,7 +104,7 @@ private fun buildInstallPolicyInput(
         )
       },
     defaultAgentTargets =
-      multiRootDefaultTargets(request.home.toPath(), installPlanEnvironment(request)),
+      multiRootDefaultTargets(request.home.toPath(), installPlanEnvironment(request), hostPlatform),
   )
 }
 
@@ -135,6 +138,7 @@ internal fun enumerateInstallPlanSkills(
 internal fun collectInstallPlanningFacts(
   request: InstallPlanRequest,
   catalogLoader: PlatformPackCatalogLoader? = null,
+  hostPlatform: HostPlatformPort = JdkHostPlatformPort,
 ): InstallPlanningFacts {
   requireSupportedAgentContract()
   val platformManifests = discoverPlatformManifests(request, catalogLoader = catalogLoader)
@@ -142,7 +146,7 @@ internal fun collectInstallPlanningFacts(
     baseSkills = discoverBaseSkills(request.targetPaths.skillsRoot.toPath()),
     platformManifests = platformManifests,
     detectedAgentTargets =
-      detectAgents(request.home.toPath(), installPlanEnvironment(request)).map { target ->
+      detectAgents(request.home.toPath(), installPlanEnvironment(request), hostPlatform).map { target ->
         InstallAgentTarget(
           agent = SupportedAgent.fromId(target.name),
           path = target.path,
@@ -150,7 +154,7 @@ internal fun collectInstallPlanningFacts(
         )
       },
     defaultAgentTargets =
-      multiRootDefaultTargets(request.home.toPath(), installPlanEnvironment(request)),
+      multiRootDefaultTargets(request.home.toPath(), installPlanEnvironment(request), hostPlatform),
   )
 }
 
@@ -179,8 +183,9 @@ private fun installPlanEnvironment(request: InstallPlanRequest): Map<String, Str
 private fun multiRootDefaultTargets(
   home: Path,
   environment: Map<String, String>,
+  hostPlatform: HostPlatformPort,
 ): List<InstallAgentDefaultTarget> =
-  agentPaths(home, installConfigRoots(home, environment)).flatMap { (agent, path) ->
+  agentPaths(home, installConfigRoots(home, environment, hostPlatform)).flatMap { (agent, path) ->
     if (agent == SupportedAgent.CLAUDE) {
       claudeSkillTargets(home, environment).map { skillPath ->
         InstallAgentDefaultTarget(agent = agent, path = skillPath.toFileLocation())

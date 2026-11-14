@@ -55,6 +55,8 @@ $defs:
       - claude
       - codex
       - cursor
+      - opencode
+      - devin
   # Shared enum: agent-target source. Mirrors `InstallAgentTargetSource`
   # — wire form is `name.lowercase()`.
   agentSource:

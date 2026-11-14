@@ -172,7 +172,7 @@ internal fun goalOperatorDecisionText(result: GoalRunnerOperatorDecisionResult):
     }
     if (result is GoalRunnerOperatorDecisionResult.Recorded) {
       appendLine(
-        "next: skill-bill goal resume ${result.issueKey} (consumes the recorded decision)",
+        "next: sona goal resume ${result.issueKey} (consumes the recorded decision)",
       )
     }
   }
@@ -202,7 +202,7 @@ internal fun goalFreshQualityText(result: GoalRunnerFreshQualityResult): String 
         appendLine("status: ok")
         appendLine("parent_workflow_id: ${result.parentWorkflowId}")
         appendLine("reason: ${result.reason}")
-        appendLine("next: skill-bill ${result.issueKey} (admits a fresh quality execution)")
+        appendLine("next: sona ${result.issueKey} (admits a fresh quality execution)")
       }
       is GoalRunnerFreshQualityResult.Rejected -> {
         appendLine("goal: ${result.issueKey}")

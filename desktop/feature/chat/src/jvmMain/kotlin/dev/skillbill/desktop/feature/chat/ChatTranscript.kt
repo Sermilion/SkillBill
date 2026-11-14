@@ -69,6 +69,7 @@ internal fun ChatTranscript(
   allowStartActions: Boolean = true,
   allowSuggestedActions: Boolean = true,
   startIssueKey: String? = null,
+  startContext: StartCardContext? = null,
   footer: (@Composable () -> Unit)? = null,
   approvals: ChatApprovalActions? = null,
   operationCards: ChatOperationCardActions? = null,
@@ -101,7 +102,7 @@ internal fun ChatTranscript(
     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
   ) {
     items(messages) { message ->
-      ChatMessageRow(message, agent, !busy && supported && !gone && allowSuggestedActions && message === messages.lastOrNull { !it.isCard }, mode, allowStartActions, startIssueKey, approvals, operationCards, onAction)
+      ChatMessageRow(message, agent, !busy && supported && !gone && allowSuggestedActions && message === messages.lastOrNull { !it.isCard }, mode, allowStartActions, startIssueKey, startContext, approvals, operationCards, onAction)
     }
     if (footer != null) item(key = "chat-footer", contentType = "footer") { footer() }
   }
@@ -128,6 +129,7 @@ private fun ChatMessageRow(
   mode: ChatPermissionMode,
   allowStartActions: Boolean,
   startIssueKey: String?,
+  startContext: StartCardContext?,
   approvals: ChatApprovalActions?,
   operationCards: ChatOperationCardActions?,
   onAction: ((ChatMessage.Agent, ChatSuggestedAction) -> Unit)?,
@@ -139,7 +141,7 @@ private fun ChatMessageRow(
     is ChatMessage.Approval -> ChatApprovalCard(message, approvals)
     is ChatMessage.OperationCard -> ChatOperationCard(message, operationCards)
     is ChatMessage.Operator -> OperatorMessage(message)
-    is ChatMessage.Agent -> AgentTurn(message, agent, actionsEnabled, mode, allowStartActions, startIssueKey, onAction?.let { act -> { action: ChatSuggestedAction -> act(message, action) } })
+    is ChatMessage.Agent -> AgentTurn(message, agent, actionsEnabled, mode, allowStartActions, startIssueKey, startContext, onAction?.let { act -> { action: ChatSuggestedAction -> act(message, action) } })
     is ChatMessage.Notice -> if (message.confirmation) {
       Callout(
         tone = FeedbackTone.Success,
@@ -237,6 +239,7 @@ private fun AgentTurn(
   mode: ChatPermissionMode,
   allowStartActions: Boolean,
   startIssueKey: String?,
+  startContext: StartCardContext?,
   onAction: ((ChatSuggestedAction) -> Unit)?,
 ) {
   val colors = SkillBillTheme.colors
@@ -262,7 +265,7 @@ private fun AgentTurn(
     if (message.text.isNotEmpty()) ChatMarkdown(message.text, Modifier.fillMaxWidth())
     if (!message.streaming && message.text.isNotEmpty()) MessageCopyButton(message.text)
     val actions = if (allowStartActions) message.actions else message.actions.filter { it.start == null }
-    if (onAction != null && !message.streaming && actions.isNotEmpty()) ChatActionButtons(actions, actionsEnabled, mode, startIssueKey, onAction)
+    if (onAction != null && !message.streaming && actions.isNotEmpty()) ChatActionButtons(actions, actionsEnabled, mode, startIssueKey, startContext, onAction)
   }
 }
 

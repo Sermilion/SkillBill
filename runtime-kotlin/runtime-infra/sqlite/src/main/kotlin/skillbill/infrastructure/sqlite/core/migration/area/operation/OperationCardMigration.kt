@@ -1,6 +1,7 @@
 package skillbill.infrastructure.sqlite.core.migration.area.operation
 
 import skillbill.infrastructure.sqlite.core.migration.DatabaseColumnMigrations
+import skillbill.infrastructure.sqlite.core.schema.OPEN_CODE_IDENTITY_COLUMN
 import java.sql.Connection
 
 internal fun addOperationProposalCards(connection: Connection) {
@@ -48,6 +49,10 @@ internal fun addOperationProposalCards(connection: Connection) {
 
 internal fun addOperationLaunchRetention(connection: Connection) {
   DatabaseColumnMigrations.ensureColumn(connection, "operation_launch_contexts", "retention", "TEXT")
+}
+
+internal fun addOperationOpenCodeIdentity(connection: Connection) {
+  DatabaseColumnMigrations.ensureColumn(connection, "operation_launch_contexts", OPEN_CODE_IDENTITY_COLUMN, "TEXT")
 }
 
 internal fun addOperationConfirmationExecutions(connection: Connection) {

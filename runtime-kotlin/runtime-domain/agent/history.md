@@ -33,7 +33,7 @@ Areas: runtime-domain test skillbill.review.eval; evals/review (README.md, capmo
 - Matching is same file plus a line window (default ±5, per-entry override, range-aware); each reported and expected finding matches at most once. Reports TP, missed TP, FP against non_issue, unlabeled findings (excluded from TP, FP and precision), and per-lane plus overall precision/recall.
 - needs_curation expected entries are excluded and listed. A parseReview throw or a missing/unparseable location becomes a curation item and marks scores partial; the scorer never throws.
 - Lane attribution: laneSkillName, else unattributed, for precision; expected entry lane for recall.
-- Registers from skill-bill phase review lack Review run/session ID lines, so the scorer prepends placeholder ids before parsing.
+- Registers from sona phase review lack Review run/session ID lines, so the scorer prepends placeholder ids before parsing.
 - ReviewEvalExpectedYaml reads expected-findings.yaml with the jackson YAML library already on the test classpath. ReviewEvalOnDemandRunnerTest skips unless SKILL_BILL_REVIEW_EVAL_REGISTER_DIR is set, then scores each case with a <case-id>.md register. Command is in evals/review/README.md. reusable
 - evals/review stores revision pointers only, with no diffs or source excerpts from private repos.
 - Limits: the capmo-android-pr-3110 case has an empty base_revision and zero true_positive rows; custom-text-resurrection is a needs_curation non_issue. census_subtask_4.md lists what the operator must supply. Scores never gate review completion or validation.
@@ -54,7 +54,7 @@ Acceptance criteria: 10/10 implemented
 
 ## [2026-10-08] Standalone review step gets a default execution tier
 Areas: runtime-domain/config
-- `DEFAULT_PHASE_TIERS` had no entry for `present_findings`, the standalone review step. With an `execution_matrix` agent configured, `ExecutionMatrix.tierOf` threw `NoSuchElementException` and `skill-bill phase review` crashed before reviewing.
+- `DEFAULT_PHASE_TIERS` had no entry for `present_findings`, the standalone review step. With an `execution_matrix` agent configured, `ExecutionMatrix.tierOf` threw `NoSuchElementException` and `sona phase review` crashed before reviewing.
 - `present_findings` now defaults to the reasoning tier, like `review` and `verify_findings`.
 - The tier-coverage test now asserts the defaults cover `FeatureTaskRuntimePhaseIds.all` instead of the full-run step list, which never contained the standalone review step.
 Feature flag: N/A
@@ -172,7 +172,7 @@ Areas: runtime-domain/workflow, runtime-kotlin docs, docs, install
 - Runtime-specific branching identifies `FeatureTaskRuntimePhaseWorkflowDefinition` by durable workflow name, while runtime persistence labels the implementation skill `bill-feature`; durable `workflow_name=bill-feature-task` identity remains unchanged.
 - Repointed install guidance and internal-skill, source-generation, capability, and architecture documentation to the retained `bill-feature` and `bill-feature-goal` surfaces.
 - Pattern: keep workflow identity separate from authored instruction paths and use definition metadata instead of deleted skill-name branches. reusable
-- Breaking changes or known limitations: deleted authored continuation surfaces have no compatibility shim; the `skill-bill feature-task` CLI and durable workflow identity remain unchanged.
+- Breaking changes or known limitations: deleted authored continuation surfaces have no compatibility shim; the `sona feature-task` CLI and durable workflow identity remain unchanged.
 Feature flag: N/A
 Acceptance criteria: 9/11 implemented
 

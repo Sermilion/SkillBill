@@ -143,7 +143,7 @@ class NewAddonCommand(
       state.completeUnsupportedScaffold(
         retiredInteractiveModeMessage(
           "new-addon --interactive",
-          "skill-bill new-addon --platform <platform> --name <name>",
+          "sona new-addon --platform <platform> --name <name>",
         ),
         format,
       )

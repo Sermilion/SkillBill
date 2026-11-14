@@ -10,6 +10,7 @@ import skillbill.infrastructure.skills.scaffold.platformpack.catalog.PlatformPac
 import skillbill.infrastructure.skills.scaffold.rendering.inferSkillDescription
 import skillbill.infrastructure.skills.scaffold.rendering.renderContentBody
 import skillbill.infrastructure.skills.scaffold.runtime.service.ScaffoldAdapterSeams
+import skillbill.infrastructure.skills.scaffold.runtime.service.ScaffoldInstallOutcome
 import skillbill.infrastructure.skills.scaffold.runtime.service.ScaffoldPlan
 import skillbill.infrastructure.skills.scaffold.runtime.service.ScaffoldRuntimeContext
 import skillbill.infrastructure.skills.scaffold.runtime.service.contract.TemplateContext
@@ -166,7 +167,7 @@ class ScaffoldExternalPlatformPackTest {
       validateScaffold = validate,
       optionalBaselineLayers = { _, _, _ -> emptyList() },
       resolveAddonConsumerSkillDirs = { _, _, _ -> emptyList() },
-      performInstall = { _, _, _ -> emptyList<Path>() to emptyList<String>() },
+      performInstall = { _, _, _ -> ScaffoldInstallOutcome(emptyList(), emptyList()) },
       rollbackInstallTargets = { _, _ -> },
     )
 

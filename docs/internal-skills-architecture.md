@@ -19,8 +19,8 @@ The catalog has one listed skill: `skill-bill`. It is a dispatcher. Its
 full-run form resolves intake and launches the goal runtime, which owns new
 work preparation, durable planning, and execution. Standalone phases and operations are operator tools;
 agents invoke them only at the operator's explicit request. Its `phase:<name>`
-forms run `skill-bill phase <name>`,
-and its `operation:<name>` forms run `skill-bill operation <name>`. The
+forms run `sona phase <name>`,
+and its `operation:<name>` forms run `sona operation <name>`. The
 runtime owns preparation, continuation, execution, and durable goal state. The
 text of the retired listed skills (`bill-feature`, `bill-feature-spec`,
 `bill-code-review`, `bill-code-check`, `bill-pr-description`,
@@ -30,7 +30,7 @@ text of the retired listed skills (`bill-feature`, `bill-feature-spec`,
 lives in `skills/skill-bill/content.md` and in engine directive resources under
 `runtime-kotlin/runtime-engine/src/main/resources/skillbill/engine/`.
 `bill-monitor` and the `bill-code-review-inline` worker were deleted.
-`skill-bill goal status` stays CLI-only.
+`sona goal status` stays CLI-only.
 
 ## What install produces
 
@@ -48,8 +48,8 @@ directory points into the content-addressed staging cache:
 
 An install over a home that has the retired skills removes their links and
 installed copies (`InstallLegacySkillNames`). Feature-task, goal, phase, and
-operation work runs inside the Kotlin runtime (`skill-bill feature-task`,
-`skill-bill goal`, `skill-bill phase`, `skill-bill operation`). Platform-pack
+operation work runs inside the Kotlin runtime (`sona feature-task`,
+`sona goal`, `sona phase`, `sona operation`). Platform-pack
 review packs still install their own native subagents outside the skills
 directory.
 
@@ -68,19 +68,19 @@ durable identities, including retired skill names such as
 ## How routing works, end to end
 
 ```
-user: "/skill-bill APP-1 …" / "/skill-bill phase:review" / "/skill-bill operation:release bump:patch"
+user: "/sona APP-1 …" / "/sona phase:review" / "/sona operation:release bump:patch"
   │
   ▼
 skill-bill                                       [listed]
   │  update check
   │  full run:  tracker link/key → connected tracker requirements
   │             raw requirements / existing spec key or path
-  │               → skill-bill <intake> → goal runtime
+  │               → sona <intake> → goal runtime
   │               new work → runtime prepares spec and parent workflow
   │               existing spec → resume its durable goal
   │               durable planning → execution
-  │  operator-requested phase:<name>      → skill-bill phase <name>
-  │  operator-requested operation:<name>  → skill-bill operation <name>
+  │  operator-requested phase:<name>      → sona phase <name>
+  │  operator-requested operation:<name>  → sona operation <name>
   │                        awaiting_confirmation → one operator question → confirm:<token>
   ▼
 runtime output → verbatim relay
@@ -101,7 +101,7 @@ consumed at three seams:
   skill, must not be the skill itself, no chaining (depth 1), and
   platform-pack skills cannot carry the key at all. Authoring discovery and
   install-plan building throw the first violation as a typed
-  `InvalidInternalSkillClassificationError`; `skill-bill validate` reports
+  `InvalidInternalSkillClassificationError`; `sona validate` reports
   every violation as an issue.
 - **Planning.** `discoverBaseSkills` carries `internalFor` onto each
   `InstallPlanSkill`. Staging intents are only emitted for skills that
@@ -117,7 +117,7 @@ consumed at three seams:
   internal skills produces byte-identical output to the pre-SKILL-102
   pipeline.
 - **Linking.** Agent skills-dir symlinks are created only for non-internal
-  skills. The direct path is guarded too: `skill-bill link-skill` against an
+  skills. The direct path is guarded too: `sona link-skill` against an
   internal skill's directory refuses with the same typed error.
 - **Reuse and repair.** A cached staging dir is reused only if its hash
   marker, `SKILL.md`, *and every expected sidecar* are intact; anything
@@ -125,7 +125,7 @@ consumed at three seams:
   removes its one symlink — the sidecars live inside the parent's staging
   dir, so there is nothing separate to clean up.
 
-### Guardrails enforced at `skill-bill validate` time
+### Guardrails enforced at `sona validate` time
 
 - All classification rules above, as repo-validation issues.
 - **Collision guard:** an authored file in a parent's source dir occupying
@@ -179,7 +179,7 @@ consumed at three seams:
 
 The same mechanism, extended to platform-pack skills. The code-review family
 had stack-specific review skills listed to users even though the supported
-entry point is the review phase (`/skill-bill phase:review`), which detects the
+entry point is the review phase (`/sona phase:review`), which detects the
 dominant stack from `platform.yaml` routing signals and routes automatically.
 SKILL-104 hid them as sidecars of `bill-code-review`; SKILL-383 re-parented
 them to `skill-bill` and retired `bill-code-review`. Hiding them removes
@@ -257,7 +257,7 @@ every opted-in review sidecar. SKILL-105 applies the same
 selection-aware review sidecar model. Quality checks do not use pack sidecars:
 the selected dominant pack declares its collect-all and
 cache-bypassing collect-all argv in `validation_gate`, and
-`skill-bill phase validation` is the standalone quality-check entry point. It uses
+`sona phase validation` is the standalone quality-check entry point. It uses
 the same agent validation strategy as goal validate and runs all required project
 checks. Goal build uses the dominant pack's build argv. KMP owns its gate; review
 baseline composition does not provide a quality-check fallback.
@@ -276,10 +276,10 @@ there is no silent auto-include. `ALL` selection is trivially safe.
 ### Routing walkthrough
 
 ```
-user: "/skill-bill phase:review" on a Kotlin diff
+user: "/sona phase:review" on a Kotlin diff
   │
   ▼
-skill-bill → skill-bill phase review               [listed dispatcher → runtime]
+sona → sona phase review               [listed dispatcher → runtime]
   │  reads platform.yaml routing signals from the diff
   │  (strong signals, then tie-breakers) → dominant pack
   ▼

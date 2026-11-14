@@ -5,6 +5,8 @@ import dev.skillbill.desktop.core.domain.model.ChatSteeringResult
 import dev.skillbill.desktop.core.domain.model.ChatSteeringUpdate
 import dev.skillbill.desktop.core.testing.RecordingDiagnostics
 import dev.skillbill.desktop.core.domain.model.ChatEvent
+import dev.skillbill.desktop.core.domain.model.ChatFailure
+import dev.skillbill.desktop.core.domain.model.ChatStopSettlement
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
 import dev.skillbill.desktop.core.domain.model.ChatImage
@@ -94,189 +96,52 @@ class ChatStopTest {
   }
 
   @Test
-  fun `uncertain execution follow up defers clear resume and close until explicit discard`() = runTest {
-    val item = workItem("SKILL-530")
+  fun `stop retains the collector until repository terminal delivery settles`() = runTest {
+    val item = workItem("SKILL-535")
     details.details = mapOf(item.id to flowOf(loaded(item)))
-    fake.steeringPolicies["claude"] = ChatSteeringPolicy.LiveWhenAvailable
-    fake.steeringResult = { ChatSteeringResult.DeliveryUncertain(it.deliveryId, "Awaiting acknowledgement") }
-    hangingAfterOpening()
-    val workspace = workspace()
-    workspace.open(item)
-    runCurrent()
-    workspace.send(item.id, "question")
-    runCurrent()
-    val session = workspace.session(item.id)!!
-    val before = session.sessionId
-    val image = ChatImage(byteArrayOf(1), "image/png")
-    workspace.send(item.id, "retained", images = listOf(image))
-    workspace.sendNow(item.id)
-    runCurrent()
-    val delivery = session.thread.delivery.value!!
-    workspace.clear(item.id)
-    workspace.resume(item.id, ChatHistoryEntry("other", item.id, fake.agent!!, clock.now(), "saved", emptyList()))
-    workspace.close(item.id)
-    assertFalse(workspace.closeAll())
-    runCurrent()
-    assertTrue(workspace.session(item.id) === session)
-    assertEquals(before, session.sessionId)
-    assertTrue(session.thread.delivery.value!!.images.single() === image)
-    assertTrue(session.thread.delivery.value!!.blockedAction != null)
-    assertTrue(fake.ended.isEmpty())
-    workspace.discardDelivery(item.id, delivery.deliveryId)
-    workspace.clear(item.id)
-    runCurrent()
-    assertFalse(before == session.sessionId)
-    fake.retainedSteering.value = mapOf((before to delivery.deliveryId) to
-      ChatSteeringUpdate(before, ChatSteeringResult.Accepted(delivery.deliveryId)))
-    runCurrent()
-    assertFalse(session.thread.hasDeliveryClaim())
-    assertTrue(session.transcript.value.none { it is ChatMessage.Operator && it.text == "retained" })
-    assertEquals(1, fake.retiredSteering.count { it.third == delivery.deliveryId })
-    workspace.close(item.id)
-    assertEquals(null, workspace.session(item.id))
-  }
-
-  @Test
-  fun `required execution teardown retains images and Stop returns only later ordinary additions before explicit retry`() = runTest {
-    val item = workItem("SKILL-530")
-    details.details = mapOf(item.id to flowOf(loaded(item)))
-    fake.steeringPolicies["claude"] = ChatSteeringPolicy.LiveWhenAvailable
-    fake.steeringResult = { ChatSteeringResult.DeliveryUncertain(it.deliveryId, "Awaiting acknowledgement") }
-    hangingAfterOpening()
-    val workspace = workspace()
-    workspace.open(item)
-    runCurrent()
-    workspace.send(item.id, "question")
-    runCurrent()
-    val session = workspace.session(item.id)!!
-    val image = ChatImage(byteArrayOf(2), "image/png")
-    workspace.send(item.id, "retained", images = listOf(image))
-    workspace.sendNow(item.id)
-    runCurrent()
-    val deliveryId = session.thread.delivery.value!!.deliveryId
-    workspace.send(item.id, "ordinary")
-    workspace.stop(item.id)
-    runCurrent()
-    assertEquals("ordinary", workspace.drafts[item.id])
-    assertEquals("retained", session.thread.delivery.value!!.text)
-    workspace.send(item.id, "later")
-    workspace.closeChats()
-    runCurrent()
-    assertTrue(workspace.session(item.id) === session)
-    assertTrue(session.thread.delivery.value!!.images.single() === image)
-    assertEquals(2, fake.requests.size)
-    assertTrue(fake.ended.contains(session.sessionId))
-    workspace.retryDelivery(item.id, deliveryId)
-    runCurrent()
-    assertEquals(3, fake.requests.size)
-    assertTrue(fake.requests.last().prompt.endsWith("retained\n\nlater"))
-    assertTrue(fake.requests.last().images.single() === image)
-    fake.retainedSteering.value = mapOf((session.sessionId to deliveryId) to
-      ChatSteeringUpdate(session.sessionId, ChatSteeringResult.Accepted(deliveryId)))
-    runCurrent()
-    assertEquals(3, fake.requests.size)
-    assertEquals(1, session.transcript.value.filterIsInstance<ChatMessage.Operator>().count { it.text == "retained\n\nlater" })
-  }
-
-  @Test
-  fun `live send now claims once and late acceptance preserves the original turn`() = runTest {
-    val item = workItem("SKILL-530")
-    details.details = mapOf(item.id to flowOf(loaded(item)))
-    fake.steeringPolicies["claude"] = ChatSteeringPolicy.LiveWhenAvailable
-    fake.steeringResult = { ChatSteeringResult.DeliveryUncertain(it.deliveryId, "Awaiting acknowledgement") }
-    val continueReply = CompletableDeferred<Unit>()
+    val stopRequested = CompletableDeferred<Unit>()
+    val releaseTerminal = CompletableDeferred<Unit>()
+    val terminalDelivered = CompletableDeferred<Unit>()
+    var collectorClosed = false
     var turns = 0
     fake.events = {
-      turns++
-      if (turns == 1) flowOf(ChatEvent.Completed) else flow {
-        emit(ChatEvent.TextDelta("Before"))
-        continueReply.await()
-        emit(ChatEvent.TextDelta("After"))
-        emit(ChatEvent.Completed)
+      if (++turns == 1) flowOf(ChatEvent.Completed) else flow {
+        try {
+          emit(ChatEvent.TextDelta("partial"))
+          releaseTerminal.await()
+          emit(ChatEvent.Failed(ChatFailure.ProcessFailed, "Provider stop settled"))
+          terminalDelivered.complete(Unit)
+        } finally {
+          collectorClosed = true
+        }
       }
     }
-    val workspace = workspace()
+    val repository = object : ExecutionChatRepository by fake {
+      override suspend fun stopTurn(sessionId: String): ChatStopSettlement {
+        stopRequested.complete(Unit)
+        terminalDelivered.await()
+        return ChatStopSettlement.Settled
+      }
+    }
+    val workspace = workspace(repository)
     workspace.open(item)
     runCurrent()
     workspace.send(item.id, "question")
     runCurrent()
-    val session = workspace.session(item.id)!!
-    val original = session.turnJob
-    val image = ChatImage(byteArrayOf(1), "image/png")
-    workspace.send(item.id, "guidance", images = listOf(image))
-    workspace.sendNow(item.id)
-    workspace.sendNow(item.id)
-    workspace.send(item.id, "later")
-    runCurrent()
-    assertEquals(1, fake.steeringRequests.size)
-    assertEquals(original, session.turnJob)
-    assertTrue(original!!.isActive)
-    assertEquals(2, fake.requests.size)
-    assertTrue(fake.ended.isEmpty())
-    assertEquals(listOf("later"), session.thread.queued.value.map { it.text })
-    assertTrue(session.thread.hasDeliveryClaim())
-    val request = fake.steeringRequests.single()
-    assertTrue(request.images.single() === image)
-    fake.retainedSteering.value = mapOf((request.sessionId to request.deliveryId) to
-      ChatSteeringUpdate(request.sessionId, ChatSteeringResult.Accepted(request.deliveryId)))
-    runCurrent()
-    assertFalse(session.thread.hasDeliveryClaim())
-    assertEquals(1, session.transcript.value.filterIsInstance<ChatMessage.Operator>().count { it.text == "guidance" })
-    continueReply.complete(Unit)
-    runCurrent()
-    assertEquals(listOf("Before", "After", "BeforeAfter"), session.transcript.value.filterIsInstance<ChatMessage.Agent>().map { it.text })
-    assertEquals(3, fake.requests.size)
-  }
 
-  @Test
-  fun `live send now during unprompted output leaves the provider running`() = runTest {
-    val item = workItem("SKILL-530")
-    details.details = mapOf(item.id to flowOf(loaded(item)))
-    fake.steeringPolicies["claude"] = ChatSteeringPolicy.LiveWhenAvailable
-    fake.steeringResult = { ChatSteeringResult.Accepted(it.deliveryId) }
-    val workspace = workspace()
-    workspace.open(item)
+    workspace.stop(item.id)
     runCurrent()
-    val session = workspace.session(item.id)!!
-    fake.unpromptedEvents.emit(session.sessionId to ChatEvent.TextDelta("Background output"))
-    runCurrent()
-    assertEquals(null, session.turnJob)
-    workspace.send(item.id, "guidance")
-    workspace.sendNow(item.id)
-    runCurrent()
-    assertEquals(1, fake.steeringRequests.size)
-    assertEquals(1, fake.requests.size)
-    assertTrue(fake.ended.isEmpty())
-    fake.unpromptedEvents.emit(session.sessionId to ChatEvent.TextDelta("Continued"))
-    runCurrent()
-    assertEquals("Continued", session.transcript.value.filterIsInstance<ChatMessage.Agent>().last().text)
-  }
 
-  @Test
-  fun `unavailable live delivery restores originals ahead of additions without stopping Claude`() = runTest {
-    val item = workItem("SKILL-530")
-    details.details = mapOf(item.id to flowOf(loaded(item)))
-    fake.steeringPolicies["claude"] = ChatSteeringPolicy.LiveWhenAvailable
-    val result = CompletableDeferred<ChatSteeringResult>()
-    fake.steeringResult = { result.await() }
-    hangingAfterOpening()
-    val workspace = workspace()
-    workspace.open(item)
+    assertTrue(stopRequested.isCompleted)
+    assertFalse(collectorClosed)
+    assertTrue(workspace.session(item.id)!!.busy.value)
+    releaseTerminal.complete(Unit)
     runCurrent()
-    workspace.send(item.id, "question")
-    runCurrent()
-    workspace.send(item.id, "first")
-    workspace.sendNow(item.id)
-    runCurrent()
-    workspace.send(item.id, "second")
-    val request = fake.steeringRequests.single()
-    result.complete(ChatSteeringResult.Unsupported(request.deliveryId, "Live delivery is unavailable"))
-    runCurrent()
+    assertTrue(collectorClosed)
     val session = workspace.session(item.id)!!
-    assertEquals(listOf("first", "second"), session.thread.queued.value.map { it.text })
-    assertTrue(session.turnJob!!.isActive)
-    assertTrue(fake.ended.isEmpty())
-    assertEquals(2, fake.requests.size)
+    assertFalse(session.busy.value)
+    assertEquals(1, session.transcript.value.filterIsInstance<ChatMessage.Error>().count { it.text == "Provider stop settled" })
+    assertEquals(ChatMessage.Notice(STOPPED_NOTICE), session.transcript.value.last())
   }
 
   @Test

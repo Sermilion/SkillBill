@@ -23,6 +23,7 @@ import skillbill.engine.goalrunner.manifest.reconcileGoalManifest
 import skillbill.engine.goalrunner.manifest.toAcceptedSubtasks
 import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
 import skillbill.engine.goalrunner.monitoring.GOAL_FINALIZATION_OPERATION_KIND
+import skillbill.engine.goalrunner.monitoring.GoalProgressStallSignals
 import skillbill.engine.goalrunner.persist.GoalRunnerAttemptLedgerStore
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.error.core.SkillBillRuntimeException
@@ -453,6 +454,7 @@ public class GoalRunnerStatusProjectionAssembler(
           currentStep,
           assembly.progress?.workflowStatus,
           assembly.childWorkflowId,
+          assembly.loadedState.controlState.goalCompletedAt != null,
         ),
         outcomeStore,
         database,
@@ -742,7 +744,13 @@ public class GoalRunnerStatusProjectionAssembler(
       auditResult = projectSubtaskAudit(artifacts, auditRecord, auditConclusion, degradation),
       runningReviewPass = runningReviewPass(reviewRecord, reviewState, database, degradation),
       execution = subtaskExecution(workflowId, records.values),
-      phaseCards = subtaskPhaseCards(workflowId, records, database, degradation),
+      phaseCards =
+        attachPlanningRecord(
+          subtaskPhaseCards(workflowId, records, database, degradation),
+          artifacts,
+          records,
+          degradation,
+        ),
     )
   }
 

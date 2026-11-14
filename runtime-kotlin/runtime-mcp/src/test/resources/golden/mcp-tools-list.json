@@ -49,7 +49,7 @@
     },
     {
       "name": "diff_comment_add",
-      "description": "Add a local diff comment thread for the skill-bill desktop Changes window. These are not GitHub PR comments.",
+      "description": "Add a local diff comment thread for the sona desktop Changes window. These are not GitHub PR comments.",
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
@@ -94,7 +94,7 @@
     },
     {
       "name": "diff_comment_list",
-      "description": "List local diff comment threads for the skill-bill desktop Changes window. These are not GitHub PR comments.",
+      "description": "List local diff comment threads for the sona desktop Changes window. These are not GitHub PR comments.",
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
@@ -126,7 +126,7 @@
     },
     {
       "name": "diff_comment_reply",
-      "description": "Reply to a local diff comment thread for the skill-bill desktop Changes window. These are not GitHub PR comments.",
+      "description": "Reply to a local diff comment thread for the sona desktop Changes window. These are not GitHub PR comments.",
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
@@ -164,7 +164,7 @@
     },
     {
       "name": "diff_comment_set_state",
-      "description": "Change the state of a local diff comment thread for the skill-bill desktop Changes window. These are not GitHub PR comments.",
+      "description": "Change the state of a local diff comment thread for the sona desktop Changes window. These are not GitHub PR comments.",
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,

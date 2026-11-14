@@ -134,6 +134,8 @@ class ProductReportDeliveryTest {
         override val javaCommand = null
         override val pathSeparator = ":"
 
+        override fun resolveUserName(): String? = "test-user"
+
         override fun resolveUserHome() = home
 
         override fun resolveEnvironment() = emptyMap<String, String>()

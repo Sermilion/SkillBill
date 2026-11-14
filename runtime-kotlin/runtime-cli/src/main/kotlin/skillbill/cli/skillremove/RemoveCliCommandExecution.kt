@@ -86,10 +86,10 @@ internal fun refusalErrorMessage(
       Removing them is a maintainer-only operation because it changes the workflow set installed for every agent.
 
     To preview the maintainer removal:
-      skill-bill remove $rawTarget --dry-run --allow-shipped
+      sona remove $rawTarget --dry-run --allow-shipped
 
     To remove it after reviewing the preview:
-      skill-bill remove $rawTarget --allow-shipped
+      sona remove $rawTarget --allow-shipped
     """.trimIndent()
 }
 
@@ -140,9 +140,9 @@ internal fun removeUsageMessage(): String =
   Missing remove target.
 
   Examples:
-    skill-bill remove skill:bill-my-skill --dry-run
-    skill-bill remove platform:my-platform --dry-run
-    skill-bill remove addon:platform-packs/kmp/addons/my-addon.md --dry-run
+    sona remove skill:bill-my-skill --dry-run
+    sona remove platform:my-platform --dry-run
+    sona remove addon:platform-packs/kmp/addons/my-addon.md --dry-run
 
   Target forms:
     skill:<name>
