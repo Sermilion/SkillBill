@@ -1,6 +1,7 @@
 package skillbill.infrastructure.skills.install
 
 import skillbill.contracts.JsonCodec
+import skillbill.contracts.SharedPayloadKeys
 import skillbill.error.core.catchingNonCancellation
 import skillbill.install.model.InstallTelemetryLevel
 import skillbill.install.model.McpRegistrationChoice
@@ -25,12 +26,20 @@ internal fun parseInstallSelectionPayload(
 
 private fun Map<String, Any?>.toInstallSelection(path: Path): SharedInstallSelection {
   requireExactKeys(path, keys, INSTALL_SELECTION_KEYS, "root")
-  requireContractVersion(path, requireString(path, "contract_version"))
+  requireContractVersion(path, requireString(path, SharedPayloadKeys.CONTRACT_VERSION))
   return SharedInstallSelection(
-    selectedAgents = requireStringList(path, "selected_agents").mapTo(mutableSetOf(), SupportedAgent::fromId),
-    platformPackSelection = requireObject(path, "platform_pack_selection").toPlatformPackSelection(path),
-    telemetryLevel = requireTelemetryLevel(path, requireString(path, "telemetry_level")),
-    mcpRegistrationChoice = requireObject(path, "mcp_registration").toMcpRegistrationChoice(path),
+    selectedAgents =
+      requireStringList(
+        path,
+        InstallSelectionKeys.SELECTED_AGENTS,
+      ).mapTo(mutableSetOf(), SupportedAgent::fromId),
+    platformPackSelection =
+      requireObject(
+        path,
+        InstallSelectionKeys.PLATFORM_PACK_SELECTION,
+      ).toPlatformPackSelection(path),
+    telemetryLevel = requireTelemetryLevel(path, requireString(path, InstallSelectionKeys.TELEMETRY_LEVEL)),
+    mcpRegistrationChoice = requireObject(path, InstallSelectionKeys.MCP_REGISTRATION).toMcpRegistrationChoice(path),
   )
 }
 
@@ -47,15 +56,15 @@ private fun requireContractVersion(
 }
 
 private fun Map<String, Any?>.toPlatformPackSelection(path: Path): PlatformPackSelection {
-  requireExactKeys(path, keys, PLATFORM_PACK_SELECTION_KEYS, "platform_pack_selection")
+  requireExactKeys(path, keys, PLATFORM_PACK_SELECTION_KEYS, InstallSelectionKeys.PLATFORM_PACK_SELECTION)
   val mode =
-    when (val rawMode = requireString(path, "mode")) {
+    when (val rawMode = requireString(path, InstallSelectionKeys.MODE)) {
       "none" -> PlatformPackSelectionMode.NONE
       "selected" -> PlatformPackSelectionMode.SELECTED
       "all" -> PlatformPackSelectionMode.ALL
       else -> throw malformedInstallSelection(path, "Unknown platform pack selection mode '$rawMode'.")
     }
-  val selectedSlugs = requireStringList(path, "selected_slugs").toSet()
+  val selectedSlugs = requireStringList(path, InstallSelectionKeys.SELECTED_SLUGS).toSet()
   if (selectedSlugs.any(String::isBlank)) {
     throw malformedInstallSelection(path, "Field 'platform_pack_selection.selected_slugs' must not contain blanks.")
   }
@@ -67,9 +76,9 @@ private fun Map<String, Any?>.toPlatformPackSelection(path: Path): PlatformPackS
 }
 
 private fun Map<String, Any?>.toMcpRegistrationChoice(path: Path): McpRegistrationChoice {
-  requireExactKeys(path, keys, MCP_REGISTRATION_KEYS, "mcp_registration")
+  requireExactKeys(path, keys, MCP_REGISTRATION_KEYS, InstallSelectionKeys.MCP_REGISTRATION)
   val runtimeMcpBin =
-    when (val rawPath = get("runtime_mcp_bin")) {
+    when (val rawPath = get(InstallSelectionKeys.RUNTIME_MCP_BIN)) {
       null -> null
       is String ->
         if (rawPath.isBlank()) {
@@ -80,7 +89,7 @@ private fun Map<String, Any?>.toMcpRegistrationChoice(path: Path): McpRegistrati
       else -> throw malformedInstallSelection(path, "Field 'runtime_mcp_bin' must be a string or null.")
     }
   return McpRegistrationChoice(
-    register = requireBoolean(path, "register"),
+    register = requireBoolean(path, InstallSelectionKeys.REGISTER),
     runtimeMcpBin = runtimeMcpBin?.toFileLocation(),
   )
 }

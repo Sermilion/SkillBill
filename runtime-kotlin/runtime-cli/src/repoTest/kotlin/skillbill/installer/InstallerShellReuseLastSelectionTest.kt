@@ -23,6 +23,7 @@ class InstallerShellReuseLastSelectionTest {
 
     assertEquals(0, run.exitCode, run.output)
     assertContains(run.output, "Reusing latest successful install selections")
+    assertContains(run.output, "Retired agent omitted from saved selections")
     assertContains(run.output, "Selections:     reused latest successful install selection")
     assertEquals(
       expectedApplyArgs(run) +
@@ -88,6 +89,20 @@ class InstallerShellReuseLastSelectionTest {
     assertFalse(run.output.contains("Pre-install cleanup"), "cleanup must not run after reuse validation failure")
   }
 
+  @Test
+  fun `source replay build failure refuses stale cli before cleanup`() {
+    val run =
+      runInstaller(
+        extraArgs = listOf("--from-source", "--reuse-last-selection"),
+        options = InstallerRunOptions(sourceReplayBuildFails = true, skipPreinstallUninstall = false),
+      )
+
+    assertFalse(run.exitCode == 0, run.output)
+    assertContains(run.output, "Cannot prepare the source runtime CLI for saved selection replay")
+    assertFalse(run.output.contains("Pre-install cleanup"), run.output)
+    assertFalse(run.output.contains("Reusing latest successful install selections"), run.output)
+  }
+
   private fun runInstaller(
     extraArgs: List<String>,
     options: InstallerRunOptions = InstallerRunOptions(),
@@ -98,6 +113,9 @@ class InstallerShellReuseLastSelectionTest {
     val releaseDir = Files.createTempDirectory("skillbill-installer-reuse-release")
     val logPath = Files.createTempFile("skillbill-installer-reuse-runtime", ".log")
     seedRepo(testRepo)
+    if (options.sourceReplayBuildFails) {
+      Files.writeString(testRepo.resolve("runtime-kotlin/gradlew"), "#!/usr/bin/env bash\nexit 42\n")
+    }
     stageRelease(releaseDir, releaseValid = true, omitRuntimeAssets = false)
     if (options.currentTelemetryLevel != null) {
       val configPath = home.resolve(".config/skill-bill/config.json")
@@ -114,7 +132,7 @@ class InstallerShellReuseLastSelectionTest {
           environment()["HOME"] = home.toString()
           environment()["SKILL_BILL_BIN_DIR"] = binDir.toString()
           environment()["SKILL_BILL_DESKTOP_APP_DIR"] = home.resolve("desktop").toString()
-          environment()["SKILL_BILL_SKIP_RUNTIME_DISTRIBUTION_BUILD"] = "1"
+          environment()["SKILL_BILL_SKIP_RUNTIME_DISTRIBUTION_BUILD"] = if (options.sourceReplayBuildFails) "0" else "1"
           environment()["SKILL_BILL_TEST_RUNTIME_LOG"] = logPath.toString()
           environment()["SKILL_BILL_RELEASE_DIR"] = PrebuiltReleaseStager.stageDesktopOnlyRelease().toString()
           environment()["SKILL_BILL_TEST_REUSE_SELECTION"] = options.reuseSelection
@@ -201,7 +219,7 @@ class InstallerShellReuseLastSelectionTest {
     |    printf '%s\n' "Install selection record is missing at '${'$'}home/.skill-bill/install-selection.json'."
     |    exit 1
     |  fi
-    |  printf '%s\n' "SLF4J(W): No SLF4J providers were found." >&2
+    |  printf '%s\n' "Retired agent omitted from saved selections" >&2
     |  printf 'agent\tcodex\t%s\n' "${'$'}home/agent-targets/codex"
     |  printf 'platform-mode\tselected\nplatform\tkotlin\ntelemetry\t%s\nmcp\tregister\n' \
     |    "${'$'}{SKILL_BILL_TEST_REPLAY_TELEMETRY:-full}"
@@ -290,6 +308,7 @@ class InstallerShellReuseLastSelectionTest {
 
   private data class InstallerRunOptions(
     val reuseSelection: String = "ok",
+    val sourceReplayBuildFails: Boolean = false,
     val skipPreinstallUninstall: Boolean = true,
     val replayTelemetryLevel: String = "full",
     val currentTelemetryLevel: String? = null,

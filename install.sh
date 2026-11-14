@@ -3090,6 +3090,13 @@ replay_last_install_selection() {
   local value
   local extra
 
+  if [[ "$INSTALL_SOURCE" == "source" && "${SKILL_BILL_SKIP_RUNTIME_DISTRIBUTION_BUILD:-}" != "1" ]]; then
+    if ! build_selection_replay_runtime_cli; then
+      err "Cannot prepare the source runtime CLI for saved selection replay."
+      exit 1
+    fi
+  fi
+
   stderr_file="$(mktemp)"
   if ! output="$(
     run_selection_runtime_cli install replay-last-selection \
@@ -3108,7 +3115,11 @@ replay_last_install_selection() {
     err "Run ./install.sh without --reuse-last-selection to choose install options again."
     exit 1
   fi
+  error_output="$(trim_string "$(cat "$stderr_file")")"
   rm -f "$stderr_file"
+  if [[ -n "$error_output" ]]; then
+    warn "$error_output"
+  fi
 
   AGENT_SELECTION_MODE="manual"
   AGENT_NAMES=()

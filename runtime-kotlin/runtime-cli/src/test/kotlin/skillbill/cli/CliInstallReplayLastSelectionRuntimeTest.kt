@@ -11,13 +11,13 @@ import kotlin.test.assertFalse
 
 class CliInstallReplayLastSelectionRuntimeTest {
   @Test
-  fun `install replay last selection emits reusable fields without stale mcp path`() {
+  fun `install replay last selection retains supported agents and settings from a retired agent selection`() {
     val fixture = replayFixture()
     val staleMcpBin = fixture.home.resolve(".skill-bill/old-runtime/runtime-mcp/bin/runtime-mcp")
     writeInstallSelection(
       fixture.home,
       TestInstallSelection(
-        selectedAgents = listOf("codex"),
+        selectedAgents = listOf("codex", "junie"),
         platformMode = "selected",
         selectedSlugs = listOf("kotlin"),
         telemetryLevel = "full",
@@ -42,6 +42,8 @@ class CliInstallReplayLastSelectionRuntimeTest {
     assertContains(result.stdout, "telemetry\tfull")
     assertContains(result.stdout, "mcp\tregister")
     assertFalse(result.stdout.contains(staleMcpBin.toString()))
+    assertFalse(result.stdout.contains("agent\tjunie"))
+    assertContains(Files.readString(installSelectionPath(fixture.home)), "junie")
   }
 
   @Test
