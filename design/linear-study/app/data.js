@@ -16,13 +16,14 @@
     'zero-account': { name: 'zero-account', path: '~/StudioProjects/ZeroAccount-pr-168', color: 'var(--data-3)', web: 'github.com/0account/zero-account', appRun: ['android'] },
   };
 
-  /* SupportedAgent: claude, codex, cursor. MODEL_DIRECTIVE_CAPABLE_AGENTS: claude, codex, cursor. */
+  /* Agents available in the desktop selectors. */
   const AGENTS = {
     claude: { name: 'claude', initials: 'Cl', color: 'var(--data-4)', modelCapable: true },
     codex: { name: 'codex', initials: 'Cx', color: 'var(--data-2)', modelCapable: true },
     cursor: { name: 'cursor', initials: 'Cu', color: 'var(--data-6)', modelCapable: true },
+    devin: { name: 'devin', initials: 'De', color: 'var(--data-6)', modelCapable: true },
   };
-  const AGENT_CHOICES = ['claude', 'codex', 'cursor'];
+  const AGENT_CHOICES = ['claude', 'codex', 'cursor', 'devin'];
   /* What each agent's CLI reports for the agent and model picker ([label, id]), shaped like ChatModelsRead.Loaded. */
   const AGENT_MODELS = {
     claude: [['Claude Opus 5.5', 'claude-opus-5-5'], ['Claude Sonnet 5.5', 'claude-sonnet-5-5'], ['Claude Haiku 5.5', 'claude-haiku-5-5'], ['Claude Fable 5.2', 'claude-fable-5-2']],
@@ -1255,7 +1256,8 @@ Stopped the desktop app and private display processes. Stopped the Gradle and Ko
    * Cursor has no readable usage source, so it shows "No usage data". Only a provider that reports a sign-in failure says
    * "Not signed in". */
   const USAGE = {
-    providers: ['Codex', 'Claude', 'Cursor'],
+    providers: ['Codex', 'Claude', 'Devin'],
+    devin: { windows: [{ label: 'Weekly', used: 2, resetIn: '18h', resetAt: 'Sun 09:00' }, { label: 'Extra balance', valueText: '10 USD' }] },
     scenarios: {
       normal: { windows: [{ label: '5 hour', used: 12, resetIn: '2h 14m', resetAt: '16:30' }, { label: 'Weekly', used: 43, resetIn: '4d 6h', resetAt: 'Thu 09:00' }] },
       low: { windows: [{ label: '5 hour', used: 91, resetIn: '2h 14m', resetAt: '16:30' }, { label: 'Weekly', used: 58, resetIn: '4d 6h', resetAt: 'Thu 09:00' }] },

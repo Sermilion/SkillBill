@@ -528,7 +528,7 @@ class UsageSidebarModel(
   /** A failed or unverified read never replaces a reading the card already shows; sign-in and real data always do. */
   private fun accept(cacheKey: Pair<UsageProvider, String?>, result: UsageResult) {
     val previous = lastResults[cacheKey]
-    val shown = if (result.isDefinitive() || previous?.isDefinitive() != true) result else previous
+    val shown = if (cacheKey.first == UsageProvider.Devin || result.isDefinitive() || previous?.isDefinitive() != true) result else previous
     lastResults[cacheKey] = shown
     state.value = state.value.copy(result = shown, unavailableReason = null)
   }
@@ -590,6 +590,7 @@ class UsageSidebarModel(
   private fun providerFor(agentId: String): UsageProvider? = when (agentId.lowercase()) {
     "codex" -> UsageProvider.Codex
     "claude" -> UsageProvider.Claude
+    "devin" -> UsageProvider.Devin
     else -> null
   }
 

@@ -6,6 +6,8 @@ import dev.skillbill.desktop.core.designsystem.usage.UsageUiState
 import dev.skillbill.desktop.core.domain.usage.model.DecimalQuantity
 import dev.skillbill.desktop.core.domain.usage.model.PartialUsageField
 import dev.skillbill.desktop.core.domain.usage.model.RequestPermission
+import dev.skillbill.desktop.core.domain.usage.model.UsageFreshness
+import dev.skillbill.desktop.core.domain.usage.model.UsageRefreshState
 import dev.skillbill.desktop.core.domain.usage.model.UsageCapability
 import dev.skillbill.desktop.core.domain.usage.model.UsageMeter
 import dev.skillbill.desktop.core.domain.usage.model.UsageMeterScope
@@ -23,11 +25,13 @@ import kotlin.time.Instant
 internal fun UsageProvider.uiName() = when (this) {
   UsageProvider.Codex -> "Codex"
   UsageProvider.Claude -> "Claude"
+  UsageProvider.Devin -> "Devin"
 }
 
 internal fun UsageProvider.agentId() = when (this) {
   UsageProvider.Codex -> "codex"
   UsageProvider.Claude -> "claude"
+  UsageProvider.Devin -> "devin"
 }
 
 /** Agent name plus its allowance windows in the repository's ranked order. One short line replaces the meters when there are none. */
@@ -39,7 +43,13 @@ internal fun UsageSidebarState.toUsageUiState(now: Instant): UsageUiState {
     provider = provider?.uiName() ?: "Usage",
     agentId = provider?.agentId(),
     meters = meters,
-    message = if (meters.isNotEmpty()) null else message(),
+    message = if (meters.isEmpty()) message() else (result as? UsageResult.Snapshot)?.value?.let {
+      when {
+        it.refreshState == UsageRefreshState.Failed -> "Couldn't refresh. Showing previous usage"
+        it.freshness == UsageFreshness.Stale -> "Showing previous usage"
+        else -> null
+      }
+    },
   )
 }
 

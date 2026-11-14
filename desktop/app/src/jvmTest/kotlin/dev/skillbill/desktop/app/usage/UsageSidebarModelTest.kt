@@ -371,6 +371,26 @@ class UsageSidebarModelTest {
     assertTrue(fixture.model.view.value.result is UsageResult.SignInRequired)
   }
 
+  @Test
+  fun `Devin context and manual tab use Devin quotas and its saved default can be cleared`() = runTest {
+    val fixture = Fixture(this, context = SelectedNewTaskUsageContext.Ready(1, ChatAgent("devin", null, null), "devin-chat", false))
+    runCurrent()
+    assertEquals(UsageProvider.Devin, fixture.model.view.value.provider)
+    assertEquals(UsageProvider.Devin, fixture.usage.demands.values.single().request.profile.provider)
+    fixture.model.chooseManualProvider("codex")
+    runCurrent()
+    fixture.model.chooseManualProvider("devin")
+    runCurrent()
+    assertEquals(UsageProvider.Devin, fixture.model.view.value.provider)
+    assertEquals("Devin", fixture.model.view.value.toUsageUiState(Instant.fromEpochMilliseconds(0)).provider)
+    fixture.model.toggleDefaultAgent("devin")
+    runCurrent()
+    assertEquals("devin", fixture.settings.settings.value.defaultAgentId)
+    fixture.model.toggleDefaultAgent("devin")
+    runCurrent()
+    assertNull(fixture.settings.settings.value.defaultAgentId)
+  }
+
   private class Fixture(
     test: TestScope,
     lastAgent: String? = null,

@@ -64,6 +64,10 @@ class UsageProfileResolver(private val host: HostEnvironment) {
     )
   }
 
+  internal fun devin(): EffectiveUsageProfile = EffectiveUsageProfile(
+    lookup(UsageProvider.Devin, host.userHome), host.variables,
+  )
+
   companion object {
     const val CURSOR_CONFIG_DIR = "CURSOR_CONFIG_DIR"
   }

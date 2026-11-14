@@ -13,6 +13,9 @@ interface UsageBindings {
   fun claudeUsageReader(collector: ClaudeUsageCollector): ClaudeUsageReader = collector
 
   @Provides
+  fun devinUsageReader(collector: DevinUsageCollector): DevinUsageReader? = collector
+
+  @Provides
   fun usageScheduler(): UsageScheduler = CoroutineUsageScheduler
 
   @Provides

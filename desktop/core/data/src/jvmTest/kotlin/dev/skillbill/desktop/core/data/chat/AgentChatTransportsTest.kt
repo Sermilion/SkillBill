@@ -59,6 +59,7 @@ class AgentChatTransportsTest {
     val transports = listOf(
       CodexChatTransport(host, launcher, store, RecordingDiagnostics()),
       CursorChatTransport(host, store, RecordingDiagnostics(), liveLauncher = launcher),
+      DevinChatTransport(host, store, RecordingDiagnostics(), liveLauncher = launcher),
     )
     for (transport in transports) {
       val failure = assertIs<ChatEvent.Failed>(transport.run(request.copy(

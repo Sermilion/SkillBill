@@ -162,6 +162,7 @@
     const scenario = st.usage.scenario;
     const data = provider === 'Cursor' && !['signedout', 'loading'].includes(scenario) ? D.USAGE.cursor
       : provider === 'Claude' && D.USAGE.claude[scenario] ? D.USAGE.claude[scenario]
+      : provider === 'Devin' && !['signedout', 'loading', 'nodata'].includes(scenario) ? D.USAGE.devin
       : D.USAGE.scenarios[scenario];
     const colors = Object.fromEntries(D.USAGE.providers.map((p) => [p, D.AGENTS[p.toLowerCase()].color]));
     const agents = D.AGENT_CHOICES.map((name) => ({ name, label: name.slice(0, 1).toUpperCase() + name.slice(1), initials: D.AGENTS[name].initials, color: D.AGENTS[name].color }));

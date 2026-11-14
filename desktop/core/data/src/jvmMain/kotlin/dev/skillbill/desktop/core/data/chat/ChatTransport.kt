@@ -68,4 +68,8 @@ interface ChatTransportBindings {
   @Provides
   @IntoSet
   fun cursor(transport: CursorChatTransport): ChatTransport = transport
+
+  @Provides
+  @IntoSet
+  fun devin(transport: DevinChatTransport): ChatTransport = transport
 }

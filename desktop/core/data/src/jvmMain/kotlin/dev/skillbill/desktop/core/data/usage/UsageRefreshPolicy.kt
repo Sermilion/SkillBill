@@ -19,13 +19,14 @@ internal object UsageRefreshPolicy {
     val productInterval = when (provider) {
       UsageProvider.Codex -> familyInterval(UsageRefreshFamily.CodexSnapshot, active)
       UsageProvider.Claude -> familyInterval(UsageRefreshFamily.ClaudeSnapshot, active)
+      UsageProvider.Devin -> familyInterval(UsageRefreshFamily.DevinSnapshot, active)
     }
     return maxOf(productInterval, sourceFloor)
   }
 
   fun effectiveSourceFloor(capability: UsageRefreshCapability): Duration? = when (capability) {
     is UsageRefreshCapability.Pull -> maxOf(
-      if (capability.family == UsageRefreshFamily.CodexSnapshot || capability.family == UsageRefreshFamily.ClaudeSnapshot) Duration.ZERO else familyInterval(capability.family, active = false),
+      if (capability.family == UsageRefreshFamily.CodexSnapshot || capability.family == UsageRefreshFamily.ClaudeSnapshot || capability.family == UsageRefreshFamily.DevinSnapshot) Duration.ZERO else familyInterval(capability.family, active = false),
       capability.minimumInterval,
     )
     UsageRefreshCapability.EventOnly, UsageRefreshCapability.ProbeOnly, UsageRefreshCapability.Unsupported -> null
@@ -38,7 +39,7 @@ internal object UsageRefreshPolicy {
 
   private fun familyInterval(family: UsageRefreshFamily, active: Boolean): Duration = when (family) {
     UsageRefreshFamily.CodexSnapshot -> if (active) 60.seconds else 5.minutes
-    UsageRefreshFamily.ClaudeSnapshot -> 5.minutes
+    UsageRefreshFamily.ClaudeSnapshot, UsageRefreshFamily.DevinSnapshot -> 5.minutes
     UsageRefreshFamily.TeamSpend -> 5.minutes
     UsageRefreshFamily.AggregatedActivity -> 1.hours
   }

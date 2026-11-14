@@ -428,6 +428,7 @@
     const used = Math.max(0, Math.min(100, o.used));
     const label = !o.detailed && o.resetIn ? `${o.label} · ${o.resetIn}` : o.label;
     const reset = o.detailed && o.resetIn ? (o.resetIn === 'now' ? 'Resetting' : ['Resets in ' + o.resetIn, o.resetAt].filter(Boolean).join(' · ')) : '';
+    if (o.valueText) return `<span class="sb-usage-window"><span class="sb-usage-line"><span class="trunc">${esc(o.label)}</span><b>${esc(o.valueText)}</b></span></span>`;
     return `<span class="sb-usage-window" style="--usage-color:${usageColor(o.used)}"><span class="sb-usage-line"><span class="trunc">${esc(label)}</span><b>${esc(o.used)}%</b></span><span class="sb-usage-track" role="meter" aria-label="${esc(o.label + ', ' + o.used + '% used')}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${used}"><i style="width:${used}%"></i></span>${reset ? `<span class="sb-usage-reset">${esc(reset)}</span>` : ''}</span>`;
   }
 

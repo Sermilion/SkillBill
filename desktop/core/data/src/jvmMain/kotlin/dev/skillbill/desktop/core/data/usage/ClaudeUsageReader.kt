@@ -32,31 +32,24 @@ import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
 fun interface ClaudeUsageReader {
-  suspend fun read(profile: UsageProfileLookup): ClaudeUsageRead
-}
-
-sealed interface ClaudeUsageRead {
-  data class Success(val reading: StoredUsageReading) : ClaudeUsageRead
-  data object SignInRequired : ClaudeUsageRead
-  data class Throttled(val retryAt: Instant?) : ClaudeUsageRead
-  data object Failed : ClaudeUsageRead
+  suspend fun read(profile: UsageProfileLookup): UsageSnapshotRead
 }
 
 /** Reads the same OAuth allowance endpoint as Claude Code, using only the selected profile's credentials. */
 @Inject
 class ClaudeUsageCollector(private val clock: Clock, private val diagnostics: Diagnostics) : ClaudeUsageReader {
-  override suspend fun read(profile: UsageProfileLookup): ClaudeUsageRead = try {
+  override suspend fun read(profile: UsageProfileLookup): UsageSnapshotRead = try {
     runInterruptible(Dispatchers.IO) {
-      val home = profile.configurationReference ?: return@runInterruptible ClaudeUsageRead.SignInRequired
+      val home = profile.configurationReference ?: return@runInterruptible UsageSnapshotRead.SignInRequired
       val credentials = Path.of(home).resolve(".credentials.json")
-      if (!Files.exists(credentials)) return@runInterruptible ClaudeUsageRead.SignInRequired
+      if (!Files.exists(credentials)) return@runInterruptible UsageSnapshotRead.SignInRequired
       val token = Files.newInputStream(credentials).use { stream ->
         val bytes = stream.readNBytes(MAX_RESPONSE_BYTES + 1)
-        if (bytes.size > MAX_RESPONSE_BYTES) return@runInterruptible ClaudeUsageRead.Failed
+        if (bytes.size > MAX_RESPONSE_BYTES) return@runInterruptible UsageSnapshotRead.Failed
         val root = Json.parseToJsonElement(bytes.decodeToString()).jsonObject
         (root[ClaudeUsageKeys.OAUTH] as? JsonObject)?.get(ClaudeUsageKeys.ACCESS_TOKEN)
           ?.jsonPrimitive?.contentOrNull?.takeIf(String::isNotBlank)
-      } ?: return@runInterruptible ClaudeUsageRead.SignInRequired
+      } ?: return@runInterruptible UsageSnapshotRead.SignInRequired
       val connection = URI(USAGE_URL).toURL().openConnection() as HttpURLConnection
       try {
         connection.connectTimeout = 10_000
@@ -68,27 +61,27 @@ class ClaudeUsageCollector(private val clock: Clock, private val diagnostics: Di
         when (connection.responseCode) {
           200 -> connection.inputStream.use { stream ->
             val bytes = stream.readNBytes(MAX_RESPONSE_BYTES + 1)
-            if (bytes.size > MAX_RESPONSE_BYTES) ClaudeUsageRead.Failed
+            if (bytes.size > MAX_RESPONSE_BYTES) UsageSnapshotRead.Failed
             else parseClaudeUsage(bytes.decodeToString(), clock.now())
           }
-          401, 403 -> ClaudeUsageRead.SignInRequired
+          401, 403 -> UsageSnapshotRead.SignInRequired
           429 -> {
             val seconds = connection.getHeaderField("Retry-After")?.toLongOrNull()?.takeIf { it in 0..86_400 }
-            ClaudeUsageRead.Throttled(seconds?.let { clock.now() + it.seconds })
+            UsageSnapshotRead.Throttled(seconds?.let { clock.now() + it.seconds })
           }
-          else -> ClaudeUsageRead.Failed
+          else -> UsageSnapshotRead.Failed
         }
       } finally {
         connection.disconnect()
       }
     }.also { result ->
-      if (result !is ClaudeUsageRead.Success) diagnostics.record("usage.claude_read_unavailable")
+      if (result !is UsageSnapshotRead.Success) diagnostics.record("usage.claude_read_unavailable")
     }
   } catch (cancelled: CancellationException) {
     throw cancelled
   } catch (_: Exception) {
     diagnostics.record("usage.claude_read_failed")
-    ClaudeUsageRead.Failed
+    UsageSnapshotRead.Failed
   }
 
   private companion object {
@@ -98,15 +91,15 @@ class ClaudeUsageCollector(private val clock: Clock, private val diagnostics: Di
 }
 
 /** A malformed window rejects the read instead of replacing good retained numbers with a partial parse. */
-internal fun parseClaudeUsage(body: String, observedAt: Instant): ClaudeUsageRead {
+internal fun parseClaudeUsage(body: String, observedAt: Instant): UsageSnapshotRead {
   return try {
     val root = Json.parseToJsonElement(body).jsonObject
     val meters = root.mapNotNull { (key, element) ->
       if (key != ClaudeUsageKeys.FIVE_HOUR && key != ClaudeUsageKeys.SEVEN_DAY && !key.startsWith(ClaudeUsageKeys.MODEL_WEEK_PREFIX)) return@mapNotNull null
       if (element is JsonNull) return@mapNotNull null
       val window = element.jsonObject
-      val percent = window[ClaudeUsageKeys.UTILIZATION]?.jsonPrimitive?.doubleOrNull ?: return ClaudeUsageRead.Failed
-      val value = UsageValue.PercentageUsed.create(percent) ?: return ClaudeUsageRead.Failed
+      val percent = window[ClaudeUsageKeys.UTILIZATION]?.jsonPrimitive?.doubleOrNull ?: return UsageSnapshotRead.Failed
+      val value = UsageValue.PercentageUsed.create(percent) ?: return UsageSnapshotRead.Failed
       val reset = window[ClaudeUsageKeys.RESETS_AT]?.jsonPrimitive?.contentOrNull?.let(Instant::parse)
       val model = key.takeIf { it.startsWith(ClaudeUsageKeys.MODEL_WEEK_PREFIX) }?.removePrefix(ClaudeUsageKeys.MODEL_WEEK_PREFIX)
       UsageMeter.create(
@@ -121,10 +114,10 @@ internal fun parseClaudeUsage(body: String, observedAt: Instant): ClaudeUsageRea
         freshnessBasis = 5.minutes,
       )!!
     }
-    if (meters.isEmpty()) ClaudeUsageRead.Failed
-    else ClaudeUsageRead.Success(StoredUsageReading(RequestPermission.Unknown, false, observedAt, meters))
+    if (meters.isEmpty()) UsageSnapshotRead.Failed
+    else UsageSnapshotRead.Success(StoredUsageReading(RequestPermission.Unknown, false, observedAt, meters))
   } catch (_: IllegalArgumentException) {
-    ClaudeUsageRead.Failed
+    UsageSnapshotRead.Failed
   }
 }
 
