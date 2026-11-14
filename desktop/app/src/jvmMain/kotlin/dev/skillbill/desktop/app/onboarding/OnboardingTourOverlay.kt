@@ -103,7 +103,15 @@ fun OnboardingTourOverlay(tour: OnboardingTourState, onStartFirstTask: () -> Uni
             contentAlignment = Alignment.Center,
           ) {
             val scale = tourFrameScale(maxWidth, maxHeight)
-            ScaledTourFrame(scale) { EmptyStagedFrame(Modifier.fillMaxSize()) }
+            ScaledTourFrame(scale) {
+              when (tour.step) {
+                1 -> TourSidebarScene(tour.step, tour.replayToken)
+                2 -> TourChatScene(tour.step, tour.replayToken)
+                3 -> TourWorkScene(tour.step, tour.replayToken)
+                4 -> TourRunDetailScene(tour.step, tour.replayToken)
+                else -> EmptyStagedFrame(Modifier.fillMaxSize())
+              }
+            }
           }
         }
       }

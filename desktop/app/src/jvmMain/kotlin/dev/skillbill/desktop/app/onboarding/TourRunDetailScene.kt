@@ -1,0 +1,231 @@
+package dev.skillbill.desktop.app.onboarding
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
+import dev.skillbill.desktop.core.designsystem.LocalContentColor
+import dev.skillbill.desktop.core.designsystem.LocalReducedMotion
+import dev.skillbill.desktop.core.designsystem.SkillBillRadius
+import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.composite.Edge
+import dev.skillbill.desktop.core.designsystem.composite.hairline
+import dev.skillbill.desktop.core.designsystem.detail.PhasePipeline
+import dev.skillbill.desktop.core.designsystem.detail.PipelineStep
+import dev.skillbill.desktop.core.designsystem.detail.PipelineStepState
+import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
+import dev.skillbill.desktop.core.designsystem.icon.SbIcon
+import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
+import dev.skillbill.desktop.core.designsystem.list.SubtaskRow
+import dev.skillbill.desktop.core.designsystem.status.StatusDot
+import dev.skillbill.desktop.core.designsystem.status.StatusKind
+
+internal data class TourDetailState(
+  val chrome: StageChrome = StageChrome(TourNav.Work),
+  val overlay: StageOverlay = StageOverlay(),
+  val subs: List<TourSubtask> = TourFixture.subtaskTitles.map { TourSubtask(it, StatusKind.Pending) },
+  val pipelineIndex: Int = 0,
+  val currentSubtask: Int? = null,
+  val changes: TourChanges = TourChanges(0, 0, 0),
+  val log: List<TourLogLine> = emptyList(),
+  val logTotal: Int = 0,
+)
+
+internal fun tourRunDetailTimeline(): TourTimeline<TourDetailState> {
+  fun spot(ms: Int, target: TourTarget, tip: TourTip, side: TipSide, pad: Dp): TourCue<TourDetailState> =
+    TourCue(ms) { it.copy(overlay = it.overlay.copy(spotlight = Spotlight(target, tip, side, pad))) }
+  return TourTimeline(
+    TourDetailState(),
+    listOf(
+      TourCue(500) { it.runSubtask(0).copy(pipelineIndex = 0).appendLog(TourFixture.logPreplan) },
+      spot(700, TourTarget.Subtasks, TourFixture.tipSubtasks, TipSide.Right, (-4).dp),
+      TourCue(1400) { it.copy(pipelineIndex = 1).appendLog(TourFixture.logPlan) },
+      TourCue(2300) { it.copy(pipelineIndex = 2).appendLog(TourFixture.logEditCsv).appendLog(TourFixture.logEditCsvTest) },
+      TourCue(2600) { it.copy(changes = TourChanges(1, 64, 0)) },
+      spot(2700, TourTarget.Pipeline, TourFixture.tipPipeline, TipSide.Bottom, 2.dp),
+      TourCue(3200) { it.copy(pipelineIndex = 3).appendLog(TourFixture.logReview) },
+      TourCue(4100) { it.copy(pipelineIndex = 4).appendLog(TourFixture.logTest) },
+      TourCue(5000) { it.copy(pipelineIndex = 5).appendLog(TourFixture.logCommit) },
+      spot(5200, TourTarget.ActivityLog, TourFixture.tipActivity, TipSide.Top, 6.dp),
+      TourCue(5900) {
+        it.finishSubtask(0).copy(pipelineIndex = 6, changes = TourChanges(2, 105, 0)).appendLog(TourFixture.logSubtaskDone)
+      },
+      TourCue(6100) {
+        it.copy(overlay = it.overlay.copy(spotlight = null)).runSubtask(1).copy(pipelineIndex = 0)
+      },
+      TourCue(6800) { it.copy(pipelineIndex = 1) },
+    ),
+    endMs = 7600,
+  )
+}
+
+private fun TourDetailState.appendLog(text: String): TourDetailState {
+  val n = logTotal + 1
+  return copy(log = (log + TourLogLine("14:%02d".format(2 + n), text)).takeLast(6), logTotal = n)
+}
+
+private fun TourDetailState.runSubtask(index: Int): TourDetailState = copy(
+  currentSubtask = index,
+  subs = subs.mapIndexed { i, s -> if (i == index) s.copy(status = StatusKind.Active, current = true) else s.copy(current = false) },
+)
+
+private fun TourDetailState.finishSubtask(index: Int): TourDetailState = copy(
+  subs = subs.mapIndexed { i, s -> if (i == index) s.copy(status = StatusKind.Completed, current = false) else s },
+)
+
+@Composable
+internal fun TourRunDetailScene(step: Int, replayToken: Int) {
+  val timeline = remember { tourRunDetailTimeline() }
+  val state by rememberTourTimeline(step, replayToken, timeline, LocalReducedMotion.current) {}
+  TourStageFrame(state.chrome, state.overlay) {
+    TourRunDetail(state)
+  }
+}
+
+/** The staged run detail for ACME-121; step 05 layers its banner and keycap on top of this panel. */
+@Composable
+internal fun TourRunDetail(state: TourDetailState, modifier: Modifier = Modifier) {
+  val colors = SkillBillTheme.colors
+  val type = SkillBillTheme.type
+  Column(modifier.fillMaxSize()) {
+    Row(
+      Modifier.fillMaxWidth().height(44.dp).hairline(Edge.Bottom, colors.borderSubtle).padding(horizontal = 16.dp),
+      verticalAlignment = Alignment.CenterVertically,
+    ) {
+      BasicText("Work", style = type.tSm.copy(color = colors.fgFaint))
+      BasicText("›", Modifier.padding(horizontal = 8.dp), style = type.tSm.copy(color = colors.fgFaint))
+      BasicText(TourFixture.goalKey, style = type.monoSm.copy(color = colors.fgFaint))
+      Spacer(Modifier.weight(1f))
+      Row(
+        Modifier.height(22.dp).border(1.dp, colors.border, SkillBillRadius.full).padding(horizontal = 9.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+      ) {
+        StatusDot(colors.stActive, size = 7.dp)
+        BasicText("Active", style = type.tXs.copy(color = colors.fg2))
+      }
+    }
+    Column(Modifier.fillMaxWidth().padding(start = 20.dp, top = 18.dp, end = 20.dp, bottom = 14.dp).hairline(Edge.Bottom, colors.borderSubtle)) {
+      BasicText(TourFixture.goalTitle, style = type.tXl.copy(color = colors.fg))
+      Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        TourChip {
+          CompositionLocalProvider(LocalContentColor provides colors.fgMuted) { SbIcon(LucideIcons.folder, SbIconSize.Xs) }
+          BasicText("acme-web", style = type.tXs.copy(color = colors.fgMuted))
+        }
+        TourChip {
+          CompositionLocalProvider(LocalContentColor provides colors.fgMuted) { SbIcon(LucideIcons.branch, SbIconSize.Xs) }
+          BasicText(TourFixture.goalBranch, style = type.monoSm.copy(color = colors.fgMuted))
+        }
+        TourChip {
+          TourAgentDot(TourFixture.claude)
+          BasicText("Claude · opus", style = type.tXs.copy(color = colors.fgMuted))
+        }
+        TourChip {
+          BasicText("${state.changes.files} files", style = type.tXs.copy(color = colors.fgMuted))
+          BasicText("+${state.changes.adds}", style = type.tXs.copy(color = colors.stActive))
+          BasicText("−${state.changes.deletes}", style = type.tXs.copy(color = colors.stFailed))
+        }
+      }
+    }
+    Row(Modifier.weight(1f).fillMaxWidth()) {
+      Column(Modifier.width(270.dp).fillMaxHeight().hairline(Edge.End, colors.borderSubtle).padding(start = 12.dp, top = 16.dp, end = 12.dp)) {
+        val done = state.subs.count { it.status == StatusKind.Completed }
+        Column(Modifier.tourTarget(TourTarget.Subtasks)) {
+          TourSectionLabel("Subtasks $done/3", Modifier.padding(horizontal = 8.dp))
+          Column(Modifier.padding(top = 10.dp)) {
+            state.subs.forEachIndexed { index, sub ->
+              SubtaskRow(
+                number = "${index + 1}",
+                status = sub.status,
+                progress = sub.progress,
+                title = sub.title,
+                current = sub.current,
+              )
+            }
+          }
+        }
+      }
+      Column(Modifier.weight(1f).fillMaxHeight().padding(start = 22.dp, top = 16.dp, end = 22.dp)) {
+        if (state.currentSubtask != null) {
+          BasicText(
+            buildAnnotatedString {
+              withStyle(SpanStyle(color = colors.fgFaint)) { append("Subtask ${state.currentSubtask + 1} · ") }
+              append(state.subs[state.currentSubtask].title)
+            },
+            style = type.tMd.copy(color = colors.fg, fontWeight = FontWeight.SemiBold),
+          )
+        }
+        Box(
+          Modifier.fillMaxWidth().padding(top = 18.dp).tourTarget(TourTarget.Pipeline)
+            .clip(RoundedCornerShape(10.dp))
+            .background(colors.bgInset)
+            .border(1.dp, colors.borderSubtle, RoundedCornerShape(10.dp))
+            .padding(horizontal = 14.dp, vertical = 14.dp),
+        ) {
+          PhasePipeline(
+            TourFixture.phaseNames.mapIndexed { index, name ->
+              PipelineStep(
+                name,
+                when {
+                  index < state.pipelineIndex -> PipelineStepState.Done
+                  index == state.pipelineIndex -> PipelineStepState.Current
+                  else -> PipelineStepState.Pending
+                },
+              )
+            },
+          )
+        }
+        TourSectionLabel("Latest activity", Modifier.padding(top = 26.dp))
+        Column(
+          Modifier.padding(top = 10.dp).tourTarget(TourTarget.ActivityLog),
+          verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+          state.log.forEach { line ->
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+              BasicText(line.time, style = type.monoSm.copy(color = colors.fgFaint))
+              BasicText(line.text, style = type.monoSm.copy(color = colors.fg2, fontWeight = FontWeight.Medium))
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+@Composable
+private fun TourSectionLabel(text: String, modifier: Modifier = Modifier) {
+  BasicText(
+    text.uppercase(),
+    modifier,
+    style = SkillBillTheme.type.tXs.copy(
+      color = SkillBillTheme.colors.fgFaint,
+      fontWeight = FontWeight.SemiBold,
+      letterSpacing = .06.em,
+    ),
+  )
+}

@@ -45,7 +45,7 @@ import dev.skillbill.desktop.core.domain.model.NewTaskActionKind
  * Where a goal or plan start card would run. New task knows its repository and base branch; [starting] is true while a start
  * it sent is in flight. An execution chat passes none, so its cards name only the kind and any branch the action carries.
  */
-internal data class StartCardContext(val repository: String?, val baseBranch: String?, val starting: Boolean = false)
+data class StartCardContext(val repository: String?, val baseBranch: String?, val starting: Boolean = false)
 
 /**
  * The agent's suggested next steps; the first is the recommended one. Goal and plan starts render as a start card, every
@@ -126,7 +126,7 @@ private fun ActionRow(label: String, action: ChatSuggestedAction, pause: Boolean
 private val START_CARD_KINDS = setOf(NewTaskActionKind.Goal, NewTaskActionKind.Plan)
 
 @Composable
-private fun StartCard(
+fun StartCard(
   action: ChatSuggestedAction,
   issueKey: String?,
   context: StartCardContext?,
