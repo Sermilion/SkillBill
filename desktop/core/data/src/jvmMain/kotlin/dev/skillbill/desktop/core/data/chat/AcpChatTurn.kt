@@ -169,6 +169,9 @@ internal fun acpTurn(
   stopRequested: CompletableDeferred<String>? = null,
   onDisposition: (ChatEvent) -> Unit = {},
   workingDirectory: String = openCodeBinding?.workingDirectory ?: request.scope.repositoryRoot,
+  registerActive: (CursorAcpSession) -> Unit = {},
+  clearActive: (CursorAcpSession) -> Unit = {},
+  onSteeringResponse: (deliveryId: String, accepted: Boolean, detail: String?) -> Unit = { _, _, _ -> },
 ): Flow<ChatEvent> = channelFlow {
   val dependency = when (request.cursorMcpDependency) {
     CursorMcpDependency.ProjectUserOnly -> CursorAcpMcpDependency.ProjectUserOnly
@@ -237,6 +240,7 @@ internal fun acpTurn(
     },
     onCard = { events.trySend(ChatEvent.ApprovalRequested(it.toCard())) },
     record = { diagnostics.record("chat.${provider.seam}_diagnostic") },
+    onSteeringResponse = onSteeringResponse,
   )
   val opening = authority.openCursor(
     chatOpenRequest(
@@ -299,6 +303,7 @@ internal fun acpTurn(
   var terminal: ChatEvent? = null
   var cancelled: CancellationException? = null
   try {
+    registerActive(protocol)
     if (!generation.isStopped) protocol.start()
     withTimeout(30_000) {
       while (!protocol.ready && protocol.outcome() == null) {
@@ -322,6 +327,7 @@ internal fun acpTurn(
   } finally {
     withContext(NonCancellable) {
       generation.release()
+      clearActive(protocol)
       inputs.close()
       reader.cancelAndJoin()
       if (!processCleanup.isCompleted) {

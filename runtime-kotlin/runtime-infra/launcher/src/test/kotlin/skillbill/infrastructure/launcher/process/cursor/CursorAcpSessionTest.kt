@@ -1,6 +1,7 @@
 package skillbill.infrastructure.launcher.process.cursor
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
@@ -574,6 +575,109 @@ class CursorAcpSessionTest {
   }
 
   @Test
+  fun `Devin steering sends a second prompt on the running turn and resolves its delivery`() {
+    val harness = devinTurn()
+
+    assertEquals(CursorAcpSteerOutcome.Pending, harness.session.steer("d1", "also adjust the plan", emptyList()))
+    val steer = harness.frames.last()
+    assertEquals("session/prompt", steer.text(CursorAcpKeys.METHOD))
+    assertContains(steer.toString(), "also adjust the plan")
+    val steerId = steer[CursorAcpKeys.ID]
+
+    harness.session.observe("""{"jsonrpc":"2.0","id":$steerId,"result":{"stopReason":"end_turn"}}""")
+    assertEquals(listOf(SteeringResponse("d1", true, null)), harness.steeringResponses)
+
+    harness.respondPrompt("""{"stopReason":"end_turn"}""")
+    assertNull(harness.session.outcome()?.failure)
+    assertEquals(1, harness.steeringResponses.size)
+  }
+
+  @Test
+  fun `Devin steering deliveries resolve with the turn even without their own response`() {
+    val harness = devinTurn()
+    assertEquals(CursorAcpSteerOutcome.Pending, harness.session.steer("d1", "x", emptyList()))
+
+    harness.respondPrompt("""{"stopReason":"end_turn"}""")
+
+    assertNull(harness.session.outcome()?.failure)
+    assertEquals(listOf(SteeringResponse("d1", true, null)), harness.steeringResponses)
+  }
+
+  @Test
+  fun `a Devin follow-up answer arriving after the turn response settles only once`() {
+    val harness = devinTurn()
+    assertEquals(CursorAcpSteerOutcome.Pending, harness.session.steer("d1", "x", emptyList()))
+    val steerId = harness.frames.last()[CursorAcpKeys.ID]
+
+    harness.respondPrompt("""{"stopReason":"end_turn"}""")
+    harness.session.observe("""{"jsonrpc":"2.0","id":$steerId,"result":{"stopReason":"end_turn"}}""")
+
+    assertNull(harness.session.outcome()?.failure)
+    assertEquals(listOf(SteeringResponse("d1", true, null)), harness.steeringResponses)
+  }
+
+  @Test
+  fun `Devin steering refuses outside a live prompt and for providers without steering`() {
+    val idle = Harness(provider = AcpProvider.Devin)
+    assertEquals(CursorAcpSteerOutcome.Inactive, idle.session.steer("d", "x", emptyList()))
+
+    val cursor = Harness(provider = AcpProvider.Cursor)
+    cursor.open()
+    assertEquals(CursorAcpSteerOutcome.Inactive, cursor.session.steer("d", "x", emptyList()))
+    assertTrue(cursor.frames.none { it.text(CursorAcpKeys.METHOD) == "session/prompt" && it.toString().contains("\"x\"") })
+    cursor.session.close()
+
+    val ended = devinTurn()
+    ended.respondPrompt("""{"stopReason":"end_turn"}""")
+    assertEquals(CursorAcpSteerOutcome.Inactive, ended.session.steer("d", "x", emptyList()))
+  }
+
+  @Test
+  fun `Devin steering reports provider rejection and turn cancellation`() {
+    val rejected = devinTurn()
+    assertEquals(CursorAcpSteerOutcome.Pending, rejected.session.steer("d1", "x", emptyList()))
+    val steerId = rejected.frames.last()[CursorAcpKeys.ID]
+    rejected.session.observe(
+      """{"jsonrpc":"2.0","id":$steerId,"error":{"code":-32602,"message":"bad prompt"}}""",
+    )
+    assertEquals(listOf(SteeringResponse("d1", false, "bad prompt")), rejected.steeringResponses)
+    assertNull(rejected.session.outcome())
+
+    val cancelled = devinTurn()
+    assertEquals(CursorAcpSteerOutcome.Pending, cancelled.session.steer("d2", "x", emptyList()))
+    cancelled.session.stop("operator stopped")
+    assertEquals(listOf(SteeringResponse("d2", false, "operator stopped")), cancelled.steeringResponses)
+  }
+
+  @Test
+  fun `a failed Devin steering write drops the reservation without failing the turn`() {
+    val harness = devinTurn()
+    harness.writesOpen = false
+
+    assertEquals(CursorAcpSteerOutcome.WriteFailed, harness.session.steer("d1", "x", emptyList()))
+
+    harness.writesOpen = true
+    harness.respondPrompt("""{"stopReason":"end_turn"}""")
+    assertNull(harness.session.outcome()?.failure)
+    assertTrue(harness.steeringResponses.isEmpty())
+  }
+
+  private fun devinTurn(): Harness {
+    val harness = Harness(provider = AcpProvider.Devin)
+    harness.session.start()
+    harness.respond("""{"protocolVersion":1,"agentCapabilities":{"loadSession":true}}""")
+    harness.respond(
+      """{"sessionId":"s","configOptions":[{"id":"mode","category":"mode","currentValue":"accept-edits",""" +
+        """"options":[{"value":"accept-edits"},{"value":"bypass"}]}]}""",
+    )
+    harness.respond("""{"configOptions":[{"id":"mode","currentValue":"bypass"}]}""")
+    assertTrue(harness.session.ready)
+    assertEquals("session/prompt", harness.frames.last().text(CursorAcpKeys.METHOD))
+    harness.promptId = harness.frames.last()[CursorAcpKeys.ID]
+    return harness
+  }
+
+  @Test
   fun `Devin refuses an unimplemented blocking method with its request id`() {
     val harness = Harness(provider = AcpProvider.Devin)
     harness.session.start()
@@ -628,6 +732,8 @@ class CursorAcpSessionTest {
     harness.session.close()
   }
 
+  private data class SteeringResponse(val deliveryId: String, val accepted: Boolean, val detail: String?)
+
   private class Harness(
     saved: String? = null,
     model: String? = null,
@@ -644,6 +750,9 @@ class CursorAcpSessionTest {
     val cards = mutableListOf<ApprovalRequestRecord>()
     val reportedModels = mutableListOf<String>()
     val records = mutableListOf<String>()
+    val steeringResponses = mutableListOf<SteeringResponse>()
+    var writesOpen = true
+    var promptId: JsonElement? = null
     val owner = Owner()
     val session =
       CursorAcpSession(
@@ -661,14 +770,15 @@ class CursorAcpSessionTest {
         ),
         Clock.fixed(Instant.EPOCH, ZoneOffset.UTC),
         {
-          frames += Json.parseToJsonElement(it).jsonObject
-          true
+          if (writesOpen) frames += Json.parseToJsonElement(it).jsonObject
+          writesOpen
         },
         { true },
         events::add,
         cards::add,
         records::add,
         onModel = { reportedModels += it },
+        onSteeringResponse = { id, accepted, detail -> steeringResponses += SteeringResponse(id, accepted, detail) },
       )
 
     init {
@@ -699,6 +809,10 @@ class CursorAcpSessionTest {
     fun respond(result: String) {
       val id = frames.last()[CursorAcpKeys.ID]
       session.observe("""{"jsonrpc":"2.0","id":$id,"result":$result}""")
+    }
+
+    fun respondPrompt(result: String) {
+      session.observe("""{"jsonrpc":"2.0","id":$promptId,"result":$result}""")
     }
 
     fun permission(

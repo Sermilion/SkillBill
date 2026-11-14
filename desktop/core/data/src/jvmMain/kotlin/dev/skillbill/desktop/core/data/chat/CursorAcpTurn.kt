@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.Flow
 import skillbill.contracts.system.AgentHomeEnvironmentKeys
 import skillbill.infrastructure.launcher.process.cursor.AcpProvider
 import skillbill.infrastructure.launcher.process.cursor.AcpStdioMcpServer
+import skillbill.infrastructure.launcher.process.cursor.CursorAcpSession
 
 internal fun cursorAcpTurn(
   live: LiveChatProcessLauncher,
@@ -28,6 +29,9 @@ internal fun cursorAcpTurn(
   stopRequested: CompletableDeferred<String>? = null,
   onDisposition: (ChatEvent) -> Unit = {},
   workingDirectory: String = openCodeBinding?.workingDirectory ?: request.scope.repositoryRoot,
+  registerActive: (CursorAcpSession) -> Unit = {},
+  clearActive: (CursorAcpSession) -> Unit = {},
+  onSteeringResponse: (deliveryId: String, accepted: Boolean, detail: String?) -> Unit = { _, _, _ -> },
 ): Flow<ChatEvent> = acpTurn(
   live,
   authority,
@@ -54,4 +58,7 @@ internal fun cursorAcpTurn(
   stopRequested = stopRequested,
   onDisposition = onDisposition,
   workingDirectory = workingDirectory,
+  registerActive = registerActive,
+  clearActive = clearActive,
+  onSteeringResponse = onSteeringResponse,
 )

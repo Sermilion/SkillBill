@@ -8,6 +8,9 @@ import dev.skillbill.desktop.core.domain.model.ChatImage
 import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
+import dev.skillbill.desktop.core.domain.model.ChatSteeringPolicy
+import dev.skillbill.desktop.core.domain.model.ChatSteeringRequest
+import dev.skillbill.desktop.core.domain.model.ChatSteeringResult
 import dev.skillbill.desktop.core.domain.model.ChatStoreRead
 import dev.skillbill.desktop.core.domain.model.CursorMcpDependency
 import dev.skillbill.desktop.core.testing.RecordingDiagnostics
@@ -101,6 +104,33 @@ class AgentChatTransportsTest {
       assertEquals("saved-provider-thread", store.agentSession(request.sessionId))
       assertEquals(history, (store.replayHistoryRead(request.sessionId) as ChatStoreRead.Value).value)
     }
+  }
+
+  @Test
+  fun `Devin steering without an active turn restores the delivery and keeps settled lanes empty`() = runTest {
+    val launcher = NoLaunch()
+    val sessions = dev.skillbill.desktop.core.data.session.DatabaseSessionManager(
+      dev.skillbill.desktop.core.data.session.ComponentSessionGraphFactory(
+        object : dev.skillbill.desktop.core.data.session.DatabaseSessionComponent.Factory {
+          override fun createDatabaseSessionComponent(): dev.skillbill.desktop.core.data.session.DatabaseSessionComponent =
+            error("No runtime session without a turn")
+        },
+      ),
+      dev.skillbill.desktop.core.testing.FakeAppSettingsRepository(),
+      dev.skillbill.desktop.core.common.DatabaseDispatcher(kotlinx.coroutines.test.StandardTestDispatcher(testScheduler)),
+      RecordingDiagnostics(),
+      dev.skillbill.desktop.core.data.session.LaunchReservations(),
+      dev.skillbill.desktop.core.common.ApplicationCoroutineScope(backgroundScope),
+    )
+    val transport = DevinChatTransport(host, store, RecordingDiagnostics(), liveLauncher = launcher,
+      approvalAuthority = null, sessions = sessions)
+
+    assertEquals(ChatSteeringPolicy.LiveWhenAvailable, transport.steeringPolicy)
+    assertIs<ChatSteeringResult.NoActiveTurn>(transport.steer(
+      ChatSteeringRequest("s1", "devin", "d1", "follow up")))
+    assertIs<ChatSteeringResult.NoActiveTurn>(transport.settleSteering("s1", "d1"))
+    transport.retireSteering("s1", "d1")
+    assertTrue(launcher.commands.isEmpty())
   }
 
   @Test

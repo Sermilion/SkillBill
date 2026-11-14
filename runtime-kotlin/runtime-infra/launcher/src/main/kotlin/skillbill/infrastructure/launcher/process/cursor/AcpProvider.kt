@@ -13,6 +13,7 @@ data class AcpProvider(
   val defaultMode: String? = null,
   val autoApprovePermissions: Boolean = false,
   val launchEnvironment: Map<String, String> = emptyMap(),
+  val supportsSteering: Boolean = false,
 ) {
   val seam: String get() = "${id}_acp"
 
@@ -53,6 +54,7 @@ data class AcpProvider(
         exactModels = true,
         loginCommand = "devin auth login",
         defaultMode = "bypass",
+        supportsSteering = true,
       )
   }
 }

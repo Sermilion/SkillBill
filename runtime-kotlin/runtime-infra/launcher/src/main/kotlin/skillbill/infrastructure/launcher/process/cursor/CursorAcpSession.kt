@@ -82,6 +82,9 @@ data class CursorAcpOutcome(
   val failure: String?,
 )
 
+/** What [CursorAcpSession.steer] did with a follow-up: never sent, failed on the wire, or awaiting the provider's answer. */
+enum class CursorAcpSteerOutcome { Inactive, WriteFailed, Pending }
+
 class CursorAcpSession(
   private val launch: CursorAcpLaunch,
   private val clock: Clock,
@@ -91,14 +94,17 @@ class CursorAcpSession(
   private val onCard: (ApprovalRequestRecord) -> Unit,
   private val record: (String) -> Unit,
   private val onModel: (String) -> Unit = {},
+  private val onSteeringResponse: (deliveryId: String, accepted: Boolean, detail: String?) -> Unit = { _, _, _ -> },
 ) : ApprovalOwnerEffects {
   private val lock = Any()
   private val providerName = launch.provider.name
   private val seam = launch.provider.seam
   private val startedAt = clock.instant()
-  private var expectedId = 1
-  private var expectedMethod = K.INITIALIZE
-  private var sessionId: String? = launch.savedSession
+  @Volatile private var expectedId = 1
+  @Volatile private var requestSeq = 1
+  @Volatile private var expectedMethod = K.INITIALIZE
+  private val steeringIds = HashMap<Int, String>()
+  @Volatile private var sessionId: String? = launch.savedSession
   private var capabilities = JsonObject(emptyMap())
   private var model: String? = null
   private var selectedModel: String? = null
@@ -148,12 +154,18 @@ class CursorAcpSession(
   }
 
   fun observe(line: String) {
-    if (outcome() != null) return
     val message =
       catchingNonCancellation { Json.parseToJsonElement(line) }.getOrNull() as? JsonObject
         ?: return stop("$providerName sent a malformed ACP frame.")
     if (message.text(K.JSONRPC) != "2.0") return stop("$providerName sent an incompatible JSON-RPC envelope.")
     val method = message.text(K.METHOD)
+    if (method == null) {
+      val deliveryId = synchronized(lock) {
+        steeringIds.remove((message[K.ID] as? JsonPrimitive)?.intOrNull)
+      }
+      if (deliveryId != null) return steeringResponse(deliveryId, message)
+    }
+    if (outcome() != null) return
     when {
       method != null && message[K.ID] != null -> blocking(message, method)
       method == K.SESSION_UPDATE_METHOD -> updateMessage(message)
@@ -453,26 +465,80 @@ class CursorAcpSession(
       K.SESSION_PROMPT,
       buildJsonObject {
         put(K.SESSION_ID, sessionId)
-        put(
-          K.PROMPT,
-          JsonArray(
-            listOf(
-              buildJsonObject {
-                put(K.TYPE, "text")
-                put(K.TEXT, launch.prompt)
-              },
-            ) +
-              launch.images.map { image ->
-                buildJsonObject {
-                  put(K.TYPE, K.IMAGE)
-                  put(K.DATA, image.data)
-                  put(K.MIME_TYPE, image.mimeType)
-                }
-              },
-          ),
-        )
+        put(K.PROMPT, promptBlocks(launch.prompt, launch.images))
       },
     )
+  }
+
+  private fun promptBlocks(text: String, images: List<CursorAcpImage>): JsonArray =
+    JsonArray(
+      listOf(
+        buildJsonObject {
+          put(K.TYPE, "text")
+          put(K.TEXT, text)
+        },
+      ) +
+        images.map { image ->
+          buildJsonObject {
+            put(K.TYPE, K.IMAGE)
+            put(K.DATA, image.data)
+            put(K.MIME_TYPE, image.mimeType)
+          }
+        },
+    )
+
+  /**
+   * Sends [deliveryId]'s text as a second prompt inside the running turn. [CursorAcpSteerOutcome.Pending] stays
+   * unresolved until the provider answers that request, which happens with the turn's own end.
+   */
+  fun steer(deliveryId: String, text: String, images: List<CursorAcpImage>): CursorAcpSteerOutcome {
+    val frame = synchronized(lock) {
+      if (
+        closed || closing || !ready || expectedMethod != K.SESSION_PROMPT ||
+        !launch.provider.supportsSteering
+      ) {
+        return CursorAcpSteerOutcome.Inactive
+      }
+      val requestId = ++requestSeq
+      steeringIds[requestId] = deliveryId
+      steerFrame(requestId, text, images)
+    }
+    val written = catchingNonCancellation { writeLine(frame.toString()) }.getOrDefault(false)
+    if (!written) {
+      dropSteer(deliveryId)
+      return CursorAcpSteerOutcome.WriteFailed
+    }
+    return CursorAcpSteerOutcome.Pending
+  }
+
+  /** Drops [deliveryId]'s reservation so a late provider answer resolves nothing. */
+  fun dropSteer(deliveryId: String) {
+    synchronized(lock) { steeringIds.values.removeAll { it == deliveryId } }
+  }
+
+  private fun steerFrame(requestId: Int, text: String, images: List<CursorAcpImage>): JsonObject =
+    buildJsonObject {
+      put(K.JSONRPC, "2.0")
+      put(K.ID, requestId)
+      put(K.METHOD, K.SESSION_PROMPT)
+      put(
+        K.PARAMS,
+        buildJsonObject {
+          put(K.SESSION_ID, sessionId)
+          put(K.PROMPT, promptBlocks(text, images))
+        },
+      )
+    }
+
+  private fun steeringResponse(deliveryId: String, message: JsonObject) {
+    val error = message.obj(K.ERROR)
+    when {
+      error != null ->
+        onSteeringResponse(deliveryId, false, error.text(K.MESSAGE) ?: "$providerName rejected the follow-up.")
+      message.obj(K.RESULT)?.text(K.STOP_REASON) == "cancelled" ->
+        onSteeringResponse(deliveryId, false, "cancelled")
+      else -> onSteeringResponse(deliveryId, true, null)
+    }
   }
 
   private fun update(params: JsonObject) {
@@ -592,9 +658,12 @@ class CursorAcpSession(
   }
 
   private fun finish(failure: String?) {
+    val outstanding: List<String>
     synchronized(lock) {
       if (closed || closing) return
       closing = true
+      outstanding = steeringIds.values.toList()
+      steeringIds.clear()
     }
     try {
       if (failure == null) permissions?.clear() else permissions?.release()
@@ -614,6 +683,7 @@ class CursorAcpSession(
         result = CursorAcpOutcome(text.toString(), sessionId, model, failure)
         closing = false
       }
+      outstanding.forEach { onSteeringResponse(it, failure == null, failure) }
     }
   }
 
@@ -621,8 +691,10 @@ class CursorAcpSession(
     method: String,
     params: JsonObject,
   ) {
-    expectedMethod = method
-    expectedId += 1
+    synchronized(lock) {
+      expectedMethod = method
+      expectedId = ++requestSeq
+    }
     write(
       buildJsonObject {
         put(K.JSONRPC, "2.0")
