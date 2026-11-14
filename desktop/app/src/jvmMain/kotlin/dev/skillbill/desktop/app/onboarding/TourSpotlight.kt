@@ -83,6 +83,10 @@ internal fun SpotlightLayer(spotlight: Spotlight?, modifier: Modifier = Modifier
     if (alpha <= 0f) return@Canvas
     val pad = (lastSpot?.pad ?: 0.dp).toPx()
     val hole = Rect(left, top, right, bottom).inflate(pad)
+    if (hole.width <= 0f || hole.height <= 0f) {
+      drawRect(colors.scrim.copy(alpha = colors.scrim.alpha * alpha))
+      return@Canvas
+    }
     val corner = CornerRadius(
       (lastSpot?.radius ?: 0.dp).toPx().coerceIn(0f, min(hole.width, hole.height) / 2f),
     )

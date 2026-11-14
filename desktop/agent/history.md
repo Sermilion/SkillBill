@@ -1,3 +1,17 @@
+## [2026-11-14] SONA-23 first-run onboarding tour
+Areas: desktop/app/onboarding, desktop/app/shell, desktop/app/command, desktop/app/di, desktop/core/datastore, desktop/core/domain, desktop/core/testing, desktop/feature/chat, desktop/QA.md, design/onboarding, design/linear-study
+- MEDIUM feature. The desktop app opens a first-run onboarding tour once per install and replays it from the "Show tour" command. Overlay chrome, caption card, welcome and outro heroes, key handling, the timeline mechanism and the frame scaler live in app/onboarding.
+- Added `onboarding_tour_seen` as an additive boolean key in the existing DataStore settings file, with Outcome-returning read and mark calls on AppSettingsRepository and fakes in core/testing. No migration: a missing key reads as not seen and a read failure keeps the tour closed.
+- reusable: TourTimeline models each step as ordered timed actions over immutable scene state with a pure finalState; LocalReducedMotion applies the final state at once. TourFrameLayout scales the fixed 1120x680 staged frame to fit with no lower clamp and a compact caption below 600 dp window height.
+- reusable: TourStageFrame with TourTargetRects resolves child rects in unscaled frame space; SpotlightLayer/TipBubble, DemoCursorLayer, CardFlightLayer and KeycapLayer render from plain state, and TourFixture holds every mock value. The Canvas-drawn PingMark covers the 104 dp hero size BrandMark cannot reach.
+- Steps 01-08 play inside the staged frame: sidebar walkthrough, New task chat using the real StartCard (now public, called with a null issue key), Work board inserting ACME-121, run detail with the phase pipeline, pause/resume with the Needs-you tip, a review flow ending in an in-frame toast, finish pipeline with PR checks, and a staged CommandList palette filtered by a typed query.
+- Every scene control is an inert tour-only no-op; the step 06 toast renders inside the frame from fixture ToastData and never reaches the window ToastHostState. The tour key handler consumes raw KeyEvents ahead of shell shortcuts so P, R and the G chords never reach real work while the tour is open.
+- Design sync: design/onboarding/index.html gained the StartCard subtitle, a Close outro button, modK platform detection, caption-measured fit scaling without the 0.4 floor, and compact <600px and <760px layouts; design/linear-study/HANDOFF.md 4.1 records the First-run tour row.
+- QA repair: SpotlightLayer's Canvas draw now returns after the scrim when the padded hole has non-positive width or height. Step 04's -4 dp pad crashed while the hole animated in from a zero-size rect, because coerceIn to an empty range killed the render loop. TourSpotlightTest replays that cue frame-by-frame in runComposeUiTest.
+- Limits: the Start goal click is inert because the runner cannot restart a step from an offset; the fixture pins Cursor to data slot 5, diverging from agentDataSlot's slot 6; step 08 typing cadence lands the last character near 1871 ms versus the mock's ~2160; the mock's Enter flash is omitted per spec.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
+
 ## [2026-11-13] SONA-19 unavailable-agent compatibility
 Areas: core/domain, core/data/chat, core/designsystem, feature/chat, feature/detail, feature/specs, app/usage, build-logic
 - MEDIUM feature retains saved chats with unsupported non-null agent ids as unavailable, preserving transcript, model, effort, profile, summary and session data. Ordinary saves persist the sentinel; normalization diagnostics omit raw ids and chat content.
