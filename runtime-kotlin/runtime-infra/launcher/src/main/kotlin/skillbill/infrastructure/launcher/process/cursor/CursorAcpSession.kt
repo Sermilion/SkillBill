@@ -82,7 +82,10 @@ data class CursorAcpOutcome(
   val failure: String?,
 )
 
-/** What [CursorAcpSession.steer] did with a follow-up: never sent, failed on the wire, or awaiting the provider's answer. */
+/**
+ * What [CursorAcpSession.steer] did with a follow-up: never sent, failed on the wire, or awaiting
+ * the provider's answer.
+ */
 enum class CursorAcpSteerOutcome { Inactive, WriteFailed, Pending }
 
 class CursorAcpSession(
@@ -470,38 +473,19 @@ class CursorAcpSession(
     )
   }
 
-  private fun promptBlocks(text: String, images: List<CursorAcpImage>): JsonArray =
-    JsonArray(
-      listOf(
-        buildJsonObject {
-          put(K.TYPE, "text")
-          put(K.TEXT, text)
-        },
-      ) +
-        images.map { image ->
-          buildJsonObject {
-            put(K.TYPE, K.IMAGE)
-            put(K.DATA, image.data)
-            put(K.MIME_TYPE, image.mimeType)
-          }
-        },
-    )
-
   /**
    * Sends [deliveryId]'s text as a second prompt inside the running turn. [CursorAcpSteerOutcome.Pending] stays
    * unresolved until the provider answers that request, which happens with the turn's own end.
    */
   fun steer(deliveryId: String, text: String, images: List<CursorAcpImage>): CursorAcpSteerOutcome {
     val frame = synchronized(lock) {
-      if (
-        closed || closing || !ready || expectedMethod != K.SESSION_PROMPT ||
-        !launch.provider.supportsSteering
-      ) {
+      val live = ready && expectedMethod == K.SESSION_PROMPT && launch.provider.supportsSteering
+      if (closed || closing || !live) {
         return CursorAcpSteerOutcome.Inactive
       }
       val requestId = ++requestSeq
       steeringIds[requestId] = deliveryId
-      steerFrame(requestId, text, images)
+      steerFrame(sessionId, requestId, text, images)
     }
     val written = catchingNonCancellation { writeLine(frame.toString()) }.getOrDefault(false)
     if (!written) {
@@ -515,20 +499,6 @@ class CursorAcpSession(
   fun dropSteer(deliveryId: String) {
     synchronized(lock) { steeringIds.values.removeAll { it == deliveryId } }
   }
-
-  private fun steerFrame(requestId: Int, text: String, images: List<CursorAcpImage>): JsonObject =
-    buildJsonObject {
-      put(K.JSONRPC, "2.0")
-      put(K.ID, requestId)
-      put(K.METHOD, K.SESSION_PROMPT)
-      put(
-        K.PARAMS,
-        buildJsonObject {
-          put(K.SESSION_ID, sessionId)
-          put(K.PROMPT, promptBlocks(text, images))
-        },
-      )
-    }
 
   private fun steeringResponse(deliveryId: String, message: JsonObject) {
     val error = message.obj(K.ERROR)
@@ -729,6 +699,42 @@ class CursorAcpSession(
     val OPENING_TIMEOUT: Duration = Duration.ofSeconds(30)
   }
 }
+
+private fun steerFrame(
+  sessionId: String?,
+  requestId: Int,
+  text: String,
+  images: List<CursorAcpImage>,
+): JsonObject =
+  buildJsonObject {
+    put(K.JSONRPC, "2.0")
+    put(K.ID, requestId)
+    put(K.METHOD, K.SESSION_PROMPT)
+    put(
+      K.PARAMS,
+      buildJsonObject {
+        put(K.SESSION_ID, sessionId)
+        put(K.PROMPT, promptBlocks(text, images))
+      },
+    )
+  }
+
+private fun promptBlocks(text: String, images: List<CursorAcpImage>): JsonArray =
+  JsonArray(
+    listOf(
+      buildJsonObject {
+        put(K.TYPE, "text")
+        put(K.TEXT, text)
+      },
+    ) +
+      images.map { image ->
+        buildJsonObject {
+          put(K.TYPE, K.IMAGE)
+          put(K.DATA, image.data)
+          put(K.MIME_TYPE, image.mimeType)
+        }
+      },
+  )
 
 private fun cursorExtensionAcceptance(
   method: String,

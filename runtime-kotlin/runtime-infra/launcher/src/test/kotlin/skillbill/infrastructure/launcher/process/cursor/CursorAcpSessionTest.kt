@@ -624,7 +624,8 @@ class CursorAcpSessionTest {
     val cursor = Harness(provider = AcpProvider.Cursor)
     cursor.open()
     assertEquals(CursorAcpSteerOutcome.Inactive, cursor.session.steer("d", "x", emptyList()))
-    assertTrue(cursor.frames.none { it.text(CursorAcpKeys.METHOD) == "session/prompt" && it.toString().contains("\"x\"") })
+    val prompts = cursor.frames.filter { it.text(CursorAcpKeys.METHOD) == "session/prompt" }
+    assertTrue(prompts.none { it.toString().contains("\"x\"") })
     cursor.session.close()
 
     val ended = devinTurn()
