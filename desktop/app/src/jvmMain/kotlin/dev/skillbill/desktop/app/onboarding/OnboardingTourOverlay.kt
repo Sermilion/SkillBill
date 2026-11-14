@@ -93,8 +93,6 @@ fun OnboardingTourOverlay(tour: OnboardingTourState, onStartFirstTask: () -> Uni
           Modifier.fillMaxWidth().weight(1f),
           horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-          TourCaption(tour, frame.compact, timelineEnded)
-          Spacer(Modifier.height(12.dp))
           BoxWithConstraints(
             Modifier.fillMaxWidth().weight(1f),
             contentAlignment = Alignment.Center,
@@ -114,6 +112,8 @@ fun OnboardingTourOverlay(tour: OnboardingTourState, onStartFirstTask: () -> Uni
               }
             }
           }
+          Spacer(Modifier.height(12.dp))
+          TourCaption(tour, frame.compact, timelineEnded)
         }
       }
     }
