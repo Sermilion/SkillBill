@@ -217,8 +217,8 @@ internal fun ChatComposer(
       ModeBadge(ChatPermissionMode.Act)
       AgentPicker(
         agent, workspace.agents, session.item.repositoryRoot, enabled = delivery == null && !busy && !gone,
-        loadModels = workspace::models, onChooseModel = { workspace.switchModel(id, it) },
-      ) { workspace.switchAgent(id, it) }
+        resolveAgent = workspace::agentFor, loadModels = workspace::models,
+      ) { agentId, pick -> workspace.choose(id, agentId, pick) }
       if (agent?.agentId?.startsWith("cursor", ignoreCase = true) == true) {
         CursorMcpPicker(cursorMcpDependency, enabled = !gone) {
           workspace.cursorMcpDependencies[id] = it

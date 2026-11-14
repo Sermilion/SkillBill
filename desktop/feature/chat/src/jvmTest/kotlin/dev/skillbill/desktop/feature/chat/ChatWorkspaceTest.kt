@@ -1533,6 +1533,30 @@ class ChatWorkspaceTest {
     assertTrue(session.transcript.value.any { it is ChatMessage.Notice && "Codex · gpt-5 · high" in it.text })
   }
 
+  // The picker commits agent and model together; dropping the pick would start the new agent on its matrix model instead.
+  @Test
+  fun `choosing another agent with a model switches once and starts on that model`() = runTest {
+    val item = workItem("SKILL-1", lifecycle = Lifecycle.Paused).copy(running = false)
+    details.details = mapOf(item.id to flowOf(loaded(item)))
+    chat.agentFor = { ChatAgent(it, "gpt-5", "high") }
+    val workspace = workspace()
+    workspace.open(item)
+    runCurrent()
+    val session = workspace.session(item.id)!!
+    val notices = session.transcript.value.count { it is ChatMessage.Notice }
+
+    workspace.choose(item.id, "codex", ModelPick("gpt-6", null, "GPT-6"))
+    runCurrent()
+    workspace.send(item.id, "what failed?")
+    runCurrent()
+
+    assertEquals(ChatAgent("codex", "gpt-6", null), chat.requests.last().agent)
+    assertTrue(chat.requests.last().firstTurn)
+    val added = session.transcript.value.filterIsInstance<ChatMessage.Notice>().drop(notices)
+    assertEquals(1, added.size)
+    assertTrue("Codex · gpt-6" in added.single().text)
+  }
+
   // A chat that is not saved, or a resume that starts a new agent session, loses what the operator was doing; a resume that
   // leaves the opening turn running would stream its reply into the restored chat.
   @Test

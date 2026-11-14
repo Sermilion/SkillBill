@@ -922,6 +922,12 @@
     track('TargetPicker');
     return `<section class="sb-tpick" aria-label="Repository and base branch">${pickerColumn(o.repo)}${pickerColumn(o.branch)}</section>`;
   }
+  /* The agent and model popup over the composer: { agent, model } columns shaped like TargetPicker's, and `notice`, a line
+   * under both while the highlighted agent is not the chat's (picking a model then switches agents). */
+  function AgentModelPicker(o) {
+    track('AgentModelPicker');
+    return `<section class="sb-tpick sb-tpick--agent" aria-label="Agent and model">${pickerColumn(o.agent)}${pickerColumn(o.model)}${o.notice ? `<div class="sb-tpick-note" role="status">${o.notice}</div>` : ''}</section>`;
+  }
   /* One queued message: its place in the send order (the first is Next), two lines of text, tags, and × to remove it. */
   function QueuedRow(o) {
     track('QueuedRow');
@@ -1874,7 +1880,7 @@
     PaneSection, DetailsPanel, MenuHead, QaFrame, Counts, LiveText, Dot, Note, InspectorSection, InspectorLine, PhaseBlock, PickerButton, Range, ShellPrompt, AppShell, WorkArea, ScrollArea, DetailSplit, ChangeStrip, ChangesFrame, DiffView, InlineComposer, CommentThread, KeyHints, WindowSheet, Breakdown, TreeRow, SettingsHeader, SettingsGroup, SettingRow, TierBadge,
     ConfigRow, TrayPopover,
     ChatStatusMark, ChatTabs, SuggestionChip, StartCard, ChatMessage, ChatTranscript, ChatPill, Composer, StepLine, NewTaskHome,
-    InboxList, InboxRow, FilterBar, TargetPicker, QueuedRow, QueuePanel, ChatChangesPill, ChatChangeRow, ChatChangesPanel, ResumeRow, ResumePalette,
+    InboxList, InboxRow, FilterBar, TargetPicker, AgentModelPicker, QueuedRow, QueuePanel, ChatChangesPill, ChatChangeRow, ChatChangesPanel, ResumeRow, ResumePalette,
     QaVerdict, QaItem, QaFold, QaResults, QaLive, QaPreview, QaStageList, QaShots, QaRounds, ReportText, DeviceSwitcher, DeviceOption, DevicePanel,
     SegmentBar, CheckTally, RunOutcome, CheckRow, StepTimeline, WorkSummary, VerifyContext, SelectAll, SelectionBar,
     ValidationDoc, FlagStrip, Tag, LinkButton, BoxNote, ReportPart, BranchRun,

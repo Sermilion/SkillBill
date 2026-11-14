@@ -51,7 +51,7 @@ sealed interface SbMenuEntry {
 }
 
 @Composable
-fun SbMenuItem(item: SbMenuEntry.Item, highlighted: Boolean = false) {
+fun SbMenuItem(item: SbMenuEntry.Item, highlighted: Boolean = false, modifier: Modifier = Modifier) {
   val colors = SkillBillTheme.colors
   val interaction = remember { MutableInteractionSource() }
   // `[disabled]` sets pointer-events: none, so a disabled item never takes the hover fill.
@@ -60,7 +60,7 @@ fun SbMenuItem(item: SbMenuEntry.Item, highlighted: Boolean = false) {
   val fg = when { item.danger -> colors.stFailed; active -> colors.fg; else -> colors.fg2 }
   val shape = RoundedCornerShape(SkillBillRadius.sm)
   Row(
-    Modifier.fillMaxWidth().heightIn(min = 30.dp).background(if (active) colors.bgActive else androidx.compose.ui.graphics.Color.Transparent, shape)
+    modifier.fillMaxWidth().heightIn(min = 30.dp).background(if (active) colors.bgActive else androidx.compose.ui.graphics.Color.Transparent, shape)
       .hoverable(interaction).clickable(interaction, null, enabled = item.enabled, onClick = item.onClick).handCursor(item.enabled)
       .sbFocusRing(interaction, shape)
       .semantics { role = Role.Button; contentDescription = listOfNotNull(item.label, item.reason, item.detail, item.endText).joinToString(", "); if (!item.enabled) disabled(); if (item.checked) selected = true }

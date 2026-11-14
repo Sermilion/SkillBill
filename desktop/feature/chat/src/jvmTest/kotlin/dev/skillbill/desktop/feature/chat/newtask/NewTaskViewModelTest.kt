@@ -50,6 +50,7 @@ import dev.skillbill.desktop.core.ui.feedback.readProblemText
 import dev.skillbill.desktop.core.ui.shell.ShellPanes
 import dev.skillbill.desktop.feature.chat.ChatMessage
 import dev.skillbill.desktop.feature.chat.ChatWorkspace
+import dev.skillbill.desktop.feature.chat.ModelPick
 import dev.skillbill.desktop.feature.chat.chipText
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -337,7 +338,7 @@ class NewTaskViewModelTest {
     runCurrent()
     val previous = repository.requests.single()
 
-    model.onAction(NewTaskAction.ChooseModel(ChatModel("new-model", "New model")))
+    model.onAction(NewTaskAction.ChooseModel(ModelPick.listed(ChatModel("new-model", "New model"))))
     runCurrent()
     val selected = draft.selectedAgent!!
     assertEquals("new-model", selected.model)
@@ -371,7 +372,7 @@ class NewTaskViewModelTest {
     val previous = draft.selectedAgent
     model.onAction(NewTaskAction.ChooseAgent("codex"))
     runCurrent()
-    model.onAction(NewTaskAction.ChooseModel(ChatModel("old-agent-model", "Old agent model")))
+    model.onAction(NewTaskAction.ChooseModel(ModelPick.listed(ChatModel("old-agent-model", "Old agent model"))))
     assertEquals(previous, draft.selectedAgent)
 
     val codex = ChatAgent("codex", "codex-model", null)

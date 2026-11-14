@@ -1,10 +1,14 @@
 package dev.skillbill.desktop.feature.chat
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -13,10 +17,20 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.semantics.semantics
@@ -40,9 +54,27 @@ import dev.skillbill.desktop.core.domain.model.ChatModelsRead
 import dev.skillbill.desktop.core.ui.input.ShellLayer
 import dev.skillbill.desktop.core.ui.input.gatesShortcutsWhileFocused
 
+private val PICKER_WIDTH = 560.dp
+private val AGENT_PANE_WIDTH = 168.dp
+private val PANES_HEIGHT = 380.dp
+
+/** A model row the operator picked. [model] and [effort] replace the agent's own, so a null [model] keeps the agent CLI's default. */
+data class ModelPick(val model: String?, val effort: String?, val label: String) {
+  fun applyTo(agent: ChatAgent): ChatAgent = agent.copy(model = model, effort = effort)
+
+  companion object {
+    val AgentDefault = ModelPick(null, null, "agent default")
+
+    fun listed(model: ChatModel) = ModelPick(model.id, null, model.label)
+
+    fun configured(agent: ChatAgent) = ModelPick(agent.model, agent.effort, agent.model ?: "agent default")
+  }
+}
+
 /**
- * The agent chip. Clicking it lists the agents the chat can switch to, then the models the current agent reports for
- * [repositoryRoot]. Models load each time the popover opens; choosing "Agent default" clears the explicit model.
+ * The agent chip. Its popover lists agents on the left and the highlighted agent's models for [repositoryRoot] on the right.
+ * Highlighting an agent only previews its models; picking a model calls [onChoose] once with both, so a switch never needs a
+ * second trip. Models load each time an agent is highlighted.
  */
 @Composable
 internal fun AgentPicker(
@@ -51,9 +83,9 @@ internal fun AgentPicker(
   repositoryRoot: String?,
   enabled: Boolean,
   disabledWhy: String? = null,
+  resolveAgent: suspend (String) -> ChatAgent,
   loadModels: suspend (ChatAgent, String) -> ChatModelsRead,
-  onChooseModel: (ChatModel?) -> Unit,
-  onChoose: (String) -> Unit,
+  onChoose: (agentId: String, pick: ModelPick) -> Unit,
 ) {
   var open by remember { mutableStateOf(false) }
   val close = { open = false }
@@ -75,69 +107,146 @@ internal fun AgentPicker(
     if (why != null) SbTooltip(why) { chip() } else chip()
     if (open && canOpen) {
       ShellLayer(close)
-      SbPopover(expanded = true, onDismissRequest = close) {
-        Column(Modifier.width(360.dp)) {
-          SbMenu(
-            listOf<SbMenuEntry>(SbMenuEntry.Head("Agent")) +
-              agents.map { choice ->
-                SbMenuEntry.Item(choice, { close(); onChoose(choice) }, checked = choice == agent?.agentId, mono = true)
-              } +
-              listOf(SbMenuEntry.Separator, SbMenuEntry.Head("Model")),
-          )
-          if (agent != null) {
-            ModelSection(agent, repositoryRoot, loadModels) { close(); onChooseModel(it) }
-          }
-        }
+      SbPopover(expanded = true, onDismissRequest = close, width = PICKER_WIDTH, maxWidth = PICKER_WIDTH, title = "Agent and model") {
+        AgentModelPanes(agent, agents, repositoryRoot, resolveAgent, loadModels) { agentId, pick -> close(); onChoose(agentId, pick) }
       }
     }
   }
 }
 
 @Composable
-private fun ModelSection(
-  agent: ChatAgent,
+private fun AgentModelPanes(
+  current: ChatAgent?,
+  agents: List<String>,
   repositoryRoot: String?,
-  load: suspend (ChatAgent, String) -> ChatModelsRead,
-  onChoose: (ChatModel?) -> Unit,
+  resolveAgent: suspend (String) -> ChatAgent,
+  loadModels: suspend (ChatAgent, String) -> ChatModelsRead,
+  onChoose: (String, ModelPick) -> Unit,
 ) {
-  var read by remember(agent, repositoryRoot) { mutableStateOf<ChatModelsRead?>(null) }
-  var retry by remember { mutableStateOf(0) }
-  var query by remember { mutableStateOf("") }
-  if (repositoryRoot != null) {
-    LaunchedEffect(agent, repositoryRoot, retry) {
-      read = null
-      read = load(agent, repositoryRoot)
+  val initial = remember { current?.agentId?.takeIf { it in agents } ?: agents.first() }
+  var highlighted by remember { mutableStateOf(initial) }
+  val rowFocus = remember(agents) { agents.associateWith { FocusRequester() } }
+  val searchFocus = remember { FocusRequester() }
+  // The popover focuses its first row when it opens; previews wait until focus is back on the current agent.
+  var focusPreviews by remember { mutableStateOf(false) }
+  LaunchedEffect(Unit) {
+    withFrameNanos {}
+    runCatching { rowFocus.getValue(initial).requestFocus() }
+    focusPreviews = true
+  }
+  val divider = SkillBillTheme.colors.borderSubtle
+  Column(Modifier.fillMaxWidth()) {
+    Row(Modifier.fillMaxWidth().height(PANES_HEIGHT)) {
+      Column(Modifier.width(AGENT_PANE_WIDTH).fillMaxHeight().verticalScroll(rememberScrollState())) {
+        SbMenu(listOf(SbMenuEntry.Head("Agent")))
+        agents.forEach { choice ->
+          SbMenuItem(
+            SbMenuEntry.Item(choice, { highlighted = choice }, checked = choice == current?.agentId, mono = true),
+            highlighted = choice == highlighted,
+            modifier = Modifier.focusRequester(rowFocus.getValue(choice))
+              .onFocusChanged { if (it.isFocused && focusPreviews) highlighted = choice }
+              .onPreviewKeyEvent {
+                if (it.type != KeyEventType.KeyDown || (it.key != Key.DirectionRight && it.key != Key.Enter)) return@onPreviewKeyEvent false
+                highlighted = choice
+                runCatching { searchFocus.requestFocus() }
+                true
+              },
+          )
+        }
+      }
+      Box(Modifier.width(1.dp).fillMaxHeight().background(divider))
+      key(highlighted, repositoryRoot) {
+        ModelPane(
+          current, highlighted, repositoryRoot, resolveAgent, loadModels, searchFocus,
+          onBack = { runCatching { rowFocus.getValue(highlighted).requestFocus() } },
+          onPick = { onChoose(highlighted, it) },
+          modifier = Modifier.weight(1f).fillMaxHeight(),
+        )
+      }
+    }
+    if (current != null && highlighted != current.agentId) {
+      Box(Modifier.fillMaxWidth().height(1.dp).background(divider))
+      BasicText(
+        "Picking a model switches to $highlighted and starts a new conversation.",
+        Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+        style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.accentText),
+      )
     }
   }
-  Column(Modifier.padding(horizontal = 4.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-    SbInput(query, { query = it }, placeholder = "Search models", modifier = Modifier.gatesShortcutsWhileFocused())
-    SbMenuItem(SbMenuEntry.Item("Agent default", { onChoose(null) }, checked = agent.model == null))
-    when (val result = read) {
-      null -> MutedText(if (repositoryRoot == null) "Choose a repository to list models." else "Loading models...")
-      is ChatModelsRead.Failed -> {
-        MutedText(result.message)
-        SbButton("Retry", { retry++ }, size = SbControlSize.Small)
+}
+
+@Composable
+private fun ModelPane(
+  current: ChatAgent?,
+  agentId: String,
+  repositoryRoot: String?,
+  resolveAgent: suspend (String) -> ChatAgent,
+  load: suspend (ChatAgent, String) -> ChatModelsRead,
+  searchFocus: FocusRequester,
+  onBack: () -> Unit,
+  onPick: (ModelPick) -> Unit,
+  modifier: Modifier,
+) {
+  var configured by remember { mutableStateOf<ChatAgent?>(null) }
+  var read by remember { mutableStateOf<ChatModelsRead?>(null) }
+  var retry by remember { mutableStateOf(0) }
+  var query by remember { mutableStateOf("") }
+  var searchFocused by remember { mutableStateOf(false) }
+  val active = current?.takeIf { it.agentId == agentId }
+  LaunchedEffect(retry) {
+    read = null
+    val resolved = resolveAgent(agentId)
+    configured = resolved.takeIf { it.model != null }
+    if (repositoryRoot != null) read = load(active ?: resolved, repositoryRoot)
+  }
+  val configuredChecked = active != null && configured?.let { it.model == active.model && it.effort == active.effort } == true
+  Column(
+    // Left with an empty search, or Up from the search, returns to the highlighted agent rather than the last agent row.
+    modifier.padding(4.dp).onPreviewKeyEvent {
+      val back = it.type == KeyEventType.KeyDown &&
+        ((it.key == Key.DirectionLeft && query.isEmpty()) || (it.key == Key.DirectionUp && searchFocused))
+      if (back) onBack()
+      back
+    },
+    verticalArrangement = Arrangement.spacedBy(4.dp),
+  ) {
+    SbInput(query, { query = it }, placeholder = "Search $agentId models", modifier = Modifier.fillMaxWidth().focusRequester(searchFocus).onFocusChanged { searchFocused = it.hasFocus }
+        .gatesShortcutsWhileFocused())
+    Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+      configured?.let { matrix ->
+        SbMenuItem(
+          SbMenuEntry.Item("Configured", { onPick(ModelPick.configured(matrix)) }, checked = configuredChecked,
+            detail = listOfNotNull(matrix.model, matrix.effort).joinToString(" · ")),
+        )
       }
-      is ChatModelsRead.Loaded -> {
-        val models = result.models.filter { it.id.contains(query, true) || it.label.contains(query, true) }
-        Column(Modifier.heightIn(max = 300.dp).verticalScroll(rememberScrollState())) {
+      SbMenuItem(SbMenuEntry.Item("Agent default", { onPick(ModelPick.AgentDefault) }, checked = active != null && active.model == null))
+      SbMenu(listOf(SbMenuEntry.Separator))
+      when (val result = read) {
+        null -> MutedText(if (repositoryRoot == null) "Choose a repository to list models." else "Loading models...")
+        is ChatModelsRead.Failed -> {
+          MutedText(result.message)
+          SbButton("Retry", { retry++ }, size = SbControlSize.Small)
+        }
+        is ChatModelsRead.Loaded -> {
+          val models = result.models.filter { it.id.contains(query, true) || it.label.contains(query, true) }
           models.forEach { model ->
             SbMenuItem(
-              SbMenuEntry.Item(model.label, { onChoose(model) }, checked = model.id == agent.model,
+              SbMenuEntry.Item(model.label, { onPick(ModelPick.listed(model)) },
+                checked = active != null && model.id == active.model && !configuredChecked,
                 detail = model.id.takeUnless { it == model.label }),
             )
           }
           if (models.isEmpty()) MutedText(if (result.models.isEmpty()) "No models reported by this agent." else "No matching models.")
         }
-        SbButton("Refresh models", { retry++ }, size = SbControlSize.Small)
       }
     }
+    if (read is ChatModelsRead.Loaded) SbButton("Refresh models", { retry++ }, size = SbControlSize.Small)
   }
 }
 
 @Composable
 private fun MutedText(text: String) {
-  BasicText(text, style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgMuted))
+  BasicText(text, Modifier.padding(horizontal = 8.dp, vertical = 4.dp), style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgMuted))
 }
 
 internal fun chipText(agent: ChatAgent?): String = when {

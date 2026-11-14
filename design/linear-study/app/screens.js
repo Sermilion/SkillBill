@@ -2661,7 +2661,12 @@
   const chatStatus = (c) => (c.stream ? 'replying' : c.unread ? 'unread' : null);
   const chatEmpty = (c) => !c.lines.length && !c.stream;
   const chatAgo = (m) => (m < 1 ? 'now' : m < 60 ? `${m}m` : m < 1440 ? `${Math.floor(m / 60)}h` : m < 2880 ? '1d' : `${Math.floor(m / 1440)}d`);
-  const agentModel = (a) => (D.MATRIX[a] ? D.MATRIX[a].reasoning.model : null);
+  /* The execution matrix's reasoning model and effort for an agent, or null when the matrix has no entry. */
+  const configuredModel = (a) => (D.MATRIX[a] && D.MATRIX[a].reasoning.model ? D.MATRIX[a].reasoning : null);
+  /* A chat runs its agent's configured model until the agent and model picker sets `c.pick` ({ model, effort }; a null model
+   * is the agent CLI's default). */
+  const chatModel = (c) => c.pick || configuredModel(c.agent) || { model: null, effort: null };
+  const chipText = (agent, m) => (m.model ? [agent, m.model, m.effort].filter(Boolean).join(' · ') : `${agent} · default`);
   const agentDot = (a) => S.Dot(agentOf(a).color);
   const defaultBranch = (repo) => (D.REPO_BRANCHES[repo] || {}).defaultBranch || '';
   const baseBranch = (c) => c.branch || defaultBranch(c.repo);
@@ -2735,10 +2740,9 @@
     const repoPill = empty
       ? S.ChatPill({ icon: 'folder', html: c.repo ? repoAndBranch(c.repo, c.currentBranch || baseBranch(c)) : 'Choose repository', need: !c.repo, chevron: 'chevronDown', act: 'pk-toggle', expanded: pop.type === 'target', id: 'nt-target', tip: 'Change repository or base branch' })
       : S.ChatPill({ icon: 'folder', html: repoAndBranch(c.repo, c.currentBranch || baseBranch(c)), tip: `${c.repo} / ${baseBranch(c)}` });
-    const model = agentModel(c.agent);
     const chg = chatChanges(c);
     const changesPill = chg ? S.ChatChangesPill(Object.assign({ act: 'chg-toggle', expanded: pop.type === 'changes', id: 'nt-changes' }, chg)) : '';
-    const agentPill = S.ChatPill({ lead: agentDot(c.agent), text: model ? `${c.agent} · ${model}` : c.agent, chevron: 'chevronDown', act: 'nt-agent-menu', expanded: pop.type === 'nt-agent', disabled: !!c.stream, tip: c.stream ? 'Wait for the current reply to finish' : 'Change agent' });
+    const agentPill = S.ChatPill({ lead: agentDot(c.agent), text: chipText(c.agent, chatModel(c)), chevron: 'chevronDown', act: 'nt-agent-menu', expanded: pop.type === 'nt-agent', id: 'nt-agent', disabled: !!c.stream, tip: c.stream ? 'Wait for the current reply to finish' : 'Change agent or model' });
     const warning = c.branchIntent && c.currentBranch !== defaultBranch(c.repo) && !c.branch
       ? `<div class="l-col g-2" role="status">${S.Callout({ tone: 'warn', body: `This checkout is on ${esc(c.currentBranch)}. New work normally starts from ${esc(defaultBranch(c.repo))}. Switch to ${esc(defaultBranch(c.repo))} or explicitly use ${esc(c.currentBranch)} as the base branch before starting.` })}<div class="l-row g-2 l-wrap">${S.Button({ label: `Switch to ${defaultBranch(c.repo)}`, size: 'sm', act: 'chat-default-branch', disabled: !!c.stream })}${S.Button({ label: 'Use current branch as base', size: 'sm', act: 'chat-current-base', disabled: !!c.stream })}</div></div>` : '';
     return warning + S.Composer({
@@ -2828,6 +2832,49 @@
   }
   const targetPicker = (st) => targetPickerView({ repos: st.nt.repos, chat: ntChat(st), pk: st.nt.pk });
 
+  /* Agent and model picker state for a chat: the highlighted agent starts as the chat's, with its checked model active. */
+  function agentPickerState(c) {
+    const am = { agent: c.agent, filter: '', state: 'ok', active: { agent: Math.max(0, D.AGENT_CHOICES.indexOf(c.agent)), model: 0 } };
+    am.active.model = Math.max(0, agentModelItems({ chat: c, am }).model.findIndex((it) => it.checked));
+    return am;
+  }
+  /* The agent column, then the model rows for the highlighted agent: Configured (the matrix model and effort, when the
+   * matrix has one), Agent default, then the models its CLI reports, filtered. Rows are checked only for the chat's agent. */
+  function agentModelItems(o) {
+    const c = o.chat, am = o.am, current = am.agent === c.agent ? chatModel(c) : null;
+    const configured = configuredModel(am.agent);
+    const configuredOn = !!(current && configured && current.model === configured.model && current.effort === configured.effort);
+    const q = am.filter.trim().toLowerCase();
+    const listed = am.state === 'ok' ? (D.AGENT_MODELS[am.agent] || []).filter(([label, id]) => !q || label.toLowerCase().includes(q) || id.toLowerCase().includes(q)) : [];
+    const model = [
+      ...(configured ? [{ kind: 'configured', label: 'Configured', sub: [configured.model, configured.effort].filter(Boolean).join(' · '), model: configured.model, effort: configured.effort, checked: configuredOn }] : []),
+      { kind: 'default', label: 'Agent default', model: null, effort: null, checked: !!(current && current.model == null) },
+      ...listed.map(([label, id]) => ({ kind: 'listed', label, sub: id === label ? null : id, model: id, effort: null, checked: !!(current && current.model === id && current.effort == null && !configuredOn) })),
+    ];
+    return { agent: D.AGENT_CHOICES, model };
+  }
+  function agentModelPickerView(o) {
+    const c = o.chat, am = o.am;
+    const items = agentModelItems(o);
+    const agentRows = items.agent.map((a, n) => ({ lead: S.Avatar({ name: a, initials: D.AGENTS[a].initials, color: D.AGENTS[a].color, size: 'sm' }), html: `<span class="mono">${esc(a)}</span>`, label: a, checked: a === c.agent, hl: a === am.agent, act: 'am-pick', arg: 'agent|' + n }));
+    const fixed = items.model.filter((it) => it.kind !== 'listed').length;
+    const modelRows = items.model.map((it, n) => ({ label: it.label, sub: it.sub, checked: it.checked, hl: am.active.model === n, act: 'am-pick', arg: 'model|' + n }));
+    const model = {
+      title: `Models for ${am.agent}`, label: 'Models', id: 'am-list-model', pick: 'model',
+      filter: S.FilterBar({ id: 'am-filter', value: am.filter, placeholder: `Search ${am.agent} models`, input: 'am-filter', pick: 'model' }),
+      rows: [S.Menu({ items: [...modelRows.slice(0, fixed), '-', ...modelRows.slice(fixed)] })],
+    };
+    if (am.state === 'loading') model.rows.push(S.MenuItem({ label: 'Loading models…', disabled: true }));
+    else if (am.state === 'error') model.problem = S.Hint({ tone: 'warn', html: `Could not read models. Check the agent installation and sign-in, then retry. ${S.Button({ label: 'Retry', variant: 'ghost', size: 'sm', act: 'am-retry' })}` });
+    else if (items.model.length === fixed) model.rows.push(S.MenuItem({ label: am.filter.trim() ? `No model matches "${am.filter.trim()}"` : 'No models reported by this agent.', disabled: true }));
+    return S.AgentModelPicker({
+      agent: { title: 'Agent', label: 'Agents', id: 'am-list-agent', pick: 'agent', focusable: true, rows: [S.Menu({ items: agentRows })] },
+      model,
+      notice: am.agent !== c.agent ? `Picking a model switches to ${esc(am.agent)} and starts a new conversation.` : '',
+    });
+  }
+  const agentModelPicker = (st) => { const c = ntChat(st); return agentModelPickerView({ chat: c, am: st.nt.am && st.popover && st.popover.type === 'nt-agent' ? st.nt.am : agentPickerState(c) }); };
+
   /* The open chats behind the tab strip's count button; a filter appears past eight chats (NewTaskChatOverflowMenu). */
   function chatMenu(st) {
     const q = (st.nt.menuQ || '').trim().toLowerCase();
@@ -2911,7 +2958,7 @@
   window.Screens = {
     subPhaseStates, finishStates, buildOf, app, work, detail, history, settingsPage, specsPane, terminal, tierOf, lookup, itemBy, subKeys, selectedSub, paneShown, PANE_MIN, paneWidth, activityGroups,
     statusIcon, stepText, clock, rowKey, repoOf, agentOf, LIFE, SECTIONS, resumable, controllable, pauseEligible, recoveryOffered,
-    newTask, ntChat, chatLabel, chatStatus, chatEmpty, ntSendButton, pickerItems, targetPicker, targetPickerView, chatMenu, chatTabMenu, queuePanel, chatChanges, changesPanel,
+    newTask, ntChat, chatLabel, chatStatus, chatEmpty, ntSendButton, pickerItems, targetPicker, targetPickerView, agentPickerState, agentModelItems, agentModelPicker, agentModelPickerView, chatModel, chatMenu, chatTabMenu, queuePanel, chatChanges, changesPanel,
     resumeListing, resumePalette, resumePaletteView,
     qaView, qaResults, qaLiveBlock, peekCard, finishResults, devicePanel, usageData,
     isPlanRun, planStrip, planNow, planTeaser, planActivity, planBundle, planTranscript, planBriefing, PLAN_STAGES,

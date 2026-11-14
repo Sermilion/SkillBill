@@ -64,7 +64,8 @@
     const h = (location.hash || '').replace('#', '');
     return ['components', 'foundations', 'states'].includes(h) ? h : 'prototype';
   }
-  /* #new-task opens the New task view; #new-task/queue, #new-task/picker and #new-task/resume also open that popup.
+  /* #new-task opens the New task view; #new-task/queue, #new-task/picker, #new-task/agent and #new-task/resume also open that
+   * popup (#new-task/agent/<state>: other, loading, error, noMatch).
    * #new-task/changes/<variant> selects a chat with changes and opens its changes popup (none, few, many, resumed);
    * #new-task/state/changes shows the same chat as few with the popup closed.
    * #detail/<id> opens a work item's detail (#detail/ph-sb-qa for QA results, #detail/ph-sb-plan for a plan run).
@@ -79,7 +80,7 @@
     /* The old #activity links open the recorded run, whose detail holds Activity. */
     if (page === 'activity') return { view: 'detail', id: 'SKILL-512', open: null };
     if (['changes', 'comments'].includes(page)) return { view: page, surfaceScenario: open || null };
-    if (page === 'new-task') return { view: 'newtask', open: open === 'state' ? rest[0] === 'closing' ? 'closing' : null : open || null, scenario: open === 'state' ? rest[0] : null, variant: open === 'picker' || open === 'resume' || open === 'changes' ? rest[0] || null : null };
+    if (page === 'new-task') return { view: 'newtask', open: open === 'state' ? rest[0] === 'closing' ? 'closing' : null : open || null, scenario: open === 'state' ? rest[0] : null, variant: open === 'picker' || open === 'resume' || open === 'changes' || open === 'agent' ? rest[0] || null : null };
     if (page === 'detail' && open) return { view: 'detail', id: decodeURIComponent(open), open: null, inspector: rest[0], resultTab: rest[1] };
     if (page === 'build') return { view: 'detail', id: D.BUILD.focus, open: null, build: { state: open || D.BUILD.live.state, type: rest[0] || D.BUILD.live.type } };
     /* #run-app/<scenario> opens an Android sample goal with Run app in one state. On NEWS-168 (completed): ready, building,
@@ -158,7 +159,7 @@
       const queued = Math.max(0, st.nt.chats.findIndex((c) => c.queue.length));
       const chats = st.nt.chats.map((c, i) => as({ view: 'newtask', termOpen: false, nt: Object.assign({}, st.nt, { active: i }) }, () => X.app(st))).join('');
       return chats + as({ view: 'newtask', nt: Object.assign({}, st.nt, { active: queued }) }, () =>
-        ['target', 'queue', 'changes', 'chats', 'nt-agent'].map((t) => S.Popover({ x: 0, y: 0, flush: t === 'target' || t === 'queue' || t === 'changes', body: popoverBody({ type: t }) })).join('')
+        ['target', 'queue', 'changes', 'chats', 'nt-agent'].map((t) => S.Popover({ x: 0, y: 0, flush: t === 'target' || t === 'queue' || t === 'changes' || t === 'nt-agent', body: popoverBody({ type: t }) })).join('')
         + dialogBody({ type: 'chat-close', arg: st.nt.chats[queued].id })
         + as({ dialog: { type: 'resume', q: '', active: 0, showAll: false } }, () => dialogBody(st.dialog)));
     });
@@ -524,7 +525,7 @@
       const usage = X.usageData(st);
       return S.UsagePanel(usage);
     }
-    if (p.type === 'nt-agent') return S.Menu({ items: [{ head: 'Agent' }, ...D.AGENT_CHOICES.map((a) => ({ lead: S.Avatar({ name: a, initials: D.AGENTS[a].initials, color: D.AGENTS[a].color, size: 'sm' }), label: a, end: D.MATRIX[a] ? esc(D.MATRIX[a].reasoning.model) : '', act: 'nt-agent-pick', arg: a, checked: X.ntChat(st).agent === a }))] });
+    if (p.type === 'nt-agent') return X.agentModelPicker(st);
     if (p.type === 'claude') return S.Menu({ items: [{ head: 'Claude config directories found' }, ...D.CLAUDE_DIRS.map((d) => ({ icon: 'folder', html: `<span class="mono">${esc(d)}</span>`, label: d, act: 'claude-pick', arg: d, checked: st.prefs.claudeDir === d }))] });
     return '';
   }
@@ -818,6 +819,28 @@
     choosePick('repo', X.pickerItems(pickerInput()).repo.findIndex((x) => x.id === name));
   }
   function closeTarget(focus) { st.popover = null; st.focusNext = focus || 'nt-target'; render(); }
+  /* Agent and model picker: highlighting an agent only shows its models; picking a model sets the chat's agent and model
+   * together and closes the popup. The app reads models each time an agent is highlighted (ChatModelsRead). */
+  const agentItems = () => X.agentModelItems({ chat: ntCur(), am: st.nt.am });
+  function highlightAgent(i, toModels) {
+    const am = st.nt.am, a = D.AGENT_CHOICES[i];
+    if (!a) return;
+    if (a !== am.agent) {
+      Object.assign(am, { agent: a, filter: '', state: 'ok' });
+      am.active.model = Math.max(0, agentItems().model.findIndex((it) => it.checked));
+    }
+    am.active.agent = i;
+    if (toModels) { if (st.popover) st.popover.focus = 'am-filter'; st.focusNext = 'am-filter'; }
+    render();
+  }
+  function chooseModel(i) {
+    const c = ntCur(), it = agentItems().model[i];
+    if (!it) return;
+    c.agent = st.nt.am.agent;
+    c.pick = { model: it.model, effort: it.effort };
+    closeAgentPicker();
+  }
+  function closeAgentPicker() { st.popover = null; st.focusNext = 'composer-' + ntCur().id; render(); }
   const reveal = (sel) => root.querySelectorAll(sel).forEach((el) => el.scrollIntoView({ block: 'nearest' }));
   function cycleChat(d) { const n = st.nt.chats.length; selectChat(st.nt.chats[(st.nt.active + d + n) % n].id); }
   /* Home lists: the selected row lives in st.nt.inboxSel and is painted in place while arrows move it. */
@@ -852,6 +875,26 @@
         render(); reveal('[data-pop] .sb-menu-item.hl'); return true;
       }
       if (key === 'Enter') { e.preventDefault(); choosePick(list, st.nt.pk.active[list]); return true; }
+      return false;
+    }
+    if (p && p.type === 'nt-agent') {
+      if (key === 'Escape') { e.preventDefault(); closeAgentPicker(); return true; }
+      const list = e.target.dataset && e.target.dataset.pick, am = st.nt.am;
+      if (!list) return false;
+      if (list === 'agent') {
+        const n = D.AGENT_CHOICES.length;
+        if (down || up) { e.preventDefault(); highlightAgent((am.active.agent + (down ? 1 : -1) + n) % n, false); return true; }
+        if (key === 'ArrowRight' || key === 'Enter') { e.preventDefault(); highlightAgent(am.active.agent, true); return true; }
+        return false;
+      }
+      if (down || up) {
+        e.preventDefault();
+        const n = agentItems().model.length;
+        am.active.model = (am.active.model + (down ? 1 : -1) + n) % n;
+        render(); reveal('#am-list-model .sb-menu-item.hl'); return true;
+      }
+      if (key === 'Enter') { e.preventDefault(); chooseModel(am.active.model); return true; }
+      if (key === 'ArrowLeft' && !am.filter) { e.preventDefault(); st.popover.focus = 'am-list-agent'; st.focusNext = 'am-list-agent'; render(); return true; }
       return false;
     }
     if (p && p.type === 'changes' && key === 'Escape') { e.preventDefault(); st.popover = null; refocusChanges(); render(); return true; }
@@ -889,6 +932,14 @@
     if (open === 'queue') { const i = st.nt.chats.findIndex((c) => c.queue.length); if (i >= 0) { st.nt.active = i; render(); A['q-toggle'](null, document.getElementById('nt-queue')); } }
     else if (open === 'changes') { if (document.getElementById('nt-changes')) A['chg-toggle'](null, document.getElementById('nt-changes')); }
     else if (open === 'picker') { const i = st.nt.chats.findIndex((c) => X.chatEmpty(c)); if (i >= 0) { st.nt.active = i; render(); A['pk-toggle'](null, document.getElementById('nt-target')); } }
+    else if (open === 'agent') {
+      A['nt-agent-menu'](null, document.getElementById('nt-agent'));
+      const am = st.nt.am, v = st.ntVariant;
+      if (v === 'other' || v === 'loading' || v === 'error') highlightAgent(D.AGENT_CHOICES.indexOf(ntCur().agent === 'claude' ? 'codex' : 'claude'), false);
+      if (v === 'loading' || v === 'error') am.state = v;
+      if (v === 'noMatch') am.filter = 'no-such-model';
+      render();
+    }
     else if (open === 'resume') {
       A['resume-palette']();
       if (st.ntVariant === 'noMatch') st.dialog.q = 'no-such-saved-chat';
@@ -1534,8 +1585,14 @@
       render();
     },
     'chat-current-base'() { const c = ntCur(); c.branch = c.currentBranch; c.branchIntent = false; render(); },
-    'nt-agent-menu'(a, el) { st.popover = Object.assign({ type: 'nt-agent', above: true }, anchorPos(el)); render(); },
-    'nt-agent-pick'(a) { ntCur().agent = a; st.popover = null; focusComposer(); render(); },
+    'nt-agent-menu'(a, el) {
+      if (st.popover && st.popover.type === 'nt-agent') return closeAgentPicker();
+      st.nt.am = X.agentPickerState(ntCur());
+      st.popover = Object.assign({ type: 'nt-agent', above: true, flush: true, role: 'dialog', focus: 'am-list-agent' }, anchorPos(el || document.getElementById('nt-agent')));
+      render(); reveal('[data-pop] .sb-menu-item.hl');
+    },
+    'am-pick'(arg) { const [list, i] = arg.split('|'); if (list === 'agent') highlightAgent(+i, true); else chooseModel(+i); },
+    'am-retry'() { st.nt.am.state = 'ok'; if (st.popover) st.popover.focus = 'am-filter'; st.focusNext = 'am-filter'; render(); },
 
     /* repository and base branch picker */
     'pk-toggle'(a, el) {
@@ -1675,6 +1732,7 @@
     /* The composer keeps its draft per chat and relabels Send / Queue / Send now in place. */
     if (k === 'composer') { const c = chatById(t.dataset.chat); if (c) { c.draft = t.value; const b = document.getElementById('composer-send'); if (b) b.outerHTML = X.ntSendButton(c); } return; }
     if (k === 'pk-filter') { st.nt.pk.filter[t.dataset.pick] = t.value; st.nt.pk.active[t.dataset.pick] = 0; render(); return; }
+    if (k === 'am-filter') { st.nt.am.filter = t.value; st.nt.am.active.model = 0; render(); return; }
     if (k === 'chat-menu-q') { st.nt.menuQ = t.value; render(); return; }
     if (k === 'resume-q') { st.dialog.q = t.value; st.dialog.active = 0; render(); return; }
     if (k === 'work-filter') { st.filter = t.value; st.focus = 0; render(); }

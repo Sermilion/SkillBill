@@ -7,7 +7,6 @@ import androidx.compose.runtime.snapshotFlow
 import dev.skillbill.desktop.core.domain.model.ApprovalCardKey
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatAgent
-import dev.skillbill.desktop.core.domain.model.ChatModel
 import dev.skillbill.desktop.core.domain.model.ChatImage
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatStopSettlement
@@ -709,27 +708,35 @@ class ChatWorkspace(
 
   internal suspend fun models(agent: ChatAgent, root: String) = chat.models(agent, root)
 
-  internal fun switchModel(id: String, model: ChatModel?) {
+  internal suspend fun agentFor(agentId: String) = chat.agentFor(agentId)
+
+  /** Applies the agent picker's choice: [pick] on the current agent, or a switch to [agentId] with [pick]. */
+  internal fun choose(id: String, agentId: String, pick: ModelPick) {
+    if (sessions[id]?.agentState?.value?.agentId == agentId) switchModel(id, pick) else switchAgent(id, agentId, pick)
+  }
+
+  internal fun switchModel(id: String, pick: ModelPick) {
     val session = sessions[id] ?: return
-    if (deferAcceptedPersistence(session) { switchModel(id, model) }) return
+    if (deferAcceptedPersistence(session) { switchModel(id, pick) }) return
     if (session.thread.deferDestructiveAction("change the model")) return
     val agent = session.agentState.value ?: return
-    if (session.busyState.value || (agent.model == model?.id && agent.effort == null)) return
+    if (session.busyState.value || (agent.model == pick.model && agent.effort == pick.effort)) return
     endAgent(session)
-    val selected = agent.copy(model = model?.id, effort = null)
+    val selected = pick.applyTo(agent)
     session.agentState.value = selected
     session.thread.showCapability(selected)
-    session.append(ChatMessage.Notice("Model changed to ${model?.label ?: "agent default"}."))
+    session.append(ChatMessage.Notice("Model changed to ${pick.label}."))
     scope.launch(session.job) { turns.save(session, selected) }
   }
 
   /**
-   * Moves [id]'s chat to [agentId] with that agent's reasoning model, or its CLI default when the config sets none. The next
-   * turn opens a new agent session with the full snapshot. Ignored while a turn runs or when [agentId] is already in use.
+   * Moves [id]'s chat to [agentId] with [pick], or without one that agent's reasoning model, or its CLI default when the config
+   * sets none. The next turn opens a new agent session with the full snapshot. Ignored while a turn runs or when [agentId] is
+   * already in use.
    */
-  fun switchAgent(id: String, agentId: String) {
+  fun switchAgent(id: String, agentId: String, pick: ModelPick? = null) {
     val session = sessions[id] ?: return
-    if (deferAcceptedPersistence(session) { switchAgent(id, agentId) }) return
+    if (deferAcceptedPersistence(session) { switchAgent(id, agentId, pick) }) return
     if (session.thread.deferDestructiveAction("switch agents")) return
     if (session.busyState.value || session.agentState.value?.agentId == agentId) return
     cursorMcpDependencies[id] = CursorMcpDependency.ProjectUserOnly
@@ -737,7 +744,7 @@ class ChatWorkspace(
     session.stoppableState.value = false
     launchTurn(session) {
       session.awaitAcceptedPersistence()
-      val agent = chat.agentFor(agentId)
+      val agent = chat.agentFor(agentId).let { resolved -> pick?.applyTo(resolved) ?: resolved }
       session.agentState.value = agent
       session.agentSupportedState.value = chat.supports(agentId)
       session.thread.showCapability(agent)

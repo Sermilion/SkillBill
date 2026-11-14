@@ -175,8 +175,10 @@ internal fun NewTaskComposer(
         RepositoryPicker(state, draft, busy || delivery != null, offer.starting || draft.branchSwitching, focus, now, Modifier.weight(1f, fill = false), onAction)
         AgentPicker(
           state.agent, state.agents, draft.workingDirectory, enabled = pickersEnabled, disabledWhy = pickersDisabledWhy,
-          loadModels = draft::models, onChooseModel = { onAction(NewTaskAction.ChooseModel(it)) },
-        ) { onAction(NewTaskAction.ChooseAgent(it)) }
+          resolveAgent = draft::agentFor, loadModels = draft::models,
+        ) { agentId, pick ->
+          onAction(if (agentId == state.agent?.agentId) NewTaskAction.ChooseModel(pick) else NewTaskAction.ChooseAgent(agentId, pick))
+        }
         if (state.agent?.agentId?.startsWith("cursor", ignoreCase = true) == true) {
           CursorMcpPicker(cursorMcpDependency, enabled = pickersEnabled) { draft.cursorMcpDependency = it }
         }

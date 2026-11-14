@@ -932,6 +932,10 @@ button.sb-cpill[disabled] { opacity: 0.55; cursor: default; pointer-events: none
 .sb-tpick-problem { flex: none; padding: var(--sp-2) var(--sp-3); border-top: 1px solid var(--border-subtle); }
 .sb-tpick-foot { flex: none; padding: var(--sp-1); border-top: 1px solid var(--border-subtle); }
 .sb-tpick-foot .sb-menu-item { color: var(--fg-muted); font-size: var(--t-sm); }
+.sb-tpick--agent { width: min(560px, calc(100vw - 48px)); grid-template-columns: minmax(150px, 1fr) minmax(0, 2.4fr); }
+.sb-tpick--agent .sb-tpick-col { height: 340px; }
+.sb-tpick--agent .sb-menu-tx > small { font-family: var(--font-mono); }
+.sb-tpick-note { grid-column: 1 / -1; padding: var(--sp-2) var(--sp-3); border-top: 1px solid var(--border-subtle); font-size: var(--t-xs); color: var(--accent-text); }
 
 /* Queue panel and queued row: the messages waiting for the current reply to end */
 .sb-queue { width: min(420px, calc(100vw - 32px)); display: flex; flex-direction: column; font-size: var(--t-sm); }
@@ -1857,6 +1861,8 @@ button.sb-pun:focus-visible { outline-offset: -2px; }
   .sb-tpick { grid-template-columns: minmax(0, 1fr); }
   .sb-tpick-col { height: 220px; }
   .sb-tpick-col + .sb-tpick-col { border-left: 0; border-top: 1px solid var(--border-subtle); }
+  .sb-tpick--agent .sb-tpick-col:first-child { height: auto; max-height: 140px; }
+  .sb-tpick--agent .sb-tpick-col + .sb-tpick-col { height: 260px; }
   .sb-resume-body { grid-template-columns: minmax(0, 1fr); }
   .sb-resume-list { border-right: 0; }
   .sb-resume-pv-hd, .sb-resume-pv-lines { display: none; }

@@ -695,6 +695,8 @@ class NewTaskDraft internal constructor(
 
   internal suspend fun models(agent: ChatAgent, root: String) = chats.models(agent, root)
 
+  internal suspend fun agentFor(agentId: String) = chats.agentFor(agentId)
+
   /** Requests one committed context change. Existing chats keep their old projection until its save finishes. */
   internal fun rebindChat(
     requestedRepository: NewTaskRepository? = repository,

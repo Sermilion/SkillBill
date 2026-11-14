@@ -26,41 +26,59 @@ class AgentPickerTest {
     assertEquals("Unavailable agent · retained-model", chipText(ChatAgent("retired-agent", "retained-model", null, "/profiles/retired")))
   }
 
+  // Choosing an agent used to close the popover and switch at once, so picking its model took a second trip.
   @Test
-  fun `one chip lists agents and the current agent's models`() = runComposeUiTest {
-    var agentChoice: String? = null
-    picker(ChatAgent("codex", null, null), onChoose = { agentChoice = it }) {
-      ChatModelsRead.Loaded(listOf(ChatModel("new-model", "New model")))
+  fun `highlighting another agent previews its models and one model pick switches both`() = runComposeUiTest {
+    val choices = mutableListOf<Pair<String, ModelPick>>()
+    picker(ChatAgent("codex", null, null), onChoose = { agent, pick -> choices += agent to pick }) { agent ->
+      ChatModelsRead.Loaded(listOf(ChatModel("${agent.agentId}-model", "${agent.agentId}-model")))
     }
-    onNodeWithText("Model: default").assertDoesNotExist()
     onNodeWithText(chipText(ChatAgent("codex", null, null))).performClick()
-    onNodeWithText("New model").assertExists()
+    onNodeWithText("codex-model").assertExists()
+
     onNodeWithText("claude").performClick()
-    runOnIdle { assertEquals("claude", agentChoice) }
+    onNodeWithText("claude-model").assertExists()
+    onNodeWithText("codex-model").assertDoesNotExist()
+    runOnIdle { assertEquals(emptyList(), choices) }
+
+    onNodeWithText("claude-model").performClick()
+    runOnIdle { assertEquals(listOf("claude" to ModelPick("claude-model", null, "claude-model")), choices) }
+    onNodeWithText("claude-model").assertDoesNotExist()
+  }
+
+  @Test
+  fun `configured row picks the matrix model with its effort`() = runComposeUiTest {
+    var choice: ModelPick? = null
+    picker(ChatAgent("codex", null, null), resolve = { ChatAgent(it, "gpt-5", "high") }, onChoose = { _, pick -> choice = pick }) {
+      ChatModelsRead.Loaded(listOf(ChatModel("gpt-5", "GPT-5")))
+    }
+    onNodeWithText(chipText(ChatAgent("codex", null, null))).performClick()
+    onNodeWithText("Configured").performClick()
+    runOnIdle { assertEquals(ModelPick("gpt-5", "high", "gpt-5"), choice) }
   }
 
   @Test
   fun `operator searches provider models and chooses an exact model id`() = runComposeUiTest {
-    var choice: ChatModel? = null
-    picker(ChatAgent("codex", null, null), onChooseModel = { choice = it }) {
+    var choice: ModelPick? = null
+    picker(ChatAgent("codex", null, null), onChoose = { _, pick -> choice = pick }) {
       ChatModelsRead.Loaded(listOf(ChatModel("new-model", "New model"), ChatModel("other", "Other model")))
     }
     onNodeWithText(chipText(ChatAgent("codex", null, null))).performClick()
     onNode(hasSetTextAction()).performTextInput("new")
     onNodeWithText("Other model").assertDoesNotExist()
     onNodeWithText("New model").performClick()
-    runOnIdle { assertEquals(ChatModel("new-model", "New model"), choice) }
+    runOnIdle { assertEquals(ModelPick("new-model", null, "New model"), choice) }
   }
 
   @Test
   fun `agent default clears the explicit model`() = runComposeUiTest {
-    var choice: ChatModel? = ChatModel("x", "x")
-    picker(ChatAgent("codex", "new-model", null), onChooseModel = { choice = it }) {
+    var choice: ModelPick? = null
+    picker(ChatAgent("codex", "new-model", null), onChoose = { _, pick -> choice = pick }) {
       ChatModelsRead.Loaded(listOf(ChatModel("new-model", "New model")))
     }
     onNodeWithText(chipText(ChatAgent("codex", "new-model", null))).performClick()
     onNodeWithText("Agent default").performClick()
-    runOnIdle { assertNull(choice) }
+    runOnIdle { assertNull(choice?.model) }
   }
 
   @Test
@@ -89,14 +107,14 @@ class AgentPickerTest {
   private fun ComposeUiTest.picker(
     agent: ChatAgent,
     repositoryRoot: String? = "/repo",
-    onChoose: (String) -> Unit = {},
-    onChooseModel: (ChatModel?) -> Unit = {},
-    load: () -> ChatModelsRead,
+    resolve: (String) -> ChatAgent = { ChatAgent(it, null, null) },
+    onChoose: (String, ModelPick) -> Unit = { _, _ -> },
+    load: (ChatAgent) -> ChatModelsRead,
   ) {
     setContent {
       Themed {
         AgentPicker(agent, listOf("claude", "codex"), repositoryRoot, enabled = true,
-          loadModels = { _, _ -> load() }, onChooseModel = onChooseModel, onChoose = onChoose)
+          resolveAgent = { resolve(it) }, loadModels = { chosen, _ -> load(chosen) }, onChoose = onChoose)
       }
     }
   }
