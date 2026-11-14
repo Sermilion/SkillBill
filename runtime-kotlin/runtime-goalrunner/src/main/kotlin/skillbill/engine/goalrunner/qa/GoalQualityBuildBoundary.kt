@@ -176,12 +176,13 @@ public class GoalQualityBuildBoundary public constructor(
       SkeletonDefinition.GOAL_QA.id to (plans.qa to progress.qa),
       SkeletonDefinition.VALIDATION.id to (plans.validation to progress.validation),
     ).forEach { (definitionId, retained) ->
-      val plan = phasePlans.validateGoalQualityExecutionPlan(
-        retained.first,
-        definitionId,
-        inputs.effectiveAgentId,
-        assignments,
-      )
+      val plan =
+        phasePlans.validateGoalQualityExecutionPlan(
+          retained.first,
+          definitionId,
+          inputs.effectiveAgentId,
+          assignments,
+        )
       phasePlans.validateNestedProgressKeys(retained.second)
       phasePlans.validateRetainedRunningPhases(
         retained.second,

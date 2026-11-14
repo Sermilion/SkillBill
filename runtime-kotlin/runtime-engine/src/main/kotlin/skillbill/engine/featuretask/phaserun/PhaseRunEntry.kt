@@ -648,38 +648,54 @@ public class PhaseRunEntry(
     return PhaseRunSetup(branch, executionPlan, facts)
   }
 
-  private fun validateQualityRoutingReference(request: PhaseRunRequest, workflowId: String) {
+  private fun validateQualityRoutingReference(
+    request: PhaseRunRequest,
+    workflowId: String,
+  ) {
     val hasReference = request.agentAssignmentsWorkflowId != null || request.agentAssignmentsFingerprint != null
     if (!hasReference) {
-      val assignments = request.workflowAgentAssignments
-      if (assignments != null || request.workflowAgentAssignmentsFingerprint != null) {
-        val legacyCompatible =
-          assignments != null &&
-            assignments.policyMode == WorkflowAgentAssignmentPolicyMode.LEGACY &&
-            assignments.admissionWorkflowId == workflowId &&
-            !request.workflowAgentAssignmentsFingerprint.isNullOrBlank()
-        if (!legacyCompatible) {
-          invalidQualityRoutingReference()
-        }
-        RuntimeDiagnosticsBestEffortWarning.record(
-          diagnostics,
-          "seam=workflow_agent_assignment phase=${request.definitionId.take(MAX_DIAGNOSTIC_ID)} " +
-            "reason=legacy_record_use outcome=compatible",
-        )
-      }
+      validateLegacyRoutingCompatibility(request, workflowId)
       return
     }
-    val assignments = request.workflowAgentAssignments
-    if (request.agentAssignmentsWorkflowId.isNullOrBlank() ||
-      request.agentAssignmentsWorkflowId != workflowId ||
-      request.agentAssignmentsFingerprint.isNullOrBlank() ||
-      assignments == null ||
-      assignments.admissionWorkflowId != request.agentAssignmentsWorkflowId ||
-      assignments.policyMode != WorkflowAgentAssignmentPolicyMode.FROZEN ||
-      request.workflowAgentAssignmentsFingerprint != request.agentAssignmentsFingerprint
-    ) {
+    if (!frozenRoutingMatches(request, workflowId)) {
       invalidQualityRoutingReference()
     }
+  }
+
+  private fun validateLegacyRoutingCompatibility(
+    request: PhaseRunRequest,
+    workflowId: String,
+  ) {
+    val assignments = request.workflowAgentAssignments
+    if (assignments == null && request.workflowAgentAssignmentsFingerprint == null) {
+      return
+    }
+    val legacyCompatible =
+      assignments != null &&
+        assignments.policyMode == WorkflowAgentAssignmentPolicyMode.LEGACY &&
+        assignments.admissionWorkflowId == workflowId &&
+        !request.workflowAgentAssignmentsFingerprint.isNullOrBlank()
+    if (!legacyCompatible) {
+      invalidQualityRoutingReference()
+    }
+    RuntimeDiagnosticsBestEffortWarning.record(
+      diagnostics,
+      "seam=workflow_agent_assignment phase=${request.definitionId.take(MAX_DIAGNOSTIC_ID)} " +
+        "reason=legacy_record_use outcome=compatible",
+    )
+  }
+
+  private fun frozenRoutingMatches(
+    request: PhaseRunRequest,
+    workflowId: String,
+  ): Boolean {
+    val assignments = request.workflowAgentAssignments ?: return false
+    return !request.agentAssignmentsWorkflowId.isNullOrBlank() &&
+      request.agentAssignmentsWorkflowId == workflowId &&
+      !request.agentAssignmentsFingerprint.isNullOrBlank() &&
+      assignments.admissionWorkflowId == request.agentAssignmentsWorkflowId &&
+      assignments.policyMode == WorkflowAgentAssignmentPolicyMode.FROZEN &&
+      request.workflowAgentAssignmentsFingerprint == request.agentAssignmentsFingerprint
   }
 
   private fun invalidQualityRoutingReference(): Nothing =

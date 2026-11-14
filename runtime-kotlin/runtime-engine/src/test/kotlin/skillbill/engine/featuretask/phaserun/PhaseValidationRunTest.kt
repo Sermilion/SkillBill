@@ -215,6 +215,7 @@ class PhaseValidationRunTest {
     val request =
       validationRequest().copy(
         acceptedGoalQualityAgentId = "claude",
+        goalQualityInvocationId = "phr-quality",
         goalQualityPhaseProgress = latest,
         persistGoalQualityPhaseProgress = { progress, _ ->
           latest = progress

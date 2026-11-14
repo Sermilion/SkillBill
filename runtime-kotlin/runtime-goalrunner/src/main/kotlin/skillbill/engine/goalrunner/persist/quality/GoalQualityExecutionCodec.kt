@@ -18,7 +18,6 @@ import skillbill.goalrunner.model.quality.GoalQualityAcceptedEnvelope
 import skillbill.goalrunner.model.quality.GoalQualityAcceptedOutput
 import skillbill.goalrunner.model.quality.GoalQualityAcceptedSourceObservation
 import skillbill.goalrunner.model.quality.GoalQualityAdoptionEvidence
-import skillbill.goalrunner.model.quality.GoalQualityMigrationEvidence
 import skillbill.goalrunner.model.quality.GoalQualityExecution
 import skillbill.goalrunner.model.quality.GoalQualityExecutionInputs
 import skillbill.goalrunner.model.quality.GoalQualityExecutionPlans
@@ -26,6 +25,7 @@ import skillbill.goalrunner.model.quality.GoalQualityExecutionProgress
 import skillbill.goalrunner.model.quality.GoalQualityExecutionRecord
 import skillbill.goalrunner.model.quality.GoalQualityExecutionStatus
 import skillbill.goalrunner.model.quality.GoalQualityHydratedAddonInput
+import skillbill.goalrunner.model.quality.GoalQualityMigrationEvidence
 import skillbill.goalrunner.model.quality.GoalQualityPhaseProgress
 import skillbill.goalrunner.model.quality.GoalQualityPreQaBuildOccurrence
 import skillbill.goalrunner.model.quality.GoalQualityPreQaBuildState
@@ -879,8 +879,9 @@ internal fun migrateGoalQualityExecutionRouting07(
     validateExecutionIdentity(original)
     validateExecutionDisposition(original, currentContract = true)
     if (original.status != GoalQualityExecutionStatus.RETIRED) {
-      val inputs = original.governingInputs
-        ?: invalidLegacy("Stored 0.7 quality execution has no retained governing inputs.")
+      val inputs =
+        original.governingInputs
+          ?: invalidLegacy("Stored 0.7 quality execution has no retained governing inputs.")
       if (original.governingInputFingerprint != historicalGoverningInputFingerprint(inputs, sourceVersion)) {
         invalidLegacy(
           "Stored 0.7 governing inputs do not match their source-version fingerprint; " +
@@ -889,29 +890,33 @@ internal fun migrateGoalQualityExecutionRouting07(
       }
     }
   }
-  val execution = decoded.execution?.let { old ->
-    val inputs = old.governingInputs
-    if (inputs == null && old.status == GoalQualityExecutionStatus.RETIRED) {
-      old
-    } else {
-      val retainedInputs = inputs
-        ?: invalidLegacy("Stored 0.7 quality execution has no retained governing inputs.")
-      val legacyInputs = retainedInputs.copy(
-        agentAssignmentsWorkflowId = null,
-        agentAssignmentsFingerprint = null,
-      )
-      old.copy(
-        governingInputs = legacyInputs,
-        governingInputFingerprint = governingInputFingerprint(legacyInputs),
-      )
+  val execution =
+    decoded.execution?.let { old ->
+      val inputs = old.governingInputs
+      if (inputs == null && old.status == GoalQualityExecutionStatus.RETIRED) {
+        old
+      } else {
+        val retainedInputs =
+          inputs
+            ?: invalidLegacy("Stored 0.7 quality execution has no retained governing inputs.")
+        val legacyInputs =
+          retainedInputs.copy(
+            agentAssignmentsWorkflowId = null,
+            agentAssignmentsFingerprint = null,
+          )
+        old.copy(
+          governingInputs = legacyInputs,
+          governingInputFingerprint = governingInputFingerprint(legacyInputs),
+        )
+      }
     }
-  }
   return decoded.copy(
     contractVersion = GOAL_QUALITY_EXECUTION_CONTRACT_VERSION,
     execution = execution,
-    migrationEvidence = GoalQualityMigrationEvidence(
-      sourceContractVersion = sourceVersion,
-      originalPayloadJson = JsonCodec.mapToJsonString(source),
-    ),
+    migrationEvidence =
+      GoalQualityMigrationEvidence(
+        sourceContractVersion = sourceVersion,
+        originalPayloadJson = JsonCodec.mapToJsonString(source),
+      ),
   )
 }

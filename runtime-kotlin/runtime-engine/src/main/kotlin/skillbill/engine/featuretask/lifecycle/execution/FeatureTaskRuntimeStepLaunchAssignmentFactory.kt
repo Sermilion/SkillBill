@@ -120,23 +120,24 @@ public class FeatureTaskRuntimeStepLaunchResolver(
     environmentKind: LaunchEnvironmentKind,
     diagnostics: RuntimeDiagnostics,
   ) {
-    val provider = supportedProvider(phaseId, providerId, diagnostics)
     when (
-      val support = launcher.queryLaunchCapability(AgentRunLaunchCapabilityRequest(provider.wireValue, environmentKind))
+      val support = launcher.queryLaunchCapability(AgentRunLaunchCapabilityRequest(providerId, environmentKind))
     ) {
       AgentRunLaunchCapability.Supported -> {}
 
       is AgentRunLaunchCapability.Unsupported -> {
-        recordRoutingRefusal(diagnostics, phaseId, provider.wireValue, "unsupported_adapter")
+        val reason =
+          if (SupportedAgent.fromWireOrNull(providerId) == null) "unknown_provider" else "unsupported_adapter"
+        recordRoutingRefusal(diagnostics, phaseId, providerId, reason)
         throw IncompatibleFeatureTaskRuntimeExecutionPlanError(
-          "Provider '${provider.wireValue}' selected for phase '$phaseId' is unsupported: ${support.reason}",
+          "Provider '$providerId' selected for phase '$phaseId' is unsupported: ${support.reason}",
         )
       }
     }
-    unavailableAgentLauncherReason(provider.wireValue, executableLookup::onPath)?.let { reason ->
-      recordRoutingRefusal(diagnostics, phaseId, provider.wireValue, "executable_unavailable")
+    unavailableAgentLauncherReason(providerId, executableLookup::onPath)?.let { reason ->
+      recordRoutingRefusal(diagnostics, phaseId, providerId, "executable_unavailable")
       throw IncompatibleFeatureTaskRuntimeExecutionPlanError(
-        "Provider '${provider.wireValue}' selected for phase '$phaseId' is unavailable: $reason",
+        "Provider '$providerId' selected for phase '$phaseId' is unavailable: $reason",
       )
     }
   }
@@ -166,19 +167,6 @@ public class FeatureTaskRuntimeStepLaunchResolver(
       }
     }
   }
-
-  private fun supportedProvider(
-    phaseId: String,
-    providerId: String,
-    diagnostics: RuntimeDiagnostics,
-  ): SupportedAgent =
-    SupportedAgent.fromWireOrNull(providerId)
-      ?: run {
-        recordRoutingRefusal(diagnostics, phaseId, providerId, "unknown_provider")
-        throw IncompatibleFeatureTaskRuntimeExecutionPlanError(
-          "Unknown provider '$providerId' is selected for phase '$phaseId'.",
-        )
-      }
 
   private fun recordRoutingRefusal(
     diagnostics: RuntimeDiagnostics,
@@ -250,7 +238,10 @@ public object FeatureTaskRuntimeStepLaunchAssignmentFactory {
       }
     }
 
-  internal fun selectedProviderFor(stepId: String, inputs: StepLaunchAssignmentInputs): String {
+  internal fun selectedProviderFor(
+    stepId: String,
+    inputs: StepLaunchAssignmentInputs,
+  ): String {
     val frozen = inputs.workflowAgentAssignments?.takeIf { it.policyMode == WorkflowAgentAssignmentPolicyMode.FROZEN }
     if (frozen != null) {
       return frozen.phaseAssignments[stepId]?.agentId?.wireValue

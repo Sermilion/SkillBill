@@ -267,7 +267,6 @@ internal interface PhaseAttemptLaunchPreparationContext :
   val phaseInstructionSource: PhaseInstructionFileSource
 
   fun verifyCurrentLaunchSelection()
-
 }
 
 /** Run-loop and attempt helpers that resolve strategies for arbitrary selected steps. */

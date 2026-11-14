@@ -102,3 +102,11 @@ public class GoalRunnerTickProgressReader(
     const val TICK_MEMO_WINDOW_MILLIS: Long = 200L
   }
 }
+
+internal sealed interface GoalRunnerChildProgressRead {
+  data object Absent : GoalRunnerChildProgressRead
+
+  data class Present(val progress: GoalRunnerWorkflowProgress?) : GoalRunnerChildProgressRead
+
+  data class Failed(val error: Exception) : GoalRunnerChildProgressRead
+}

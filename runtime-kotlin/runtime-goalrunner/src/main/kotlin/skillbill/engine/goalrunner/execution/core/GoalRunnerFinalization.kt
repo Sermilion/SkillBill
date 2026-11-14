@@ -80,15 +80,20 @@ import skillbill.workflow.taskruntime.validation.FeatureTaskRuntimeProviderLimit
 import java.nio.file.Path
 
 @Inject
+public class GoalRunnerFinalizationStages(
+  internal val ciMonitor: GoalRunnerCiMonitor,
+  internal val qaGate: GoalRunnerQaGate,
+  internal val assessmentGate: GoalRunnerAssessmentGate,
+)
+
+@Inject
 public class GoalRunnerFinalization(
   private val outcomeStore: GoalRunnerWorkflowOutcomeStore,
   private val specScratchCleanup: GoalSpecScratchCleanup,
   private val gitOperations: WorkflowGitOperations,
   private val diagnostics: RuntimeDiagnostics,
   private val noChangePauses: FeatureTaskRuntimePhaseRecorder,
-  private val ciMonitor: GoalRunnerCiMonitor,
-  private val qaGate: GoalRunnerQaGate,
-  private val assessmentGate: GoalRunnerAssessmentGate,
+  private val stages: GoalRunnerFinalizationStages,
   private val pauseBoundary: GoalRunnerPauseBoundary,
   private val finalHistoryWriter: GoalRunnerFinalHistoryWriter,
   private val publication: GoalRunnerPullRequests,
@@ -127,10 +132,12 @@ public class GoalRunnerFinalization(
   ): GoalRunnerRunReport {
     requireCompletedChildrenHaveDrafts(finalState)
     val settled =
-      noChangeFinalization(finalState.manifest, request, attempted)?.also { assessmentGate.skipNoChanges(finalState) }
+      noChangeFinalization(finalState.manifest, request, attempted)?.also {
+        stages.assessmentGate.skipNoChanges(finalState)
+      }
         ?: publication.publishedGoalResult(finalState, request, attempted)
     settled?.let { return it }
-    when (val assessment = assessmentGate.run(finalState, request)) {
+    when (val assessment = stages.assessmentGate.run(finalState, request)) {
       is GoalAssessmentStageResult.ProviderPaused -> {
         pauseBoundary.pauseNow(finalState.parentWorkflowId, assessment.reason)
         return stopped(
@@ -194,7 +201,7 @@ public class GoalRunnerFinalization(
     request: GoalRunnerRunRequest,
     attempted: List<Int>,
   ): ValidatedPublicationPrep {
-    val qaResult = qaGate.run(finalState, request)
+    val qaResult = stages.qaGate.run(finalState, request)
     if (qaResult is GoalQaGateResult.Paused) {
       return ValidatedPublicationPrep.Stopped(
         pauseForProviderLimit(finalState, attempted, qaResult.reason, qaResult.stepId),
@@ -537,7 +544,7 @@ public class GoalRunnerFinalization(
     pullRequestUrl: String,
     pullRequestStatus: GoalPullRequestStatus,
   ): GoalRunnerRunReport =
-    when (val result = ciMonitor.monitor(state, request)) {
+    when (val result = stages.ciMonitor.monitor(state, request)) {
       is PhaseRunResult.Completed -> {
         deleteGoalSpecScratchOnSuccess(state.manifest, request)
         completed(

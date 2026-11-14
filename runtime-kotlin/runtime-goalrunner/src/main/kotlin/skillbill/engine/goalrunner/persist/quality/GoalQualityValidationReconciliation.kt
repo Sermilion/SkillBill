@@ -1,18 +1,25 @@
 package skillbill.engine.goalrunner.persist.quality
 
+import skillbill.config.model.WorkflowAgentAssignmentPolicyMode
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.goal.GOAL_QUALITY_EXECUTION_CONTRACT_VERSION
 import skillbill.contracts.workflow.goal.GoalQualityExecutionPayloadKeys
+import skillbill.engine.featuretask.lifecycle.assignment.WorkflowAgentAssignmentInspection
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.goalrunner.model.quality.GoalQualityAcceptedSourceObservation
 import skillbill.goalrunner.model.quality.GoalQualityAdoptionEvidence
 import skillbill.goalrunner.model.quality.GoalQualityExecution
+import skillbill.goalrunner.model.quality.GoalQualityExecutionInputs
+import skillbill.goalrunner.model.quality.GoalQualityExecutionPlans
+import skillbill.goalrunner.model.quality.GoalQualityExecutionProgress
 import skillbill.goalrunner.model.quality.GoalQualityExecutionRecord
 import skillbill.goalrunner.model.quality.GoalQualityExecutionStatus
 import skillbill.goalrunner.model.quality.GoalQualityPhaseProgress
 import skillbill.goalrunner.model.quality.GoalQualityPreQaBuildOccurrence
 import skillbill.goalrunner.model.quality.GoalQualityPreQaBuildState
+import skillbill.goalrunner.model.quality.GoalQualityReadiness
+import skillbill.goalrunner.model.quality.GoalQualityReadiness.CLEAN_UNSTARTED
 import skillbill.goalrunner.model.quality.GoalQualityValidationDisposition
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
@@ -290,7 +297,7 @@ private fun sha256(value: String): String =
     .digest(value.toByteArray(Charsets.UTF_8))
     .joinToString("") { "%02x".format(it) }
 
-private fun invalid(reason: String): Nothing =
+internal fun invalid(reason: String): Nothing =
   throw SkillBillRuntimeException(WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION, reason)
 
 internal fun archivedBuildEvidenceConflicts(
@@ -421,4 +428,278 @@ internal fun archivedBuildWatermarkExceeds(
     }
   val ledgerExceeds = (active?.ledgerSequenceHighWaterMark ?: 0) < occurrence.progress.ledgerSequenceHighWaterMark
   return attemptExceeds || ledgerExceeds
+}
+
+internal fun GoalQualityExecutionStatus.isUnsettled(): Boolean = allowedNextStatuses(this).isNotEmpty()
+
+internal data class AdoptedQuality(
+  val record: GoalQualityExecutionRecord,
+  val proofMatchesStored: Boolean = false,
+  val sourceProofCurrent: Boolean = false,
+)
+
+internal fun nextPhaseProgress(
+  existing: GoalQualityPhaseProgress,
+  progress: GoalQualityPhaseProgress,
+): GoalQualityPhaseProgress? {
+  val terminalUpdate = progress.terminalCompleted || progress.terminalBlockedStep != null
+  return if (terminalUpdate) {
+    val sameAcceptedState =
+      progress.copy(
+        terminalBlockedStep = existing.terminalBlockedStep,
+        terminalBlockedReason = existing.terminalBlockedReason,
+        terminalCompleted = existing.terminalCompleted,
+        acceptedSourceObservations = existing.acceptedSourceObservations,
+      ) == existing
+    if (progress.revision != existing.revision || !sameAcceptedState) return null
+    existing.copy(
+      terminalBlockedStep = progress.terminalBlockedStep,
+      terminalBlockedReason = progress.terminalBlockedReason,
+      terminalCompleted = progress.terminalCompleted,
+      acceptedSourceObservations = progress.acceptedSourceObservations,
+      revision = existing.revision + 1,
+    )
+  } else {
+    if (progress.revision != existing.revision + 1) return null
+    progress
+  }
+}
+
+internal fun replacedInitialBuild(
+  prior: GoalQualityExecution,
+  candidate: GoalQualityExecution,
+): Boolean {
+  val settled =
+    prior.preQaBuild in setOf(GoalQualityPreQaBuildState.PASSED, GoalQualityPreQaBuildState.WARNED)
+  if (!settled) return false
+  val changedState = prior.preQaBuild != candidate.preQaBuild
+  val changedFingerprint = prior.preQaBuildContentFingerprint != candidate.preQaBuildContentFingerprint
+  return changedState || changedFingerprint
+}
+
+internal fun sameOuterSnapshot(
+  current: GoalQualityExecutionRecord,
+  expected: GoalQualityExecutionRecord,
+): Boolean =
+  current.copy(
+    execution = current.execution?.copy(progress = null),
+  ) ==
+    expected.copy(
+      execution = expected.execution?.copy(progress = null),
+    )
+
+internal fun selectedPlan(
+  plans: GoalQualityExecutionPlans,
+  definitionId: String,
+): String =
+  when (definitionId) {
+    SkeletonDefinition.GOAL_BUILD.id -> plans.build
+    SkeletonDefinition.GOAL_QA.id -> plans.qa
+    SkeletonDefinition.VALIDATION.id -> plans.validation
+    else -> invalid("Unsupported goal-quality phase '$definitionId'.")
+  }
+
+internal fun ownsProgress(
+  execution: GoalQualityExecution,
+  definitionId: String,
+): Boolean =
+  when (definitionId) {
+    SkeletonDefinition.GOAL_BUILD.id -> execution.status != GoalQualityExecutionStatus.RETIRED
+    SkeletonDefinition.GOAL_QA.id -> execution.status == GoalQualityExecutionStatus.QA_PENDING
+    SkeletonDefinition.VALIDATION.id -> execution.status == GoalQualityExecutionStatus.VALIDATION_RUNNING
+    else -> invalid("Unsupported goal-quality phase '$definitionId'.")
+  }
+
+internal fun progressFor(
+  progress: GoalQualityExecutionProgress,
+  definitionId: String,
+): GoalQualityPhaseProgress =
+  when (definitionId) {
+    SkeletonDefinition.GOAL_BUILD.id -> progress.build
+    SkeletonDefinition.GOAL_QA.id -> progress.qa
+    SkeletonDefinition.VALIDATION.id -> progress.validation
+    else -> invalid("Unsupported goal-quality phase '$definitionId'.")
+  }
+
+internal fun updateProgress(
+  record: GoalQualityExecutionRecord,
+  definitionId: String,
+  progress: GoalQualityPhaseProgress,
+  finalValidationContentFingerprint: String?,
+  preQaBuildContentFingerprint: String?,
+): GoalQualityExecutionRecord {
+  val execution = record.execution ?: invalid("Admitted quality execution is absent.")
+  val current = execution.progress ?: invalid("Admitted quality execution phase progress is absent.")
+  val updated =
+    when (definitionId) {
+      SkeletonDefinition.GOAL_BUILD.id -> current.copy(build = progress)
+      SkeletonDefinition.GOAL_QA.id -> current.copy(qa = progress)
+      SkeletonDefinition.VALIDATION.id -> current.copy(validation = progress)
+      else -> invalid("Unsupported goal-quality phase '$definitionId'.")
+    }
+  return record.copy(
+    execution =
+      execution.copy(
+        progress = updated,
+        finalValidationContentFingerprint =
+          finalValidationContentFingerprint ?: execution.finalValidationContentFingerprint,
+        preQaBuildContentFingerprint =
+          preQaBuildContentFingerprint ?: execution.preQaBuildContentFingerprint,
+      ),
+  )
+}
+
+internal fun retirableQualityRecord(
+  retained: GoalQualityExecutionRead,
+  parentWorkflowId: String,
+): Pair<GoalQualityExecutionRecord, Boolean>? =
+  when (retained) {
+    is GoalQualityExecutionRead.Current -> {
+      validateParentIdentity(retained.record, parentWorkflowId)
+      retained.record to false
+    }
+    is GoalQualityExecutionRead.Historical -> {
+      if (retained.parentWorkflowId != parentWorkflowId ||
+        retained.status == GoalQualityExecutionStatus.RETIRED ||
+        retained.invocationId == null
+      ) {
+        null
+      } else {
+        GoalQualityExecutionRecord(
+          readiness = CLEAN_UNSTARTED,
+          adoptionEvidence =
+            GoalQualityAdoptionEvidence(
+              retained.sourceContractVersion,
+              JsonCodec.mapToJsonString(retained.originalPayload),
+            ),
+        ) to true
+      }
+    }
+    is GoalQualityExecutionRead.Ambiguous -> null
+    is GoalQualityExecutionRead.Invalid -> null
+  }
+
+internal fun validateParentIdentity(
+  record: GoalQualityExecutionRecord,
+  parentWorkflowId: String,
+) {
+  val execution = record.execution ?: return
+  if (execution.parentWorkflowId != parentWorkflowId) {
+    invalid(
+      "Stored goal quality execution belongs to '${execution.parentWorkflowId}', " +
+        "not '$parentWorkflowId'.",
+    )
+  }
+}
+
+internal fun validateExecutionInputs(execution: GoalQualityExecution) {
+  if (execution.status == GoalQualityExecutionStatus.RETIRED) return
+  val inputs =
+    execution.governingInputs
+      ?: invalid("An active quality execution has no retained governing inputs.")
+  val blankRequired =
+    listOf(
+      inputs.issueKey,
+      inputs.repoRoot,
+      inputs.invokedAgentId,
+      inputs.parentSpecPath,
+      inputs.branch,
+    ).any(String::isBlank)
+  val blankOptional =
+    listOfNotNull(
+      inputs.configuredAgentOverrideId,
+      inputs.acceptanceCriteriaReadFailure,
+    ).any(String::isBlank)
+  val invalidTimeout = inputs.timeoutMillis?.let { it <= 0 } == true
+  val invalidIdentity = blankRequired || blankOptional
+  if (invalidIdentity ||
+    invalidTimeout ||
+    execution.governingInputFingerprint != governingInputFingerprint(inputs)
+  ) {
+    invalid("Stored quality governing inputs have a blank value or do not match their fingerprint.")
+  }
+}
+
+internal fun validTransition(
+  current: GoalQualityExecutionRecord,
+  next: GoalQualityExecutionRecord,
+): Boolean {
+  val prior = current.execution ?: return false
+  val candidate = next.execution ?: return false
+  val sameRecord =
+    next.readiness == GoalQualityReadiness.ADMITTED && next.contractVersion == current.contractVersion
+  val allowedStatus = candidate.warning?.isBlank() != true && candidate.status in allowedNextStatuses(prior.status)
+  val sameIdentity = sameExecutionIdentity(prior, candidate)
+  if (replacedInitialBuild(prior, candidate)) return false
+  val validObservation = validQaObservation(prior, candidate) && validSettledFingerprint(prior, candidate)
+  return sameRecord && allowedStatus && sameIdentity && validObservation &&
+    validFinalValidationObservation(prior, candidate) &&
+    validCandidateDisposition(prior, candidate)
+}
+
+internal fun requireHistoricalAdmissionMatches(
+  retained: GoalQualityExecutionRead.Historical,
+  parentWorkflowId: String,
+  selectionFingerprint: String,
+  governingInputs: GoalQualityExecutionInputs,
+  executionPlans: GoalQualityExecutionPlans,
+) {
+  if (retained.governingInputs == null) {
+    invalid("Historical quality execution has no retained governing inputs.")
+  }
+  if (!historicalAdmissionMatches(
+      retained,
+      parentWorkflowId,
+      selectionFingerprint,
+      governingInputs,
+      executionPlans,
+    )
+  ) {
+    invalid("Historical quality invocation, inputs or retained QA/validation plans changed before adoption.")
+  }
+}
+
+internal fun reconciledAdmission(
+  admitted: GoalQualityExecutionRecord,
+  proofMatchesStored: Boolean,
+  sourceProofCurrent: Boolean,
+): GoalQualityExecutionRecord {
+  val active = admitted.execution
+  val staleValidation =
+    active?.let {
+      it.status != GoalQualityExecutionStatus.RETIRED && requiresValidationReentry(it, proofMatchesStored)
+    } == true && !sourceProofCurrent
+  if (active == null || !staleValidation) return admitted
+  if (hasUnknownValidationOperation(active)) {
+    invalid(
+      "Final validation has an unresolved external operation; inspect its retained evidence before retry.",
+    )
+  }
+  return admitted.startNewValidationOccurrence()
+}
+
+internal fun validatePresentRoutingAdmission(
+  inspection: WorkflowAgentAssignmentInspection.Present,
+  fresh: Boolean,
+  suppliedReference: Boolean,
+  workflowId: String?,
+  fingerprint: String?,
+) {
+  val policyMode = inspection.assignments.policyMode
+  val mismatched =
+    policyMode != WorkflowAgentAssignmentPolicyMode.FROZEN ||
+      workflowId != inspection.assignments.admissionWorkflowId ||
+      fingerprint != inspection.fingerprint
+  if (suppliedReference && mismatched) {
+    invalid(
+      "Goal-quality routing reference does not match the accepted parent artifact; preserve both records " +
+        "and repair the reference.",
+    )
+  }
+  if (fresh && policyMode == WorkflowAgentAssignmentPolicyMode.FROZEN && !suppliedReference) {
+    invalid("New frozen goal-quality execution requires the accepted parent routing reference.")
+  }
+  if (fresh && policyMode == WorkflowAgentAssignmentPolicyMode.LEGACY && suppliedReference) {
+    invalid("Legacy parent routing must retain paired-null goal-quality references.")
+  }
 }

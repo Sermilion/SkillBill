@@ -1,8 +1,8 @@
 package skillbill.engine.featuretask.model.core
 
 import skillbill.agentaddon.model.HydratedAgentAddonSelection
-import skillbill.config.model.ResolvedWorkflowAgentAssignments
 import skillbill.config.model.CompactionSettings
+import skillbill.config.model.ResolvedWorkflowAgentAssignments
 import skillbill.contracts.system.OpenCodeLaunchIdentity
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.model.execution.MonitorExecutionContext

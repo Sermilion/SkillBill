@@ -41,6 +41,7 @@ import skillbill.engine.goalrunner.RecordingPullRequestPort
 import skillbill.engine.goalrunner.TestGoalQualityOutcomeStore
 import skillbill.engine.goalrunner.execution.core.GoalRunnerFinalHistoryWriter
 import skillbill.engine.goalrunner.execution.core.GoalRunnerFinalization
+import skillbill.engine.goalrunner.execution.core.GoalRunnerFinalizationStages
 import skillbill.engine.goalrunner.execution.core.GoalRunnerPauseBoundary
 import skillbill.engine.goalrunner.execution.core.GoalRunnerPullRequestWriter
 import skillbill.engine.goalrunner.execution.core.GoalRunnerPullRequests
@@ -561,12 +562,14 @@ class GoalQaRepairLoopTest {
           git,
           NoopRuntimeDiagnostics,
           goalRunnerDefaultPhaseRecorder(),
-          GoalRunnerCiMonitor { _, _ -> error("CI must follow the history boundary.") },
-          GoalRunnerQaGate { state, request ->
-            assertEquals(listOf("assessment"), events)
-            gate.run(state, request).also { qualityResult = it }
-          },
-          RecordingGoalRunnerAssessmentGate(events),
+          GoalRunnerFinalizationStages(
+            GoalRunnerCiMonitor { _, _ -> error("CI must follow the history boundary.") },
+            GoalRunnerQaGate { state, request ->
+              assertEquals(listOf("assessment"), events)
+              gate.run(state, request).also { qualityResult = it }
+            },
+            RecordingGoalRunnerAssessmentGate(events),
+          ),
           GoalRunnerPauseBoundary(InMemoryGoalManifestStore(state.manifest), clock),
           GoalRunnerFinalHistoryWriter { _, _, _ ->
             events += "history"

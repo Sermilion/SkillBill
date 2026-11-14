@@ -34,6 +34,7 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.skeleton.LaunchEnvironmentKind
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
+import skillbill.workflow.taskruntime.model.skeleton.StepLaunchAssignment
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateProgress
 import skillbill.workflow.taskruntime.model.validation.ValidationGateRunOutcome
 import skillbill.workflow.taskruntime.validation.FeatureTaskRuntimeProviderLimitPause
@@ -96,30 +97,7 @@ public class PhaseRunPlanResolver(
           if (strategies.selectedOwnerOf(step, plan) == null) invalidQualityPlan()
         }
       }
-      val requiredAssignments =
-        FeatureTaskRuntimeStepLaunchAssignmentFactory
-          .agentBackedStepIds(
-            strategies,
-            plan,
-          ).toSet()
-      if (workflowAgentAssignments != null &&
-        workflowAgentAssignments.policyMode != WorkflowAgentAssignmentPolicyMode.FROZEN
-      ) {
-        invalidQualityPlan()
-      }
-      val providerMismatch = plan.stepLaunchAssignments.any { (step, assignment) ->
-        val acceptedProvider = workflowAgentAssignments?.phaseAssignments?.get(step)?.agentId?.wireValue
-        assignment.stepId != step ||
-          if (workflowAgentAssignments == null) assignment.agentId != expectedAgentId
-          else acceptedProvider == null || assignment.agentId != acceptedProvider
-      }
-      if (plan.stepLaunchAssignments.keys != requiredAssignments ||
-        providerMismatch ||
-        workflowAgentAssignments != null &&
-        !workflowAgentAssignments.phaseAssignments.keys.containsAll(requiredAssignments)
-      ) {
-        invalidQualityPlan()
-      }
+      requireQualityLaunchAssignments(plan, expectedAgentId, workflowAgentAssignments)
       return plan
     } catch (failure: SkillBillRuntimeException) {
       throw failure
@@ -129,6 +107,52 @@ public class PhaseRunPlanResolver(
         "The admitted '${definition.id}' execution plan is unsupported or corrupt.",
         failure,
       )
+    }
+  }
+
+  private fun requireQualityLaunchAssignments(
+    plan: ResolvedPhaseExecutionPlan,
+    expectedAgentId: String,
+    workflowAgentAssignments: ResolvedWorkflowAgentAssignments?,
+  ) {
+    val requiredAssignments =
+      FeatureTaskRuntimeStepLaunchAssignmentFactory
+        .agentBackedStepIds(
+          strategies,
+          plan,
+        ).toSet()
+    if (workflowAgentAssignments != null &&
+      workflowAgentAssignments.policyMode != WorkflowAgentAssignmentPolicyMode.FROZEN
+    ) {
+      invalidQualityPlan()
+    }
+    val providerMismatch =
+      plan.stepLaunchAssignments.any { (step, assignment) ->
+        assignmentProviderMismatch(step, assignment, expectedAgentId, workflowAgentAssignments)
+      }
+    val missingCatalogAssignments =
+      workflowAgentAssignments != null &&
+        !workflowAgentAssignments.phaseAssignments.keys.containsAll(requiredAssignments)
+    if (plan.stepLaunchAssignments.keys != requiredAssignments ||
+      providerMismatch ||
+      missingCatalogAssignments
+    ) {
+      invalidQualityPlan()
+    }
+  }
+
+  private fun assignmentProviderMismatch(
+    step: String,
+    assignment: StepLaunchAssignment,
+    expectedAgentId: String,
+    workflowAgentAssignments: ResolvedWorkflowAgentAssignments?,
+  ): Boolean {
+    if (assignment.stepId != step) return true
+    val acceptedProvider = workflowAgentAssignments?.phaseAssignments?.get(step)?.agentId?.wireValue
+    return if (workflowAgentAssignments == null) {
+      assignment.agentId != expectedAgentId
+    } else {
+      acceptedProvider == null || assignment.agentId != acceptedProvider
     }
   }
 
@@ -450,7 +474,8 @@ public class PhaseRunPlanResolver(
         ?.takeIf { it.policyMode == WorkflowAgentAssignmentPolicyMode.LEGACY }
         ?: return emptyMap()
     if (workflowId.isBlank()) return emptyMap()
-    val pausedStepIds = executionPlanResolver.inspectResumeEvidence(workflowId).pausedStepIds
+    val pausedStepIds =
+      executionPlanResolver.resumeEvidenceIfPlanExists(workflowId)?.pausedStepIds.orEmpty()
     return assignments.phaseAssignments
       .filterKeys { it in pausedStepIds }
       .mapValues { (_, phase) -> phase.agentId.wireValue }

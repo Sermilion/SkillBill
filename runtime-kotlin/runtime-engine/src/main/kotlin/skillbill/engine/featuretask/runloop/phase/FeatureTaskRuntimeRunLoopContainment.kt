@@ -15,7 +15,7 @@ import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.catchingNonCancellation
 import skillbill.error.core.failureCodeLabel
-import skillbill.error.featuretask.isQualityRoutingRefusal
+import skillbill.error.shellcontent.isQualityRoutingRefusal
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 

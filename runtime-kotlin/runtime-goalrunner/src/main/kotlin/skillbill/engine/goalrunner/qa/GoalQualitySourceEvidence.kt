@@ -11,6 +11,7 @@ import skillbill.engine.goalrunner.persist.quality.GoalQualityExecutionRead
 import skillbill.engine.goalrunner.persist.quality.GoalQualityValidationSourceProof
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.WorkflowFailureCode
+import skillbill.error.shellcontent.isQualityRoutingRefusal
 import skillbill.goalrunner.model.history.GoalFinalRepairContext
 import skillbill.goalrunner.model.history.GoalHistoryWriterInput
 import skillbill.goalrunner.model.history.accumulateGoalFinalRepairWarnings
@@ -226,14 +227,20 @@ private fun proofForAcceptedBoundary(
   )
 }
 
+internal class GoalHistoryWriterSourceInput(
+  val outcomeStore: GoalRunnerWorkflowOutcomeStore,
+  val phasePlans: PhaseRunPlanResolver,
+  val state: GoalRunnerManifestState,
+  val request: GoalRunnerRunRequest,
+)
+
 internal fun historyWriterOwnsCurrentContents(
-  outcomeStore: GoalRunnerWorkflowOutcomeStore,
-  phasePlans: PhaseRunPlanResolver,
-  state: GoalRunnerManifestState,
-  request: GoalRunnerRunRequest,
+  input: GoalHistoryWriterSourceInput,
   execution: GoalQualityExecution,
   currentFingerprint: String,
 ): Boolean {
+  val outcomeStore = input.outcomeStore
+  val state = input.state
   val completion = outcomeStore.goalHistoryCompletion(state.parentWorkflowId) ?: return false
   val repairContext = outcomeStore.goalFinalRepairContext(state.parentWorkflowId) ?: return false
   val writerInput =
@@ -252,8 +259,8 @@ internal fun historyWriterOwnsCurrentContents(
     return false
   }
   return historyWriterValidationMatches(
-    phasePlans,
-    request,
+    input.phasePlans,
+    input.request,
     state,
     execution,
     completion.preWriterContentFingerprint,
@@ -459,3 +466,53 @@ private fun terminalQualityEvent(
         it.action == FeatureTaskRuntimePhaseLedgerAction.COMPLETE
     }.maxByOrNull { it.sequenceNumber }
   }
+
+internal fun validationReentryPlan(
+  phasePlans: PhaseRunPlanResolver,
+  state: GoalRunnerManifestState,
+  request: GoalRunnerRunRequest,
+  execution: GoalQualityExecution,
+): ResolvedPhaseExecutionPlan? {
+  if (execution.progress == null || execution.governingInputs == null || execution.executionPlans == null) return null
+  val validationProgress = requireNotNull(execution.progress).validation
+  val inputs = requireNotNull(execution.governingInputs)
+  val plans = requireNotNull(execution.executionPlans)
+  val validationPlan =
+    phasePlans.validateGoalQualityExecutionPlan(
+      plans.validation,
+      SkeletonDefinition.VALIDATION.id,
+      inputs.effectiveAgentId,
+      qualityWorkflowAgentAssignments(inputs, request, state.parentWorkflowId),
+    )
+  val acceptedRunningBoundary = phasePlans.hasAcceptedValidationBoundary(validationProgress, validationPlan)
+  val terminalProgress = validationProgress.terminalCompleted || validationProgress.terminalBlockedStep != null
+  if (execution.status == GoalQualityExecutionStatus.VALIDATION_RUNNING &&
+    terminalProgress && !acceptedRunningBoundary
+  ) {
+    throw SkillBillRuntimeException(
+      WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION,
+      "Retained validation terminal state for '${execution.invocationId}' has no accepted plan boundary.",
+    )
+  }
+  val reentryCandidate =
+    execution.status in
+      setOf(
+        GoalQualityExecutionStatus.VALIDATION_COMPLETED_PENDING_SETTLEMENT,
+        GoalQualityExecutionStatus.SETTLED_PASSED,
+        GoalQualityExecutionStatus.SETTLED_SKIPPED,
+        GoalQualityExecutionStatus.SETTLED_WARNED,
+      ) || execution.status == GoalQualityExecutionStatus.VALIDATION_RUNNING &&
+      acceptedRunningBoundary
+  return validationPlan.takeIf { reentryCandidate }
+}
+
+internal fun qualityRoutingRefusal(failure: Throwable): SkillBillRuntimeException? {
+  val runtimeFailure = failure as? SkillBillRuntimeException ?: return null
+  if (!runtimeFailure.isQualityRoutingRefusal) return null
+  if (runtimeFailure.code == WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION) return runtimeFailure
+  return SkillBillRuntimeException(
+    WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION,
+    "Selected quality provider could not launch; retained quality progress remains pending.",
+    runtimeFailure,
+  )
+}

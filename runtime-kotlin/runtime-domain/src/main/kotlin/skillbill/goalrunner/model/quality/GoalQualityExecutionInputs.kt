@@ -45,8 +45,10 @@ data class GoalQualityExecutionInputs(
     require(addons.map { it.persisted.slug }.distinct().size == addons.size)
     require(
       (agentAssignmentsWorkflowId == null && agentAssignmentsFingerprint == null) ||
-        (!agentAssignmentsWorkflowId.isNullOrBlank() &&
-          agentAssignmentsFingerprint?.matches(Regex("^[0-9a-f]{64}$")) == true),
+        (
+          !agentAssignmentsWorkflowId.isNullOrBlank() &&
+            agentAssignmentsFingerprint?.matches(Regex("^[0-9a-f]{64}$")) == true
+        ),
     )
   }
 }

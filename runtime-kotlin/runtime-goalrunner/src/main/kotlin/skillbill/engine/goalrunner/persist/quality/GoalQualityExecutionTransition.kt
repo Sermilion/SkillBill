@@ -544,3 +544,14 @@ internal fun validFinalValidationObservation(
 private fun sha256(value: String): String =
   MessageDigest.getInstance("SHA-256")
     .digest(value.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
+
+public data class GoalQualityPhaseProgressWrite(
+  val parentWorkflowId: String,
+  val invocationId: String,
+  val definitionId: String,
+  val acceptedPlan: String,
+  val progress: GoalQualityPhaseProgress,
+  val finalValidationContentFingerprint: String? = null,
+  val preQaBuildContentFingerprint: String? = null,
+  val preQaBuildSourceProof: GoalQualityBuildSourceProof? = null,
+)

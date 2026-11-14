@@ -35,13 +35,11 @@ public class GoalFinalizationRoutingBinder(
     val suppliedFingerprint = request.workflowAgentAssignmentsFingerprint
     return when (val inspection = workflowAgentAssignments.inspect(parentWorkflowId)) {
       is WorkflowAgentAssignmentInspection.Present -> {
-        if ((suppliedAssignments != null || suppliedFingerprint != null) &&
-          (suppliedAssignments != inspection.assignments || suppliedFingerprint != inspection.fingerprint)
+        requireNoSuppliedConflict(
+          suppliedAssignments != null || suppliedFingerprint != null,
+          "The supplied goal routing reference conflicts with the accepted parent artifact.",
         ) {
-          throw SkillBillRuntimeException(
-            WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION,
-            "The supplied goal routing reference conflicts with the accepted parent artifact.",
-          )
+          suppliedAssignments != inspection.assignments || suppliedFingerprint != inspection.fingerprint
         }
         val frozen = inspection.assignments.policyMode == WorkflowAgentAssignmentPolicyMode.FROZEN
         GoalFinalizationRouting(
@@ -54,12 +52,10 @@ public class GoalFinalizationRoutingBinder(
       }
 
       WorkflowAgentAssignmentInspection.Legacy -> {
-        if (suppliedAssignments != null || suppliedFingerprint != null) {
-          throw SkillBillRuntimeException(
-            WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION,
-            "The goal request supplies routing that the accepted parent does not contain.",
-          )
-        }
+        requireNoSuppliedConflict(
+          suppliedAssignments != null || suppliedFingerprint != null,
+          "The goal request supplies routing that the accepted parent does not contain.",
+        ) { true }
         GoalFinalizationRouting(
           workflowAgentAssignments = null,
           workflowAgentAssignmentsFingerprint = null,
@@ -71,6 +67,16 @@ public class GoalFinalizationRoutingBinder(
 
       is WorkflowAgentAssignmentInspection.Problem ->
         throw SkillBillRuntimeException(inspection.failureCode, inspection.recoveryMessage)
+    }
+  }
+
+  private inline fun requireNoSuppliedConflict(
+    supplied: Boolean,
+    message: String,
+    conflict: () -> Boolean,
+  ) {
+    if (supplied && conflict()) {
+      throw SkillBillRuntimeException(WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION, message)
     }
   }
 

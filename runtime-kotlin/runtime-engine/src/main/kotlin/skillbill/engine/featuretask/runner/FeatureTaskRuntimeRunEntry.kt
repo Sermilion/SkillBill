@@ -224,7 +224,11 @@ public class FeatureTaskRuntimeRunEntry(
     val launchDefinition = admittedDefinition(request, admittedExecution)
     val legacyPausedStepAssignments =
       if (admittedExecution.workflowAgentAssignments?.policyMode == WorkflowAgentAssignmentPolicyMode.LEGACY) {
-        val pausedStepIds = executionPlans.inspectResumeEvidence(admittedExecution.identity.workflowId).pausedStepIds
+        val pausedStepIds =
+          executionPlans
+            .resumeEvidenceIfPlanExists(admittedExecution.identity.workflowId)
+            ?.pausedStepIds
+            .orEmpty()
         admittedExecution.plan.stepLaunchAssignments
           .filterKeys { it in pausedStepIds }
           .mapValues { (_, assignment) -> assignment.agentId }

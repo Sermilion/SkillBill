@@ -69,11 +69,11 @@ import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.engine.goalrunner.GoalOperatorDecisionService
 import skillbill.engine.goalrunner.GoalRunner
 import skillbill.engine.goalrunner.findings.UnaddressedFindingsLedgerService
+import skillbill.engine.goalrunner.persist.quality.GoalQualityExecutionReadiness
 import skillbill.engine.goalrunner.plan.StandalonePlanRun
 import skillbill.engine.goalrunner.planning.GoalPlanningLogService
 import skillbill.engine.goalrunner.preflight.GoalPreflightService
 import skillbill.engine.goalrunner.status.GoalRunnerStatusService
-import skillbill.engine.goalrunner.persist.quality.GoalQualityExecutionReadiness
 import skillbill.engine.operation.core.OperationExecutor
 import skillbill.engine.operation.core.OperationRegistry
 import skillbill.engine.specbrowser.SpecBrowserService

@@ -3,8 +3,6 @@ package skillbill.engine.goalrunner.persist.quality
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.goal.GOAL_QUALITY_EXECUTION_CONTRACT_VERSION
 import skillbill.contracts.workflow.goal.GoalQualityExecutionPayloadKeys
-import skillbill.error.core.SkillBillRuntimeException
-import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.goalrunner.model.quality.GoalQualityAcceptedSourceObservation
 import skillbill.goalrunner.model.quality.GoalQualityAdoptionEvidence
 import skillbill.goalrunner.model.quality.GoalQualityExecution
@@ -532,9 +530,6 @@ private fun fingerprintInputsWire(inputs: Map<String, Any?>): String {
     .digest(json.toByteArray(Charsets.UTF_8))
     .joinToString("") { "%02x".format(it) }
 }
-
-private fun invalid(reason: String): Nothing =
-  throw SkillBillRuntimeException(WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION, reason)
 
 private fun invalidSourceObservations(progress: GoalQualityPhaseProgress): Boolean =
   progress.acceptedSourceObservations.any { !validSourceObservation(it, progress) } ||

@@ -3,6 +3,7 @@ package skillbill.error.shellcontent
 import skillbill.error.core.RuntimeFailureCode
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.featuretask.FeatureTaskRuntimePhaseOutputFailureCode
+import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.featuretask.InvalidFeatureTaskRuntimeHandoffProjectionContext
 
 enum class FeatureTaskRuntimeFailureCode : RuntimeFailureCode {
@@ -55,6 +56,18 @@ enum class FeatureTaskRuntimeFailureCode : RuntimeFailureCode {
   LOOP_EDGE_CAP_EXHAUSTED,
   INVALID_MODEL_DIRECTIVE_SUPPLEMENTS_SETTING,
 }
+
+private val QUALITY_ROUTING_REFUSAL_CODES =
+  setOf(
+    AgentAddonFailureCode.INVALID_SELECTION,
+    AgentAddonFailureCode.SELECTION_DRIFT,
+  )
+
+val SkillBillRuntimeException.isQualityRoutingRefusal: Boolean
+  get() =
+    this is IncompatibleFeatureTaskRuntimeExecutionPlanError ||
+      code == WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION ||
+      code in QUALITY_ROUTING_REFUSAL_CODES
 
 fun invalidFeatureTaskRuntimeRepairReceipt(
   fieldPath: String,

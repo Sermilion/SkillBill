@@ -244,11 +244,12 @@ internal fun qualityWorkflowAgentAssignments(
 ): ResolvedWorkflowAgentAssignments? {
   if (inputs.agentAssignmentsWorkflowId == null && inputs.agentAssignmentsFingerprint == null) return null
   val assignments = request.workflowAgentAssignments
-  if (inputs.agentAssignmentsWorkflowId != parentWorkflowId ||
-    assignments?.admissionWorkflowId != inputs.agentAssignmentsWorkflowId ||
-    assignments?.policyMode != WorkflowAgentAssignmentPolicyMode.FROZEN ||
-    request.workflowAgentAssignmentsFingerprint != inputs.agentAssignmentsFingerprint
-  ) {
+  val routingMatches =
+    inputs.agentAssignmentsWorkflowId == parentWorkflowId &&
+      assignments?.admissionWorkflowId == inputs.agentAssignmentsWorkflowId &&
+      assignments?.policyMode == WorkflowAgentAssignmentPolicyMode.FROZEN &&
+      request.workflowAgentAssignmentsFingerprint == inputs.agentAssignmentsFingerprint
+  if (!routingMatches) {
     throw SkillBillRuntimeException(
       WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION,
       "The accepted goal-quality routing reference no longer matches its parent artifact.",

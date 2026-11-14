@@ -25,6 +25,7 @@ import skillbill.engine.featuretask.validation.ValidationGateResolver
 import skillbill.engine.featuretask.validation.model.ValidationGateResolution
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
+import skillbill.error.featuretask.MissingFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.shellcontent.missingValidationGate
 import skillbill.error.workflow.WorkflowAgentAssignmentsFailureCode
 import skillbill.install.model.SupportedAgent
@@ -144,6 +145,9 @@ public class FeatureTaskRuntimeExecutionPlanResolver(
       )
 
   public fun inspectResumeEvidence(workflowId: String): FeatureTaskRuntimeResumeEvidence =
+    resumeEvidenceIfPlanExists(workflowId) ?: throw MissingFeatureTaskRuntimeExecutionPlanError()
+
+  public fun resumeEvidenceIfPlanExists(workflowId: String): FeatureTaskRuntimeResumeEvidence? =
     database.read { unit ->
       val snapshot = unit.workflowStates.getFeatureTaskWorkflow(workflowId)?.toSnapshot()
       val routing = workflowAgentAssignments.inspect(unit, workflowId)
@@ -156,12 +160,12 @@ public class FeatureTaskRuntimeExecutionPlanResolver(
           ?.let {
             DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.value(it)
           }?.let { JsonCodec.valueToJsonString(it).toByteArray(Charsets.UTF_8) }
+          ?: return@read null
       val plan = compatibility.requireSupportedComposition(descriptor)
       FeatureTaskRuntimeResumeEvidence(
         routing,
         plan,
-        snapshot
-          ?.steps
+        snapshot.steps
           .orEmpty()
           .filter { it.status == WorkflowStepStatus.PAUSED }
           .map { it.stepId }

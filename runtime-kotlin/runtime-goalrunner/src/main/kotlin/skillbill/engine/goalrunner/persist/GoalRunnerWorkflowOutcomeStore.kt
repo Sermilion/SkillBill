@@ -264,7 +264,7 @@ public interface GoalRunnerWorkflowLedgerWriteStore {
   public fun childWorkflowLoopIterations(workflowId: String): Map<String, Int>
 }
 
-public interface GoalRunnerQualityExecutionStore {
+public interface GoalRunnerQualityObservationStore {
   public fun goalQualityExecution(parentWorkflowId: String): GoalQualityExecutionRecord?
 
   public fun prepareGoalQualityExecution(parentWorkflowId: String): GoalQualityExecutionRead? =
@@ -272,7 +272,9 @@ public interface GoalRunnerQualityExecutionStore {
 
   public fun retainedGoalQualityExecution(parentWorkflowId: String): GoalQualityExecutionRead? =
     goalQualityExecution(parentWorkflowId)?.let { GoalQualityExecutionRead.Current(it) }
+}
 
+public interface GoalRunnerQualityExecutionStore : GoalRunnerQualityObservationStore {
   /**
    * Records the operator's choice to discard quality state the runtime cannot judge. Ambiguous
    * historical state becomes clean and unstarted; an unsettled admitted execution, such as one

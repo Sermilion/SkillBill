@@ -129,7 +129,6 @@ internal class PhaseAttemptRunHost(
     directVerifySelectedLaunch?.invoke(diagnostics) ?: throw GoalPlanningPhaseGatesUnsupportedError()
   }
 
-
   val commitPushManifestCompletion: CommitPushManifestCompletion?
     get() = backingRunState.commitPushManifestCompletion
 

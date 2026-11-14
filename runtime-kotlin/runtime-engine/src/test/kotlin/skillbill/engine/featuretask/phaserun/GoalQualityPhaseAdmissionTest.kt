@@ -112,6 +112,7 @@ class GoalQualityPhaseAdmissionTest {
       home,
       "codex",
       acceptedGoalQualityAgentId = "codex",
+      goalQualityInvocationId = invocation,
       goalQualityPhaseProgress = retained,
       persistGoalQualityPhaseProgress = { progress, _ ->
         latest = progress

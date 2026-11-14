@@ -18,6 +18,7 @@ import skillbill.goalrunner.model.GoalRunnerCiCheck
 import skillbill.goalrunner.model.GoalRunnerCiCycle
 import skillbill.goalrunner.model.GoalRunnerPhaseCard
 import skillbill.goalrunner.model.GoalRunnerPhaseCardState
+import skillbill.goalrunner.model.quality.GoalQualityExecutionProgress
 import skillbill.goalrunner.model.quality.GoalQualityReadiness
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.idestatus.model.MonitorCiCheckBucket
@@ -218,26 +219,15 @@ private fun qualityCards(
   quality: GoalQualityExecutionRead?,
   durableRead: GoalRunnerStatusDurableReadTracker,
 ): List<GoalRunnerPhaseCard> {
-  val progress =
-    when (quality) {
-      null -> return emptyList()
-      is GoalQualityExecutionRead.Current ->
-        quality.record.execution?.progress
-          ?: if (quality.record.readiness == GoalQualityReadiness.HISTORICAL_AMBIGUITY) null else return emptyList()
-      is GoalQualityExecutionRead.Historical -> {
-        if (quality.isCleanUnstarted()) return emptyList()
-        if (quality.hasAuthoritativePlansAndProgress) quality.progress else null
-      }
-      is GoalQualityExecutionRead.Ambiguous -> null
-      is GoalQualityExecutionRead.Invalid -> null
-    }
+  val progress = retainedQualityProgress(quality)
   if (progress == null) {
+    if (qualityShowsNoCard(quality)) return emptyList()
     durableRead.recordDegradedRead(
       "goal-status.goal_finish_quality",
       "goal_quality_execution_progress",
       "recovery_card",
     )
-    return listOf(qualityRecoveryCard(quality))
+    return listOf(qualityRecoveryCard(requireNotNull(quality)))
   }
   val accepted = progress.qa.acceptedEnvelopes + progress.validation.acceptedEnvelopes
   return listOf(progress.qa, progress.validation).flatMap { it.phaseRecords.values }
@@ -263,6 +253,22 @@ private fun qualityCards(
       }
     }
 }
+
+private fun retainedQualityProgress(quality: GoalQualityExecutionRead?): GoalQualityExecutionProgress? =
+  when (quality) {
+    null -> null
+    is GoalQualityExecutionRead.Current -> quality.record.execution?.progress
+    is GoalQualityExecutionRead.Historical ->
+      if (quality.hasAuthoritativePlansAndProgress) quality.progress else null
+    is GoalQualityExecutionRead.Ambiguous -> null
+    is GoalQualityExecutionRead.Invalid -> null
+  }
+
+private fun qualityShowsNoCard(quality: GoalQualityExecutionRead?): Boolean =
+  quality == null ||
+    quality is GoalQualityExecutionRead.Historical && quality.isCleanUnstarted() ||
+    quality is GoalQualityExecutionRead.Current &&
+    quality.record.readiness != GoalQualityReadiness.HISTORICAL_AMBIGUITY
 
 private fun qualityRecoveryCard(quality: GoalQualityExecutionRead): GoalRunnerPhaseCard {
   val sourceVersion =

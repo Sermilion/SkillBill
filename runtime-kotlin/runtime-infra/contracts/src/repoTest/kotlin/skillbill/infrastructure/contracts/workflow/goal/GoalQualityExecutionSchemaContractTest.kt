@@ -9,6 +9,7 @@ import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.goalrunner.model.quality.GoalQualityExecutionStatus
 import skillbill.goalrunner.model.quality.GoalQualityReadiness
 import skillbill.goalrunner.model.quality.GoalQualityValidationDisposition
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -146,7 +147,7 @@ class GoalQualityExecutionSchemaContractTest {
       keys.INVOCATION_ID to "invocation",
       keys.BASELINE_CONTENT_FINGERPRINT to "baseline",
       keys.GOVERNING_INPUT_FINGERPRINT to "inputs",
-      keys.GOVERNING_INPUTS to null,
+      keys.GOVERNING_INPUTS to governingInputsPayload(),
       keys.EXECUTION_PLANS to
         mapOf(
           keys.BUILD_PLAN to "build",
@@ -168,4 +169,24 @@ class GoalQualityExecutionSchemaContractTest {
       keys.FINAL_VALIDATION_CONTENT_FINGERPRINT to "validated",
     )
   }
+
+  private fun governingInputsPayload(): Map<String, Any?> =
+    mapOf(
+      keys.ISSUE_KEY to "SKILL-1",
+      keys.INTAKE to null,
+      keys.REPO_ROOT to "/repo",
+      keys.INVOKED_AGENT_ID to "agent",
+      keys.CONFIGURED_AGENT_OVERRIDE_ID to null,
+      keys.AGENT_ASSIGNMENTS_WORKFLOW_ID to null,
+      keys.AGENT_ASSIGNMENTS_FINGERPRINT to null,
+      keys.TIMEOUT_MILLIS to null,
+      keys.QA_SELECTION to FeatureTaskRuntimeQaSelection.AUTO.wireValue,
+      keys.PARENT_SPEC_PATH to "spec.md",
+      keys.ACCEPTANCE_CRITERIA to null,
+      keys.ACCEPTANCE_CRITERIA_READ_FAILURE to null,
+      keys.BRANCH to "main",
+      keys.MODEL_DIRECTIVES to emptyMap<String, Any?>(),
+      keys.MODEL_MATRIX to null,
+      keys.ADDONS to emptyList<Any?>(),
+    )
 }

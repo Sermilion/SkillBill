@@ -1,12 +1,12 @@
 package skillbill.engine.goalrunner.persist.quality
 
+import skillbill.error.core.RuntimeFailureCode
 import skillbill.goalrunner.model.quality.GoalQualityExecutionInputs
 import skillbill.goalrunner.model.quality.GoalQualityExecutionPlans
 import skillbill.goalrunner.model.quality.GoalQualityExecutionProgress
 import skillbill.goalrunner.model.quality.GoalQualityExecutionRecord
 import skillbill.goalrunner.model.quality.GoalQualityExecutionStatus
 import skillbill.goalrunner.model.quality.GoalQualityValidationDisposition
-import skillbill.error.core.RuntimeFailureCode
 
 public data class GoalQualityAdmissionRequest(
   val baselineContentFingerprint: String,

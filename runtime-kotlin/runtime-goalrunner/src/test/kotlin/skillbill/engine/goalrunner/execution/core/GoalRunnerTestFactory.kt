@@ -290,41 +290,16 @@ internal fun testGoalRunner(deps: GoalRunnerTestInputs): GoalRunner = testGoalRu
 
 internal fun testGoalRunner(wiring: GoalRunnerTestWiring): GoalRunner {
   val (executionPlans, crashReconciler) = goalRunnerExecutionPlans(wiring)
-  val progressReader = GoalRunnerProgressReader(wiring.outcomeStore)
   val pauseBoundary = GoalRunnerPauseBoundary(wiring.manifestStore, wiring.clock)
-  val finalizationRouting =
-    testGoalFinalizationRoutingBinder(
-      wiring.goalDatabase ?: goalRunnerTestDatabase(wiring.manifestStore),
-      wiring.clock,
-      wiring.diagnostics,
-    )
-  val finalization =
-    GoalRunnerFinalization(
-      finalizationTestOutcomes(wiring.outcomeStore),
-      GoalSpecScratchCleanup(wiring.specScratchStore, testProjectStore, wiring.diagnostics),
-      finalizationTestGit(wiring.gitOperations),
-      wiring.diagnostics,
-      wiring.phaseRecorder,
-      wiring.ciMonitor,
-      wiring.qaGate,
-      wiring.assessmentGate,
-      pauseBoundary,
-      wiring.finalHistoryWriter,
-      GoalRunnerPullRequests(
-        wiring.outcomeStore,
-        wiring.pullRequestPort,
-        wiring.pullRequestIdentityLookup,
-        GoalSpecScratchCleanup(wiring.specScratchStore, testProjectStore, wiring.diagnostics),
-        wiring.unaddressedFindingsLedgerService,
-        wiring.diagnostics,
-        wiring.pullRequestWriter,
-        finalizationRouting,
-      ),
-      finalizationRouting,
-    )
   val intakePreparation = goalRunnerIntakePreparation(wiring)
   val perRunLoopAssembler =
-    testGoalRunnerLoopAssembler(wiring, executionPlans, progressReader, finalization, pauseBoundary)
+    testGoalRunnerLoopAssembler(
+      wiring,
+      executionPlans,
+      GoalRunnerProgressReader(wiring.outcomeStore),
+      testGoalRunnerFinalization(wiring, pauseBoundary),
+      pauseBoundary,
+    )
   return GoalRunner(
     manifestStore = wiring.manifestStore,
     outcomeStore = wiring.outcomeStore,
@@ -360,6 +335,39 @@ internal fun testGoalRunner(wiring: GoalRunnerTestWiring): GoalRunner {
         executionPlans,
         wiring.diagnostics,
       ),
+  )
+}
+
+private fun testGoalRunnerFinalization(
+  wiring: GoalRunnerTestWiring,
+  pauseBoundary: GoalRunnerPauseBoundary,
+): GoalRunnerFinalization {
+  val finalizationRouting =
+    testGoalFinalizationRoutingBinder(
+      wiring.goalDatabase ?: goalRunnerTestDatabase(wiring.manifestStore),
+      wiring.clock,
+      wiring.diagnostics,
+    )
+  return GoalRunnerFinalization(
+    finalizationTestOutcomes(wiring.outcomeStore),
+    GoalSpecScratchCleanup(wiring.specScratchStore, testProjectStore, wiring.diagnostics),
+    finalizationTestGit(wiring.gitOperations),
+    wiring.diagnostics,
+    wiring.phaseRecorder,
+    GoalRunnerFinalizationStages(wiring.ciMonitor, wiring.qaGate, wiring.assessmentGate),
+    pauseBoundary,
+    wiring.finalHistoryWriter,
+    GoalRunnerPullRequests(
+      wiring.outcomeStore,
+      wiring.pullRequestPort,
+      wiring.pullRequestIdentityLookup,
+      GoalSpecScratchCleanup(wiring.specScratchStore, testProjectStore, wiring.diagnostics),
+      wiring.unaddressedFindingsLedgerService,
+      wiring.diagnostics,
+      wiring.pullRequestWriter,
+      finalizationRouting,
+    ),
+    finalizationRouting,
   )
 }
 

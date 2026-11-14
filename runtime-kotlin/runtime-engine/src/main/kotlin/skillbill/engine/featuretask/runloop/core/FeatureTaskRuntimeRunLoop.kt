@@ -47,8 +47,8 @@ import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
 import skillbill.engine.featuretask.slot.state.PhaseRunState
 import skillbill.engine.recovery.recommendedDurableChildRecoveryCommand
 import skillbill.error.core.SkillBillRuntimeException
-import skillbill.error.workflow.WorkflowAgentAssignmentsFailureCode
 import skillbill.error.shellcontent.WorkflowFailureCode
+import skillbill.error.workflow.WorkflowAgentAssignmentsFailureCode
 import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.diff.DiffResolverPort
@@ -336,14 +336,19 @@ public class FeatureTaskRuntimePhaseRunFactory(
         legacyPausedStepAssignments = legacyPausedStepAssignments(run.request),
       )
     val environmentKind =
-      if (run.request.goalContinuation == null) LaunchEnvironmentKind.INHERITED else LaunchEnvironmentKind.GOVERNED_CHILD
+      if (run.request.goalContinuation == null) {
+        LaunchEnvironmentKind.INHERITED
+      } else {
+        LaunchEnvironmentKind.GOVERNED_CHILD
+      }
     val assignments = run.request.workflowAgentAssignments
     if (assignments?.policyMode == WorkflowAgentAssignmentPolicyMode.FROZEN) {
-      val expected = assignments.phaseAssignments[run.phaseId]?.agentId?.wireValue
-        ?: throw SkillBillRuntimeException(
-          WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION,
-          "Frozen routing has no provider assignment for phase '${run.phaseId}'.",
-        )
+      val expected =
+        assignments.phaseAssignments[run.phaseId]?.agentId?.wireValue
+          ?: throw SkillBillRuntimeException(
+            WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION,
+            "Frozen routing has no provider assignment for phase '${run.phaseId}'.",
+          )
       val accepted = run.launchAssignment
       if (accepted != null && accepted.agentId != expected) {
         throw SkillBillRuntimeException(
@@ -376,7 +381,8 @@ public class FeatureTaskRuntimePhaseRunFactory(
         ?.takeIf { it.policyMode == WorkflowAgentAssignmentPolicyMode.LEGACY }
         ?: return emptyMap()
     if (request.workflowId.isBlank()) return emptyMap()
-    val pausedStepIds = executionPlans.inspectResumeEvidence(request.workflowId).pausedStepIds
+    val pausedStepIds =
+      executionPlans.resumeEvidenceIfPlanExists(request.workflowId)?.pausedStepIds.orEmpty()
     return assignments.phaseAssignments
       .filterKeys { it in pausedStepIds }
       .mapValues { (_, phase) -> phase.agentId.wireValue }
@@ -420,34 +426,35 @@ public class FeatureTaskRuntimePhaseRunFactory(
           },
         )
       }
-    val run = PhaseRun(
-      phaseId = phaseId,
-      declaration =
-        phaseDeclaration(
-          phaseId,
-          request.runInvariants.featureSize,
-          context.runState.unselectedStepIds(),
-        ),
-      resolvedAgent = resolvedAgent,
-      modelDirective =
-        reasoningDirective ?: FeatureTaskRuntimeResumeLaunchAssignment.modelDirective(
-          recorded,
-          resolvedAgentId,
-          phaseId,
-          request.modelAssignment,
-        ),
-      compaction = request.compactionSettings.directiveFor(phaseId),
-      request = request,
-      specSource = specSource,
-      policy = context.acceptedStepPolicy(phaseId),
-      projectStoreRoot = projectStore.resolve(request.repoRoot).root,
-      launchAssignment =
-        escalatedAssignment ?: FeatureTaskRuntimeResumeLaunchAssignment.recordedForAgent(recorded, resolvedAgentId),
-      reentry = reentry,
-      failureContinuationOutput =
-        (context.runState.strategyFor(phaseId).stepHooks(phaseId) as? PhaseUpstreamFailureContinuationHooks)
-          ?.failureContinuationOutput(context.state.outputs()),
-    )
+    val run =
+      PhaseRun(
+        phaseId = phaseId,
+        declaration =
+          phaseDeclaration(
+            phaseId,
+            request.runInvariants.featureSize,
+            context.runState.unselectedStepIds(),
+          ),
+        resolvedAgent = resolvedAgent,
+        modelDirective =
+          reasoningDirective ?: FeatureTaskRuntimeResumeLaunchAssignment.modelDirective(
+            recorded,
+            resolvedAgentId,
+            phaseId,
+            request.modelAssignment,
+          ),
+        compaction = request.compactionSettings.directiveFor(phaseId),
+        request = request,
+        specSource = specSource,
+        policy = context.acceptedStepPolicy(phaseId),
+        projectStoreRoot = projectStore.resolve(request.repoRoot).root,
+        launchAssignment =
+          escalatedAssignment ?: FeatureTaskRuntimeResumeLaunchAssignment.recordedForAgent(recorded, resolvedAgentId),
+        reentry = reentry,
+        failureContinuationOutput =
+          (context.runState.strategyFor(phaseId).stepHooks(phaseId) as? PhaseUpstreamFailureContinuationHooks)
+            ?.failureContinuationOutput(context.state.outputs()),
+      )
     verifySelectedLaunch(run, context.diagnostics)
     return run
   }

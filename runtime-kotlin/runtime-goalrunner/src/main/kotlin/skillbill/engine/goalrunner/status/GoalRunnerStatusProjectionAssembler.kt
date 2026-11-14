@@ -28,13 +28,12 @@ import skillbill.engine.goalrunner.monitoring.GOAL_FINALIZATION_OPERATION_KIND
 import skillbill.engine.goalrunner.persist.GoalRunnerAttemptLedgerStore
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.persist.quality.GoalQualityExecutionRead
-import skillbill.goalrunner.model.quality.GoalQualityReadiness
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.catchingNonCancellation
 import skillbill.error.core.failureCodeLabel
 import skillbill.error.core.rethrowUnless
-import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.error.shellcontent.WorkflowFailureCode
+import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.goalrunner.model.ExecutionLiveness
 import skillbill.goalrunner.model.ExecutionProgressStall
 import skillbill.goalrunner.model.GoalNoChangeState
@@ -55,6 +54,7 @@ import skillbill.goalrunner.model.GoalRunnerStatusProjector
 import skillbill.goalrunner.model.GoalRunnerSubtaskPhaseResults
 import skillbill.goalrunner.model.GoalRunnerSubtaskValidationEvidence
 import skillbill.goalrunner.model.GoalRunnerWorktreeStatus
+import skillbill.goalrunner.model.quality.GoalQualityReadiness
 import skillbill.goalrunner.subtaskreview.GoalSubtaskReviewSummaryReducer
 import skillbill.idestatus.model.WorktreeEditTick
 import skillbill.idestatus.model.summary
@@ -728,7 +728,7 @@ public class GoalRunnerStatusProjectionAssembler(
               ?.let(JsonCodec::parseObjectOrNull)
               ?.let(JsonCodec::jsonElementToValue)
               ?.let(GoalSubtaskReviewSummaryReducer::reviewRunId)
-              ?.let { runId -> storedPassFindings(runId, degradation) }
+              ?.let { runId -> storedPassFindings(database, runId, degradation) }
           val storedFindings = stored?.findings?.takeIf { it.isNotEmpty() }
           if (storedFindings == null && pass.findings.isNotEmpty() && stored?.readFailed != true) {
             degradation.record(
@@ -760,80 +760,6 @@ public class GoalRunnerStatusProjectionAssembler(
     )
   }
 
-  private fun readPhaseRecord(
-    artifacts: DurableWorkflowArtifacts,
-    phaseId: String,
-    degradation: SubtaskReadDegradation,
-  ): FeatureTaskRuntimePhaseRecord? =
-    catchingNonCancellation {
-      artifacts.phaseRecord(phaseId)
-    }.getOrElse { error ->
-      degradation.record(
-        source = GoalRunnerSubtaskReadSource.PHASE_RESULTS,
-        expected = "${phaseId}_phase_record",
-        used = "omitted",
-        error = error,
-      )
-      null
-    }
-
-  private fun reviewRawResults(
-    artifacts: Any,
-    degradation: SubtaskReadDegradation,
-  ): Map<String, String> =
-    catchingNonCancellation { GoalSubtaskReviewArtifactDecoder.decode(artifacts)?.rawResults.orEmpty() }.getOrElse {
-        error ->
-      degradation.record(
-        source = GoalRunnerSubtaskReadSource.REVIEW_RAW_RESULTS,
-        expected = "raw_review_results",
-        used = "compact_findings",
-        error = error,
-      )
-      emptyMap()
-    }
-
-  private class StoredPassFindings(
-    val findings: List<GoalRunnerReviewFinding>?,
-    val lanes: List<String>,
-    val readFailed: Boolean = false,
-  )
-
-  private fun storedPassFindings(
-    runId: String,
-    degradation: SubtaskReadDegradation,
-  ): StoredPassFindings? =
-    catchingNonCancellation {
-      database.read { unit ->
-        val reviews = unit.reviews
-        val statuses = reviews.fetchFindingStatuses(runId)
-        StoredPassFindings(
-          findings =
-            statuses.takeIf { it.isNotEmpty() }?.let {
-              storedReviewPassFindings(reviews.fetchNumberedFindings(runId), it)
-            },
-          lanes = reviews.fetchReviewRunLanes(runId).sortedBy { it.orderIndex }.map { it.laneSkillName },
-        )
-      }
-    }.getOrElse { error ->
-      degradation.record(
-        source = GoalRunnerSubtaskReadSource.REVIEW_FINDINGS,
-        expected = "stored_review_findings",
-        used = "compact_findings",
-        error = error,
-      )
-      StoredPassFindings(findings = null, lanes = emptyList(), readFailed = true)
-    }
-
-  private fun compactPassFinding(finding: GoalSubtaskReviewCompactFinding): GoalRunnerReviewFinding =
-    GoalRunnerReviewFinding(
-      ref = finding.findingId.orEmpty(),
-      severity = finding.severity,
-      confidence = null,
-      specialist = null,
-      location = null,
-      description = finding.text,
-    )
-
   private fun FeatureTaskRuntimePhaseRecord.toConclusion(
     degradation: SubtaskReadDegradation,
   ): GoalRunnerPhaseConclusion {
@@ -862,9 +788,10 @@ public class GoalRunnerStatusProjectionAssembler(
     parentWorkflowId: String,
     durableRead: GoalRunnerStatusDurableReadTracker,
   ): GoalRunnerQaResult? {
-    val retained = catchingNonCancellation {
-      outcomeStore.retainedGoalQualityExecution(parentWorkflowId)
-    }.getOrNull()
+    val retained =
+      catchingNonCancellation {
+        outcomeStore.retainedGoalQualityExecution(parentWorkflowId)
+      }.getOrNull()
     retained?.qualityRecoverySourceVersion()?.let { sourceVersion ->
       durableRead.recordDegradedRead(
         seam = "goal-status.goal_qa_result",
@@ -901,8 +828,8 @@ public class GoalRunnerStatusProjectionAssembler(
       val retained = catchingNonCancellation { outcomeStore.retainedGoalQualityExecution(parentWorkflowId) }.getOrNull()
       if (
         error is SkillBillRuntimeException &&
-          error.code == WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION &&
-          retained is GoalQualityExecutionRead.Invalid
+        error.code == WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION &&
+        retained is GoalQualityExecutionRead.Invalid
       ) {
         durableRead.recordDegradedRead(
           seam = "goal-status.goal_qa_result",
@@ -954,7 +881,7 @@ public class GoalRunnerStatusProjectionAssembler(
             originalPayload[GoalQualityExecutionPayloadKeys.READINESS] !=
             GoalQualityReadiness.CLEAN_UNSTARTED.wireValue
         }
-      is GoalQualityExecutionRead.Invalid -> null
+      is GoalQualityExecutionRead.Invalid -> sourceContractVersion ?: "unknown"
     }
 
   private fun durablePlanningStatus(
@@ -1184,3 +1111,78 @@ private fun readExecutionPhaseRecords(
   )
   emptyMap()
 }
+
+private fun readPhaseRecord(
+  artifacts: DurableWorkflowArtifacts,
+  phaseId: String,
+  degradation: SubtaskReadDegradation,
+): FeatureTaskRuntimePhaseRecord? =
+  catchingNonCancellation {
+    artifacts.phaseRecord(phaseId)
+  }.getOrElse { error ->
+    degradation.record(
+      source = GoalRunnerSubtaskReadSource.PHASE_RESULTS,
+      expected = "${phaseId}_phase_record",
+      used = "omitted",
+      error = error,
+    )
+    null
+  }
+
+private fun reviewRawResults(
+  artifacts: Any,
+  degradation: SubtaskReadDegradation,
+): Map<String, String> =
+  catchingNonCancellation { GoalSubtaskReviewArtifactDecoder.decode(artifacts)?.rawResults.orEmpty() }.getOrElse {
+      error ->
+    degradation.record(
+      source = GoalRunnerSubtaskReadSource.REVIEW_RAW_RESULTS,
+      expected = "raw_review_results",
+      used = "compact_findings",
+      error = error,
+    )
+    emptyMap()
+  }
+
+private class StoredPassFindings(
+  val findings: List<GoalRunnerReviewFinding>?,
+  val lanes: List<String>,
+  val readFailed: Boolean = false,
+)
+
+private fun storedPassFindings(
+  database: DatabaseSessionFactory,
+  runId: String,
+  degradation: SubtaskReadDegradation,
+): StoredPassFindings? =
+  catchingNonCancellation {
+    database.read { unit ->
+      val reviews = unit.reviews
+      val statuses = reviews.fetchFindingStatuses(runId)
+      StoredPassFindings(
+        findings =
+          statuses.takeIf { it.isNotEmpty() }?.let {
+            storedReviewPassFindings(reviews.fetchNumberedFindings(runId), it)
+          },
+        lanes = reviews.fetchReviewRunLanes(runId).sortedBy { it.orderIndex }.map { it.laneSkillName },
+      )
+    }
+  }.getOrElse { error ->
+    degradation.record(
+      source = GoalRunnerSubtaskReadSource.REVIEW_FINDINGS,
+      expected = "stored_review_findings",
+      used = "compact_findings",
+      error = error,
+    )
+    StoredPassFindings(findings = null, lanes = emptyList(), readFailed = true)
+  }
+
+private fun compactPassFinding(finding: GoalSubtaskReviewCompactFinding): GoalRunnerReviewFinding =
+  GoalRunnerReviewFinding(
+    ref = finding.findingId.orEmpty(),
+    severity = finding.severity,
+    confidence = null,
+    specialist = null,
+    location = null,
+    description = finding.text,
+  )
