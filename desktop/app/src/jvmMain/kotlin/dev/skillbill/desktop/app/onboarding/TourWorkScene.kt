@@ -24,7 +24,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -67,15 +66,14 @@ internal fun tourWorkTimeline(): TourTimeline<TourBoardState> = TourTimeline(
 )
 
 @Composable
-internal fun TourWorkScene(step: Int, replayToken: Int, beat: Int) {
-  val timeline = remember { tourWorkTimeline() }
+internal fun TourWorkScene(step: Int, replayToken: Int, beat: Int, timeline: TourTimeline<TourBoardState>) {
   val state = timeline.stateAt(beat)
   TourStageFrame(state.chrome, state.overlay) {
     TourWorkBoard(state.newRow)
   }
 }
 
-/** The staged Work board; later steps reuse it with the settled ACME-121 row. */
+/** The staged Work board with the settled ACME-121 row. */
 @Composable
 internal fun TourWorkBoard(newRow: TourBoardRow?, modifier: Modifier = Modifier) {
   val colors = SkillBillTheme.colors

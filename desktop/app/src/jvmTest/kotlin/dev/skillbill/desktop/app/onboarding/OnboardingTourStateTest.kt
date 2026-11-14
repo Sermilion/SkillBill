@@ -57,15 +57,12 @@ class OnboardingTourStateTest {
   }
 
   @Test
-  fun `next walks a step's beats before advancing and back replays the previous step`() = runTest {
+  fun `next advances one merged step at a time and back returns to the previous step`() = runTest {
     val tour = OnboardingTourState(FakeAppSettingsRepository(), WindowCoroutineScope(backgroundScope))
     tour.show()
     tour.goTo(1)
 
     assertEquals(0, tour.beat)
-    tour.next()
-    assertEquals(1, tour.step)
-    assertEquals(1, tour.beat)
     tour.next()
     assertEquals(2, tour.step)
     assertEquals(0, tour.beat)

@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -48,8 +47,9 @@ internal data class TourFinishState(
 )
 
 /**
- * Step 07 "From goal to pull request": the finishing phases complete in order, the PR card's checks
- * go green one by one, sparks fire once, and the final spotlight lands on the card with "Ready for you".
+ * The "Review and ship" sequence: the finishing phases complete in order, the PR card's checks go
+ * green one by one, sparks fire once, and the final spotlight lands on the card with "Ready for you".
+ * The merged step lands on the final state.
  */
 internal fun tourFinishTimeline(): TourTimeline<TourFinishState> = TourTimeline(
   TourFinishState(),
@@ -84,8 +84,7 @@ internal fun tourFinishTimeline(): TourTimeline<TourFinishState> = TourTimeline(
 )
 
 @Composable
-internal fun TourFinishScene(step: Int, replayToken: Int, beat: Int) {
-  val timeline = remember { tourFinishTimeline() }
+internal fun TourFinishScene(step: Int, replayToken: Int, beat: Int, timeline: TourTimeline<TourFinishState>) {
   val reduced = LocalReducedMotion.current
   val state = timeline.stateAt(beat)
   TourStageFrame(state.chrome, state.overlay) {

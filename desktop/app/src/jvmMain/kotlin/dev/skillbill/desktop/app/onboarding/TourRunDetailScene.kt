@@ -26,7 +26,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -34,7 +33,6 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import dev.skillbill.desktop.core.designsystem.LocalContentColor
@@ -68,33 +66,6 @@ internal data class TourDetailState(
   val banner: Boolean = false,
 )
 
-internal fun tourRunDetailTimeline(): TourTimeline<TourDetailState> {
-  fun spot(target: TourTarget, tip: TourTip, side: TipSide, pad: Dp): TourBeat<TourDetailState> =
-    TourBeat { it.copy(overlay = it.overlay.copy(spotlight = Spotlight(target, tip, side, pad))) }
-  return TourTimeline(
-    TourDetailState(),
-    listOf(
-      TourBeat { it.runSubtask(0).copy(pipelineIndex = 0).appendLog(TourFixture.logPreplan) },
-      spot(TourTarget.Subtasks, TourFixture.tipSubtasks, TipSide.Right, (-4).dp),
-      TourBeat {
-        it.copy(pipelineIndex = 4, changes = TourChanges(1, 64, 0))
-          .appendLog(TourFixture.logPlan)
-          .appendLog(TourFixture.logEditCsv)
-          .appendLog(TourFixture.logEditCsvTest)
-          .appendLog(TourFixture.logReview)
-          .appendLog(TourFixture.logTest)
-      },
-      spot(TourTarget.Pipeline, TourFixture.tipPipeline, TipSide.Bottom, 2.dp),
-      TourBeat {
-        it.copy(pipelineIndex = 5).appendLog(TourFixture.logCommit)
-          .finishSubtask(0).copy(changes = TourChanges(2, 105, 0)).appendLog(TourFixture.logSubtaskDone)
-          .runSubtask(1).copy(pipelineIndex = 1)
-      },
-      spot(TourTarget.ActivityLog, TourFixture.tipActivity, TipSide.Top, 6.dp),
-    ),
-  )
-}
-
 internal fun TourDetailState.appendLog(text: String): TourDetailState {
   val n = logTotal + 1
   return copy(log = (log + TourLogLine("14:%02d".format(2 + n), text)).takeLast(6), logTotal = n)
@@ -109,16 +80,7 @@ internal fun TourDetailState.finishSubtask(index: Int): TourDetailState = copy(
   subs = subs.mapIndexed { i, s -> if (i == index) s.copy(status = StatusKind.Completed, current = false) else s },
 )
 
-@Composable
-internal fun TourRunDetailScene(step: Int, replayToken: Int, beat: Int) {
-  val timeline = remember { tourRunDetailTimeline() }
-  val state = timeline.stateAt(beat)
-  TourStageFrame(state.chrome, state.overlay) {
-    TourRunDetail(state)
-  }
-}
-
-/** The staged run detail for ACME-121; step 05 drives the pill and the paused banner through [TourDetailState]. */
+/** The staged run detail for ACME-121; the merged steer step drives the pill and the paused banner through [TourDetailState]. */
 @Composable
 internal fun TourRunDetail(state: TourDetailState, modifier: Modifier = Modifier) {
   val colors = SkillBillTheme.colors

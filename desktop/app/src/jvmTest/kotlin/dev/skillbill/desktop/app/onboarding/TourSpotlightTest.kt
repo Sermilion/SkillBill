@@ -9,16 +9,16 @@ import kotlin.test.Test
 @OptIn(ExperimentalTestApi::class)
 class TourSpotlightTest {
   @Test
-  fun `the step four subtasks spotlight draws through its grow-in frames`() = runComposeUiTest {
+  fun `the steer step's pipeline spotlight draws through its grow-in frames`() = runComposeUiTest {
     mainClock.autoAdvance = false
     setContent {
       SkillBillTheme(reducedMotion = false) {
-        TourRunDetailScene(step = 4, replayToken = 0, beat = 1)
+        TourControlScene(step = 2, replayToken = 0, beat = 0, timeline = tourSteerTimeline())
       }
     }
 
     repeat(90) { mainClock.advanceTimeByFrame() }
 
-    onNodeWithText("Subtasks").assertExists()
+    onNodeWithText("The same steps every time").assertExists()
   }
 }

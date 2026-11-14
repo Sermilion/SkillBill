@@ -26,16 +26,14 @@ class TourKeysTest {
   fun `applied actions move steps and escape skips to the outro then closes`() = runTest {
     val tour = OnboardingTourState(FakeAppSettingsRepository(), WindowCoroutineScope(backgroundScope))
     tour.show()
-    tour.goTo(3)
+    tour.goTo(2)
 
     applyTourAction(TourKeyAction.Swallow, tour)
-    assertEquals(3, tour.step)
+    assertEquals(2, tour.step)
     applyTourAction(TourKeyAction.Next, tour)
     assertEquals(3, tour.step)
-    repeat(tourBeatCount(3) - 1) { applyTourAction(TourKeyAction.Next, tour) }
-    assertEquals(4, tour.step)
     applyTourAction(TourKeyAction.Back, tour)
-    assertEquals(3, tour.step)
+    assertEquals(2, tour.step)
     applyTourAction(TourKeyAction.Escape, tour)
     assertEquals(OnboardingTourState.LAST_STEP, tour.step)
     assertTrue(tour.open)

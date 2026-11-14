@@ -72,6 +72,7 @@ class OnboardingTourState(
 
   companion object {
     const val WELCOME_STEP = 0
-    const val LAST_STEP = 9
+    const val LAST_STEP = 5
+    const val LAST_STAGED_STEP = LAST_STEP - 1
   }
 }

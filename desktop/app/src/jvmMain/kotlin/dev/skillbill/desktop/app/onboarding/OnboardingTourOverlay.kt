@@ -101,14 +101,10 @@ fun OnboardingTourOverlay(tour: OnboardingTourState, onStartFirstTask: () -> Uni
             val scale = tourFrameScale(maxWidth, maxHeight)
             ScaledTourFrame(scale) {
               when (tour.step) {
-                1 -> TourSidebarScene(tour.step, tour.replayToken, tour.beat)
-                2 -> TourChatScene(tour.step, tour.replayToken, tour.beat)
-                3 -> TourWorkScene(tour.step, tour.replayToken, tour.beat)
-                4 -> TourRunDetailScene(tour.step, tour.replayToken, tour.beat)
-                5 -> TourControlScene(tour.step, tour.replayToken, tour.beat)
-                6 -> TourReviewScene(tour.step, tour.replayToken, tour.beat)
-                7 -> TourFinishScene(tour.step, tour.replayToken, tour.beat)
-                8 -> TourCommandsScene(tour.step, tour.replayToken, tour.beat)
+                1 -> TourWorkScene(tour.step, tour.replayToken, tour.beat, tourStartTimeline())
+                2 -> TourWorkScene(tour.step, tour.replayToken, tour.beat, tourKindsTimeline())
+                3 -> TourControlScene(tour.step, tour.replayToken, tour.beat, tourSteerTimeline())
+                4 -> TourFinishScene(tour.step, tour.replayToken, tour.beat, tourShipTimeline())
                 else -> EmptyStagedFrame(Modifier.fillMaxSize())
               }
             }
@@ -132,7 +128,7 @@ private fun TourTopBar(tour: OnboardingTourState, modifier: Modifier = Modifier)
       Spacer(Modifier.width(12.dp))
       BasicText("First-run tour", style = SkillBillTheme.type.tXs.copy(color = colors.fgFaint))
       Spacer(Modifier.weight(1f))
-      if (tour.step in 1..8) {
+      if (tour.step in 1..OnboardingTourState.LAST_STAGED_STEP) {
         SbButton("Skip tour", tour::skip, variant = SbButtonVariant.Ghost, size = SbControlSize.Small)
       }
     }
@@ -160,8 +156,9 @@ private fun EmptyStagedFrame(modifier: Modifier = Modifier) {
 @Composable
 private fun TourCaption(tour: OnboardingTourState, compact: Boolean, ended: Boolean) {
   val colors = SkillBillTheme.colors
-  val step = tour.step.coerceIn(1, 8)
-  val nextLabel = if (step == 8) "Finish" else "Next"
+  val lastStaged = OnboardingTourState.LAST_STAGED_STEP
+  val step = tour.step.coerceIn(1, lastStaged)
+  val nextLabel = if (step == lastStaged) "Finish" else "Next"
   val copy = TOUR_STEP_COPY[step - 1]
   val shape = RoundedCornerShape(14.dp)
   Column(
@@ -171,7 +168,7 @@ private fun TourCaption(tour: OnboardingTourState, compact: Boolean, ended: Bool
   ) {
     if (compact) {
       Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        BasicText("%02d / 08".format(step), style = SkillBillTheme.type.monoSm.copy(color = colors.fgFaint))
+        BasicText("%02d / %02d".format(step, lastStaged), style = SkillBillTheme.type.monoSm.copy(color = colors.fgFaint))
         BasicText(copy.title, Modifier.weight(1f), style = SkillBillTheme.type.tSmMedium.copy(color = colors.fg))
         SbButton("Back", tour::back, size = SbControlSize.Small)
         TourNextButton(tour, nextLabel, ended)
@@ -182,7 +179,7 @@ private fun TourCaption(tour: OnboardingTourState, compact: Boolean, ended: Bool
           Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
               BasicText(
-                "%02d / 08 · %d/%d".format(step, tour.beat + 1, tourBeatCount(step)),
+                "%02d / %02d · %d/%d".format(step, lastStaged, tour.beat + 1, tourBeatCount(step)),
                 style = SkillBillTheme.type.monoSm.copy(color = colors.fgFaint),
               )
               BasicText(copy.title, style = SkillBillTheme.type.tMd.copy(color = colors.fg))
@@ -191,12 +188,12 @@ private fun TourCaption(tour: OnboardingTourState, compact: Boolean, ended: Bool
           }
           Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-              (1..8).forEach { index ->
+              (1..lastStaged).forEach { index ->
                 Box(
                   Modifier.size(width = if (index == step) 20.dp else 6.dp, height = 6.dp).background(
                     when { index == step -> colors.accent; index < step -> colors.fgFaint; else -> colors.borderStrong }, CircleShape,
                   ).clickable { tour.goTo(index) }.semantics {
-                    contentDescription = "Step $index of 8"
+                    contentDescription = "Step $index of $lastStaged"
                     role = Role.Button
                   },
                 )
@@ -209,7 +206,7 @@ private fun TourCaption(tour: OnboardingTourState, compact: Boolean, ended: Bool
             }
           }
         }
-        if (step == 8) {
+        if (step == lastStaged) {
           Spacer(Modifier.height(6.dp))
           TourKeyGrid()
         }
@@ -280,13 +277,19 @@ private fun TourHero(tour: OnboardingTourState, onStartFirstTask: () -> Unit, mo
     BasicText(if (welcome) "Welcome to Sona" else "That's the loop", style = SkillBillTheme.type.t2xl.copy(fontSize = if (compact) 26.sp else 40.sp, color = colors.fg, textAlign = androidx.compose.ui.text.style.TextAlign.Center))
     Spacer(Modifier.height(10.dp))
     BasicText(
-      if (welcome) "Sona takes your coding agent from plan to pull request: plan, implement, review, validate, ship. You decide what gets built and when it runs."
-      else "Describe it, start it, steer it, review it, ship it. The rest of Sona builds on those five moves.",
-      Modifier.widthIn(max = 520.dp), style = SkillBillTheme.type.tLg.copy(color = colors.fgMuted, textAlign = androidx.compose.ui.text.style.TextAlign.Center),
+      if (welcome) "Sona puts coding agents like Claude Code, Codex and Cursor to work on your repositories. You say what you want built. The agent plans it, writes the code, reviews it, runs your checks and opens a pull request."
+      else "Ask, start, watch, review, ship. The rest of Sona builds on those five moves.",
+      Modifier.widthIn(max = 560.dp), style = SkillBillTheme.type.tLg.copy(color = colors.fgMuted, textAlign = androidx.compose.ui.text.style.TextAlign.Center),
     )
+    if (welcome && !compact) {
+      Spacer(Modifier.height(22.dp))
+      Row(Modifier.widthIn(max = 720.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        WELCOME_POINTS.forEach { (title, body) -> WelcomePoint(title, body, Modifier.weight(1f)) }
+      }
+    }
     Spacer(Modifier.height(24.dp))
     if (welcome) {
-      SbButton("Take the tour · 90 sec", { tour.goTo(1) }, variant = SbButtonVariant.Primary)
+      SbButton("Take the tour", { tour.goTo(1) }, variant = SbButtonVariant.Primary)
       Spacer(Modifier.height(8.dp))
       SbButton("Skip for now", tour::skip, variant = SbButtonVariant.Ghost)
       Spacer(Modifier.height(16.dp))
@@ -314,3 +317,22 @@ private fun TourHero(tour: OnboardingTourState, onStartFirstTask: () -> Unit, mo
 }
 
 private data class HeroMarkState(val bands: Int, val ripples: Boolean)
+
+private val WELCOME_POINTS = listOf(
+  "You ask" to "Describe a change in chat, like you'd brief a teammate.",
+  "Agents work" to "They plan, code, review and test on your machine, in your repo.",
+  "You decide" to "Nothing starts or merges without your click.",
+)
+
+@Composable
+private fun WelcomePoint(title: String, body: String, modifier: Modifier = Modifier) {
+  val colors = SkillBillTheme.colors
+  val shape = RoundedCornerShape(10.dp)
+  Column(
+    modifier.background(colors.bgWindow, shape).border(1.dp, colors.borderSubtle, shape).padding(14.dp),
+    verticalArrangement = Arrangement.spacedBy(4.dp),
+  ) {
+    BasicText(title, style = SkillBillTheme.type.tSmMedium.copy(color = colors.fg))
+    BasicText(body, style = SkillBillTheme.type.tXs.copy(color = colors.fgMuted))
+  }
+}

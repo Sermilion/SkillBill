@@ -3,27 +3,20 @@ package dev.skillbill.desktop.app.onboarding
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import dev.skillbill.desktop.core.designsystem.component.ToastData
-import dev.skillbill.desktop.core.designsystem.component.ToastLead
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
-import dev.skillbill.desktop.core.designsystem.overlay.CommandGroup
-import dev.skillbill.desktop.core.designsystem.overlay.CommandItem
 import dev.skillbill.desktop.core.designsystem.status.StatusKind
 import dev.skillbill.desktop.core.designsystem.usage.UsageUiMeter
 import dev.skillbill.desktop.core.designsystem.usage.UsageUiState
-import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
-import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
-import dev.skillbill.desktop.core.domain.model.NewTaskActionKind
 
 internal enum class TourNav { NewTask, Work, History, Specs, Settings }
 
 /** The tour targets primitives can point at; later steps append their own entries. */
 internal enum class TourTarget {
   NavGroup, NavNewTask, NavWork, NavHistory, NavSpecs, NavSettings,
-  Usage, StartCard, StartGoalButton,
+  Usage,
   BoardLanes, LaneNeeds, LaneGoals, LanePhases, LaneOps, LaneDone, NewRow,
   Subtasks, Pipeline, ActivityLog,
-  DiffLine, DiffPlus, AddReview, FinishSteps, PrCard, SparkLayer,
+  FinishSteps, PrCard, SparkLayer,
 }
 
 internal enum class TipSide { Right, Left, Top, Bottom, BottomLeft }
@@ -91,16 +84,6 @@ internal data class TourLogLine(val time: String, val text: String)
 
 internal data class TourChanges(val files: Int, val adds: Int, val deletes: Int)
 
-internal sealed interface TourChatLine {
-  data class User(val text: String) : TourChatLine
-  data class Agent(val text: String) : TourChatLine
-  data object AgentThinking : TourChatLine
-}
-
-internal data class TourDiffFile(val path: String, val adds: Int, val deletes: Int)
-
-internal data class TourDiffLine(val sign: Char, val number: Int?, val text: String, val target: Boolean = false)
-
 internal data class TourFinishStep(val phase: String, val outcome: String)
 
 /** Every string and value the staged tour shares, copied from `design/onboarding/index.html`. */
@@ -167,11 +150,6 @@ internal object TourFixture {
     agent = claude, branch = goalBranch, label = "Planning", progress = 0f, time = "0s", fresh = true,
   )
   val newGoalRowActive = newGoalRow.copy(status = StatusKind.Active, label = "Subtask 1/3", progress = 0.08f, time = "12s")
-  val newGoalRowSettled = TourBoardRow(
-    goalKey, goalTitle,
-    status = StatusKind.Active, iconProgress = 0.15f,
-    agent = claude, branch = goalBranch, label = "Subtask 1/3", progress = 0.12f, time = "1m",
-  )
 
   val subtaskTitles = listOf(
     "CSV serializer for invoice rows",
@@ -180,35 +158,9 @@ internal object TourFixture {
   )
   val phaseNames = listOf("preplan", "plan", "implement", "review", "validate", "commit")
 
-  const val newTaskHeading = "What should we build?"
-  const val newTaskBody = "Describe the work in your own words. The agent prepares it with you before anything runs."
-  const val composerPlaceholder = "Describe a change, paste an issue, or ask a question"
-  val homeCounts = listOf("Needs you · 0", "Running · 3", "Finished today · 2")
-
-  const val chatMessage1 = "Add CSV export to the invoices table. It should respect the active filters."
-  const val chatReply1 = "I read `InvoicesTable.tsx` and `api/invoices`. One question first: should archived invoices be included?"
-  const val chatMessage2 = "Only what the table shows."
-  const val chatReply2 = "Clear. I'd split this into three subtasks: a CSV serializer, an export endpoint that applies the active filters, and the button with tests."
-
-  // The card shows `instruction` as its tooltip, so it stays a plain sentence.
-  val startAction = ChatSuggestedAction(
-    label = "Start goal",
-    instruction = "Start a goal that adds CSV export to the invoices table, split into three subtasks.",
-    mode = ChatPermissionMode.Act,
-    start = NewTaskActionKind.Goal,
-    title = goalTitle,
-  )
-
-  const val logPreplan = "preplan · read 14 files, 2 specs"
-  const val logPlan = "plan · 4 steps written"
-  const val logEditCsv = "edit src/export/csv.ts"
-  const val logEditCsvTest = "edit src/export/csv.test.ts"
-  const val logReview = "review · 0 blocking findings"
-  const val logTest = "npm test · 48 passed"
   const val logCommit = "commit 3f9a2c1"
-  const val logSubtaskDone = "subtask 1 done · starting subtask 2"
 
-  // Step 05 seeds subtask 2 mid-flight; appended lines take stamps after 14:10 through `logTotal` = 8.
+  // The steer sequence seeds subtask 2 mid-flight; appended lines take stamps after 14:10 through `logTotal` = 8.
   val controlSeedLog = listOf(
     TourLogLine("14:07", logCommit),
     TourLogLine("14:08", "preplan · read 9 files"),
@@ -224,41 +176,6 @@ internal object TourFixture {
   const val pauseBannerTitle = "Paused after subtask 2"
   const val pauseBannerBody = "Two of three subtasks are committed. Resume when you're ready, or switch agents first."
 
-  val reviewFiles = listOf(
-    TourDiffFile("src/export/csv.ts", 64, 0),
-    TourDiffFile("src/export/csv.test.ts", 41, 0),
-    TourDiffFile("src/api/invoices/export.ts", 28, 3),
-    TourDiffFile("src/ui/InvoicesTable.tsx", 19, 5),
-    TourDiffFile("src/ui/ExportButton.tsx", 4, 0),
-  )
-  val reviewDiff = listOf(
-    TourDiffLine(' ', 1, "import { Invoice } from \"../model\";"),
-    TourDiffLine('+', 2, "import { formatMoney, formatDate } from \"../format\";"),
-    TourDiffLine(' ', 3, ""),
-    TourDiffLine('+', 4, "export function toCsv(rows: Invoice[]): string {"),
-    TourDiffLine('+', 5, "  const header = [\"Number\", \"Customer\", \"Date\", \"Total\"];"),
-    TourDiffLine('+', 6, "  const lines = rows.map((r) => ["),
-    TourDiffLine('+', 7, "    r.number,"),
-    TourDiffLine('+', 8, "    r.customer.replace(/,/g, \" \"),", target = true),
-    TourDiffLine('+', 9, "    formatDate(r.issuedAt),"),
-    TourDiffLine('+', 10, "    formatMoney(r.total),"),
-    TourDiffLine('+', 11, "  ].join(\",\"));"),
-    TourDiffLine('+', 12, "  return [header.join(\",\"), ...lines].join(\"\\n\");"),
-    TourDiffLine('+', 13, "}"),
-    TourDiffLine(' ', 14, ""),
-    TourDiffLine('-', null, "export const CSV_MIME = \"text/plain\";"),
-    TourDiffLine('+', 15, "export const CSV_MIME = \"text/csv\";"),
-  )
-  const val csvFixedLine = "    escapeCsvCell(r.customer),"
-  const val reviewComment = "Commas get dropped here. Use the shared escapeCsvCell helper so they are quoted instead."
-  const val reviewCommentThread =
-    "Commas get dropped here. Use the shared `escapeCsvCell` helper so they are quoted instead."
-  const val reviewDraftFooter = "Line 8 · pending in this review"
-  const val reviewReply =
-    "Fixed in `9b1e04d`. The serializer now calls `escapeCsvCell`, so commas are quoted, not dropped."
-  val reviewToast =
-    ToastData("Review added · 1 comment sent to Claude", lead = ToastLead.Status(StatusKind.Completed))
-
   val finishSteps = listOf(
     TourFinishStep("goal_assessment", "All 3 subtasks match the spec"),
     TourFinishStep("qa", "3 of 3 journeys passed"),
@@ -272,46 +189,17 @@ internal object TourFixture {
   const val prStatusReady = "Ready to merge"
   const val prRange = "feat/invoice-csv → main"
 
-  // The staged palette mirrors the real catalog's sections; Show tour sits last in Navigation, as the shell places it.
-  val commandGroups = listOf(
-    CommandGroup("Navigation", listOf(
-      CommandItem("nav:new-task", "Go to New task", LucideIcons.pencil, "G N"),
-      CommandItem("nav:work", "Go to Work", LucideIcons.target, "G W"),
-      CommandItem("nav:history", "Go to History", LucideIcons.history, "G H"),
-      CommandItem("tour:show", "Show tour", LucideIcons.play),
-    )),
-    CommandGroup("Panes", listOf(
-      CommandItem("pane:specs", "Open specs pane", LucideIcons.fileText, "G S"),
-      CommandItem("pane:term", "Toggle terminal", LucideIcons.terminal, "⌃ `"),
-    )),
-    CommandGroup(goalKey, listOf(
-      CommandItem("goal:pause", "Pause after subtask", LucideIcons.pause, "P"),
-      CommandItem("goal:pause-now", "Pause now", LucideIcons.stop, "⇧ P"),
-      CommandItem("goal:resume", "Resume", LucideIcons.play, "R"),
-    )),
-  )
-  const val palettePlaceholder = "Type a command or search…"
-  const val paletteQuery = "pause"
-
-  val tipNavGroup = TourTip(
-    "One sidebar, five places",
-    "New task is where work starts. Work shows everything running. History, Specs and Settings cover the rest.",
-    listOf("G N", "G W", "G H", "G S", "G ,"),
-  )
-  val tipUsage = TourTip("Usage", "How much of your agent's limits you have left, always in view.")
-  val tipYourCall = TourTip("Your call", "Starting the goal is always a click. The agent never launches work on its own.")
-  val tipStarted = TourTip("Started", "The goal is on your Work board now.")
   val tipBoardLanes = TourTip(
     "Grouped by what it needs",
     "Needs you sits on top — paused runs and decisions wait there. Goal runs, phases and operations follow; finished runs sink to the bottom.",
   )
+  val tipRunKinds = TourTip(
+    "One board, three kinds",
+    "A goal runs the whole pipeline end to end. A standalone phase runs a single stage of it. An operation does one focused job.",
+  )
   val tipNewGoal = TourTip("Your new goal", "Next, we open it.")
-  val tipSubtasks = TourTip("Subtasks", "The plan, split into pieces small enough to review.")
   val tipPipeline = TourTip("The same steps every time", "Plan, implement, review, validate, commit. Failed checks loop back for a fix before anything is committed.")
-  val tipActivity = TourTip("Live activity", "What the agent is doing right now.")
   val tipPausedNeedsYou = TourTip("Needs you", "Paused runs and runs waiting on a decision show up here, and in a notification.")
-  val tipCommentLine = TourTip("Comment on a line", "Hover any line and click +.")
-  val tipSendReview = TourTip("Send it as one review", "Comments stay pending while you read other files, then go out together.")
   val tipGoalFinish = TourTip("Goal finish", "One last pass over the whole goal, not just the last subtask.")
   val tipReadyForYou = TourTip("Ready for you", "Merge it yourself. Sona never merges on its own.")
 }
