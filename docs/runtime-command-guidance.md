@@ -277,16 +277,25 @@ A goal relaunched from a project-store manifest needs no operator choice when it
 plans before any subtask starts. Once a completed plan governs its parent spec,
 the runner clears the ambiguity itself.
 
-The same command handles a goal that blocks with "The outcome of goal-quality
-step '<step>#<attempt>' is unknown". That happens when the runner died during an
-agent-backed QA or QA fix step, before the step recorded its outcome. The
-command retires the unsettled quality execution, and the next goal run admits a
-fresh one.
+A runner that dies mid-step, for example on SIGKILL or a crash, can leave a
+goal-quality build, QA or QA fix step `running` with no usable outcome: a pending
+gate command, a gate that never recorded progress, or no accepted agent output.
+The next goal run settles that attempt as `paused` with a ledger reason that
+says the step "was interrupted without a usable outcome and runs again as a new
+attempt", drops the dead attempt's own nested gate progress, and runs the step
+again as the next attempt. Each step gets at most two automatic reruns per
+quality progress record. The third such interruption blocks with "Goal-quality
+step '<step>' was interrupted without a usable outcome 3 times (last: <cause>);
+automatic reruns exhausted."
 
-A goal run never needs this command for an interrupted validation step.
-Validate only has to make the build green on the current tree, so the next run
-starts it again on whatever the tree holds. Other interrupted mutating steps
-keep the block.
+A step whose retained start, ledger or gate evidence is inconsistent still
+blocks with "The outcome of goal-quality step '<step>#<attempt>' is unknown".
+`sona goal fresh-quality <issue-key> --reason <why>` retires that unsettled
+quality execution, and the next goal run admits a fresh one.
+
+Validate keeps its own rule. It only has to make the build green on the
+current tree, so the next run starts an interrupted validate again on whatever
+the tree holds.
 
 Validate blocks for one reason: three attempts in a row failed to make the
 build green. Any failed attempt, whether the agent settled blocked, its process

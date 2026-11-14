@@ -27,6 +27,7 @@ import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
+import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
@@ -38,6 +39,7 @@ import skillbill.workflow.taskruntime.model.validation.ValidationGateRunOutcome
 import skillbill.workflow.taskruntime.validation.FeatureTaskRuntimeProviderLimitPause
 import java.nio.file.Path
 import java.security.MessageDigest
+import java.time.Instant
 import kotlin.coroutines.cancellation.CancellationException
 
 @Inject
@@ -114,51 +116,33 @@ public class PhaseRunPlanResolver(
     progress: GoalQualityPhaseProgress,
     plan: ResolvedPhaseExecutionPlan,
     outcomeNamespace: String,
-  ) {
+  ): List<GoalQualityInterruptedAttempt> =
     progress.phaseRecords.values.filter { record ->
       retainedRunningPhase(progress, plan, record) &&
         strategies.qualityGateOperation(plan, record.phaseId) != PhaseQualityGateOperation.AgentValidation
-    }.forEach { record ->
-      val envelopeAccepted =
-        progress.acceptedEnvelopes.any {
-          it.phaseId == record.phaseId && it.attempt == record.attemptCount
-        }
+    }.mapNotNull { record ->
       when (val operation = strategies.qualityGateOperation(plan, record.phaseId)) {
         is PhaseQualityGateOperation.PackGate -> {
-          validateRunningGate(
-            progress,
-            record,
-            operation.commandFamily,
+          val gateKey = { attempt: Int ->
             packBuildGateProgressKey(
               outcomeNamespace,
               plan.definitionId,
               record.phaseId,
-              record.attemptCount,
+              attempt,
               operation.commandFamily,
-            ),
+            )
+          }
+          validateRunningGate(
+            progress,
+            record,
+            operation.commandFamily,
+            gateKey(record.attemptCount),
+            (1 until record.attemptCount).map(gateKey).toSet(),
           )
         }
-        else -> {
-          val policy = strategies.selectedOwnerOf(record.phaseId, plan)?.policyFor(record.phaseId)
-          val acceptedSource =
-            progress.acceptedSourceObservations.any {
-              it.phaseId == record.phaseId && it.attempt == record.attemptCount &&
-                it.acceptedOutputFingerprint != null
-            }
-          if (mutatingWithoutAcceptedSource(
-              envelopeAccepted,
-              policy?.mutating == true,
-              policy?.fileMutating == true,
-              acceptedSource,
-            )
-          ) {
-            unknownQualityStep(record)
-          }
-          if (!envelopeAccepted && !replayableReadOnlyStep(progress, record, plan)) unknownQualityStep(record)
-        }
+        else -> retainedAgentAttempt(progress, plan, record)
       }
     }
-  }
 
   internal fun requiresTerminalQualitySourceEvidence(plan: ResolvedPhaseExecutionPlan): Boolean =
     plan.definitionId in setOf(goalBuildDefinitionId, validationDefinitionId) &&
@@ -190,65 +174,83 @@ public class PhaseRunPlanResolver(
     return pausedGate && isProviderPausedAttempt(progress.phaseLedger, record)
   }
 
-  private fun mutatingWithoutAcceptedSource(
-    envelopeAccepted: Boolean,
-    mutating: Boolean,
-    fileMutating: Boolean,
-    acceptedSource: Boolean,
-  ): Boolean {
-    val mutatingStep = mutating || fileMutating
-    return envelopeAccepted && mutatingStep && !acceptedSource
+  private fun retainedAgentAttempt(
+    progress: GoalQualityPhaseProgress,
+    plan: ResolvedPhaseExecutionPlan,
+    record: FeatureTaskRuntimePhaseRecord,
+  ): GoalQualityInterruptedAttempt? {
+    val policy = strategies.selectedOwnerOf(record.phaseId, plan)?.policyFor(record.phaseId)
+    val mutatingStep = policy?.mutating == true || policy?.fileMutating == true
+    val acceptedSource =
+      progress.acceptedSourceObservations.any {
+        it.phaseId == record.phaseId && it.attempt == record.attemptCount &&
+          it.acceptedOutputFingerprint != null
+      }
+    val envelopeAccepted = envelopeAccepted(progress, record)
+    val cause =
+      when {
+        envelopeAccepted && mutatingStep && !acceptedSource ->
+          "its accepted output has no accepted source observation"
+        envelopeAccepted -> return null
+        policy == null -> unknownQualityStep(record)
+        else -> "it recorded no accepted output"
+      }
+    validateAttemptStarts(progress.phaseLedger, record)
+    if (hasTerminalAction(progress.phaseLedger, record)) unknownQualityStep(record)
+    return GoalQualityInterruptedRerun.admit(progress, GoalQualityInterruptedAttempt(record, cause))
   }
 
-  private fun unstartedGate(
-    envelopeAccepted: Boolean,
-    nested: FeatureTaskRuntimeValidationGateProgress,
-    resumableProviderPause: Boolean,
-  ): Boolean {
-    val idle = nested.gateRunCount == 0 && nested.terminalOutcome == null
-    return !envelopeAccepted && idle && !resumableProviderPause
-  }
-
-  private fun replayableReadOnlyStep(
+  private fun envelopeAccepted(
     progress: GoalQualityPhaseProgress,
     record: FeatureTaskRuntimePhaseRecord,
-    plan: ResolvedPhaseExecutionPlan,
-  ): Boolean {
-    val policy = strategies.selectedOwnerOf(record.phaseId, plan)?.policyFor(record.phaseId) ?: return false
-    if (policy.mutating || policy.fileMutating) return false
-    validateAttemptStarts(progress.phaseLedger, record)
-    return !hasTerminalAction(progress.phaseLedger, record)
-  }
+  ): Boolean = progress.acceptedEnvelopes.any { it.phaseId == record.phaseId && it.attempt == record.attemptCount }
 
   internal fun validateRunningGate(
     progress: GoalQualityPhaseProgress,
     record: FeatureTaskRuntimePhaseRecord,
     commandFamily: ValidationGateCommandFamily,
     expectedKey: String,
-  ) {
-    val envelopeAccepted =
-      progress.acceptedEnvelopes.any {
-        it.phaseId == record.phaseId && it.attempt == record.attemptCount
-      }
+    earlierAttemptKeys: Set<String> = emptySet(),
+  ): GoalQualityInterruptedAttempt? {
+    val envelopeAccepted = envelopeAccepted(progress, record)
     validateAttemptStarts(progress.phaseLedger, record)
     val resumableProviderPause = isProviderPausedAttempt(progress.phaseLedger, record)
     val terminalActions = hasTerminalAction(progress.phaseLedger, record) && !resumableProviderPause
     if (terminalActions) unknownQualityStep(record)
-    val (storedKey, nested) =
-      when (commandFamily) {
-        ValidationGateCommandFamily.BUILD -> progress.buildGateProgressKey to progress.buildGateProgress
-        ValidationGateCommandFamily.VALIDATION ->
-          progress.validationGateProgressKey to progress.validationGateProgress
-      }
-    if (storedKey != expectedKey || nested == null) unknownQualityStep(record)
-    if (nested.interruptedInitialDiscovery(commandFamily)) return
-    if (nested.pendingExternalOperation != null || nested.pendingExternalCheckpoint != null) {
-      unknownQualityStep(
-        record,
+    val (storedKey, nested) = storedGateProgress(progress, commandFamily)
+    val noOwnGateProgress = storedKey == null && nested == null || storedKey in earlierAttemptKeys
+    if (noOwnGateProgress && !envelopeAccepted && !resumableProviderPause) {
+      return GoalQualityInterruptedRerun.admit(
+        progress,
+        GoalQualityInterruptedAttempt(record, "its gate recorded no progress"),
       )
     }
-    if (unstartedGate(envelopeAccepted, nested, resumableProviderPause)) {
-      unknownQualityStep(record)
+    if (storedKey != expectedKey || nested == null) unknownQualityStep(record)
+    val cause = unusableGateCause(nested, commandFamily, !envelopeAccepted && !resumableProviderPause) ?: return null
+    return GoalQualityInterruptedRerun.admit(progress, GoalQualityInterruptedAttempt(record, cause, commandFamily))
+  }
+
+  private fun storedGateProgress(
+    progress: GoalQualityPhaseProgress,
+    commandFamily: ValidationGateCommandFamily,
+  ): Pair<String?, FeatureTaskRuntimeValidationGateProgress?> =
+    when (commandFamily) {
+      ValidationGateCommandFamily.BUILD -> progress.buildGateProgressKey to progress.buildGateProgress
+      ValidationGateCommandFamily.VALIDATION -> progress.validationGateProgressKey to progress.validationGateProgress
+    }
+
+  private fun unusableGateCause(
+    nested: FeatureTaskRuntimeValidationGateProgress,
+    commandFamily: ValidationGateCommandFamily,
+    rerunnableIdleGate: Boolean,
+  ): String? {
+    val pending = nested.pendingExternalOperation != null || nested.pendingExternalCheckpoint != null
+    val idle = nested.gateRunCount == 0 && nested.terminalOutcome == null
+    return when {
+      nested.interruptedInitialDiscovery(commandFamily) -> null
+      pending -> "pending '${nested.pendingExternalOperation}' at checkpoint '${nested.pendingExternalCheckpoint}'"
+      idle && rerunnableIdleGate -> "its gate never completed a run"
+      else -> null
     }
   }
 
@@ -344,10 +346,8 @@ public class PhaseRunPlanResolver(
   private fun unknownQualityStep(record: FeatureTaskRuntimePhaseRecord): Nothing =
     throw SkillBillRuntimeException(
       WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION,
-      "The outcome of goal-quality step '${record.phaseId}#${record.attemptCount}' is unknown. " +
-        "Inspect authoritative process or phase evidence, or explicitly retire " +
-        "this quality execution and accept new cycles: " +
-        "sona goal fresh-quality <issue-key> --reason \"<why>\".",
+      "The outcome of goal-quality step '${record.phaseId}#${record.attemptCount}' is unknown: its retained " +
+        "start, ledger or gate evidence is inconsistent. Inspect authoritative process or phase evidence.",
     )
 
   internal fun invalidQualityPlan(detail: String? = null): Nothing =
@@ -746,3 +746,90 @@ public data class GoalQualityValidationSourceRequest(
       ValidationGateCommandFamily.VALIDATION
     },
 )
+
+public data class GoalQualityInterruptedAttempt(
+  val record: FeatureTaskRuntimePhaseRecord,
+  val cause: String,
+  val ownGateProgress: ValidationGateCommandFamily? = null,
+)
+
+internal object GoalQualityInterruptedRerun {
+  const val MAX_AUTOMATIC_RERUNS: Int = 2
+  const val MARKER: String = "was interrupted without a usable outcome and runs again as a new attempt"
+
+  fun reason(attempt: GoalQualityInterruptedAttempt): String =
+    "Goal-quality step '${attempt.record.phaseId}#${attempt.record.attemptCount}' $MARKER (${attempt.cause})."
+
+  fun isRerunReason(reason: String?): Boolean = reason?.contains(MARKER) == true
+
+  fun settledReruns(
+    ledger: List<FeatureTaskRuntimePhaseLedgerEntry>,
+    phaseId: String,
+  ): Int =
+    ledger.count {
+      it.phaseId == phaseId && it.action == FeatureTaskRuntimePhaseLedgerAction.PAUSED &&
+        isRerunReason(it.blockedReason)
+    }
+
+  internal fun admit(
+    progress: GoalQualityPhaseProgress,
+    attempt: GoalQualityInterruptedAttempt,
+  ): GoalQualityInterruptedAttempt {
+    val phaseId = attempt.record.phaseId
+    val interruptions = settledReruns(progress.phaseLedger, phaseId) + 1
+    if (interruptions > MAX_AUTOMATIC_RERUNS) {
+      throw SkillBillRuntimeException(
+        WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION,
+        "Goal-quality step '$phaseId' was interrupted without a usable outcome $interruptions times " +
+          "(last: ${attempt.cause}); automatic reruns exhausted.",
+      )
+    }
+    return attempt
+  }
+}
+
+internal fun GoalQualityPhaseProgress.settleInterruptedAttempts(
+  attempts: List<GoalQualityInterruptedAttempt>,
+  now: Instant,
+): GoalQualityPhaseProgress =
+  attempts.fold(
+    this,
+  ) { progress, attempt -> progress.settleInterruptedAttempt(attempt, now) }
+
+private fun GoalQualityPhaseProgress.settleInterruptedAttempt(
+  attempt: GoalQualityInterruptedAttempt,
+  now: Instant,
+): GoalQualityPhaseProgress {
+  val record = attempt.record
+  val reason = GoalQualityInterruptedRerun.reason(attempt)
+  val sequence = maxOf(phaseLedger.maxOfOrNull { it.sequenceNumber } ?: 0, ledgerSequenceHighWaterMark) + 1
+  val entry =
+    FeatureTaskRuntimePhaseLedgerEntry(
+      action = FeatureTaskRuntimePhaseLedgerAction.PAUSED,
+      sequenceNumber = sequence,
+      timestamp = now,
+      phaseId = record.phaseId,
+      attemptCount = record.attemptCount,
+      resolvedAgentId = record.resolvedAgentId,
+      executionOrigin = record.executionOrigin,
+      blockedReason = reason,
+    )
+  val settledRecord =
+    record.copy(
+      status = WorkflowStepStatus.PAUSED,
+      blockedReason = reason,
+      failureDisposition = FeatureTaskRuntimeFailureDisposition.RETRYABLE,
+    )
+  val settled =
+    copy(
+      phaseRecords = phaseRecords + (record.phaseId to settledRecord),
+      phaseLedger = phaseLedger + entry,
+      ledgerSequenceHighWaterMark = sequence,
+    )
+  return when (attempt.ownGateProgress) {
+    ValidationGateCommandFamily.BUILD -> settled.copy(buildGateProgress = null, buildGateProgressKey = null)
+    ValidationGateCommandFamily.VALIDATION ->
+      settled.copy(validationGateProgress = null, validationGateProgressKey = null)
+    null -> settled
+  }
+}

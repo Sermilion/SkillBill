@@ -21,7 +21,11 @@ import java.time.Clock
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertContains
+import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 
 class GoalQualityGateRecoveryTest {
   @TempDir lateinit var home: Path
@@ -58,7 +62,7 @@ class GoalQualityGateRecoveryTest {
 
   @Test
   fun `repeated matching starts retain a recoverable gate`() {
-    validate(progress(listOf(first, second)))
+    assertNull(validate(progress(listOf(first, second))))
   }
 
   @Test
@@ -75,14 +79,15 @@ class GoalQualityGateRecoveryTest {
   }
 
   @Test
-  fun `repeated starts do not make an interrupted external build safe to replay`() {
+  fun `a hard-killed external build reruns as a new attempt instead of resuming in place`() {
     val pending =
       gate.copy(
         pendingExternalOperation = "build:initial_discovery:./gradlew compileKotlin",
         pendingExternalCheckpoint = "checkpoint",
       )
-    val failure = assertFailsWith<SkillBillRuntimeException> { validate(progress(listOf(first, second), pending)) }
-    assertContains(failure.message.orEmpty(), "outcome of goal-quality step 'build#1' is unknown")
+    val rerun = assertNotNull(validate(progress(listOf(first, second), pending)))
+    assertEquals(ValidationGateCommandFamily.BUILD, rerun.ownGateProgress)
+    assertContains(rerun.cause, "pending 'build:initial_discovery:./gradlew compileKotlin' at checkpoint 'checkpoint'")
   }
 
   @Test
@@ -95,11 +100,11 @@ class GoalQualityGateRecoveryTest {
         pendingExternalCheckpoint = "checkpoint",
         pendingExternalInterrupted = true,
       )
-    validate(progress(listOf(first, second), interrupted))
+    assertNull(validate(progress(listOf(first, second), interrupted)))
   }
 
   @Test
-  fun `interrupted repair and verification commands keep the unknown outcome block`() {
+  fun `interrupted repair and verification commands rerun as a new attempt`() {
     listOf(
       "build:repair:build:1",
       "build:post_repair_verify:./gradlew compileKotlin",
@@ -111,9 +116,8 @@ class GoalQualityGateRecoveryTest {
           pendingExternalCheckpoint = "checkpoint",
           pendingExternalInterrupted = true,
         )
-      val failure =
-        assertFailsWith<SkillBillRuntimeException>(operation) { validate(progress(listOf(first, second), interrupted)) }
-      assertContains(failure.message.orEmpty(), "outcome of goal-quality step 'build#1' is unknown")
+      val rerun = assertNotNull(validate(progress(listOf(first, second), interrupted)), operation)
+      assertContains(rerun.cause, operation)
     }
   }
 
@@ -124,15 +128,13 @@ class GoalQualityGateRecoveryTest {
   }
 
   @Test
-  fun `an interrupted QA fix attempt keeps the unknown outcome block`() {
+  fun `an interrupted QA fix attempt reruns as a new attempt`() {
     val fix = record.copy(phaseId = "qa_fix")
-    val failure =
-      assertFailsWith<SkillBillRuntimeException> {
-        validateRetained(
-          GoalQualityPhaseProgress(phaseRecords = mapOf("qa_fix" to fix), phaseLedger = qaStarts("qa_fix")),
-        )
-      }
-    assertContains(failure.message.orEmpty(), "outcome of goal-quality step 'qa_fix#1' is unknown")
+    val reruns =
+      validateRetained(
+        GoalQualityPhaseProgress(phaseRecords = mapOf("qa_fix" to fix), phaseLedger = qaStarts("qa_fix")),
+      )
+    assertEquals(listOf(fix), reruns.map { it.record })
   }
 
   @Test
@@ -146,6 +148,7 @@ class GoalQualityGateRecoveryTest {
         validateRetained(GoalQualityPhaseProgress(phaseRecords = mapOf("qa" to qa), phaseLedger = ledger))
       }
     assertContains(failure.message.orEmpty(), "outcome of goal-quality step 'qa#1' is unknown")
+    assertFalse("fresh-quality" in failure.message.orEmpty())
   }
 
   @Test
@@ -170,14 +173,14 @@ class GoalQualityGateRecoveryTest {
   private fun validateRetained(
     progress: GoalQualityPhaseProgress,
     definition: SkeletonDefinition = SkeletonDefinition.GOAL_QA,
-  ) {
+  ): List<GoalQualityInterruptedAttempt> {
     val resolver = resolver()
     val plan =
       resolver.resolveExecutionPlan(
         PhaseRunRequest(definitionId = definition.id, repoRoot = home, invokedAgentId = "codex"),
         "goal-parent",
       )
-    resolver.validateRetainedRunningPhases(progress, plan, "goal-parent:quality-invocation")
+    return resolver.validateRetainedRunningPhases(progress, plan, "goal-parent:quality-invocation")
   }
 
   private fun resolver(): PhaseRunPlanResolver {
@@ -192,7 +195,6 @@ class GoalQualityGateRecoveryTest {
     nested: FeatureTaskRuntimeValidationGateProgress = gate,
   ) = GoalQualityPhaseProgress(phaseLedger = ledger, buildGateProgress = nested, buildGateProgressKey = "key")
 
-  private fun validate(progress: GoalQualityPhaseProgress) {
+  private fun validate(progress: GoalQualityPhaseProgress): GoalQualityInterruptedAttempt? =
     resolver().validateRunningGate(progress, record, ValidationGateCommandFamily.BUILD, "key")
-  }
 }

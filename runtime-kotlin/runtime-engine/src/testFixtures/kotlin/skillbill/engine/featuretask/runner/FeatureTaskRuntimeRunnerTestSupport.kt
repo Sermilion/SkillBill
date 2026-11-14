@@ -834,6 +834,31 @@ private fun testRunLoopEntry(deps: RuntimePhaseGatesDeps): TestFeatureTaskRuntim
   )
 }
 
+fun packBuildGateRunLoopEntryForTests(
+  gitOperations: WorkflowGitOperations,
+  manifests: List<PlatformManifest>,
+  runner: ValidationGateRunner,
+  repoLocalConfig: RepoLocalConfigPort,
+): TestFeatureTaskRuntimeRunLoopEntry {
+  val resolver = ValidationGateResolver { manifests }
+  return TestFeatureTaskRuntimeRunLoopEntry(
+    gitOperations = gitOperations,
+    qualityGateCycles =
+      RuntimeQualityGateCycles(
+        buildFeatureTaskRuntimeBuildGateCoordinator(
+          resolver,
+          runner,
+          repoLocalConfig,
+          NoopRuntimeDiagnostics,
+          gitOperations = gitOperations,
+        ),
+        AcceptingFeatureTaskRuntimeWireArtifactValidator,
+        FeatureTaskRuntimeValidationGateCoordinator(),
+        resolver,
+      ),
+  )
+}
+
 private fun defaultRepoLocalConfigPort(): RepoLocalConfigPort =
   object : RepoLocalConfigPort {
     override fun readRepoLocalConfig(request: ReadRepoLocalConfigRequest) =
