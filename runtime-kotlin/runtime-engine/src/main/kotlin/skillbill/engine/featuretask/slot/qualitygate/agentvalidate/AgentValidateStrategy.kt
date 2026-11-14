@@ -15,7 +15,7 @@ import skillbill.engine.featuretask.slot.qualitygate.QUALITY_GATE_STEP_POLICY
 import skillbill.engine.featuretask.slot.qualitygate.VALIDATE_VALUE_CONTENT
 import skillbill.engine.featuretask.slot.qualitygate.gateCurrentExecution
 import skillbill.engine.featuretask.slot.qualitygate.runtimeOwnedValidateAgentPhaseTask
-import skillbill.engine.featuretask.slot.qualitygate.validateGateTriagePhaseTask
+import skillbill.engine.featuretask.slot.qualitygate.savedValidationAgentDirective
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
 import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecution
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
@@ -37,7 +37,7 @@ public class AgentValidateStrategy :
 
   override fun directiveFor(stepId: String): String {
     policies.policyOf(stepId)
-    return runtimeOwnedValidateAgentPhaseTask()
+    return runtimeOwnedValidateAgentPhaseTask(null)
   }
 
   override fun promptSections(
@@ -45,15 +45,16 @@ public class AgentValidateStrategy :
     inputs: FeatureTaskRuntimePhasePromptComposeInputs,
   ): PhaseStepPromptSections {
     policies.policyOf(stepId)
+    val (taskDirective, runsBuildGate) =
+      savedValidationAgentDirective(
+        inputs.validationLaunchTransport,
+        inputs.packValidationCommand,
+        inputs.validationGateTriage,
+      )
     return PhaseStepPromptSections(
-      taskDirective =
-        if (inputs.validationGateTriage) {
-          validateGateTriagePhaseTask()
-        } else {
-          runtimeOwnedValidateAgentPhaseTask()
-        },
+      taskDirective = taskDirective,
       runsValidationGate = true,
-      runsBuildGate = true,
+      runsBuildGate = runsBuildGate,
       valueContent = VALIDATE_VALUE_CONTENT,
     )
   }

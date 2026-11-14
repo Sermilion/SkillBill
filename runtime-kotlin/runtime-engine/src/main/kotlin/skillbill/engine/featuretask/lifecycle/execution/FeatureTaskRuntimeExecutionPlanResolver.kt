@@ -2,6 +2,7 @@ package skillbill.engine.featuretask.lifecycle.execution
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonCodec
+import skillbill.contracts.config.projectchecks.ProjectCheckCategory
 import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
 import skillbill.engine.featuretask.model.execution.FeatureTaskRuntimeExecutionPlanCreationRequest
 import skillbill.engine.featuretask.model.execution.ValidationGateCommandFamily
@@ -10,6 +11,11 @@ import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
 import skillbill.engine.featuretask.validation.ValidationGateResolver
 import skillbill.engine.featuretask.validation.model.ValidationGateResolution
+import skillbill.engine.featuretask.validation.projectchecks.ProjectCheckCommandDiscoveryRequest
+import skillbill.engine.featuretask.validation.projectchecks.ProjectCheckCommandResolver
+import skillbill.engine.featuretask.validation.projectchecks.ProjectCheckCommandResolverRequest
+import skillbill.engine.featuretask.validation.projectchecks.ProjectCheckCommandSnapshotAdmission
+import skillbill.engine.featuretask.validation.projectchecks.ProjectCheckConfigAccessSnapshot
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.shellcontent.missingValidationGate
 import skillbill.ports.config.RepoLocalConfigPort
@@ -21,6 +27,7 @@ import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPla
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.ports.workflow.model.toSnapshot
+import skillbill.scaffold.model.ValidationGateDeclaration
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
@@ -45,6 +52,7 @@ public class FeatureTaskRuntimeExecutionPlanResolver(
   private val config: RepoLocalConfigPort,
   private val database: DatabaseSessionFactory,
   private val compatibility: FeatureTaskRuntimeExecutionPlanCompatibility,
+  private val projectCheckCommands: ProjectCheckCommandResolver,
   private val diagnostics: RuntimeDiagnostics,
 ) {
   public fun resolveCreation(
@@ -83,20 +91,18 @@ public class FeatureTaskRuntimeExecutionPlanResolver(
         ),
       )
     val inputs = resolveInputs(repoRoot, plan.qualityGateSelection, validationDepth, timeout)
-    recordSelectedStrategies(plan)
-    requireBuildGate(inputs, recorded = false)
-    return ValidatedFeatureTaskRuntimeExecutionPlan.read(codec.encodeExecution(plan, inputs), validator)
+    val admitted = admitProjectCheckCommands(request, plan, inputs)
+    recordSelectedStrategies(admitted.plan)
+    requireBuildGate(admitted.inputs, recorded = false)
+    return ValidatedFeatureTaskRuntimeExecutionPlan.read(
+      codec.encodeExecution(admitted.plan, admitted.inputs),
+      validator,
+    )
   }
 
   public fun creationQualityGate(
-    repoRoot: Path,
     qualityGate: FeatureTaskRuntimeQualityGateSelection?,
-  ): FeatureTaskRuntimeQualityGateSelection? {
-    if (qualityGate == FeatureTaskRuntimeQualityGateSelection.BUILD) {
-      requireBuildGate(resolveInputs(repoRoot, qualityGate, ValidationDepth.DEFAULT, null), recorded = false)
-    }
-    return qualityGate
-  }
+  ): FeatureTaskRuntimeQualityGateSelection? = qualityGate
 
   internal fun resolveInputs(
     repoRoot: Path,
@@ -121,12 +127,7 @@ public class FeatureTaskRuntimeExecutionPlanResolver(
       }
     val declaration = (resolution as? ValidationGateResolution.Declared)?.declaration
     return EffectiveGatePolicyInputs(
-      commandFamily =
-        if (qualityGate == FeatureTaskRuntimeQualityGateSelection.BUILD) {
-          ValidationGateCommandFamily.BUILD
-        } else {
-          ValidationGateCommandFamily.VALIDATION
-        },
+      commandFamily = commandFamilyFor(qualityGate),
       packSlug = pack,
       declaration = declaration,
       gradleWrapper =
@@ -143,13 +144,27 @@ public class FeatureTaskRuntimeExecutionPlanResolver(
     plan: ResolvedPhaseExecutionPlan,
   ): EffectiveGatePolicyInputs {
     val settings = plan.effectivePolicySettings ?: incompatible("Recorded execution settings are missing.")
-    val wrapper = config.readRepoLocalConfig(ReadRepoLocalConfigRequest(repoRoot)).config.validationGate.gradleWrapper
-    val family =
-      if (plan.qualityGateSelection == FeatureTaskRuntimeQualityGateSelection.BUILD) {
-        ValidationGateCommandFamily.BUILD
-      } else {
-        ValidationGateCommandFamily.VALIDATION
+    val family = commandFamilyFor(plan.qualityGateSelection)
+    if (executionPlanSupportsProjectCheckCommands(plan.sourceContractVersion)) {
+      plan.projectCheckCommands?.let { snapshot ->
+        return EffectiveGatePolicyInputs(
+          commandFamily = family,
+          packSlug = snapshot.parserMetadata?.packSlug,
+          declaration = null,
+          gradleWrapper = snapshot.gradleWrapper,
+          validationDepth = settings.validationDepth,
+          phaseTimeoutMillis = settings.phaseTimeoutMillis,
+          projectCheckSnapshot = snapshot,
+        ).frozen()
       }
+      if (FeatureTaskRuntimeEffectivePolicies.runsGateCommands(plan)) {
+        incompatible("Current execution plan is missing frozen project check commands.")
+      }
+      return currentGateForGatelessPlan(repoRoot, plan) ?: incompatible(
+        "The recorded validation gate commands no longer match any declared platform-pack gate.",
+      )
+    }
+    val wrapper = config.readRepoLocalConfig(ReadRepoLocalConfigRequest(repoRoot)).config.validationGate.gradleWrapper
     val recorded =
       gateResolver.declaredCandidates().map { candidate ->
         val slug =
@@ -196,24 +211,126 @@ public class FeatureTaskRuntimeExecutionPlanResolver(
     return current
   }
 
+  private fun admitProjectCheckCommands(
+    request: FeatureTaskRuntimeExecutionPlanCreationRequest,
+    plan: ResolvedPhaseExecutionPlan,
+    inputs: EffectiveGatePolicyInputs,
+  ): AdmittedProjectCheckPlan {
+    if (!FeatureTaskRuntimeEffectivePolicies.runsGateCommands(plan)) {
+      return AdmittedProjectCheckPlan(plan, inputs)
+    }
+    val categories = ProjectCheckCommandSnapshotAdmission.categoriesForQualityGate(plan.qualityGateSelection)
+    if (categories.isEmpty()) {
+      return AdmittedProjectCheckPlan(plan, inputs)
+    }
+    if (request.invokedAgentId == null) {
+      incompatible("Fresh admission requires an invoked agent for project checks.")
+    }
+    if (request.issueKey == null) {
+      incompatible("Fresh admission requires an issue key for project checks.")
+    }
+    val resolution = gateResolver.resolve(listedPaths(git.trackedPaths(request.repoRoot)))
+    if (resolution is ValidationGateResolution.Incompatible) {
+      incompatible(resolution.reason)
+    }
+    val (packSlug, declaration) = ProjectCheckCommandSnapshotAdmission.packContext(resolution)
+    val loaded = loadProjectCheckConfig(request, categories, packSlug to declaration)
+    val gradleWrapper =
+      config.readRepoLocalConfig(ReadRepoLocalConfigRequest(request.repoRoot)).config.validationGate.gradleWrapper
+    val snapshot =
+      ProjectCheckCommandSnapshotAdmission.freeze(loaded, categories, packSlug, declaration, gradleWrapper)
+    val admittedInputs =
+      inputs
+        .copy(
+          projectCheckSnapshot = snapshot,
+          gradleWrapper = gradleWrapper,
+          packSlug = snapshot.parserMetadata?.packSlug,
+        )
+        .frozen()
+    return AdmittedProjectCheckPlan(plan.withProjectCheckCommands(snapshot), admittedInputs)
+  }
+
+  private fun loadProjectCheckConfig(
+    request: FeatureTaskRuntimeExecutionPlanCreationRequest,
+    categories: Set<ProjectCheckCategory>,
+    packContext: Pair<String?, ValidationGateDeclaration?>,
+  ): ProjectCheckConfigAccessSnapshot {
+    val committed = projectCheckCommands.loadCommitted(request.repoRoot)
+    if (categories.all { committed.config.category(it) != null }) {
+      return committed
+    }
+    val (packSlug, declaration) = packContext
+    val discoveryDeclaration =
+      declaration
+        ?: gateResolver.declaredCandidates().firstNotNullOfOrNull { candidate ->
+          (candidate as? ValidationGateResolution.Declared)?.declaration
+        }
+        ?: incompatible("Project check discovery requires a declared validation gate for unresolved categories.")
+    return projectCheckCommands.resolve(
+      ProjectCheckCommandResolverRequest(
+        request.repoRoot,
+        categories,
+        ProjectCheckCommandDiscoveryRequest(
+          packSlug = packSlug ?: "none",
+          validationGate = discoveryDeclaration,
+          issueKey = requireNotNull(request.issueKey),
+          agentId = requireNotNull(request.invokedAgentId),
+          modelOverride =
+            request.stepLaunchAssignments.values.firstOrNull()?.launch?.effectiveModel
+              ?: request.stepLaunchAssignments.values.firstOrNull()?.launch?.requestedModel,
+          effortOverride = request.stepLaunchAssignments.values.firstOrNull()?.launch?.requestedEffort,
+          timeout = request.timeout,
+        ),
+      ),
+    )
+  }
+
+  private data class AdmittedProjectCheckPlan(
+    val plan: ResolvedPhaseExecutionPlan,
+    val inputs: EffectiveGatePolicyInputs,
+  )
+
   private fun requireBuildGate(
     inputs: EffectiveGatePolicyInputs,
     recorded: Boolean,
   ) {
     if (inputs.commandFamily != ValidationGateCommandFamily.BUILD) return
+    snapshotBuildGateFailure(inputs)?.let { throw it }
+    if (inputs.projectCheckSnapshot != null) return
     if (ValidationGateCyclePhase.entries.all { !inputs.commandArgv(it).isNullOrEmpty() }) return
+    throw missingValidationGate(incompleteBuildGateMessage(inputs, recorded))
+  }
+
+  private fun snapshotBuildGateFailure(inputs: EffectiveGatePolicyInputs): Throwable? {
+    val snapshot = inputs.projectCheckSnapshot ?: return null
+    val buildCommands = snapshot.buildCommands
     val pack = inputs.packSlug ?: "unrouted"
-    if (recorded) {
-      throw missingValidationGate(
-        "Recorded build gate pack '$pack' has no complete build command pair." +
-          " The original execution plan is retained." +
-          " Resume requires a reviewed semantic mapping to a declared build gate.",
-      )
+    return when {
+      buildCommands == null -> {
+        incompatible("Build gate admission requires a resolved build command category.")
+      }
+      buildCommands.commands.isEmpty() ->
+        missingValidationGate(
+          "Project build configuration for pack '$pack' is explicitly empty." +
+            " Repair saved build commands before creating the workflow.",
+        )
+      else -> null
     }
-    throw missingValidationGate(
+  }
+
+  private fun incompleteBuildGateMessage(
+    inputs: EffectiveGatePolicyInputs,
+    recorded: Boolean,
+  ): String {
+    val pack = inputs.packSlug ?: "unrouted"
+    return if (recorded) {
+      "Recorded build gate pack '$pack' has no complete build command pair." +
+        " The original execution plan is retained." +
+        " Resume requires a reviewed semantic mapping to a declared build gate."
+    } else {
       "Selected build gate pack '$pack' has no complete build command pair." +
-        " Repair pack routing or its build commands before creating the workflow.",
-    )
+        " Repair pack routing or its build commands before creating the workflow."
+    }
   }
 
   private fun recordSelectedStrategies(plan: ResolvedPhaseExecutionPlan) {
@@ -315,6 +432,13 @@ public class FeatureTaskRuntimeExecutionPlanResolver(
       }
     if (mismatches.isNotEmpty()) incompatible("Execution settings differ: ${mismatches.joinToString("; ")}.")
   }
+
+  private fun commandFamilyFor(qualityGate: FeatureTaskRuntimeQualityGateSelection?): ValidationGateCommandFamily =
+    if (qualityGate == FeatureTaskRuntimeQualityGateSelection.BUILD) {
+      ValidationGateCommandFamily.BUILD
+    } else {
+      ValidationGateCommandFamily.VALIDATION
+    }
 
   private fun listedPaths(inventory: WorkflowGitNameListResult): List<String> =
     when (inventory) {

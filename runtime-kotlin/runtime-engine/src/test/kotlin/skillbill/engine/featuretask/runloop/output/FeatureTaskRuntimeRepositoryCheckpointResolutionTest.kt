@@ -17,9 +17,9 @@ import skillbill.engine.featuretask.runner.kotlinPackWithValidationGate
 import skillbill.engine.featuretask.runner.phaseDeclaration
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
-import skillbill.engine.featuretask.validation.FeatureTaskRuntimeBuildGateCoordinator
 import skillbill.engine.featuretask.validation.FeatureTaskRuntimeValidationGateCoordinator
 import skillbill.engine.featuretask.validation.ValidationGateResolver
+import skillbill.engine.featuretask.validation.buildFeatureTaskRuntimeBuildGateCoordinator
 import skillbill.ports.config.RepoLocalConfigPort
 import skillbill.ports.config.model.ReadRepoLocalConfigRequest
 import skillbill.ports.config.model.ReadRepoLocalConfigResult
@@ -279,7 +279,7 @@ class FeatureTaskRuntimeRepositoryCheckpointResolutionTest {
   private fun unusedQualityGateCycles(): RuntimeQualityGateCycles {
     val resolver = ValidationGateResolver { listOf(kotlinPackWithValidationGate()) }
     return RuntimeQualityGateCycles(
-      FeatureTaskRuntimeBuildGateCoordinator(
+      buildFeatureTaskRuntimeBuildGateCoordinator(
         resolver,
         object : ValidationGateRunner {
           override fun run(request: ValidationGateRunRequest) = error("unused quality gate")

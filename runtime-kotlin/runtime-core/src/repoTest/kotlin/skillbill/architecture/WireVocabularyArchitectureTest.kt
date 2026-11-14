@@ -1,6 +1,8 @@
 package skillbill.architecture
 
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.contracts.config.projectchecks.ProjectCheckConfigKeys
+import skillbill.contracts.config.projectchecks.ProjectCheckDiscoveryKeys
 import skillbill.contracts.learning.LearningPayloadKeys
 import skillbill.contracts.review.ReviewAccountingPayloadKeys
 import skillbill.contracts.review.ReviewFindingPayloadKeys
@@ -82,6 +84,8 @@ class WireVocabularyArchitectureTest {
         WorkflowWirePayloadKeys::class.java,
         LearningPayloadKeys::class.java,
         WorkflowContinueSessionSummaryPayloadKeys::class.java,
+        ProjectCheckConfigKeys::class.java,
+        ProjectCheckDiscoveryKeys::class.java,
       )
 
     assertEquals(

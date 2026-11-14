@@ -12,7 +12,7 @@ import kotlin.test.assertEquals
 
 class VerifyCriterionResolutionsMigrationTest {
   @Test
-  fun `migration 128 upgrades a version 127 database and signals the verify run on resolutions and finding fixes`() {
+  fun `migration 131 upgrades a version 130 database and signals the verify run on resolutions and finding fixes`() {
     val dbPath = Files.createTempDirectory("runtime-kotlin-verify-resolutions").resolve("legacy.db")
     DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
       connection.createStatement().use { statement ->

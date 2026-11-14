@@ -128,6 +128,18 @@ governedResources {
     "SKILL-435: canonical block-incident schema",
   )
   copy(
+    "copyProjectCheckConfigSchema",
+    "project-check-config-schema.yaml",
+    "SONA-17: canonical project-check configuration schema",
+    "skillbill/contracts",
+  )
+  copy(
+    "copyProjectCheckDiscoverySchema",
+    "project-check-discovery-schema.yaml",
+    "SONA-17: canonical project-check discovery response schema",
+    "skillbill/contracts",
+  )
+  copy(
     "copyProducerOutputEvidenceSchema",
     "producer-output-evidence-schema.yaml",
     "SKILL-152: canonical producer output evidence schema",
@@ -291,6 +303,23 @@ governedResources {
     "copyFeatureTaskRuntimeExecutionPlanSchemaV02",
     "feature-task-runtime-execution-plan-0.2.yaml",
     "SKILL-419: historical execution-plan schema for admitted 0.2 plans",
+  )
+  copy(
+    "copyFeatureTaskRuntimeExecutionPlanSchemaV03",
+    "feature-task-runtime-execution-plan-0.3.yaml",
+    "SONA-17: historical execution-plan schema for admitted 0.3 plans",
+  )
+  copy(
+    "copyProjectCheckCommandSnapshotSchema",
+    "project-check-command-snapshot-schema.yaml",
+    "SONA-17: frozen project check command snapshot schema",
+    "skillbill/contracts",
+  )
+  copy(
+    "copyProjectCheckBuildCommandAttemptSchema",
+    "project-check-build-command-attempt-schema.yaml",
+    "SONA-17: per-attempt saved build command evidence schema",
+    "skillbill/contracts",
   )
   copy(
     "copyFeatureTaskRuntimePhaseOutputSchema",

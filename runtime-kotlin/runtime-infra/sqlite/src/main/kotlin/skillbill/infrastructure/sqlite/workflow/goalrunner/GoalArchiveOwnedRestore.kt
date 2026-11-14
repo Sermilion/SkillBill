@@ -20,6 +20,7 @@ private val RESTORE_ALLOWED_TABLES =
     setOf(
       "worktree_edit_journal",
       "monitor_ci_cycles",
+      "monitor_repair_validation_snapshots",
       "producer_output_evidence",
       "rejected_output_diagnostics",
       "agent_activity_stamps",

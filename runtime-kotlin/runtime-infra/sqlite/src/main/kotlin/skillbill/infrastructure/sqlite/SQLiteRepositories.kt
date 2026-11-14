@@ -6,6 +6,7 @@ import skillbill.infrastructure.sqlite.approval.SqliteApprovalStore
 import skillbill.infrastructure.sqlite.blockincident.SqliteBlockIncidentRecoveryRepository
 import skillbill.infrastructure.sqlite.blockincident.SqliteBlockIncidentRepository
 import skillbill.infrastructure.sqlite.blockincident.SqliteProductReportRepository
+import skillbill.infrastructure.sqlite.config.projectchecks.SqliteProjectCheckConfigStore
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.buildrun.SqliteAgentBuildRunStore
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.validationcheck.VALIDATION_CHECK_EVENTS_TABLE
 import skillbill.infrastructure.sqlite.core.ops.bindAll
@@ -30,6 +31,7 @@ import skillbill.infrastructure.sqlite.telemetry.lifecycle.session.LifecycleTele
 import skillbill.infrastructure.sqlite.telemetry.outbox.TelemetryOutboxStore
 import skillbill.infrastructure.sqlite.telemetry.reconciliation.reconcileStaleTelemetrySessions
 import skillbill.infrastructure.sqlite.workflow.MonitorCiCycleStore
+import skillbill.infrastructure.sqlite.workflow.MonitorRepairValidationSnapshotStore
 import skillbill.infrastructure.sqlite.workflow.WorktreeEditJournalStore
 import skillbill.infrastructure.sqlite.workflow.featuretask.AgentActivityStampStore
 import skillbill.infrastructure.sqlite.workflow.featuretask.StandalonePhaseStatusStore
@@ -52,6 +54,8 @@ import skillbill.ports.blockincident.BlockIncidentContractValidator
 import skillbill.ports.blockincident.BlockIncidentRecoveryRepository
 import skillbill.ports.blockincident.BlockIncidentRepository
 import skillbill.ports.blockincident.ProductReportRepository
+import skillbill.ports.config.projectchecks.ProjectCheckCommandSnapshotValidator
+import skillbill.ports.config.projectchecks.ProjectCheckConfigValidator
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticPermissions
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticRepository
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -71,6 +75,7 @@ import skillbill.ports.idestatus.StandalonePhaseStatusRepository
 import skillbill.ports.idestatus.WorkBoardReadModelRepository
 import skillbill.ports.idestatus.WorktreeEditJournalRepository
 import skillbill.ports.idestatus.monitor.MonitorCiCycleRepository
+import skillbill.ports.idestatus.monitor.MonitorRepairValidationSnapshotRepository
 import skillbill.ports.idestatus.verify.VerifyCriterionResolutionRepository
 import skillbill.ports.learning.LearningRepository
 import skillbill.ports.learning.model.LearningResolution
@@ -120,9 +125,12 @@ internal class SQLiteUnitOfWork(
   private val workflowSnapshotValidator: WorkflowSnapshotValidator,
   private val runtimeVersion: String,
   private val blockIncidentContractValidator: BlockIncidentContractValidator,
+  private val projectCheckConfigValidator: ProjectCheckConfigValidator,
+  private val projectCheckCommandSnapshotValidator: ProjectCheckCommandSnapshotValidator,
   transactionActive: Boolean = false,
   override val databaseFileObservation: DatabaseFileObservation? = null,
 ) : UnitOfWork {
+  override val projectCheckConfigs = SqliteProjectCheckConfigStore(connection, dbPath, projectCheckConfigValidator)
   override val featureTaskPhaseSettlements: FeatureTaskPhaseSettlementRepository =
     SqliteFeatureTaskPhaseSettlementStore(connection, clock, diagnostics)
   override val featureTaskQaOutcomes: FeatureTaskQaOutcomeRepository = SqliteFeatureTaskQaOutcomeStore(connection)
@@ -162,6 +170,8 @@ internal class SQLiteUnitOfWork(
   override val worktreeEditJournal: WorktreeEditJournalRepository =
     WorktreeEditJournalStore(connection)
   override val monitorCiCycles: MonitorCiCycleRepository = MonitorCiCycleStore(connection)
+  override val monitorRepairValidationSnapshots: MonitorRepairValidationSnapshotRepository =
+    MonitorRepairValidationSnapshotStore(connection, projectCheckCommandSnapshotValidator)
   override val verifyCriterionResolutions: VerifyCriterionResolutionRepository =
     VerifyCriterionResolutionStore(connection)
   override val agentBuildRuns: AgentBuildRunRepository =
@@ -307,6 +317,7 @@ private val PURGE_WORKFLOW_KEYED_TABLES =
   listOf(
     "worktree_edit_journal",
     "monitor_ci_cycles",
+    "monitor_repair_validation_snapshots",
     "producer_output_evidence",
     "rejected_output_diagnostics",
     "agent_activity_stamps",

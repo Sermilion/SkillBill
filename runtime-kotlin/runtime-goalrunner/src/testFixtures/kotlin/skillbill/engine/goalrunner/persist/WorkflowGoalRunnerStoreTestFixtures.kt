@@ -8,12 +8,13 @@ import skillbill.engine.diagnostics.block.testBlockIncidentCapture
 import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWireArtifactValidator
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeCrashReconciler
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionAdmission
-import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanCodec
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanCompatibility
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
+import skillbill.engine.featuretask.lifecycle.execution.featureTaskRuntimeExecutionPlanCodecForTest
 import skillbill.engine.featuretask.slot.statusProjectionPhaseStrategies
 import skillbill.engine.featuretask.testing.featureTaskRuntimeWireArtifactValidatorForTest
 import skillbill.engine.featuretask.validation.ValidationGateResolver
+import skillbill.engine.featuretask.validation.projectchecks.projectCheckCommandResolverForTests
 import skillbill.engine.goalrunner.execution.core.testPhaseRecorder
 import skillbill.engine.goalrunner.history.GoalChildHistoryEvidenceStore
 import skillbill.engine.goalrunner.manifest.GoalParentProjectionWriter
@@ -193,7 +194,7 @@ private fun testFeatureTaskRuntimeCrashReconciler(
     testExecutionPlanCompatibility(),
     FeatureTaskRuntimeExecutionPlanResolver(
       statusProjectionPhaseStrategies(),
-      FeatureTaskRuntimeExecutionPlanCodec(FeatureTaskRuntimeExecutionPlanSchemaValidator()),
+      featureTaskRuntimeExecutionPlanCodecForTest(),
       FeatureTaskRuntimeExecutionPlanSchemaValidator(),
       ValidationGateResolver { emptyList() },
       NoopWorkflowGitOperations,
@@ -203,6 +204,7 @@ private fun testFeatureTaskRuntimeCrashReconciler(
       },
       database,
       testExecutionPlanCompatibility(),
+      projectCheckCommandResolverForTests(),
       NoopRuntimeDiagnostics,
     ),
   )
@@ -210,7 +212,7 @@ private fun testFeatureTaskRuntimeCrashReconciler(
 fun testExecutionPlanCompatibility(): FeatureTaskRuntimeExecutionPlanCompatibility {
   val validator = FeatureTaskRuntimeExecutionPlanSchemaValidator()
   return FeatureTaskRuntimeExecutionPlanCompatibility(
-    FeatureTaskRuntimeExecutionPlanCodec(validator),
+    featureTaskRuntimeExecutionPlanCodecForTest(validator),
     statusProjectionPhaseStrategies(),
   )
 }

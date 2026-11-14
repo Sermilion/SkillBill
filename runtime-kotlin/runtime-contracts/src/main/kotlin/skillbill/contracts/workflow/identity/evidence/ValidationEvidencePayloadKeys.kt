@@ -40,4 +40,7 @@ object ValidationEvidencePayloadKeys {
   const val TERMINAL_REASON: String = "terminal_reason"
   const val TERMINAL_FAILURE_DISPOSITION: String = "terminal_failure_disposition"
   const val TERMINAL_FAILURE_CODE: String = "terminal_failure_code"
+  const val BUILD_COMMAND_ATTEMPT: String = "build_command_attempt"
+  const val LIST_IDENTITY: String = "list_identity"
+  const val STDOUT_EXCERPT: String = "stdout_excerpt"
 }

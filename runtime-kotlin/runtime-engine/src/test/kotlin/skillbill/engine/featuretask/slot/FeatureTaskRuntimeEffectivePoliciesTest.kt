@@ -3,9 +3,9 @@ package skillbill.engine.featuretask.slot
 import skillbill.contracts.JsonCodec
 import skillbill.engine.featuretask.lifecycle.execution.ExecutionPlanAdmissionFixture
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeEffectivePolicies
-import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanCodec
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanCompatibility
 import skillbill.engine.featuretask.lifecycle.execution.effectivePolicyDigest
+import skillbill.engine.featuretask.lifecycle.execution.featureTaskRuntimeExecutionPlanCodecForTest
 import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
 import skillbill.engine.featuretask.model.execution.ValidationGateCommandFamily
 import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildStrategy
@@ -100,7 +100,10 @@ class FeatureTaskRuntimeEffectivePoliciesTest {
       assertFailsWith<IncompatibleFeatureTaskRuntimeExecutionPlanError> {
         compatibility.requireSupportedExecution(codec.encode(restored.withEffectivePolicies(changed)), inputs)
       }
-      val revised = restored.effectivePolicies.map { if (it == selected) it.copy(semanticRevision = 2) else it }
+      val revised =
+        restored.effectivePolicies.map {
+          if (it == selected) it.copy(semanticRevision = it.semanticRevision + 1) else it
+        }
       assertFailsWith<UnsupportedFeatureTaskRuntimeExecutionPlanError> {
         compatibility.requireSupportedExecution(codec.encode(restored.withEffectivePolicies(revised)), inputs)
       }
@@ -209,7 +212,7 @@ class FeatureTaskRuntimeEffectivePoliciesTest {
   }
 
   private val validator = FeatureTaskRuntimeExecutionPlanSchemaValidator()
-  private val codec = FeatureTaskRuntimeExecutionPlanCodec(validator)
+  private val codec = featureTaskRuntimeExecutionPlanCodecForTest(validator)
   private val strategy = PackBuildStrategy()
   private val registry = PhaseStrategyRegistry(listOf(strategy))
   private val lookup =

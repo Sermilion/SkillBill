@@ -1678,7 +1678,7 @@ Composition:
   | `inline` | `slot.codereview` | Full-run review, verify_findings, and implement_fix prompts, review envelope decoding, finding-disposition gate, review briefing field set; standalone and goal-child selection maps full-run modes here |
   | `inline` | `slot.standalonereview` | The report-only present_findings step, strict register and verdict admission, accepted target pinning and pass recording, one reviewer session plus a separate read-only verifier when findings or retained warning and coverage blocks need classification, no repair or checkpoint path |
   | `delegated` | `slot.standalonereview` | The same report-only step through ParallelCodeReviewRunner, requiring complete lane coverage and integration disposition, with the same separate read-only verifier gate; no repair or checkpoint path |
-  | `pack-build` | `slot.qualitygate.packbuild` | Runtime-owned build gate, triage and repair sessions |
+  | `pack-build` | `slot.qualitygate.packbuild` | Runtime-owned build gate, triage and repair sessions; admitted descriptors with `project_check_commands` run the frozen saved build list through `ValidationGateCommandSource.PROJECT_CONFIG`, while legacy descriptors retain pack argv |
   | `agent-validate` | `slot.qualitygate.agentvalidate` | Agent validate step, its repair session, retryable blocked disposition |
   | `boundary-history` | `slot.writehistory` | write_history directive, the boundary history and decision rules (the `boundary-history-directive.md` and `boundary-decisions-directive.md` resources, with runtime inputs in `BoundaryMemoryPromptRules`; the prompt invokes no skill), finalization briefing field set, changed paths and history and decision writes measured by `WriteHistoryMeasurement` under `FeatureTaskRuntimeMeasuredFactKeys`; a fact it cannot measure is recorded as unknown with a diagnostics record |
   | `runtime-commit` | `slot.commitpush` | Commit push cycle, upstream-head fallback, finalization briefing field set |
@@ -1796,6 +1796,14 @@ without classifying model names or adding model-dependent instructions.
 
 ## Runtime Contract And Schema Seams
 
+- Project check configuration uses the canonical
+  `orchestration/contracts/project-check-config-schema.yaml` contract and its
+  `ProjectCheckConfigKeys` owner in `runtime-contracts`. The strict validator lives in
+  `runtime-infra/contracts`; SQLite stores five nullable category documents in the
+  `project_config` table. A null category remains undiscovered, while an empty command
+  array records completed discovery with no command. `ProjectCheckConfigAccess`
+  establishes database readiness before resolving the current project association or
+  reading a stored row.
 - Runtime contract schemas live in `orchestration/contracts/`. The
   `*_CONTRACT_VERSION` constants stay in `runtime-contracts`; the `*SchemaPaths`
   locators that name the staged copies live in

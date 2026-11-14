@@ -21,6 +21,7 @@ import skillbill.engine.featuretask.runloop.finalization.CommitPushManifestCompl
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
 import skillbill.engine.featuretask.runloop.qualitygate.RuntimeQualityGateCycles
+import skillbill.engine.featuretask.runloop.settlement.ValidationCommandLaunchPreparer
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnapshotAccess
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepBindingCoordinator
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunTransitionOwner
@@ -70,6 +71,7 @@ internal class PhaseAttemptRunHost(
   private val directSharedEvidenceResolver: FeatureTaskRuntimeSharedEvidenceResolverPort? = null,
   private val directDiffResolver: DiffResolverPort? = null,
   private val directQualityGateCycles: RuntimeQualityGateCycles? = null,
+  private val directValidationCommandLaunch: ValidationCommandLaunchPreparer? = null,
 ) : PhaseAttemptEnvironment,
   PhaseQualityGateReporting by backingRunState {
   override val request: FeatureTaskRuntimeRunFacts get() = acceptedRun.request
@@ -123,6 +125,9 @@ internal class PhaseAttemptRunHost(
 
   val qualityGateCycles: RuntimeQualityGateCycles
     get() = directQualityGateCycles ?: throw GoalPlanningPhaseGatesUnsupportedError()
+
+  val validationCommandLaunch: ValidationCommandLaunchPreparer
+    get() = directValidationCommandLaunch ?: throw GoalPlanningPhaseGatesUnsupportedError()
 
   val commitPushManifestCompletion: CommitPushManifestCompletion?
     get() = backingRunState.commitPushManifestCompletion

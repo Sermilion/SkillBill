@@ -4,6 +4,8 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.telemetry.TelemetryMeasurementAvailability
 import skillbill.contracts.telemetry.TelemetryOutboxEvent
 import skillbill.infrastructure.contracts.BlockIncidentSchemaValidator
+import skillbill.infrastructure.contracts.projectchecks.ProjectCheckCommandSnapshotSchemaValidator
+import skillbill.infrastructure.contracts.projectchecks.ProjectCheckConfigSchemaValidator
 import skillbill.infrastructure.sqlite.SAMPLE_REVIEW
 import skillbill.infrastructure.sqlite.SQLiteLearningStore
 import skillbill.infrastructure.sqlite.SQLiteUnitOfWork
@@ -456,6 +458,8 @@ class ReviewStatsRuntimeTest {
           workflowSnapshotValidator = SqliteTestWorkflowSnapshotValidator,
           runtimeVersion = "test-runtime-version",
           blockIncidentContractValidator = BlockIncidentSchemaValidator(),
+          projectCheckConfigValidator = ProjectCheckConfigSchemaValidator(),
+          projectCheckCommandSnapshotValidator = ProjectCheckCommandSnapshotSchemaValidator(),
         ).reviews
 
       reviews.featureTaskRuntimeStats()

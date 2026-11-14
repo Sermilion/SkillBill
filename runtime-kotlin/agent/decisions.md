@@ -1,3 +1,38 @@
+## [2026-11-13] Prefer project instructions for ordinary check discovery
+Context: SONA-17 rejects expanding ordinary validation into clean builds, cache bypass, packaging, installation or extra smoke checks merely because a pack or CI job declares them.
+Decision: Discover missing categories from applicable AGENTS.md prescriptions first, otherwise use minimal conventional commands through manifest routing. Kotlin/KMP validation defaults to ./gradlew check. Applicable consumers reuse saved categories; build stays compile-only.
+Reason: Project prescriptions define required checks. Pack recipes provide defaults, and their extra tasks or flags do not establish additional project obligations. Release and installation work retain their own requirements.
+
+## [2026-11-13] Freeze admitted commands while retaining legacy execution
+Context: Pack manifests, wrapper settings and project configuration can change after admission; older execution plans have no project-command snapshot.
+Decision: New gated plans freeze ordered commands, directories, wrapper selection and nullable parser metadata. Execute saved argv without nested expansion or injected flags, aggregate the whole list, and retain historical declared-candidate reconstruction for older descriptors.
+Reason: Rediscovery would change admitted command identity and completed evidence. Rewriting a saved directory or hiding an earlier failure behind a later success would check something other than the accepted list. Snapshot absence on a historical plan remains valid legacy state.
+
+## [2026-11-13] Freeze validation commands for each monitor repair cycle
+Context: Goal and standalone monitor repair prompts and runtime publication checks must use the same commands after restart or changes to project configuration.
+Decision: Persist the first accepted validation snapshot under its owner, cycle and phase before repair launch. Reuse its commands, directories and parser metadata for retry and publication without rewriting historical execution plans.
+Reason: Publication-time rediscovery could select a different list from the repair agent's list. Durable cycle ownership preserves identity, while fresh runtime execution establishes evidence for the repaired candidate.
+
+## [2026-11-13] Coordinate discovery outside SQL writer transactions
+Context: Concurrent processes can request first-use discovery for one project, and agent inspection may take much longer than a database write.
+Decision: Hold an interruptible state-directory file lock keyed by the existing projectId around discovery, reread association under that ownership and before publication, and use short database transactions for fill-missing.
+Reason: A JVM mutex cannot coordinate processes. A SQL writer held across an agent launch would pin the database; association rereads prevent publishing discovery into a project that the checkout no longer selects.
+
+## [2026-11-13] First committed non-null category wins
+Context: Residual first-use races can propose different command lists for the same project, including explicit empty lists.
+Decision: Validate the full proposed result, reread under the IMMEDIATE transaction, and fill only categories that remain null. Preserve the first committed non-null value without concatenation; reject an invalid result before any category publishes.
+Reason: Stale writers must not overwrite populated or known-empty configuration. Atomic publication prevents a later invalid category from leaving a partially saved discovery result.
+
+## [2026-11-13] Store five nullable command categories
+Context: SONA-17 requires separate build, lint, test, formatting and validation columns rather than the two command families suggested during preplanning.
+Decision: Store five nullable JSON columns on project_config. Null means undiscovered, an explicit empty command list means discovery found none, and a missing row means all categories are unknown. Failed or unavailable discovery leaves categories unknown.
+Reason: Each consumer executes its own category without concatenating overlapping aggregates. Explicit empty lists preserve completed discovery, while unavailable tooling must remain retryable. Future categories can add columns without converting a collapsed model.
+
+## [2026-11-13] Keep first-commit promotion in the existing project store
+Context: Promoting a repository's first commit previously moved its no-commit store to a lineage ID, which would detach saved project commands from the assigned projectId.
+Decision: Record lineage, root commits, remote and lineage key kind in the existing directory while retaining the assigned projectId. Historically rekeyed IDs stay unchanged; explicit linking selects the target row without merging commands.
+Reason: Command rows key on ProjectStoreLocation.projectId. Moving the directory or replacing that ID would orphan populated configuration or require another association field and a transfer protocol.
+
 ## [2026-11-13] Exclude test value from goal assessment
 Context: Goal assessment produced test-value findings that remained open as report-only notes. The operator chose to remove this assessment scope.
 Decision: Remove test-value instructions and candidate parsing from new goal assessments. Keep the stored finding kind, schema and codecs so historical findings retain their evidence and status. Diagnose obsolete test-value output through the existing rejected-line warnings.
@@ -1915,6 +1950,7 @@ Decision: Validate may run only the pack `validation_gate.collect_all_full_gate_
 Reason: Agnix lints instruction files. It is not the Kotlin pack gate. Mixing the two made a green `./gradlew check` look blocked.
 
 Alternatives considered: Keep agnix on the maintainer list and hope the phase prompt wins (rejected: AGENTS.md is always applied).
+Superseded by: Prefer project instructions for ordinary check discovery (2026-11-13)
 
 ## [2026-08-29] Validate repair forbids mid-session proof commands
 
@@ -3059,6 +3095,7 @@ Context: Shipped platform packs carried a second `quality-check/` skill and `dec
 Decision: Quality-check collect-all and confirmation are the dominant pack `validation_gate` argv only. `routeQualityCheck` selects the pack slug and fixes `routed_skill` to `bill-code-check`; missing `validation_gate` on the winning pack raises `MissingValidationGateError`. Scaffold, install, and review-structure validation no longer emit or require pack checker skills. Optional `declared_quality_check_file` remains schema-parseable for leftover custom packs. Install still treats that path as a declared skill directory when present, and skips undeclared `quality-check/` `addon_usage` keys so a leftover checker registration cannot block reconcile.
 Reason: One shell (`bill-code-check`), one gate surface per pack, no duplicate command-discovery sidecars. Reconcile enumerates the existing local pack copy with the new runtime before upstream can replace it.
 Alternatives considered: Keep pack checker skills as documentation-only (rejected: install and routing still duplicated argv). Generic command-discovery fallback when gate is absent (rejected: silent wrong-suite risk). Loud-fail leftover `quality-check/` `addon_usage` (rejected: `install reconcile` cannot apply the cleaned upstream pack).
+Superseded by: Prefer project instructions for ordinary check discovery (2026-11-13)
 
 ## [2026-09-22] Spotless ratchet removed; tree-wide ktlint adopted (SKILL-368)
 

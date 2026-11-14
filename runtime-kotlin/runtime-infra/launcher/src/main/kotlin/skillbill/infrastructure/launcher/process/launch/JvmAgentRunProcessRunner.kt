@@ -462,6 +462,7 @@ class JvmAgentRunProcessRunner(
   ): Throwable? {
     var cleanupFailure: Throwable? = null
     try {
+      resources.lifetime.drainExitedProcessOutputBeforeFinish()
       approval?.let { channel ->
         catchingNonCancellation { channel.finish() }
           .onFailure { failure -> degradation.recordCleanupFailure("approval_generation_finish", failure) }

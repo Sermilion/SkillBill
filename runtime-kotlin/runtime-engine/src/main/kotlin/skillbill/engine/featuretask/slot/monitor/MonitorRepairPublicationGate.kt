@@ -1,27 +1,24 @@
 package skillbill.engine.featuretask.slot.monitor
 
 import me.tatarka.inject.annotations.Inject
-import skillbill.config.model.applyValidationGateGradleWrapper
+import skillbill.contracts.config.projectchecks.ProjectCheckCommand
+import skillbill.contracts.config.projectchecks.ProjectCheckCommandSnapshot
 import skillbill.engine.featuretask.lifecycle.branch.baseBranchOrDefault
 import skillbill.engine.featuretask.model.execution.ValidationGateCyclePhase
+import skillbill.engine.featuretask.model.phase.ValidationCommandLaunchTransport
 import skillbill.engine.featuretask.slot.PhaseStepOutputCheck
-import skillbill.engine.featuretask.validation.ValidationGateResolver
-import skillbill.engine.featuretask.validation.model.ValidationGateResolution
-import skillbill.engine.featuretask.validation.validationGateArgv
+import skillbill.engine.featuretask.validation.FeatureTaskRuntimeBuildGateProjectConfig
+import skillbill.engine.featuretask.validation.SavedProjectConfigRun
+import skillbill.engine.featuretask.validation.projectchecks.QualityGateCommandRendering
 import skillbill.error.core.catchingNonCancellation
-import skillbill.ports.config.RepoLocalConfigPort
-import skillbill.ports.config.model.ReadRepoLocalConfigRequest
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.validation.ValidationGateRunner
-import skillbill.ports.validation.model.ValidationGateFindingParseMode
-import skillbill.ports.validation.model.ValidationGateRunRequest
+import skillbill.ports.validation.model.ValidationGateFinding
 import skillbill.ports.validation.model.ValidationGateRunResult
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationStatus
-import skillbill.scaffold.model.ValidationGateDeclaration
-import skillbill.workflow.taskruntime.model.validation.ValidationGateCacheMode
 import skillbill.workflow.taskruntime.model.validation.ValidationGateRunOutcome
 import java.nio.file.Path
 
@@ -37,15 +34,12 @@ public sealed interface MonitorRepairPublicationVerdict {
 }
 
 /**
- * Verifies a settled monitor repair in [repoRoot] before publication: no unresolved conflict-marker block in the
- * files the branch changed since its merge base with [recordedBaseBranch] (or the default branch), and a passing
- * full validation gate of the dominant platform pack.
+ * Verifies a settled monitor repair in [request.repoRoot] before publication: no unresolved conflict-marker block in
+ * the files the branch changed since its merge base with [request.recordedBaseBranch] (or the default branch), and a
+ * passing commands from [request.validationTransport].
  */
 public fun interface MonitorRepairPublicationGate {
-  public fun verify(
-    repoRoot: Path,
-    recordedBaseBranch: String?,
-  ): MonitorRepairPublicationVerdict
+  public fun verify(request: MonitorRepairPublicationGateRequest): MonitorRepairPublicationVerdict
 }
 
 internal fun MonitorRepairPublicationVerdict.publicationBlockingCheck(): PhaseStepOutputCheck? =
@@ -58,15 +52,11 @@ internal fun MonitorRepairPublicationVerdict.publicationBlockingCheck(): PhaseSt
 @Inject
 public class RuntimeMonitorRepairPublicationGate(
   private val git: WorkflowGitOperations,
-  private val resolver: ValidationGateResolver,
   private val runner: ValidationGateRunner,
-  private val repoLocalConfig: RepoLocalConfigPort,
   private val diagnostics: RuntimeDiagnostics,
 ) : MonitorRepairPublicationGate {
-  override fun verify(
-    repoRoot: Path,
-    recordedBaseBranch: String?,
-  ): MonitorRepairPublicationVerdict = conflictVerdict(repoRoot, recordedBaseBranch) ?: fullGateVerdict(repoRoot)
+  override fun verify(request: MonitorRepairPublicationGateRequest): MonitorRepairPublicationVerdict =
+    conflictVerdict(request.repoRoot, request.recordedBaseBranch) ?: savedValidationVerdict(request)
 
   private fun conflictVerdict(
     repoRoot: Path,
@@ -75,6 +65,95 @@ public class RuntimeMonitorRepairPublicationGate(
     when (val scan = conflictScan(repoRoot, recordedBaseBranch)) {
       is ConflictScan.Unreadable -> refused(scan.reason)
       is ConflictScan.Changed -> markerVerdict(repoRoot, scan)
+    }
+
+  private fun savedValidationVerdict(request: MonitorRepairPublicationGateRequest): MonitorRepairPublicationVerdict {
+    val transport = request.validationTransport
+    val snapshot =
+      when (transport) {
+        is ValidationCommandLaunchTransport.Commands -> transport.snapshot
+        is ValidationCommandLaunchTransport.KnownEmpty -> transport.snapshot
+        is ValidationCommandLaunchTransport.LegacyCommands, null -> null
+      }
+    val commands =
+      when (transport) {
+        is ValidationCommandLaunchTransport.Commands -> transport.snapshot.validationCommandList
+        is ValidationCommandLaunchTransport.KnownEmpty -> emptyList()
+        is ValidationCommandLaunchTransport.LegacyCommands -> transport.postRepairCommands
+        null -> emptyList()
+      }
+    val category = snapshot?.validationCommands
+    return when {
+      transport == null ->
+        refused(
+          "Monitor repair publication requires an accepted validation command snapshot or legacy command source " +
+            "for this repair cycle.",
+        )
+      snapshot != null && category == null ->
+        refused("Required validation commands were not frozen for this repair or validation launch.")
+      commands.isEmpty() -> {
+        diagnostics.warning(
+          "seam=monitor_repair_full_gate value_expected=saved_validation_commands value_actual=known_empty " +
+            "cause=explicit_empty_validation repo_root=${request.repoRoot}",
+        )
+        MonitorRepairPublicationVerdict.Publishable
+      }
+      else -> runValidationCommands(request.repoRoot, snapshot, commands)
+    }
+  }
+
+  private fun runValidationCommands(
+    repoRoot: Path,
+    snapshot: ProjectCheckCommandSnapshot?,
+    commands: List<ProjectCheckCommand>,
+  ): MonitorRepairPublicationVerdict =
+    catchingNonCancellation {
+      FeatureTaskRuntimeBuildGateProjectConfig.runSavedCommands(
+        runner,
+        repoRoot,
+        snapshot,
+        commands,
+        ValidationGateCyclePhase.POST_REPAIR_VERIFY,
+      )
+    }.fold(
+      onSuccess = { result ->
+        when (result) {
+          is SavedProjectConfigRun.Completed -> aggregateVerdict(result.result, commands)
+          is SavedProjectConfigRun.LaunchBlocked -> refused(launchBlockedReason(result.failure, result.findings))
+        }
+      },
+      onFailure = { error ->
+        refused(
+          "The runtime could not run the saved validation commands before publishing the monitor repair: " +
+            (error.message ?: error.javaClass.simpleName),
+        )
+      },
+    )
+
+  private fun launchBlockedReason(
+    failure: Throwable,
+    findings: List<ValidationGateFinding>,
+  ): String =
+    buildString {
+      append("The runtime could not run the saved validation commands before publishing the monitor repair: ")
+      append(failure.message ?: failure.javaClass.simpleName)
+      findings.take(MAX_CORRECTION_FINDINGS).forEach { finding ->
+        val location = finding.location?.let { " ($it)" }.orEmpty()
+        append("\n- ${finding.module}: ${finding.ruleOrTestId}: ${finding.message}$location".take(MAX_FINDING_CHARS))
+      }
+      if (findings.size > MAX_CORRECTION_FINDINGS) append("\n- and ${findings.size - MAX_CORRECTION_FINDINGS} more")
+    }
+
+  private fun aggregateVerdict(
+    result: ValidationGateRunResult,
+    commands: List<ProjectCheckCommand>,
+  ): MonitorRepairPublicationVerdict =
+    when {
+      result.outcome == ValidationGateRunOutcome.REJECTED_ZERO_WORK ->
+        refused("A saved validation command ran no work, so the monitor repair cannot be verified.")
+      result.outcome != ValidationGateRunOutcome.PASSED || result.exitCode != 0 ->
+        MonitorRepairPublicationVerdict.RepairAgain(gateCorrection(result, commands))
+      else -> MonitorRepairPublicationVerdict.Publishable
     }
 
   private fun conflictScan(
@@ -143,81 +222,6 @@ public class RuntimeMonitorRepairPublicationGate(
     return found
   }
 
-  private fun fullGateVerdict(repoRoot: Path): MonitorRepairPublicationVerdict {
-    val tracked =
-      when (val listed = git.trackedPaths(repoRoot)) {
-        is WorkflowGitNameListResult.Listed -> listed.names
-        is WorkflowGitNameListResult.Failed ->
-          return refused("Monitor could not list tracked files to select the validation gate: ${listed.error}")
-      }
-    return when (val resolution = resolver.resolve(tracked)) {
-      is ValidationGateResolution.Declared -> runFullGate(repoRoot, resolution)
-      is ValidationGateResolution.Absent ->
-        agentChecksOnly(repoRoot, "dominant pack '${resolution.routedPackSlug ?: "none"}' declares no validation gate")
-      is ValidationGateResolution.Incompatible -> agentChecksOnly(repoRoot, resolution.reason)
-    }
-  }
-
-  private fun runFullGate(
-    repoRoot: Path,
-    resolution: ValidationGateResolution.Declared,
-  ): MonitorRepairPublicationVerdict {
-    val declaration = resolution.declaration
-    val packArgv =
-      validationGateArgv(declaration, ValidationGateCyclePhase.POST_REPAIR_VERIFY)
-        .ifEmpty { validationGateArgv(declaration, ValidationGateCyclePhase.INITIAL_DISCOVERY) }
-    if (packArgv.isEmpty()) {
-      return agentChecksOnly(repoRoot, "pack '${resolution.packSlug}' declares no full validation gate command")
-    }
-    val argv =
-      catchingNonCancellation {
-        val config = repoLocalConfig.readRepoLocalConfig(ReadRepoLocalConfigRequest(repoRoot)).config
-        applyValidationGateGradleWrapper(packArgv, config.validationGate.gradleWrapper)
-      }.getOrElse { error ->
-        return refused("Monitor could not read the repository's validation gate settings: ${error.message.orEmpty()}")
-      }
-    val command = argv.joinToString(" ")
-    val result =
-      catchingNonCancellation { runner.run(fullGateRequest(repoRoot, argv, declaration)) }.getOrElse { error ->
-        return refused(
-          "The runtime could not run the full validation gate `$command` before publishing the monitor repair: " +
-            (error.message ?: error.javaClass.simpleName),
-        )
-      }
-    return when {
-      result.outcome == ValidationGateRunOutcome.PASSED && result.exitCode == 0 ->
-        MonitorRepairPublicationVerdict.Publishable
-      result.outcome == ValidationGateRunOutcome.REJECTED_ZERO_WORK ->
-        refused("The full validation gate `$command` ran no work, so the monitor repair cannot be verified.")
-      else -> MonitorRepairPublicationVerdict.RepairAgain(gateCorrection(command, result))
-    }
-  }
-
-  private fun fullGateRequest(
-    repoRoot: Path,
-    argv: List<String>,
-    declaration: ValidationGateDeclaration,
-  ): ValidationGateRunRequest =
-    ValidationGateRunRequest(
-      repoRoot = repoRoot,
-      argv = argv,
-      cacheMode = ValidationGateCacheMode.FORCED_FULL,
-      declaration = declaration,
-      terminalVerifying = true,
-      findingParseMode = ValidationGateFindingParseMode.COLLECT_ALL,
-    )
-
-  private fun agentChecksOnly(
-    repoRoot: Path,
-    cause: String,
-  ): MonitorRepairPublicationVerdict {
-    diagnostics.warning(
-      "record_kind=degradation seam=monitor_repair_full_gate value_expected=runtime_full_validation_gate " +
-        "value_used=agent_reported_checks cause=$cause repo_root=$repoRoot",
-    )
-    return MonitorRepairPublicationVerdict.Publishable
-  }
-
   private fun refused(reason: String): MonitorRepairPublicationVerdict.Refused =
     MonitorRepairPublicationVerdict.Refused(reason)
 }
@@ -272,19 +276,21 @@ private fun conflictCorrection(paths: List<String>): String =
     append("The runtime refused to publish this monitor repair: these files still contain unresolved merge-conflict ")
     append("markers (a <<<<<<< / ======= / >>>>>>> block). Resolve every conflict so each file keeps both ")
     append("sides' intended changes, remove all markers, then rerun the project's full checks. Nothing is published ")
-    append("until no markers remain and the runtime's full validation gate passes.")
+    append("until no markers remain and the runtime's saved validation commands pass.")
     paths.take(MAX_CORRECTION_PATHS).forEach { append("\n- ").append(it) }
     if (paths.size > MAX_CORRECTION_PATHS) append("\n- and ${paths.size - MAX_CORRECTION_PATHS} more")
   }
 
 private fun gateCorrection(
-  command: String,
   result: ValidationGateRunResult,
+  commands: List<ProjectCheckCommand>,
 ): String =
   buildString {
-    append("The runtime ran the full validation gate `$command` before publishing this monitor repair and it ")
-    append("failed with exit code ${result.exitCode}. Fix every failure below, including failures unrelated to ")
-    append("the original CI check, and rerun the gate until it passes. Nothing is published until it does.")
+    append("The runtime ran the admitted saved validation commands before publishing this monitor repair and ")
+    append("at least one failed with exit code ${result.exitCode}. Fix every failure below, including failures ")
+    append("unrelated to the original CI check, and rerun the saved list until they all pass.")
+    append("\nRerun these saved command records in listed order, using each working directory:\n")
+    append(QualityGateCommandRendering.markdownCodeBlock(QualityGateCommandRendering.renderCommands(commands)))
     val findings = result.findings
     findings.take(MAX_CORRECTION_FINDINGS).forEach { finding ->
       val location = finding.location?.let { " ($it)" }.orEmpty()

@@ -3,6 +3,9 @@ package skillbill.cli
 import kotlinx.serialization.json.JsonElement
 import skillbill.cli.model.CliRuntimeContext
 import skillbill.contracts.JsonCodec
+import skillbill.contracts.config.projectchecks.PROJECT_CHECK_DISCOVERY_CONTRACT_VERSION
+import skillbill.contracts.config.projectchecks.ProjectCheckConfigKeys
+import skillbill.contracts.config.projectchecks.ProjectCheckDiscoveryKeys
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.contracts.workflow.goal.GOAL_QUALITY_EXECUTION_CONTRACT_VERSION
 import skillbill.contracts.workflow.identity.task.FEATURE_TASK_RUNTIME_WORKER_OWNERSHIP_CONTRACT_VERSION
@@ -454,11 +457,13 @@ internal class GoalFixtureAgentRunLauncher(
     passThroughResolvedLaunchModel(request)
 
   override fun launch(request: AgentRunLaunchRequest): AgentRunLaunchOutcome {
-    requests += request
     val skillRequest = request.skillRunRequest
     if (skillRequest.goalContinuation == null && skillRequest.promptOverride != null) {
+      projectCheckDiscoveryLaunchOutcome(skillRequest.promptOverride)?.let { return it }
+      requests += request
       return planningLaunchOutcome(skillRequest)
     }
+    requests += request
     childLaunches += request
     val subtaskId = requireNotNull(skillRequest.subtaskId)
     skillRequest.outputSink.write(AgentRunOutputStream.STDOUT, "child-$subtaskId-stdout\n")
@@ -874,6 +879,54 @@ internal fun phasePlanningPayload(
   return """{"contract_version":"$FEATURE_TASK_RUNTIME_CONTRACT_VERSION","phase_id":"$phaseId",""" +
     """"status":"completed","summary":"$phaseId","produced_outputs":$outputs}"""
 }
+
+internal fun projectCheckDiscoveryLaunchOutcome(prompt: String?): AgentRunLaunchOutcome? {
+  val text = prompt ?: return null
+  if (!text.startsWith(PROJECT_CHECK_DISCOVERY_PROMPT_PREFIX)) return null
+  val projectId =
+    requireNotNull(PROJECT_CHECK_DISCOVERY_PROJECT_ID.find(text)?.groupValues?.get(1)) {
+      "project check discovery prompt is missing a project id"
+    }
+  val requested =
+    requireNotNull(PROJECT_CHECK_DISCOVERY_CATEGORIES.find(text)?.groupValues?.get(1)) {
+      "project check discovery prompt is missing requested categories"
+    }.split(", ").filter { token -> token.isNotBlank() }
+  val categories =
+    requested.associateWith { category ->
+      mapOf(
+        ProjectCheckConfigKeys.COMMANDS to
+          listOf(
+            mapOf(
+              ProjectCheckConfigKeys.ARGV to projectCheckDiscoveryArgv(category),
+              ProjectCheckConfigKeys.WORKING_DIRECTORY to ".",
+            ),
+          ),
+      )
+    }
+  return agentRunLaunchFacts(
+    agent = SupportedAgent.CODEX,
+    stdout =
+      JsonCodec.valueToJsonString(
+        mapOf(
+          ProjectCheckDiscoveryKeys.CONTRACT_VERSION to PROJECT_CHECK_DISCOVERY_CONTRACT_VERSION,
+          ProjectCheckDiscoveryKeys.PROJECT_ID to projectId,
+          ProjectCheckDiscoveryKeys.CATEGORIES to categories,
+        ),
+      ),
+  )
+}
+
+private fun projectCheckDiscoveryArgv(category: String): List<String> =
+  when (category) {
+    ProjectCheckDiscoveryKeys.BUILD -> listOf("./gradlew", "compileKotlin")
+    ProjectCheckDiscoveryKeys.VALIDATION -> listOf("./gradlew", "check")
+    else -> listOf("echo", category)
+  }
+
+private const val PROJECT_CHECK_DISCOVERY_PROMPT_PREFIX =
+  "Discover minimal project check commands for skill-bill project checks."
+private val PROJECT_CHECK_DISCOVERY_PROJECT_ID = Regex("""Project id: (\S+)""")
+private val PROJECT_CHECK_DISCOVERY_CATEGORIES = Regex("""Requested categories: (.+)""")
 
 internal fun planningProjectionOutputs(phaseId: String): String? =
   when (phaseId) {

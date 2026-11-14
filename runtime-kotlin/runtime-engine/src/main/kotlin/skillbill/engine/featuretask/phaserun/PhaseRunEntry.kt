@@ -626,10 +626,10 @@ public class PhaseRunEntry(
           request.definitionId,
           requireNotNull(request.acceptedGoalQualityAgentId),
         )
-      } ?: plans.resolveExecutionPlan(request, workflowId, branch, resolutionFacts)
+      } ?: plans.freezeAdmissionExecutionPlan(request, workflowId, branch, resolutionFacts)
     val facts =
       InMemoryPhaseRunFacts(
-        request.copy(acceptedGoalQualityExecutionPlan = executionPlan.takeIf { acceptedExecutionPlan != null }),
+        request.copy(acceptedGoalQualityExecutionPlan = executionPlan),
         definition,
         intake,
         workflowId,

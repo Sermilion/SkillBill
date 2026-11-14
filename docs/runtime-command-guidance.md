@@ -573,7 +573,12 @@ session, including build failures. It may run repository build and packaging com
 including the pack build command, to prepare missing or stale validation artifacts.
 After source repairs it rebuilds the affected artifacts and reruns all runnable required checks
 against the current candidate. The separate compile-only build gate does not reserve
-these commands away from validation. A rebuild does not complete validation, and
+these commands away from validation. Fresh feature and goal-quality admission
+freezes the project's saved build commands into the execution descriptor;
+restart, build repair, and receipts reuse that admitted list verbatim (including
+per-command working directories) instead of pack routing or rediscovery. Legacy
+descriptors without a snapshot still use pack-declared build argv until a new
+admission is created. A rebuild does not complete validation, and
 artifact identity and integrity checks remain mandatory. Monitor repair uses the same
 validation responsibility before publishing its fix, and the runtime then verifies it
 itself: see the monitor repair publication gate below.
@@ -596,13 +601,16 @@ never repeats a force push. A moved local branch or changed push destination
 refuses recovery, and an unresolved failure retains the original error, retry and
 remote evidence, and local commit identity.
 
-Standalone and workflow validation use the same agent strategy. The agent discovers
-required checks from repository instructions, build configuration, scripts, and CI,
-runs them, and repairs failures in the same session. Validation covers the full
-project regardless of which files changed and requires no platform pack or declared
-validation command. If discovery finds no applicable commands, the agent prints a
-warning and completes the step so the workflow can advance. Unreadable configuration
-or failed discovery remains an obstacle and does not count as an empty check list.
+Standalone and workflow validation use the same agent strategy. The runtime resolves
+missing validation categories through the shared project-check discovery path on first
+use, persists the accepted command list, and reuses that saved snapshot on later
+validation and monitor-repair launches. The agent runs only the admitted saved
+commands at their recorded project-relative directories, repairs failures in session,
+and does not rediscover checks from scripts, CI, or pack argv. Validation still
+covers the full project regardless of which files changed. An explicitly empty saved
+category prints an honest no-check warning and completes without counting skipped work
+as passed. Unreadable configuration or failed discovery remains an obstacle and does
+not count as an empty check list.
 
 Confirmed unavailable tools, SDKs, or host platforms skip only the checks that
 depend on them. Validation continues all independent checks and completes when

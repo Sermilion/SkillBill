@@ -2,13 +2,12 @@ package skillbill.engine.featuretask.lifecycle.execution
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonCodec
-import skillbill.contracts.workflow.identity.task.FEATURE_TASK_RUNTIME_EXECUTION_PLAN_CONTRACT_VERSION
-import skillbill.contracts.workflow.identity.task.FEATURE_TASK_RUNTIME_EXECUTION_PLAN_LEGACY_CONTRACT_VERSION
 import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.featuretask.InvalidFeatureTaskRuntimeExecutionPlanSchemaError
 import skillbill.error.featuretask.InvalidPhaseStrategyCompositionError
 import skillbill.error.featuretask.UnsupportedFeatureTaskRuntimeExecutionPlanError
+import skillbill.ports.config.projectchecks.ProjectCheckCommandSnapshotValidator
 import skillbill.ports.taskruntime.executionplan.FeatureTaskRuntimeExecutionPlanValidator
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedFeatureTaskRuntimeExecutionSettings
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
@@ -20,6 +19,7 @@ import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPla
 @Inject
 public class FeatureTaskRuntimeExecutionPlanCodec(
   private val validator: FeatureTaskRuntimeExecutionPlanValidator,
+  private val snapshotValidator: ProjectCheckCommandSnapshotValidator,
 ) {
   public fun encodeExecution(
     plan: ResolvedPhaseExecutionPlan,
@@ -45,74 +45,95 @@ public class FeatureTaskRuntimeExecutionPlanCodec(
     effectiveInputs: EffectiveGatePolicyInputs?,
   ): ByteArray =
     validator.canonicalize(
-      JsonCodec.mapToJsonString(
-        linkedMapOf(
-          Keys.CONTRACT_VERSION to plan.contractVersion,
-          Keys.DEFINITION to
-            mapOf(
-              Keys.ID to plan.definitionId,
-              Keys.SEMANTIC_REVISION to plan.definitionSemanticRevision,
-            ),
-          Keys.SELECTED_STRATEGIES to
-            plan.selectedStrategies.map { strategy ->
-              mapOf(
-                Keys.SLOT to strategy.slot.wireValue,
-                Keys.STRATEGY_ID to strategy.strategyId,
-                Keys.SEMANTIC_REVISION to strategy.semanticRevision,
-                Keys.SELECTED_STEPS to strategy.steps,
-                Keys.ENTRY_STEP to strategy.entryStep,
-              )
-            },
-          Keys.REVIEW_SELECTION to plan.reviewSelection?.wireValue,
-          Keys.QUALITY_GATE_SELECTION to plan.qualityGateSelection?.wireValue,
-          Keys.TRAVERSAL to
-            encodeExecutionPlanTraversal(
-              plan.traversal,
-              plan.contractVersion == FEATURE_TASK_RUNTIME_EXECUTION_PLAN_CONTRACT_VERSION,
-            ),
-          Keys.DISPATCH_OWNERSHIP to
-            plan.dispatchStrategyByStep.map { (step, owner) ->
-              mapOf(
-                Keys.STEP to step,
-                Keys.SLOT to owner.slot.wireValue,
-                Keys.STRATEGY_ID to owner.strategyId,
-                Keys.SEMANTIC_REVISION to owner.semanticRevision,
-              )
-            },
-          Keys.STEP_POLICIES to encodePolicies(plan.stepPolicyIdentities),
-          Keys.RESUME_INTERPRETATIONS to encodePolicies(plan.resumeInterpretationIdentities),
-          Keys.EFFECTIVE_POLICIES to
-            plan.effectivePolicies.map { policy ->
-              mapOf(
-                Keys.ID to policy.id,
-                Keys.SEMANTIC_REVISION to policy.semanticRevision,
-                Keys.SEMANTIC_DIGEST to policy.semanticDigest,
-              )
-            },
-        ).apply {
-          if (plan.contractVersion != FEATURE_TASK_RUNTIME_EXECUTION_PLAN_LEGACY_CONTRACT_VERSION) {
-            put(Keys.STEP_LAUNCH_ASSIGNMENTS, encodeAssignments(plan))
-          }
-          if (plan.contractVersion == FEATURE_TASK_RUNTIME_EXECUTION_PLAN_CONTRACT_VERSION) {
-            put(Keys.QA_SELECTION, plan.qaSelection?.wireValue)
-          }
-          (
-            effectiveInputs?.let {
-              ResolvedFeatureTaskRuntimeExecutionSettings(it.validationDepth, it.phaseTimeoutMillis)
-            } ?: plan.effectivePolicySettings
-          )?.let { settings ->
-            put(
-              Keys.EFFECTIVE_POLICY_SETTINGS,
-              mapOf(
-                Keys.VALIDATION_DEPTH to settings.validationDepth.wireValue,
-                Keys.PHASE_TIMEOUT_MILLIS to settings.phaseTimeoutMillis,
-              ),
-            )
-          }
-        },
-      ).toByteArray(Charsets.UTF_8),
+      JsonCodec.mapToJsonString(encodePayload(plan, effectiveInputs)).toByteArray(Charsets.UTF_8),
       SOURCE,
     )
+
+  private fun encodePayload(
+    plan: ResolvedPhaseExecutionPlan,
+    effectiveInputs: EffectiveGatePolicyInputs?,
+  ): Map<String, Any?> =
+    linkedMapOf(
+      Keys.CONTRACT_VERSION to plan.contractVersion,
+      Keys.DEFINITION to
+        mapOf(
+          Keys.ID to plan.definitionId,
+          Keys.SEMANTIC_REVISION to plan.definitionSemanticRevision,
+        ),
+      Keys.SELECTED_STRATEGIES to
+        plan.selectedStrategies.map { strategy ->
+          mapOf(
+            Keys.SLOT to strategy.slot.wireValue,
+            Keys.STRATEGY_ID to strategy.strategyId,
+            Keys.SEMANTIC_REVISION to strategy.semanticRevision,
+            Keys.SELECTED_STEPS to strategy.steps,
+            Keys.ENTRY_STEP to strategy.entryStep,
+          )
+        },
+      Keys.REVIEW_SELECTION to plan.reviewSelection?.wireValue,
+      Keys.QUALITY_GATE_SELECTION to plan.qualityGateSelection?.wireValue,
+      Keys.TRAVERSAL to
+        encodeExecutionPlanTraversal(
+          plan.traversal,
+          executionPlanSupportsCrossSlotAllowance(plan.contractVersion),
+        ),
+      Keys.DISPATCH_OWNERSHIP to
+        plan.dispatchStrategyByStep.map { (step, owner) ->
+          mapOf(
+            Keys.STEP to step,
+            Keys.SLOT to owner.slot.wireValue,
+            Keys.STRATEGY_ID to owner.strategyId,
+            Keys.SEMANTIC_REVISION to owner.semanticRevision,
+          )
+        },
+      Keys.STEP_POLICIES to encodePolicies(plan.stepPolicyIdentities),
+      Keys.RESUME_INTERPRETATIONS to encodePolicies(plan.resumeInterpretationIdentities),
+      Keys.EFFECTIVE_POLICIES to
+        plan.effectivePolicies.map { policy ->
+          mapOf(
+            Keys.ID to policy.id,
+            Keys.SEMANTIC_REVISION to policy.semanticRevision,
+            Keys.SEMANTIC_DIGEST to policy.semanticDigest,
+          )
+        },
+    ).apply {
+      encodeVersionedFields(plan, effectiveInputs)
+    }
+
+  private fun MutableMap<String, Any?>.encodeVersionedFields(
+    plan: ResolvedPhaseExecutionPlan,
+    effectiveInputs: EffectiveGatePolicyInputs?,
+  ) {
+    if (executionPlanSupportsStepLaunchAssignments(plan.contractVersion)) {
+      put(Keys.STEP_LAUNCH_ASSIGNMENTS, encodeAssignments(plan))
+    }
+    if (executionPlanSupportsQaSelection(plan.contractVersion)) {
+      put(Keys.QA_SELECTION, plan.qaSelection?.wireValue)
+    }
+    if (executionPlanSupportsProjectCheckCommands(plan.contractVersion)) {
+      put(Keys.PROJECT_CHECK_COMMANDS, plan.projectCheckCommands?.let(::encodeProjectCheckCommandSnapshot))
+    }
+    encodeEffectivePolicySettings(plan, effectiveInputs)
+  }
+
+  private fun MutableMap<String, Any?>.encodeEffectivePolicySettings(
+    plan: ResolvedPhaseExecutionPlan,
+    effectiveInputs: EffectiveGatePolicyInputs?,
+  ) {
+    (
+      effectiveInputs?.let {
+        ResolvedFeatureTaskRuntimeExecutionSettings(it.validationDepth, it.phaseTimeoutMillis)
+      } ?: plan.effectivePolicySettings
+    )?.let { settings ->
+      put(
+        Keys.EFFECTIVE_POLICY_SETTINGS,
+        mapOf(
+          Keys.VALIDATION_DEPTH to settings.validationDepth.wireValue,
+          Keys.PHASE_TIMEOUT_MILLIS to settings.phaseTimeoutMillis,
+        ),
+      )
+    }
+  }
 
   internal fun decode(encoded: ByteArray): ResolvedPhaseExecutionPlan {
     val payload =
@@ -122,7 +143,7 @@ public class FeatureTaskRuntimeExecutionPlanCodec(
         ),
       )
     return try {
-      decodeExecutionPlan(payload)
+      decodeExecutionPlan(payload, snapshotValidator)
     } catch (_: InvalidPhaseStrategyCompositionError) {
       throw InvalidFeatureTaskRuntimeExecutionPlanSchemaError("execution plan cannot be reconstructed")
     }

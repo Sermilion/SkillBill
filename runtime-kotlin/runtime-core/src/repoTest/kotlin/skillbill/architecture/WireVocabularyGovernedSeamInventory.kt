@@ -19,6 +19,9 @@ import skillbill.infrastructure.contracts.locator.FeatureTaskRuntimePlanBundleFe
 import skillbill.infrastructure.contracts.locator.FeatureTaskRuntimeReadinessEvidenceSchemaPaths
 import skillbill.infrastructure.contracts.locator.GoalArchiveSchemaPaths
 import skillbill.infrastructure.contracts.locator.GoalQualityExecutionSchemaPaths
+import skillbill.infrastructure.contracts.locator.ProjectCheckCommandSnapshotSchemaPaths
+import skillbill.infrastructure.contracts.locator.ProjectCheckConfigSchemaPaths
+import skillbill.infrastructure.contracts.locator.ProjectCheckDiscoverySchemaPaths
 import skillbill.infrastructure.sqlite.telemetry.GoalTelemetryPayloadKeys
 import skillbill.infrastructure.sqlite.telemetry.SqliteReviewTelemetryPayloadKeys
 import skillbill.infrastructure.sqlite.telemetry.lifecycle.SqliteLifecycleTelemetryMaterializationPayloadKeys
@@ -35,6 +38,36 @@ internal data class GovernedPayloadSeam(
 internal object WireVocabularyGovernedSeamInventory {
   val seams: List<GovernedPayloadSeam> =
     listOf(
+      GovernedPayloadSeam(
+        seamId = "project-check-config",
+        schemaRepoRelativePath = ProjectCheckConfigSchemaPaths.REPO_RELATIVE_PATH,
+        governedRelativePathMarkers =
+          listOf(
+            "contracts/config/projectchecks/ProjectCheckConfig.kt",
+            "infrastructure/contracts/projectchecks/ProjectCheckConfigSchemaValidator.kt",
+            "infrastructure/sqlite/config/projectchecks/SqliteProjectCheckConfigStore.kt",
+          ),
+      ),
+      GovernedPayloadSeam(
+        seamId = "project-check-command-snapshot",
+        schemaRepoRelativePath = ProjectCheckCommandSnapshotSchemaPaths.REPO_RELATIVE_PATH,
+        governedRelativePathMarkers =
+          listOf(
+            "contracts/config/projectchecks/ProjectCheckCommandSnapshot.kt",
+            "infrastructure/contracts/projectchecks/ProjectCheckCommandSnapshotSchemaValidator.kt",
+            "engine/featuretask/lifecycle/execution/ProjectCheckCommandSnapshotWire.kt",
+          ),
+      ),
+      GovernedPayloadSeam(
+        seamId = "project-check-discovery",
+        schemaRepoRelativePath = ProjectCheckDiscoverySchemaPaths.REPO_RELATIVE_PATH,
+        governedRelativePathMarkers =
+          listOf(
+            "contracts/config/projectchecks/ProjectCheckDiscovery.kt",
+            "infrastructure/contracts/projectchecks/ProjectCheckDiscoverySchemaValidator.kt",
+            "engine/featuretask/validation/projectchecks/ProjectCheckCommandDiscovery.kt",
+          ),
+      ),
       GovernedPayloadSeam(
         seamId = "feature-task-runtime-execution-plan",
         schemaRepoRelativePath = FeatureTaskRuntimeExecutionPlanSchemaPaths.REPO_RELATIVE_PATH,
@@ -197,6 +230,11 @@ internal object WireVocabularyGovernedSeamInventory {
       FeatureTaskRuntimeExecutionPlanSchemaPaths.REPO_RELATIVE_PATH ->
         recursiveSchemaPropertyKeys(loadRepoSchema(schemaRepoRelativePath))
       FeatureTaskRuntimePlanBundleFeasibilitySchemaPaths.REPO_RELATIVE_PATH ->
+        recursiveSchemaPropertyKeys(loadRepoSchema(schemaRepoRelativePath))
+      ProjectCheckConfigSchemaPaths.REPO_RELATIVE_PATH,
+      ProjectCheckDiscoverySchemaPaths.REPO_RELATIVE_PATH,
+      ProjectCheckCommandSnapshotSchemaPaths.REPO_RELATIVE_PATH,
+      ->
         recursiveSchemaPropertyKeys(loadRepoSchema(schemaRepoRelativePath))
       GoalArchiveSchemaPaths.REPO_RELATIVE_PATH ->
         propertyNames(loadRepoSchema(schemaRepoRelativePath).path("properties")).toSet()

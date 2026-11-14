@@ -4,6 +4,7 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.identity.task.FEATURE_TASK_RUNTIME_EXECUTION_PLAN_PREVIOUS_CONTRACT_VERSION
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
+import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhasePlanAttachments
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseStepRecords
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPlanKeys as Keys
@@ -89,9 +90,13 @@ object ArchivedAuditExecutionPlanFixture {
         current.effectivePolicies,
         current.effectivePolicySettings,
         FEATURE_TASK_RUNTIME_EXECUTION_PLAN_PREVIOUS_CONTRACT_VERSION,
-        current.qaSelection,
+        ResolvedPhasePlanAttachments(current.qaSelection),
       )
-    val supportedPolicies = FeatureTaskRuntimeEffectivePolicies.resolve(recorded, fixture.inputs)
+    val supportedPolicies =
+      FeatureTaskRuntimeEffectivePolicies.resolve(
+        recorded,
+        fixture.inputs.copy(projectCheckSnapshot = null),
+      )
     return fixture.codec.encode(recorded.withEffectivePolicies(supportedPolicies))
   }
 
@@ -134,7 +139,11 @@ object ArchivedAuditExecutionPlanFixture {
         JsonCodec.anyToStringAnyMap(item)!! + (Keys.SEMANTIC_DIGEST to "0".repeat(64))
       }
     val plan = fixture.codec.decode(JsonCodec.mapToJsonString(restored).encodeToByteArray())
-    val policies = FeatureTaskRuntimeEffectivePolicies.resolve(plan, fixture.inputs)
+    val policies =
+      FeatureTaskRuntimeEffectivePolicies.resolve(
+        plan,
+        fixture.inputs.copy(projectCheckSnapshot = null),
+      )
     return fixture.codec.encode(plan.withEffectivePolicies(policies))
   }
 

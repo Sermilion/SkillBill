@@ -14,6 +14,7 @@ import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelecti
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
+import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhasePlanAttachments
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseStepRecords
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseStrategyIdentity
 import skillbill.workflow.taskruntime.model.skeleton.RuntimeReviewSelection
@@ -211,7 +212,7 @@ public class PhaseStrategyLookup(
       effectivePolicies = effectivePolicies,
       effectivePolicySettings = effectivePolicySettings,
       contractVersion = contractVersion,
-      qaSelection = qaSelection,
+      attachments = ResolvedPhasePlanAttachments(qaSelection, projectCheckCommands),
     )
   }
 
@@ -299,7 +300,7 @@ public class PhaseStrategyLookup(
         selectedStrategies = identities,
         reviewSelection = reviewSelection(facts),
         qualityGateSelection = selectedQualityGateSelection(facts, selected),
-        qaSelection = singleQaSelection(facts),
+        attachments = ResolvedPhasePlanAttachments(qaSelection = singleQaSelection(facts)),
         traversal = declaration,
         stepRecords =
           ResolvedPhaseStepRecords(

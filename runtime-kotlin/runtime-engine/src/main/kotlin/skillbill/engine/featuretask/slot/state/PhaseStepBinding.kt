@@ -1,8 +1,10 @@
 package skillbill.engine.featuretask.slot.state
 
 import skillbill.application.telemetry.model.PrDescriptionGeneratedRequest
+import skillbill.contracts.config.projectchecks.ProjectCheckCommandSnapshot
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBriefing
+import skillbill.engine.featuretask.model.phase.ValidationCommandLaunchTransport
 import skillbill.engine.featuretask.phaserun.monitor.StandaloneMonitorLedger
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
@@ -117,6 +119,10 @@ public interface PhaseQualityGateStepBinding : PhaseAcceptedStepExecution {
     run: PhaseRun,
     call: PhaseStepCall,
   ): PhaseOutcome
+
+  public fun prepareValidationSnapshotForLaunch(
+    run: PhaseRun,
+  ): Pair<RequiredPhaseWrite, ValidationCommandLaunchTransport?>
 }
 
 public interface PhaseCommitStepBinding : PhaseAcceptedStepExecution {
@@ -126,6 +132,16 @@ public interface PhaseCommitStepBinding : PhaseAcceptedStepExecution {
 public interface PhaseMonitorStepBinding :
   PhaseAcceptedStepExecution,
   PhaseAgentExecution {
+  public fun acceptRepairValidationSnapshot(snapshot: ProjectCheckCommandSnapshot): RequiredPhaseWrite
+
+  public fun repairValidationSnapshot(): ProjectCheckCommandSnapshot?
+
+  public fun repairValidationLaunchTransport(): ValidationCommandLaunchTransport?
+
+  public fun prepareRepairValidationSnapshotForLaunch(
+    run: PhaseRun,
+  ): Pair<RequiredPhaseWrite, ValidationCommandLaunchTransport?>
+
   public fun publishRepair(
     run: PhaseRun,
     pullRequests: PullRequestIdentityLookup,
@@ -164,6 +180,16 @@ public interface PhaseCiObservation {
 public interface PhaseStandaloneMonitorStepBinding :
   PhaseAcceptedStepExecution,
   PhaseAgentExecution {
+  public fun acceptRepairValidationSnapshot(snapshot: ProjectCheckCommandSnapshot): RequiredPhaseWrite
+
+  public fun repairValidationSnapshot(): ProjectCheckCommandSnapshot?
+
+  public fun repairValidationLaunchTransport(): ValidationCommandLaunchTransport?
+
+  public fun prepareRepairValidationSnapshotForLaunch(
+    run: PhaseRun,
+  ): Pair<RequiredPhaseWrite, ValidationCommandLaunchTransport?>
+
   public fun runStandaloneMonitor(
     run: PhaseRun,
     operations: PhaseStandaloneMonitorOperations,

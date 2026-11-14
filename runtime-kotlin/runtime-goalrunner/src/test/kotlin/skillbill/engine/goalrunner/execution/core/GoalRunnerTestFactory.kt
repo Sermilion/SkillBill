@@ -581,6 +581,8 @@ private fun goalRunnerExecutionPlans(
             ?: GoalRunnerQualityGateSelectionResolver.resolve(),
           ValidationDepth.FULL,
           null,
+          issueKey = manifest.issueKey,
+          invokedAgentId = "claude",
         ),
       )
     fixture.seed(states, workflowId, manifest.issueKey, fixture.validator.read(descriptor.encoded(), "goal fixture"))

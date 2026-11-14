@@ -89,12 +89,12 @@ class FeatureTaskRuntimeBuildGateShutdownTest {
   private fun coordinator(
     runner: ValidationGateRunner,
     hooks: ShutdownHookPort,
-  ) = FeatureTaskRuntimeBuildGateCoordinator(
+  ) = buildFeatureTaskRuntimeBuildGateCoordinator(
     declaredResolver(declaration),
     runner,
     repoLocalConfig(),
     NoopRuntimeDiagnostics,
-    hooks,
+    shutdownHooks = hooks,
   )
 
   private fun cycle(store: ValidationGateProgressStore) =

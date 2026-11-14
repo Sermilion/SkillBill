@@ -66,6 +66,8 @@ import skillbill.engine.featuretask.phaserun.PhaseRunEntry
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeRunEntry
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeStatusService
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
+import skillbill.engine.featuretask.validation.projectchecks.ProjectCheckCommandResolver
+import skillbill.engine.featuretask.validation.projectchecks.ProjectCheckConfigAccess
 import skillbill.engine.goalrunner.GoalOperatorDecisionService
 import skillbill.engine.goalrunner.GoalRunner
 import skillbill.engine.goalrunner.findings.UnaddressedFindingsLedgerService
@@ -86,6 +88,7 @@ import skillbill.infrastructure.host.CanonicalRepositoryRoot
 import skillbill.infrastructure.host.blockincident.FileProductReportDeliveryOwnership
 import skillbill.infrastructure.host.concurrency.JvmInterruptSignalPort
 import skillbill.infrastructure.host.process.EnvironmentGhProductIssueCredential
+import skillbill.infrastructure.host.projectchecks.FileProjectCheckDiscoveryLock
 import skillbill.infrastructure.host.projectstore.ProjectStoreResolver
 import skillbill.infrastructure.host.system.FileConfigDocumentFiles
 import skillbill.infrastructure.host.system.FileSystemProjectConfigFile
@@ -114,6 +117,7 @@ import skillbill.ports.blockincident.ProductReportDeliveryOwnershipPort
 import skillbill.ports.concurrency.InterruptSignalPort
 import skillbill.ports.config.ConfigDocumentFiles
 import skillbill.ports.config.ProjectConfigFilePort
+import skillbill.ports.config.projectchecks.ProjectCheckDiscoveryLock
 import skillbill.ports.db.DatabaseCheckpoint
 import skillbill.ports.db.DatabaseReadConnections
 import skillbill.ports.db.DatabaseSchemaPort
@@ -259,6 +263,9 @@ abstract class RuntimeComponent(
   fun projectCatalogPort(resolver: ProjectStoreResolver): ProjectCatalogPort = resolver
 
   @Provides
+  fun projectCheckDiscoveryLock(adapter: FileProjectCheckDiscoveryLock): ProjectCheckDiscoveryLock = adapter
+
+  @Provides
   fun projectConfigFilePort(adapter: FileSystemProjectConfigFile): ProjectConfigFilePort = adapter
 
   @Provides
@@ -291,6 +298,8 @@ abstract class RuntimeComponent(
       workflowSnapshotValidator,
       runtimeVersion().value,
       blockIncidentContractValidator,
+      projectCheckConfigValidator(),
+      projectCheckCommandSnapshotValidator(),
     )
 
   @Provides
@@ -356,6 +365,8 @@ abstract class RuntimeComponent(
   abstract val featureTaskRuntimeCrashReconciler: FeatureTaskRuntimeCrashReconciler
   abstract val blockedPhaseRetryArtifacts: BlockedPhaseRetryArtifacts
   abstract val featureTaskRuntimeExecutionPlanResolver: FeatureTaskRuntimeExecutionPlanResolver
+  abstract val projectCheckConfigAccess: ProjectCheckConfigAccess
+  abstract val projectCheckCommandResolver: ProjectCheckCommandResolver
   abstract val featureTaskRuntimeStatusService: FeatureTaskRuntimeStatusService
   abstract val featureTaskRuntimeWorkerCoordinator: FeatureTaskRuntimeWorkerCoordinator
   abstract val featureTaskRuntimeRunInvariantsSource: FeatureTaskRuntimeRunInvariantsSource

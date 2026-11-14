@@ -12,6 +12,9 @@ interface ProjectStorePort {
    */
   fun resolve(workingDirectory: Path): ProjectStoreLocation
 
+  /** Resolves against current project-store records, bypassing a process-local cached association. */
+  fun resolveCurrent(workingDirectory: Path): ProjectStoreLocation
+
   /**
    * Attaches the checkout at [workingDirectory] to the existing store [projectId]. Fails when that store is
    * unknown or its record is malformed.

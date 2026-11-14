@@ -2,14 +2,31 @@
     "artifacts_json": {
         "feature_task_runtime_build_gate_progress": {
             "accepted_repair_outputs": [],
+            "build_command_attempt": {
+                "commands": [
+                    {
+                        "argv": [
+                            "echo",
+                            "build"
+                        ],
+                        "command": "echo build",
+                        "duration_ms": "__NORMALIZED_DURATION__",
+                        "exit_code": 0,
+                        "outcome": "passed",
+                        "working_directory": "."
+                    }
+                ],
+                "contract_version": "0.1",
+                "list_identity": ".::echo\u0000build"
+            },
             "captured_triage_plan": null,
             "complete_findings": [],
-            "contract_version": "0.3",
+            "contract_version": "0.4",
             "gate_run_count": 1,
             "gate_runs": [
                 {
                     "cache_mode": "cache_eligible",
-                    "command": "echo build",
+                    "command": ".::echo\u0000build",
                     "duration_ms": "__NORMALIZED_DURATION__",
                     "executed_checks": [],
                     "executed_work_units": 1,
@@ -628,7 +645,7 @@
             }
         },
         "feature_task_runtime_execution_plan": {
-            "contract_version": "0.3",
+            "contract_version": "0.4",
             "definition": {
                 "id": "goal-child",
                 "semantic_revision": 4
@@ -738,7 +755,7 @@
                 {
                     "id": "gate-commands",
                     "semantic_digest": "__NORMALIZED_SHA64__",
-                    "semantic_revision": 1
+                    "semantic_revision": 2
                 },
                 {
                     "id": "receipt-interpretation",
@@ -764,6 +781,24 @@
             "effective_policy_settings": {
                 "phase_timeout_millis": null,
                 "validation_depth": "full"
+            },
+            "project_check_commands": {
+                "build_commands": {
+                    "commands": [
+                        {
+                            "argv": [
+                                "echo",
+                                "build"
+                            ],
+                            "working_directory": "."
+                        }
+                    ]
+                },
+                "contract_version": "0.1",
+                "gradle_wrapper": null,
+                "parser_metadata": null,
+                "project_id": "test-project",
+                "validation_commands": null
             },
             "qa_selection": null,
             "quality_gate_selection": "build",
@@ -1988,7 +2023,7 @@
                 "execution_origin": "agent-executed",
                 "finished_at": "__NORMALIZED_TIMESTAMP__",
                 "first_started_at": "__NORMALIZED_TIMESTAMP__",
-                "output_artifact": "{\"contract_version\":\"0.7\",\"phase_id\":\"build\",\"status\":\"completed\",\"summary\":\"Build satisfied by runtime-owned gate execution.\",\"verdict\":\"satisfied\",\"produced_outputs\":{\"build_receipt\":{\"contract_version\":\"0.2\",\"validation_status\":\"passed\",\"checks\":[],\"repository_checkpoint\":{\"fingerprint\":\"slot-baseline-checkpoint\"},\"gate_run_count\":1,\"gate_runs\":[{\"duration_ms\":1,\"outcome\":\"passed\",\"cache_mode\":\"cache_eligible\",\"executed_work_units\":1,\"executed_checks\":[],\"command\":\"echo build\",\"exit_code\":0,\"repository_checkpoint\":\"slot-baseline-checkpoint\"}]}}}",
+                "output_artifact": "{\"contract_version\":\"0.7\",\"phase_id\":\"build\",\"status\":\"completed\",\"summary\":\"Build satisfied by runtime-owned gate execution.\",\"verdict\":\"satisfied\",\"produced_outputs\":{\"build_receipt\":{\"contract_version\":\"0.2\",\"validation_status\":\"passed\",\"checks\":[],\"repository_checkpoint\":{\"fingerprint\":\"slot-baseline-checkpoint\"},\"gate_run_count\":1,\"gate_runs\":[{\"duration_ms\":1,\"outcome\":\"passed\",\"cache_mode\":\"cache_eligible\",\"executed_work_units\":1,\"executed_checks\":[],\"command\":\".::echo\\u0000build\",\"exit_code\":0,\"repository_checkpoint\":\"slot-baseline-checkpoint\"}]}}}",
                 "phase_id": "build",
                 "record_kind": "private_phase_record",
                 "resolved_agent_id": "agent-build",

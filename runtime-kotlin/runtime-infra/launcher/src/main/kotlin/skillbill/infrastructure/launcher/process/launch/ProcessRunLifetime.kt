@@ -71,6 +71,12 @@ internal class ProcessRunLifetime(
 
   private val process: Process get() = tree.process
 
+  fun drainExitedProcessOutputBeforeFinish() {
+    if (!treeHasExited("process_pre_finish_exit_check")) return
+    joinDrain(stdout, "stdout_drain_join", CleanupState(interrupted = false))
+    joinDrain(stderr, "stderr_drain_join", CleanupState(interrupted = false))
+  }
+
   fun release(waitResult: Result<ProcessWait>?): ProcessRunReleaseSnapshot {
     if (released) return requireNotNull(releaseSnapshot)
     released = true

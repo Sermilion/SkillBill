@@ -1,5 +1,6 @@
 package skillbill.workflow.taskruntime.model.skeleton
 
+import skillbill.contracts.config.projectchecks.ProjectCheckCommandSnapshot
 import skillbill.contracts.workflow.identity.task.FEATURE_TASK_RUNTIME_EXECUTION_PLAN_CONTRACT_VERSION
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 import java.util.Collections
@@ -67,6 +68,12 @@ class ResolvedPhaseStepRecords(
   val launchAssignments: Map<String, StepLaunchAssignment> = immutableStepLaunchAssignments(launchAssignments)
 }
 
+data class ResolvedPhasePlanAttachments(
+  val qaSelection: FeatureTaskRuntimeQaSelection? = null,
+  val projectCheckCommands: ProjectCheckCommandSnapshot? = null,
+  val sourceContractVersion: String? = null,
+)
+
 class ResolvedPhaseExecutionPlan(
   val definitionId: String,
   val definitionSemanticRevision: Int,
@@ -78,8 +85,11 @@ class ResolvedPhaseExecutionPlan(
   effectivePolicies: List<ResolvedExecutionPolicy> = emptyList(),
   val effectivePolicySettings: ResolvedFeatureTaskRuntimeExecutionSettings? = null,
   val contractVersion: String = FEATURE_TASK_RUNTIME_EXECUTION_PLAN_CONTRACT_VERSION,
-  val qaSelection: FeatureTaskRuntimeQaSelection? = null,
+  attachments: ResolvedPhasePlanAttachments = ResolvedPhasePlanAttachments(),
 ) {
+  val qaSelection: FeatureTaskRuntimeQaSelection? = attachments.qaSelection
+  val projectCheckCommands: ProjectCheckCommandSnapshot? = attachments.projectCheckCommands?.frozen()
+  val sourceContractVersion: String = attachments.sourceContractVersion ?: contractVersion
   val stepPolicyIdentities: Map<String, String> = stepRecords.policyIdentities
   val resumeInterpretationIdentities: Map<String, String> = stepRecords.resumeInterpretationIdentities
   val stepLaunchAssignments: Map<String, StepLaunchAssignment> = stepRecords.launchAssignments
@@ -120,31 +130,50 @@ class ResolvedPhaseExecutionPlan(
     )
 
   fun withTraversal(value: FeatureTaskRuntimeTransitionDeclaration): ResolvedPhaseExecutionPlan =
-    ResolvedPhaseExecutionPlan(
-      definitionId = definitionId,
-      definitionSemanticRevision = definitionSemanticRevision,
-      selectedStrategies = selectedStrategies,
-      reviewSelection = reviewSelection,
-      qualityGateSelection = qualityGateSelection,
-      qaSelection = qaSelection,
-      traversal = value,
-      stepRecords =
-        ResolvedPhaseStepRecords(
-          stepPolicyIdentities,
-          resumeInterpretationIdentities,
-          stepLaunchAssignments,
-        ),
-      effectivePolicies = effectivePolicies,
-      effectivePolicySettings = effectivePolicySettings,
-      contractVersion = contractVersion,
-    )
+    copyPlan(traversal = value)
 
   fun withEffectivePolicies(value: List<ResolvedExecutionPolicy>): ResolvedPhaseExecutionPlan =
+    copyPlan(effectivePolicies = value)
+
+  fun withProjectCheckCommands(value: ProjectCheckCommandSnapshot?): ResolvedPhaseExecutionPlan =
+    copyPlan(attachments = ResolvedPhasePlanAttachments(qaSelection, value?.frozen(), sourceContractVersion))
+
+  fun withContractVersion(value: String): ResolvedPhaseExecutionPlan =
     ResolvedPhaseExecutionPlan(
-      definitionId, definitionSemanticRevision, selectedStrategies, reviewSelection, qualityGateSelection,
+      definitionId,
+      definitionSemanticRevision,
+      selectedStrategies,
+      reviewSelection,
+      qualityGateSelection,
       traversal,
       ResolvedPhaseStepRecords(stepPolicyIdentities, resumeInterpretationIdentities, stepLaunchAssignments),
-      value, effectivePolicySettings, contractVersion, qaSelection,
+      effectivePolicies,
+      effectivePolicySettings,
+      value,
+      ResolvedPhasePlanAttachments(qaSelection, projectCheckCommands, value),
+    )
+
+  private fun copyPlan(
+    selectedStrategies: List<ResolvedPhaseStrategyIdentity> = this.selectedStrategies,
+    traversal: FeatureTaskRuntimeTransitionDeclaration = this.traversal,
+    stepRecords: ResolvedPhaseStepRecords =
+      ResolvedPhaseStepRecords(stepPolicyIdentities, resumeInterpretationIdentities, stepLaunchAssignments),
+    effectivePolicies: List<ResolvedExecutionPolicy> = this.effectivePolicies,
+    attachments: ResolvedPhasePlanAttachments =
+      ResolvedPhasePlanAttachments(qaSelection, projectCheckCommands, sourceContractVersion),
+  ): ResolvedPhaseExecutionPlan =
+    ResolvedPhaseExecutionPlan(
+      definitionId,
+      definitionSemanticRevision,
+      selectedStrategies,
+      reviewSelection,
+      qualityGateSelection,
+      traversal,
+      stepRecords,
+      effectivePolicies,
+      effectivePolicySettings,
+      contractVersion,
+      attachments,
     )
 
   init {

@@ -3,6 +3,7 @@ package skillbill.engine.featuretask.lifecycle.continuation
 import skillbill.application.testHarnessClock
 import skillbill.application.testWorkflowSnapshotValidator
 import skillbill.contracts.JsonCodec
+import skillbill.contracts.config.projectchecks.ProjectCheckCommandSnapshot
 import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWireArtifactValidator
 import skillbill.engine.featuretask.lifecycle.core.ownership
 import skillbill.engine.featuretask.lifecycle.execution.ExecutionPlanAdmissionFixture
@@ -119,11 +120,21 @@ class FeatureTaskContinuationAdmissionTest {
     withFixture { fixture ->
       val candidate = fixture.candidate()
       val original = fixture.row()
+      val driftedSnapshot =
+        requireNotNull(fixture.execution.plan.projectCheckCommands).let { snapshot ->
+          ProjectCheckCommandSnapshot(
+            snapshot.projectId,
+            snapshot.buildCommands,
+            snapshot.validationCommands,
+            snapshot.parserMetadata,
+            "other/gradlew",
+          ).frozen()
+        }
       val changed =
         fixture.execution.validator.read(
           fixture.execution.codec.encodeExecution(
-            fixture.execution.plan,
-            fixture.execution.inputs.copy(packSlug = "different-pack"),
+            fixture.execution.plan.withProjectCheckCommands(driftedSnapshot),
+            fixture.execution.inputs.copy(projectCheckSnapshot = driftedSnapshot),
           ),
           "changed routing",
         )

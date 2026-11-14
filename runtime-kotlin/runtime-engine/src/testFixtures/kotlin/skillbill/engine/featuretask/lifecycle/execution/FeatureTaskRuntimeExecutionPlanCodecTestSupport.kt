@@ -1,0 +1,10 @@
+package skillbill.engine.featuretask.lifecycle.execution
+
+import skillbill.infrastructure.contracts.projectchecks.ProjectCheckCommandSnapshotSchemaValidator
+import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeExecutionPlanSchemaValidator
+import skillbill.ports.taskruntime.executionplan.FeatureTaskRuntimeExecutionPlanValidator
+
+fun featureTaskRuntimeExecutionPlanCodecForTest(
+  validator: FeatureTaskRuntimeExecutionPlanValidator = FeatureTaskRuntimeExecutionPlanSchemaValidator(),
+): FeatureTaskRuntimeExecutionPlanCodec =
+  FeatureTaskRuntimeExecutionPlanCodec(validator, ProjectCheckCommandSnapshotSchemaValidator())

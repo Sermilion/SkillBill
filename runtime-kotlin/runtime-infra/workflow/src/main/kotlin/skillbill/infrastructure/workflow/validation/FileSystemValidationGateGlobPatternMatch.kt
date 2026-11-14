@@ -15,6 +15,11 @@ internal fun fileSystemValidationGateExpandGlob(
 ): List<Path> {
   val normalized = glob.replace('\\', '/')
   val matcher = FileSystems.getDefault().getPathMatcher("glob:$normalized")
+  val strippedRootGlob = normalized.removePrefix("**/")
+  val rootMatcher =
+    strippedRootGlob.takeIf { it != normalized && it.isNotEmpty() }?.let { stripped ->
+      FileSystems.getDefault().getPathMatcher("glob:$stripped")
+    }
   if (!Files.isDirectory(repoRoot)) return emptyList()
   val matches = ArrayList<Path>()
   Files.walkFileTree(
@@ -35,7 +40,8 @@ internal fun fileSystemValidationGateExpandGlob(
         attrs: BasicFileAttributes,
       ): FileVisitResult {
         val relative = repoRoot.relativize(file).toString().replace('\\', '/')
-        if (matcher.matches(Path.of(relative))) {
+        val relativePath = Path.of(relative)
+        if (matcher.matches(relativePath) || rootMatcher?.matches(relativePath) == true) {
           matches.add(file)
         }
         return FileVisitResult.CONTINUE

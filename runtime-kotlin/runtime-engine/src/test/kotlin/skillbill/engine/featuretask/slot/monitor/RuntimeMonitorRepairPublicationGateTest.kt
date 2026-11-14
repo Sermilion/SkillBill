@@ -1,13 +1,13 @@
 package skillbill.engine.featuretask.slot.monitor
 
+import skillbill.contracts.config.projectchecks.ProjectCheckCategoryConfig
+import skillbill.contracts.config.projectchecks.ProjectCheckCommand
+import skillbill.contracts.config.projectchecks.ProjectCheckCommandSnapshot
+import skillbill.engine.featuretask.model.phase.ValidationCommandLaunchTransport
 import skillbill.engine.featuretask.validation.ScriptedGateRunner
-import skillbill.engine.featuretask.validation.ValidationGateResolver
-import skillbill.engine.featuretask.validation.declaredResolver
 import skillbill.engine.featuretask.validation.failedEmptyFindings
-import skillbill.engine.featuretask.validation.kotlinPackWithoutGate
 import skillbill.engine.featuretask.validation.neverRunsGate
 import skillbill.engine.featuretask.validation.passed
-import skillbill.engine.featuretask.validation.repoLocalConfig
 import skillbill.infrastructure.workflow.git.GitWorkflowGitOperations
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.validation.ValidationGateRunner
@@ -16,6 +16,7 @@ import skillbill.ports.validation.model.ValidationGateFindingParseMode
 import skillbill.ports.validation.model.ValidationGateRunRequest
 import skillbill.ports.validation.model.ValidationGateRunResult
 import skillbill.workflow.taskruntime.model.validation.ValidationGateCacheMode
+import skillbill.workflow.taskruntime.model.validation.ValidationGateRunOutcome
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.AfterTest
@@ -56,7 +57,7 @@ class RuntimeMonitorRepairPublicationGateTest {
     write(SOURCE, conflicted("fun main() {}"))
     commit("Prepare changes for pull request")
 
-    val verdict = gate(runner = neverRunsGate()).verify(repoRoot, "main")
+    val verdict = gate(runner = neverRunsGate()).verify(request(repoRoot, snapshot = null))
 
     val again = assertIs<MonitorRepairPublicationVerdict.RepairAgain>(verdict)
     assertTrue(SOURCE in again.correction, again.correction)
@@ -69,7 +70,7 @@ class RuntimeMonitorRepairPublicationGateTest {
     write(SOURCE, conflicted("fun main() {}"))
     write("runtime-kotlin/New.kt", conflicted("class New"))
 
-    val verdict = gate(runner = neverRunsGate()).verify(repoRoot, null)
+    val verdict = gate(runner = neverRunsGate()).verify(request(repoRoot, snapshot = null, baseBranch = null))
 
     val again = assertIs<MonitorRepairPublicationVerdict.RepairAgain>(verdict)
     assertTrue(SOURCE in again.correction && "runtime-kotlin/New.kt" in again.correction, again.correction)
@@ -83,14 +84,14 @@ class RuntimeMonitorRepairPublicationGateTest {
     commit("Edit fixture")
     val runner = ScriptedGateRunner(listOf(passed(forced = true)))
 
-    val verdict = gate(runner = runner).verify(repoRoot, "main")
+    val verdict = gate(runner = runner).verify(request(repoRoot, publicationSnapshot()))
 
     assertEquals(MonitorRepairPublicationVerdict.Publishable, verdict)
-    val request = runner.requests.single()
-    assertEquals(listOf("echo", "collect-all-full"), request.argv)
-    assertEquals(ValidationGateCacheMode.FORCED_FULL, request.cacheMode)
-    assertEquals(ValidationGateFindingParseMode.COLLECT_ALL, request.findingParseMode)
-    assertEquals(repoRoot, request.repoRoot)
+    val runRequest = runner.requests.single()
+    assertEquals(listOf("echo", "collect-all-full"), runRequest.argv)
+    assertEquals(ValidationGateCacheMode.FORCED_FULL, runRequest.cacheMode)
+    assertEquals(ValidationGateFindingParseMode.COLLECT_ALL, runRequest.findingParseMode)
+    assertEquals(repoRoot, runRequest.repoRoot)
   }
 
   @Test
@@ -99,10 +100,10 @@ class RuntimeMonitorRepairPublicationGateTest {
     val finding = ValidationGateFinding("runtime-sqlite", "DatabaseMigrationsTest", "expected 42 tables", "Db.kt:7")
     val failed = failedEmptyFindings(stdout = "BUILD FAILED in 3s").copy(findings = listOf(finding))
 
-    val verdict = gate(runner = ScriptedGateRunner(listOf(failed))).verify(repoRoot, "main")
+    val verdict = gate(runner = ScriptedGateRunner(listOf(failed))).verify(request(repoRoot, publicationSnapshot()))
 
     val again = assertIs<MonitorRepairPublicationVerdict.RepairAgain>(verdict)
-    assertTrue("echo collect-all-full" in again.correction, again.correction)
+    assertTrue("argv: 'echo' 'collect-all-full'" in again.correction, again.correction)
     assertTrue("DatabaseMigrationsTest: expected 42 tables (Db.kt:7)" in again.correction, again.correction)
     assertTrue("BUILD FAILED in 3s" in again.correction, again.correction)
   }
@@ -115,24 +116,137 @@ class RuntimeMonitorRepairPublicationGateTest {
         override fun run(request: ValidationGateRunRequest): ValidationGateRunResult = error("gradle daemon died")
       }
 
-    val verdict = gate(runner = throwing).verify(repoRoot, "main")
+    val verdict = gate(runner = throwing).verify(request(repoRoot, publicationSnapshot()))
 
     val refused = assertIs<MonitorRepairPublicationVerdict.Refused>(verdict)
     assertTrue("gradle daemon died" in refused.reason, refused.reason)
   }
 
   @Test
-  fun `a pack without a validation gate falls back to the agent's checks and records the degradation`() {
+  fun `missing repair validation snapshot refuses publication instead of pack fallback`() {
     initRepository()
 
-    val verdict =
-      gate(
-        resolver = ValidationGateResolver { listOf(kotlinPackWithoutGate()) },
-        runner = neverRunsGate(),
-      ).verify(repoRoot, "main")
+    val verdict = gate(runner = neverRunsGate()).verify(request(repoRoot, snapshot = null))
+
+    val refused = assertIs<MonitorRepairPublicationVerdict.Refused>(verdict)
+    assertTrue("accepted validation command snapshot" in refused.reason, refused.reason)
+  }
+
+  @Test
+  fun `a later saved command success does not clear an earlier failure`() {
+    initRepository()
+    val finding = ValidationGateFinding("runtime-sqlite", "DatabaseMigrationsTest", "expected 42 tables", "Db.kt:7")
+    val failed = failedEmptyFindings(stdout = "FIRST FAILED").copy(findings = listOf(finding))
+    val runner = ScriptedGateRunner(listOf(failed, passed(forced = true)))
+    val snapshot =
+      publicationSnapshot(
+        listOf("echo", "first"),
+        listOf("echo", "second"),
+      )
+
+    val verdict = gate(runner = runner).verify(request(repoRoot, snapshot))
+
+    val again = assertIs<MonitorRepairPublicationVerdict.RepairAgain>(verdict)
+    assertEquals(2, runner.requests.size)
+    assertEquals(listOf("echo", "first"), runner.requests[0].argv)
+    assertEquals(listOf("echo", "second"), runner.requests[1].argv)
+    assertTrue("DatabaseMigrationsTest: expected 42 tables (Db.kt:7)" in again.correction, again.correction)
+    assertTrue("FIRST FAILED" in again.correction, again.correction)
+  }
+
+  @Test
+  fun `a runner refusal after the first saved command does not dispatch remaining commands`() {
+    initRepository()
+    val runner =
+      object : ValidationGateRunner {
+        val requests = mutableListOf<ValidationGateRunRequest>()
+
+        override fun run(request: ValidationGateRunRequest): ValidationGateRunResult {
+          requests += request
+          error("gradle daemon died")
+        }
+      }
+    val snapshot =
+      publicationSnapshot(
+        listOf("echo", "first"),
+        listOf("echo", "second"),
+      )
+
+    val verdict = gate(runner = runner).verify(request(repoRoot, snapshot))
+
+    val refused = assertIs<MonitorRepairPublicationVerdict.Refused>(verdict)
+    assertEquals(1, runner.requests.size)
+    assertTrue("gradle daemon died" in refused.reason, refused.reason)
+  }
+
+  @Test
+  fun `a launch refusal after a completed command retains its parsed findings`() {
+    initRepository()
+    val finding = ValidationGateFinding("compiler", "TypeMismatch", "expected String", "src/Main.kt:12")
+    val runner =
+      object : ValidationGateRunner {
+        var calls = 0
+
+        override fun run(request: ValidationGateRunRequest): ValidationGateRunResult {
+          calls++
+          if (calls == 2) error("second command could not launch")
+          return failedEmptyFindings(stdout = "short excerpt").copy(findings = listOf(finding))
+        }
+      }
+    val snapshot = publicationSnapshot(listOf("echo", "first"), listOf("missing-command"))
+
+    val verdict = gate(runner).verify(request(repoRoot, snapshot))
+
+    val refused = assertIs<MonitorRepairPublicationVerdict.Refused>(verdict)
+    assertEquals(2, runner.calls)
+    assertTrue("TypeMismatch: expected String (src/Main.kt:12)" in refused.reason, refused.reason)
+    assertTrue("second command could not launch" in refused.reason, refused.reason)
+  }
+
+  @Test
+  fun `rejected zero-work on the first saved command stops remaining dispatch`() {
+    initRepository()
+    val zeroWork =
+      ValidationGateRunResult(
+        exitCode = 0,
+        durationMs = 1,
+        outcome = ValidationGateRunOutcome.REJECTED_ZERO_WORK,
+        cacheMode = ValidationGateCacheMode.FORCED_FULL,
+        executedWorkUnits = 0,
+        executedCheckIdentities = emptyList(),
+        findings = emptyList(),
+        command = "echo first",
+      )
+    val runner = ScriptedGateRunner(listOf(zeroWork, passed(forced = true)))
+    val snapshot =
+      publicationSnapshot(
+        listOf("echo", "first"),
+        listOf("echo", "second"),
+      )
+
+    val verdict = gate(runner = runner).verify(request(repoRoot, snapshot))
+
+    val refused = assertIs<MonitorRepairPublicationVerdict.Refused>(verdict)
+    assertEquals(1, runner.requests.size)
+    assertTrue("ran no work" in refused.reason, refused.reason)
+  }
+
+  @Test
+  fun `explicit known-empty saved validation publishes with a diagnostic and runs no command`() {
+    initRepository()
+    val snapshot =
+      ProjectCheckCommandSnapshot(
+        projectId = "monitor-gate-fixture",
+        buildCommands = null,
+        validationCommands = ProjectCheckCategoryConfig(emptyList()),
+        parserMetadata = null,
+        gradleWrapper = null,
+      ).frozen()
+
+    val verdict = gate(runner = neverRunsGate()).verify(request(repoRoot, snapshot))
 
     assertEquals(MonitorRepairPublicationVerdict.Publishable, verdict)
-    assertTrue(warnings.any { "seam=monitor_repair_full_gate" in it && "agent_reported_checks" in it }, "$warnings")
+    assertTrue(warnings.any { "known_empty" in it && "seam=monitor_repair_full_gate" in it }, "$warnings")
   }
 
   @Test
@@ -146,17 +260,38 @@ class RuntimeMonitorRepairPublicationGateTest {
     assertFalse(ConflictMarkerBlocks.present(null))
   }
 
-  private fun gate(
-    resolver: ValidationGateResolver = declaredResolver(),
-    runner: ValidationGateRunner,
-  ): RuntimeMonitorRepairPublicationGate =
-    RuntimeMonitorRepairPublicationGate(
-      GitWorkflowGitOperations(),
-      resolver,
-      runner,
-      repoLocalConfig(),
-      diagnostics,
+  private fun gate(runner: ValidationGateRunner): RuntimeMonitorRepairPublicationGate =
+    RuntimeMonitorRepairPublicationGate(GitWorkflowGitOperations(), runner, diagnostics)
+
+  private fun request(
+    repoRoot: Path,
+    snapshot: ProjectCheckCommandSnapshot? = publicationSnapshot(),
+    baseBranch: String? = "main",
+  ): MonitorRepairPublicationGateRequest =
+    MonitorRepairPublicationGateRequest(
+      repoRoot,
+      baseBranch,
+      snapshot?.let {
+        if (it.validationCommandList.isEmpty()) {
+          ValidationCommandLaunchTransport.KnownEmpty(it)
+        } else {
+          ValidationCommandLaunchTransport.Commands(it, "saved validation commands")
+        }
+      },
     )
+
+  private fun publicationSnapshot(vararg argv: List<String>): ProjectCheckCommandSnapshot {
+    val commands =
+      argv.toList().ifEmpty { listOf(listOf("echo", "collect-all-full")) }
+        .map { ProjectCheckCommand(it, ".") }
+    return ProjectCheckCommandSnapshot(
+      projectId = "monitor-gate-fixture",
+      buildCommands = null,
+      validationCommands = ProjectCheckCategoryConfig(commands),
+      parserMetadata = null,
+      gradleWrapper = null,
+    ).frozen()
+  }
 
   private fun initRepository() {
     git("init", "-b", "main")

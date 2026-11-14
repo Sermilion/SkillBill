@@ -8,9 +8,9 @@ import skillbill.application.telemetry.lifecycle.LifecycleTelemetryService
 import skillbill.config.model.RepoLocalConfig
 import skillbill.contracts.JsonCodec
 import skillbill.engine.RecordingWorkflowGitOperations
-import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanCodec
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanCompatibility
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
+import skillbill.engine.featuretask.lifecycle.execution.featureTaskRuntimeExecutionPlanCodecForTest
 import skillbill.engine.featuretask.phaserun.monitor.MonitorTargetResolver
 import skillbill.engine.featuretask.phaserun.monitor.StandaloneMonitorExecutionPreparer
 import skillbill.engine.featuretask.phaserun.qa.qaStandalonePhaseRun
@@ -26,6 +26,7 @@ import skillbill.engine.featuretask.slot.UnavailableStandaloneMonitorService
 import skillbill.engine.featuretask.slot.intake.LegacySpecIntake
 import skillbill.engine.featuretask.slot.intake.LegacySpecReplanIntake
 import skillbill.engine.featuretask.validation.ValidationGateResolver
+import skillbill.engine.featuretask.validation.projectchecks.projectCheckCommandResolverForTests
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeExecutionPlanSchemaValidator
 import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
 import skillbill.infrastructure.workflow.featuretask.FileSystemFeatureTaskRuntimeRunInvariantsSource
@@ -261,7 +262,7 @@ fun slotBaselineFixture(relativePath: String): Any? =
 
 fun PhaseRunEntryFixture.plans(): PhaseRunPlanResolver {
   val validator = FeatureTaskRuntimeExecutionPlanSchemaValidator()
-  val codec = FeatureTaskRuntimeExecutionPlanCodec(validator)
+  val codec = featureTaskRuntimeExecutionPlanCodecForTest(validator)
   val compatibility = FeatureTaskRuntimeExecutionPlanCompatibility(codec, strategies)
   val config =
     object : RepoLocalConfigPort {
@@ -284,7 +285,10 @@ fun PhaseRunEntryFixture.plans(): PhaseRunPlanResolver {
     executionPlanResolver =
       FeatureTaskRuntimeExecutionPlanResolver(
         strategies, codec, validator, ValidationGateResolver { qaManifests }, gitOperations, config,
-        database, compatibility, diagnostics,
+        database,
+        compatibility,
+        projectCheckCommandResolverForTests(),
+        diagnostics,
       ),
   )
 }

@@ -19,4 +19,7 @@ public data class FeatureTaskRuntimeExecutionPlanCreationRequest(
   public val workflowId: String? = null,
   public val stepLaunchAssignments: Map<String, StepLaunchAssignment> = emptyMap(),
   public val qaSelection: FeatureTaskRuntimeQaSelection? = null,
+  public val issueKey: String? = null,
+  public val invokedAgentId: String? = null,
+  public val discoveryInvocationId: String? = null,
 )
