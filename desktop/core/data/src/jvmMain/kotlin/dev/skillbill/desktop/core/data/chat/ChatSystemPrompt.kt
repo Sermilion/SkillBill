@@ -17,10 +17,25 @@ private fun executionSystemPrompt(scope: ChatScope.Execution): String = buildStr
   appendLine("Issue key: ${scope.issueKey ?: "none"}")
   appendLine("Title: ${scope.title}")
   appendLine("Worktree: ${scope.repositoryRoot}")
+  scope.verifySourceBranch?.let { branch ->
+    appendLine("Verify source branch: $branch")
+    appendLine(VERIFY_FIX_BRANCH_GUIDANCE.trim())
+  }
   appendLine(CHAT_ACCESS_GUIDANCE)
   appendLine("Issues about Sona itself go to $SKILL_BILL_REPOSITORY.")
   append(CHAT_ACTION_GUIDANCE.trimEnd())
 }
+
+private const val VERIFY_FIX_BRANCH_GUIDANCE = """
+When the operator asks to fix this verify run's findings, make every fix in the original source checkout on its recorded source branch.
+The QA checkout is throwaway. Never use it for run chat fixes, even if it still exists.
+The chat's working directory may be a fallback on another branch. Before editing, inspect git status, the current
+branch and git worktree list, then use the original checkout holding the recorded source branch.
+Do not recreate the disposed QA checkout, create a replacement branch, or move fixes into another checkout.
+If the original source checkout is unavailable or its branch has changed, explain the problem and ask the operator
+to resolve the checkout before editing. The same applies to a HEAD, detached or missing source branch. Preserve unrelated work.
+Check and record resolved findings against the same branch checkout where you made the fixes.
+"""
 
 private fun newTaskSystemPrompt(scope: ChatScope.NewTask): String = buildString {
   appendLine("You are chatting with the operator about new work. No Sona execution exists yet.")
@@ -92,6 +107,8 @@ Ordinary prose, questions about the proposal and "start" actions keep working as
 """
 
 private const val CHAT_ACTION_GUIDANCE = """
+All fixes requested through run chat belong in the run's original source checkout on its original branch.
+QA checkouts are throwaway and must never receive run chat fixes.
 When useful, offer optional action buttons by appending a structured action block at the very end of your reply.
 Use this exact fenced block format, with a JSON array containing up to 3 actions:
 ```skillbill-actions

@@ -44,6 +44,7 @@ internal data class RunActionsView(
   val implement: ControlButton? = null,
   val implementationNote: Boolean = false,
   val goalStartedNote: Boolean = false,
+  val finalize: ControlButton? = null,
 )
 
 /** HANDOFF 9.2 items 4, 5 and 7 as rules D-A to D-F: presence, labels and enablement only; nothing is sorted or timed. */
@@ -66,8 +67,14 @@ internal fun runActionsView(state: DetailUiState): RunActionsView {
   val pauseNow = ControlButton(label(InFlightControl.PauseNow, "Pause"), ready && item.controlEligible, "Stops the goal runner now").takeIf { goal }
 
   val resumable = item.lifecycle != Lifecycle.Active &&
-    (item.lifecycle != Lifecycle.Terminal || isStandaloneValidation(item))
-  val launchable = ready && options?.canLaunch == true && (item.issueKey ?: item.id) !in controls.reservations
+    (options?.canLaunch == true || (options == null && item.lifecycle != Lifecycle.Terminal))
+  val controlEnabled = ready && (item.issueKey ?: item.id) !in controls.reservations
+  val launchable = controlEnabled && options?.canLaunch == true
+  val launch = ControlButton(
+    label(InFlightControl.Launch, options?.launchLabel?.ifBlank { null } ?: "Resume"),
+    launchable,
+  ).takeIf { resumable }
+  val finalize = ControlButton(label(InFlightControl.Finalize, "Finalize"), controlEnabled).takeIf { options?.canFinalize == true }
   val goalStarted = controls.implementationStarted || options?.goalStarted == true
   val implement = ControlButton(
     label(InFlightControl.Launch, "Implement"),
@@ -80,11 +87,10 @@ internal fun runActionsView(state: DetailUiState): RunActionsView {
   val implementationAgentId = resumeAgentId
     ?: state.defaultAgentId?.takeIf { implement != null && it in options?.agentChoices.orEmpty() }
   val agentId = if (resumable) resumeAgentId else implementationAgentId
-  val launch = ControlButton(label(InFlightControl.Launch, options?.launchLabel?.ifBlank { null } ?: "Resume"), launchable).takeIf { resumable }
 
   val agentLabel = agentId?.let { "Agent: ${agentDisplayName(it)}" } ?: "Choose agent"
   val agent = when {
-    resumable -> ControlButton(agentLabel, launchable)
+    resumable -> ControlButton(agentLabel, launch?.enabled == true)
     implement != null -> ControlButton(agentLabel, implement.enabled)
     else -> null
   }
@@ -131,6 +137,7 @@ internal fun runActionsView(state: DetailUiState): RunActionsView {
     implement = implement,
     implementationNote = implement != null && !goalStarted && !planFinished(item, loaded?.detail),
     goalStartedNote = implement != null && goalStarted,
+    finalize = finalize,
   )
 }
 

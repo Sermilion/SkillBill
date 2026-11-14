@@ -36,6 +36,7 @@ fun WorkflowStateRecord.toSnapshot(): WorkflowStateSnapshot =
     startedAt = decodeInstant(startedAt, "started_at"),
     updatedAt = decodeInstant(updatedAt, "updated_at"),
     finishedAt = decodeInstant(finishedAt, "finished_at"),
+    operatorFinalizedAt = decodeInstant(operatorFinalizedAt, "operator_finalized_at"),
   )
 
 fun WorkflowStateSnapshot.mapToRecord(source: WorkflowStateRecord? = null): WorkflowStateRecord {
@@ -57,6 +58,7 @@ fun WorkflowStateSnapshot.mapToRecord(source: WorkflowStateRecord? = null): Work
     startedAt = encodeInstant(startedAt, source?.startedAt),
     updatedAt = encodeInstant(updatedAt, source?.updatedAt),
     finishedAt = encodeInstant(finishedAt, source?.finishedAt),
+    operatorFinalizedAt = encodeInstant(operatorFinalizedAt, source?.operatorFinalizedAt),
     mode = mode,
     implementationSkill = source?.implementationSkill,
     issueKey = source?.issueKey,

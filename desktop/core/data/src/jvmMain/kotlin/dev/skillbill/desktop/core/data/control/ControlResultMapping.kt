@@ -7,7 +7,7 @@ import dev.skillbill.desktop.core.domain.model.ReadProblem
 import skillbill.engine.work.control.model.WorkControlRejection
 import skillbill.engine.work.control.model.WorkControlResult
 
-internal enum class ControlKind { PAUSE_AFTER_SUBTASK, PAUSE_NOW, CANCEL, LAUNCH, START_GOAL }
+internal enum class ControlKind { PAUSE_AFTER_SUBTASK, PAUSE_NOW, CANCEL, LAUNCH, FINALIZE, START_GOAL }
 
 /**
  * Maps a control result to the outcome the user sees. A stop the runtime only accepted means no live runner needed stopping (its stop

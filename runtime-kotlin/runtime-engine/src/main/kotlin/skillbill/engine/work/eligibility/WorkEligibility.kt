@@ -23,9 +23,16 @@ internal fun workRunning(
 internal fun workLiveSection(
   snapshot: IdeStatusSnapshot,
   finishedAt: Instant?,
-): WorkLiveSection? = policy(snapshot, finishedAt).liveSection?.let { WorkLiveSection.valueOf(it.name) }
+  operatorFinalizedAt: Instant? = null,
+): WorkLiveSection? =
+  policy(snapshot, finishedAt, operatorFinalizedAt = operatorFinalizedAt).liveSection?.let {
+    WorkLiveSection.valueOf(it.name)
+  }
 
-internal fun workRequiresAttention(snapshot: IdeStatusSnapshot): Boolean = policy(snapshot, null).requiresAttention
+internal fun workRequiresAttention(
+  snapshot: IdeStatusSnapshot,
+  operatorFinalizedAt: Instant? = null,
+): Boolean = policy(snapshot, null, operatorFinalizedAt = operatorFinalizedAt).requiresAttention
 
 internal fun workDisplayPriority(
   snapshot: IdeStatusSnapshot,
@@ -42,13 +49,15 @@ internal fun workPolicy(
   finishedAt: Instant?,
   observedAt: Instant,
   successfulGoalCompletion: Boolean,
-): IdeStatusWorkPolicy = policy(snapshot, finishedAt, observedAt, successfulGoalCompletion)
+  operatorFinalizedAt: Instant? = null,
+): IdeStatusWorkPolicy = policy(snapshot, finishedAt, observedAt, successfulGoalCompletion, operatorFinalizedAt)
 
 private fun policy(
   snapshot: IdeStatusSnapshot,
   finishedAt: Instant?,
   observedAt: Instant? = null,
   successfulGoalCompletion: Boolean = false,
+  operatorFinalizedAt: Instant? = null,
 ) = IdeStatusPolicy.work(
   IdeStatusWorkPolicyFacts(
     lifecycle = snapshot.lifecycleState,
@@ -56,6 +65,7 @@ private fun policy(
     scope = snapshot.execution?.scope,
     freshness = snapshot.freshness,
     finishedAt = finishedAt,
+    operatorFinalizedAt = operatorFinalizedAt,
     awaitingOperatorDecision = snapshot.pauseReason?.code == IdeStatusPauseReasonCode.AWAITING_OPERATOR_DECISION,
     planningPrepared = snapshot.planning?.state == GoalPlanningStatusState.PREPARED,
     controlTargetPresent = !snapshot.issueKey.isNullOrBlank(),

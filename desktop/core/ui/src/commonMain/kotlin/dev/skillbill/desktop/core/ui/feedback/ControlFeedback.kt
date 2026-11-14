@@ -4,7 +4,7 @@ import dev.skillbill.desktop.core.domain.model.ControlOutcome
 import dev.skillbill.desktop.core.domain.model.ControlRejection
 
 /** The control a toast reports on. [SpecPause] is the Specs pane's pause, which stops after the current subtask. */
-enum class ControlAction { PauseAfterSubtask, PauseNow, SpecPause, Cancel, Launch }
+enum class ControlAction { PauseAfterSubtask, PauseNow, SpecPause, Cancel, Launch, Finalize }
 
 /** The item a control ran on: its key, the launch label the run options gave, and the agent a launch starts. */
 data class FeedbackSubject(val key: String, val launchLabel: String?, val agentId: String?)
@@ -19,7 +19,7 @@ data class ToastMessage(val tone: ToastTone, val text: String) {
 
 /** The one mapping every screen uses to report a control; each wording claims only what [outcome] reported. */
 fun controlFeedback(action: ControlAction, outcome: ControlOutcome, subject: FeedbackSubject): ToastMessage {
-  val run = action == ControlAction.Cancel || action == ControlAction.Launch
+  val run = action == ControlAction.Cancel || action == ControlAction.Launch || action == ControlAction.Finalize
   return when (outcome) {
     ControlOutcome.IntentRecorded -> confirmation(
       if (action == ControlAction.SpecPause) "Pause recorded. The goal stops after its current subtask."
@@ -38,6 +38,7 @@ fun controlFeedback(action: ControlAction, outcome: ControlOutcome, subject: Fee
           val label = subject.launchLabel ?: "Resume"
           subject.agentId?.let { "$label requested. Starts the installed $it harness." } ?: "$label requested."
         }
+        ControlAction.Finalize -> "Finalize recorded."
         else -> "Request accepted. No running goal process needed stopping."
       },
     )

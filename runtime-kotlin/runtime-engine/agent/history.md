@@ -1,3 +1,15 @@
+## [2026-11-13] SONA-20 keep worktrees until Finalize
+Areas: runtime-engine featuretask/phaserun, operation and work controls/projection; runtime-domain idestatus; runtime-ports; runtime-infra/sqlite and workflow/monitor; orchestration monitor ownership contract
+- MEDIUM feature. Complete keeps top-level standalone phase and operation edit holders. Completed monitor repair trees persist AWAITING_FINALIZE instead of settling and bypass inactive-owner reclamation until Finalize.
+- Fenced WorkControlAction.FINALIZE uses WorkRunFinalizer for eligibility, holder release, deferred monitor cleanup and the finalization write. A clean last holder uses non-force removal; shared holders stay held, and a dirty last holder records Kept path and detail while finalization finishes.
+- Completed unfinalized standalone rows keep launch when launch details are available. FEATURE_VERIFY gains Finalize without an invented launch. Failed, blocked, canceled and awaiting-confirmation rows remain ineligible; a run without a worktree still needs Finalize.
+- Board policy keeps unfinalized completions in Needs you. Final projection prevents supersession of failed, blocked and terminal unfinalized rows when a later attempt exists, preserving attention and live membership.
+- Monitor ownership writes 1.1 with awaiting_finalize and continues reading persisted 1.0 records.
+- reusable: existing last-holder-wins BranchWorktreeResources.release and the dedicated WorkRunFinalizer. Goal settlement and isolated QA checkout lifetime retain their existing owners.
+- Limits: QA-1 remains open in the supplied finalization inputs despite the accepted projection repairs; this entry does not claim QA closure.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented across SONA-20; QA-1 remains open.
+
 ## [2026-11-13] Resume a dead worker before its lease expires
 Areas: runtime-engine featuretask crash reconcile
 - Targeted `reconcile(workflowId)` no longer requires lease expiry once inspect confirms NotRunning. Global `reconcile()` still scans expired leases only.

@@ -233,19 +233,20 @@ class BoardObservations internal constructor(
 private fun nextDeadline(page: BoardPage): Instant? =
   page.items.flatMap { listOfNotNull(it.membershipDeadline, it.freshnessDeadline) }.filter { it > page.observedAt }.minOrNull()
 
-/** Keeps runtime section membership. Goal runs use their fixed start time for order; finished work goes under Finished. */
-private fun sectionsOf(items: List<WorkItem>): List<BoardSection> {
-  val byKind = items.groupBy { item ->
-    when (item.liveSection) {
-      WorkLiveSection.NeedsYou -> BoardSectionKind.NeedsYou
-      WorkLiveSection.Goals -> BoardSectionKind.Goals
-      WorkLiveSection.Phases -> BoardSectionKind.Phases
-      WorkLiveSection.Operations -> BoardSectionKind.Operations
-      null -> if (item.finishedAt != null) BoardSectionKind.Finished else null
-    }
+/** Maps runtime live sections; Finished today uses operator-finalization or goal completion windows, not execution finish alone. */
+internal fun WorkItem.boardSectionKind(): BoardSectionKind? =
+  when (liveSection) {
+    WorkLiveSection.NeedsYou -> BoardSectionKind.NeedsYou
+    WorkLiveSection.Goals -> BoardSectionKind.Goals
+    WorkLiveSection.Phases -> BoardSectionKind.Phases
+    WorkLiveSection.Operations -> BoardSectionKind.Operations
+    null ->
+      BoardSectionKind.Finished.takeIf { recentlyFinishedPhase || doneWithinDay }
   }
-  return BoardSectionKind.entries.map { kind ->
-    val rows = byKind[kind].orEmpty()
+
+internal fun sectionsOf(items: List<WorkItem>): List<BoardSection> =
+  BoardSectionKind.entries.map { kind ->
+    val rows = items.filter { it.boardSectionKind() == kind }
     val displayRows =
       if (kind == BoardSectionKind.Goals) {
         rows.sortedWith(compareByDescending<WorkItem> { it.startedAt }.thenBy { it.id })
@@ -254,4 +255,3 @@ private fun sectionsOf(items: List<WorkItem>): List<BoardSection> {
       }
     BoardSection(kind, displayRows)
   }
-}

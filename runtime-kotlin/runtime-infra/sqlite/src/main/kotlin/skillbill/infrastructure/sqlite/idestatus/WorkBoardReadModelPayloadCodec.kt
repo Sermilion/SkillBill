@@ -55,6 +55,8 @@ internal object WorkBoardReadModelPayloadCodec {
         WorkBoardReadModelPayloadKeys.SNAPSHOT to snapshotMap(row.item.snapshot),
         WorkBoardReadModelPayloadKeys.REPOSITORY_ROOT to row.item.repositoryRoot,
         WorkBoardReadModelPayloadKeys.FINISHED_AT to row.item.finishedAt?.let(WorkBoardReadModelTime::format),
+        WorkBoardReadModelPayloadKeys.OPERATOR_FINALIZED_AT to
+          row.item.operatorFinalizedAt?.let(WorkBoardReadModelTime::format),
         WorkBoardReadModelPayloadKeys.FINISHED_AT_SOURCE to row.item.finishedAtSource?.wireValue,
         WorkBoardReadModelPayloadKeys.CONTROL_LEASE to row.item.controlLease?.let(::leaseMap),
         WorkBoardReadModelPayloadKeys.OBSERVATION to
@@ -117,6 +119,7 @@ internal object WorkBoardReadModelPayloadCodec {
         snapshot = snapshot,
         repositoryRoot = fields.text(WorkBoardReadModelPayloadKeys.REPOSITORY_ROOT),
         finishedAt = fields.instant(WorkBoardReadModelPayloadKeys.FINISHED_AT),
+        operatorFinalizedAt = fields.instant(WorkBoardReadModelPayloadKeys.OPERATOR_FINALIZED_AT),
         finishedAtSource =
           fields.nullableText(WorkBoardReadModelPayloadKeys.FINISHED_AT_SOURCE)?.let { value ->
             WorkBoardCompletionSource.entries.firstOrNull { it.wireValue == value }

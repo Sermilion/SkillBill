@@ -133,6 +133,7 @@ class GitMonitorResources(
     record: MonitorOwnershipRecord,
     target: MonitorResolvedTarget,
   ): Boolean {
+    if (record.retention?.reason == MonitorRetentionReason.AWAITING_FINALIZE) return false
     if (record.state == MonitorOwnershipState.RELEASED || record.hasUndrainedCancellation()) return false
     val settled = record.state == MonitorOwnershipState.RETAINED && record.outcome != null
     if (!settled && (
@@ -320,6 +321,47 @@ class GitMonitorResources(
     }
   }
 
+  override fun deferUntilFinalize(request: MonitorSettleRequest): MonitorSettlement {
+    val fence = request.fence
+    val ownership = requireFence(fence)
+    val record = MonitorAdmissionFiles.read(fence.directory) ?: throw fenceLost(fence)
+    val path = record.executionPath?.let(Path::of) ?: fence.directory
+    val detail = "awaiting operator finalize"
+    val retained =
+      MonitorSettlement.Retained(MonitorRetentionReason.AWAITING_FINALIZE, path, detail)
+    MonitorAdmissionFiles.write(
+      fence.directory,
+      record.copy(
+        state = MonitorOwnershipState.RETAINED,
+        retention = MonitorRetentionRecord(retained.reason, detail, path.toString()),
+        outcome = request.outcome,
+        updatedAt = monitorNow(clock, record),
+      ),
+    )
+    release(fence, ownership)
+    return retained
+  }
+
+  override fun finalizeDeferredRemoval(admissionDirectory: Path): MonitorSettlement {
+    val record =
+      try {
+        MonitorAdmissionFiles.read(admissionDirectory)
+      } catch (failure: SkillBillRuntimeException) {
+        return MonitorSettlement.FenceLost(failure.message.orEmpty())
+      } ?: return MonitorSettlement.Released
+    if (record.retention?.reason != MonitorRetentionReason.AWAITING_FINALIZE) {
+      return MonitorSettlement.FenceLost("Monitor ownership is not awaiting finalize.")
+    }
+    val outcome = record.outcome ?: MonitorPrimaryOutcome(MonitorOutcomeKind.COMPLETED, "completed")
+    return cleanup.settle(
+      admissionDirectory,
+      record,
+      null,
+      outcome,
+      MonitorWorktreeRemoval.PLAIN,
+    )
+  }
+
   override fun settle(request: MonitorSettleRequest): MonitorSettlement {
     val fence = request.fence
     val ownership = held[fence.directory]?.takeIf { it.matches(fence) }
@@ -329,7 +371,13 @@ class GitMonitorResources(
       return MonitorSettlement.FenceLost("The ownership of ${fence.directory} is no longer held by this invocation.")
     }
     return try {
-      cleanup.settle(fence.directory, record, ownership.target, request.outcome, request.removalAllowed)
+      cleanup.settle(
+        fence.directory,
+        record,
+        ownership.target,
+        request.outcome,
+        if (request.removalAllowed) MonitorWorktreeRemoval.FORCE else MonitorWorktreeRemoval.DEFER,
+      )
     } catch (failure: SkillBillRuntimeException) {
       cleanupFailure(fence, record, request.outcome, failure)
     } finally {

@@ -14,6 +14,16 @@ Decision: After Linux createDistributable, replace launcher classpath entries wi
 Reason: The manifest shortens the native launcher classpath while Java resolves dependencies in their original order. Clearing inherited LD_LIBRARY_PATH did not resolve the crash.
 Revisit when: The bundled JDK launcher handles long classpaths without the partial pipe-read defect.
 
+## [2026-11-13] Keep Finalize eligibility and release in the runtime
+Context: Terminal-row UI checks hid launch actions even when completed unfinalized work still needed operator attention.
+Decision: Render Finalize from canFinalize and launch from canLaunch. Forward Finalize through the runtime work-control action without local git removal or lifecycle-based eligibility checks.
+Reason: Runtime owns the predicate and last-holder release. A second desktop predicate can hide an eligible row, while local deletion would bypass shared holders and Kept handling.
+
+## [2026-11-13] Require runtime completion windows for Finished today
+Context: Mapping every null liveSection to Finished today placed failed or canceled rows there without operator finalization.
+Decision: Preserve non-null runtime liveSection. For null liveSection, show Finished today only when recentlyFinishedPhase or doneWithinDay is true; otherwise omit the row from live sections.
+Reason: Null liveSection alone is not completion evidence. Runtime window facts distinguish operator-finalized standalone work and completed goals without desktop lifecycle or finishedAt inference.
+
 ## [2026-11-12] Let normal desktop launches choose the Skiko renderer
 Context: The Changes panel was slow even for small diffs. DesktopLauncher forced CPU rendering on Linux when no renderer override was supplied.
 Decision: Leave renderer selection to Skiko during normal launches and keep compose.interop.blending enabled for terminal overlays. Keep the explicit SOFTWARE_COMPAT renderer in runFromSource for the recorded source-run X11 visual crash.

@@ -106,6 +106,7 @@ class WorkViewModel(
       is WorkAction.PauseAfterSubtask -> pauseAfterSubtask(action.item)
       is WorkAction.PauseNow -> pauseNow(action.item)
       is WorkAction.Launch -> launch(action.item)
+      is WorkAction.Finalize -> finalize(action.item)
       is WorkAction.Cancel -> cancel(action.item)
       is WorkAction.RequestExport -> requestExport(action.item)
       WorkAction.DismissExportLive -> mutableState.update { it.copy(exportLiveTarget = null) }
@@ -179,6 +180,10 @@ class WorkViewModel(
       return
     }
     control(item, ControlAction.Launch) { controls.launch(item, agentId) }
+  }
+
+  private fun finalize(item: WorkItem) {
+    if (state.value.canFinalize(item)) control(item, ControlAction.Finalize) { controls.finalize(item) }
   }
 
   private fun cancel(item: WorkItem) {

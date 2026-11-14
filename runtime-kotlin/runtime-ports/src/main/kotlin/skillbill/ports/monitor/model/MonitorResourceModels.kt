@@ -91,6 +91,7 @@ enum class MonitorRetentionReason(val wireValue: String) {
   PUBLICATION_UNKNOWN("publication_unknown"),
   UNOWNED_RESOURCE("unowned_resource"),
   CLEANUP_FAILED("cleanup_failed"),
+  AWAITING_FINALIZE("awaiting_finalize"),
   ;
 
   companion object {

@@ -28,6 +28,7 @@ import skillbill.install.model.SupportedAgent
 import skillbill.model.EnvironmentContext
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.db.model.FencedTransactionResult
+import skillbill.ports.idestatus.model.StandalonePhaseFinalizeResult
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.idestatus.model.WorkDetailItem
 import skillbill.ports.persistence.UnitOfWork
@@ -58,6 +59,7 @@ public class WorkRunActions(
   private val preflight: GoalPreflightPort,
   private val environment: EnvironmentContext,
   private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
+  private val finalizer: WorkRunFinalizer,
 ) {
   internal fun startGoal(
     repoRoot: Path,
@@ -146,6 +148,27 @@ public class WorkRunActions(
     }
   }
 
+  internal fun finalize(target: WorkRunTarget): WorkControlResult {
+    val operation = operation@{ unit: UnitOfWork ->
+      val item =
+        matchingRun(status, target)
+          ?: return@operation WorkControlResult.Rejected(WorkControlRejection.CHANGED_TARGET)
+      val phase = item.snapshot.execution?.invocationId?.let(unit.standalonePhaseStatuses::readByInvocation)
+      if (!finalizer.canFinalize(item, phase, unit)) {
+        return@operation WorkControlResult.Rejected(WorkControlRejection.INELIGIBLE_TARGET)
+      }
+      val written = finalizer.writeAndRelease(item, phase, unit, clock.instant())
+      if (written != StandalonePhaseFinalizeResult.ACCEPTED) {
+        return@operation WorkControlResult.Rejected(WorkControlRejection.INELIGIBLE_TARGET)
+      }
+      WorkControlResult.Accepted
+    }
+    return when (val result = database.transactionFenced(target.databaseFileObservation, operation)) {
+      FencedTransactionResult.ChangedTarget -> WorkControlResult.Rejected(WorkControlRejection.CHANGED_TARGET)
+      is FencedTransactionResult.Committed -> result.value
+    }
+  }
+
   private fun checkoutRejection(
     phase: StandalonePhaseStatusRecord,
     target: WorkRunTarget,
@@ -202,7 +225,10 @@ public class WorkRunActions(
     val live =
       snapshot.lifecycleState == IdeStatusLifecycleState.ACTIVE || liveWorker ||
         item.goalStatus?.executionLiveness?.let { executionLivenessBlocksIdleSafeRefresh(it) } == true
-    val launchable = canLaunch(completed, terminalValidation, live)
+    val finalizeEligible = finalizer.canFinalize(item, phase, unit)
+    val launchable =
+      canLaunch(completed, terminalValidation, live) ||
+        (item.snapshot.workflowFamily != IdeStatusWorkflowFamily.FEATURE_VERIFY && finalizeEligible)
     return WorkRunOptions(
       !completed && !canceled,
       launchable && supported,
@@ -213,6 +239,7 @@ public class WorkRunActions(
         launchable && !supported
       },
       goalStartedForPlan(phase, unit),
+      canFinalize = finalizeEligible,
     )
   }
 

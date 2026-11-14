@@ -274,4 +274,3 @@ private fun SpecFilesSection(detail: Detail, onAction: (DetailAction) -> Unit) {
     }
   }
 }
-

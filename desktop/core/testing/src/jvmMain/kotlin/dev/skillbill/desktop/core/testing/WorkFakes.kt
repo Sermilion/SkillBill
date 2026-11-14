@@ -132,6 +132,8 @@ class FakeWorkControlRepository(var outcome: ControlOutcome = ControlOutcome.Int
 
   override suspend fun cancel(item: WorkItem) = record(ControlCall("cancel", item))
 
+  override suspend fun finalize(item: WorkItem) = record(ControlCall("finalize", item))
+
   override suspend fun launch(item: WorkItem, agentId: String?) = record(ControlCall("launch", item, agentId))
 
   override suspend fun startGoal(repoRoot: String, issueKey: String, agentId: String?): ControlOutcome = notFaked("startGoal")

@@ -17,6 +17,7 @@ data class WorkflowStateRecord(
   val startedAt: String?,
   val updatedAt: String?,
   val finishedAt: String?,
+  val operatorFinalizedAt: String? = null,
   val mode: FeatureTaskWorkflowMode? = null,
   val implementationSkill: String? = null,
   val issueKey: String? = null,

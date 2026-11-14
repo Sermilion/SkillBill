@@ -46,7 +46,7 @@
   }
 
   /* ---------- run controls (feature/detail RunActionButtons) ---------- */
-  const resumable = (it) => it.lifecycle !== 'active' && it.lifecycle !== 'terminal';
+  const resumable = (it) => (it.runOptions || {}).canLaunch === true;
   const controllable = (it) => it.kind === 'goal' && it.lifecycle === 'active';
   const pauseEligible = (it) => controllable(it) && !it.pauseRequested;
   function recoveryOffered(st, it) {
@@ -63,10 +63,11 @@
       out.push(S.Button({ label: it.pauseRequested ? 'Pause requested' : 'Pause after subtask', icon: 'pause', act: 'pause-soft', arg: it.id, disabled: it.refreshFailed || !pauseEligible(it), kbd: !it.refreshFailed && pauseEligible(it) ? 'P' : null }));
       out.push(S.Button({ label: 'Pause', icon: 'stop', variant: 'danger', act: 'pause-now', arg: it.id, disabled: it.refreshFailed || !controllable(it), kbd: !it.refreshFailed && controllable(it) ? '⇧ P' : null, tip: 'Stops the goal runner now' }));
     }
-    if (resumable(it)) {
-      out.push(S.Button({ label: (it.runOptions || {}).launchLabel || 'Resume', icon: 'play', variant: ro.canLaunch ? 'primary' : 'secondary', act: 'launch', arg: it.id, disabled: !ro.canLaunch, kbd: ro.canLaunch ? 'R' : null }));
-      out.push(S.Button({ label: agent ? `Agent: ${agent}` : 'Choose agent', icon: 'bot', act: 'agent-menu', arg: it.id, disabled: !ro.canLaunch }));
+    if (ro.canLaunch) {
+      out.push(S.Button({ label: (it.runOptions || {}).launchLabel || 'Resume', icon: 'play', variant: 'primary', act: 'launch', arg: it.id, kbd: 'R' }));
+      out.push(S.Button({ label: agent ? `Agent: ${agent}` : 'Choose agent', icon: 'bot', act: 'agent-menu', arg: it.id }));
     }
+    if (ro.canFinalize) out.push(S.Button({ label: 'Finalize', icon: 'checkCircle', act: 'finalize', arg: it.id }));
     /* A plan launched on its own offers Implement, on once every spec is saved; a ready plan has nothing left to cancel. */
     const plan = isPlanRun(it), ready = plan && planReady(it);
     if (plan) out.push(S.Button({ label: 'Implement', icon: 'play', variant: ready && !st.implemented.has(it.id) ? 'primary' : 'secondary', act: 'plan-implement', arg: it.id, disabled: !ready || st.implemented.has(it.id) }));
@@ -74,7 +75,7 @@
     if (it.incident && it.incident.recovery === 'available' && !st.recovered.has(it.id)) out.push(S.Button({ label: 'Recover', icon: 'refresh', act: 'recover', arg: it.id, disabled: it.refreshFailed || !recoveryOffered(st, it), tip: recoveryOffered(st, it) ? null : 'Confirm the prerequisites first' }));
     const run = runAppView(st, it);
     if (run) out.push(run.button);
-    return `<div class="l-col g-2"><div class="l-row g-2 l-wrap">${out.join('')}</div>${ro.canLaunch && resumable(it) ? `<span class="t-faint t-xs">Starts the installed agent harness</span>` : ''}${plan && !ready ? `<span class="t-faint t-xs">Implement turns on when every spec is saved</span>` : ''}${it.refreshFailed ? S.Hint({ tone: 'warn', text: 'Refresh the detail before using run controls.' }) : run && !it.refreshFailed ? run.status : ''}</div>`;
+    return `<div class="l-col g-2"><div class="l-row g-2 l-wrap">${out.join('')}</div>${ro.canLaunch ? `<span class="t-faint t-xs">Starts the installed agent harness</span>` : ''}${plan && !ready ? `<span class="t-faint t-xs">Implement turns on when every spec is saved</span>` : ''}${it.refreshFailed ? S.Hint({ tone: 'warn', text: 'Refresh the detail before using run controls.' }) : run && !it.refreshFailed ? run.status : ''}</div>`;
   }
 
   /* ---------- Run app (SONA-10) ---------- */

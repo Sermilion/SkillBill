@@ -3,6 +3,8 @@ package dev.skillbill.desktop.feature.work
 import dev.skillbill.desktop.core.common.Outcome
 import dev.skillbill.desktop.core.domain.model.BoardSectionKind
 import dev.skillbill.desktop.core.domain.model.ControlOutcome
+import dev.skillbill.desktop.core.domain.model.WorkKind
+import dev.skillbill.desktop.core.domain.model.Lifecycle
 import dev.skillbill.desktop.core.domain.model.ExportOutcome
 import dev.skillbill.desktop.core.domain.model.ExportPreflightOutcome
 import dev.skillbill.desktop.core.domain.model.ExportRefusalCategory
@@ -136,6 +138,38 @@ class WorkViewModelTest {
     advanceUntilIdle()
 
     assertEquals(listOf(ControlCall("launch", supported, "codex")), controls.calls)
+  }
+
+  @Test
+  fun `finalize forwards to the control repository when options allow it`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val item = workItem("rev", kind = WorkKind.Phase, issueKey = null, lifecycle = Lifecycle.Terminal)
+    val board = FakeWorkBoardRepository(loadedBoard(mapOf(BoardSectionKind.Phases to listOf(item))))
+    val controls = FakeWorkControlRepository(ControlOutcome.RequestAccepted)
+    val details = FakeWorkDetailRepository(
+      runOptions = mapOf(item.id to RunOptions(false, true, "Run again", "claude", listOf("claude"), null, canFinalize = true)),
+    )
+    val viewModel = WorkViewModel(
+      board,
+      details,
+      controls,
+      SelectionHolder(),
+      object : Clock { override fun now() = Instant.fromEpochMilliseconds(0) },
+      FakeArchiveFileChooser(),
+      TestSession,
+      EmptySpecRepository,
+    )
+    advanceUntilIdle()
+    viewModel.onAction(WorkAction.OpenMenu(item))
+    advanceUntilIdle()
+    viewModel.onAction(WorkAction.Finalize(item))
+    advanceUntilIdle()
+    assertEquals(listOf(ControlCall("finalize", item)), controls.calls)
+
+    controls.calls.clear()
+    viewModel.onAction(WorkAction.Finalize(item.copy(id = "other")))
+    advanceUntilIdle()
+    assertEquals(emptyList(), controls.calls)
   }
 
   @Test

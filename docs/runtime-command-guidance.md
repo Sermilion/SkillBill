@@ -141,6 +141,13 @@ iteration cannot race a completion notification that still holds the launch lock
 
 ## Standalone review finding actions
 
+All run chat fixes use the run's original source checkout and branch. QA checkouts
+are throwaway and never receive these fixes. Chat passes the verify source branch
+to the agent so it can locate the original checkout even when chat starts in a fallback
+directory. If that checkout is unavailable or its branch has changed, the agent asks
+the operator to resolve it before editing. Feedback checks use the same checkout as
+the fixes.
+
 The desktop review detail has an Actions section with "Fix findings" and "Verify
 findings". Both open a scoped agent chat turn for the selected invocation. Fix
 findings repairs open findings. Verify findings checks the current code without
@@ -643,9 +650,9 @@ CI verdict, deadline, or repair attempt count.
 
 Each goal runs in `<state>/goals/<repo>/<goal>/checkout`. Standalone phases use the
 caller's checkout. A desktop start that names a branch runs in the checkout holding
-that branch, or in a sibling worktree the runtime creates; the runtime removes that
-worktree with plain `git worktree remove` once the last run holding it completes, and
-keeps it, noting why, when removal fails. After recording completion, the runtime removes a clean worktree
+that branch, or in a sibling worktree the runtime creates; the last run holding it
+removes that worktree after Finalize with plain `git worktree remove`, and keeps it,
+noting why, when removal fails. After recording completion, the runtime removes a clean worktree
 and keeps the goal branch. It retains worktrees with `dirty_worktree`,
 `untracked_files`, `unpublished_commits`, `publication_unknown`, `unowned_resource`,
 or `cleanup_failed`. `goal status` shows the path, reason, detail, and the exact

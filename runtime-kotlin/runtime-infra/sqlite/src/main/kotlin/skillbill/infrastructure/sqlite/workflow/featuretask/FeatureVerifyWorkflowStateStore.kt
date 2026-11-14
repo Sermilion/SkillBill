@@ -3,7 +3,10 @@ package skillbill.infrastructure.sqlite.workflow.featuretask
 import skillbill.contracts.workflow.session.WorkflowContinueSessionSummary
 import skillbill.error.shellcontent.terminalWorkflowWriteRefusedError
 import skillbill.infrastructure.sqlite.core.ops.bindAll
+import skillbill.infrastructure.sqlite.core.schema.BRANCH_WORKTREE_RETAINED_DETAIL_COLUMN
+import skillbill.infrastructure.sqlite.core.schema.BRANCH_WORKTREE_RETAINED_PATH_COLUMN
 import skillbill.infrastructure.sqlite.core.schema.FEATURE_VERIFY_WORKFLOW_CONTRACT_VERSION
+import skillbill.infrastructure.sqlite.core.schema.OPERATOR_FINALIZED_AT_COLUMN
 import skillbill.infrastructure.sqlite.workflow.WorkflowRowUpsertRequest
 import skillbill.infrastructure.sqlite.workflow.getWorkflowRow
 import skillbill.infrastructure.sqlite.workflow.getWorkflowRows
@@ -15,6 +18,7 @@ import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.isTerminal
 import java.sql.Connection
 import java.time.Clock
+import java.time.Instant
 
 internal class FeatureVerifyWorkflowStateStore(
   private val connection: Connection,
@@ -55,6 +59,38 @@ internal class FeatureVerifyWorkflowStateStore(
 
   fun listWorkflows(limit: Int): List<WorkflowStateRecord> =
     connection.listWorkflowRows("feature_verify_workflows", limit)
+
+  fun finalizeOperatorCompletion(
+    workflowId: String,
+    operatorFinalizedAt: Instant,
+    branchWorktreeRetainedPath: String? = null,
+    branchWorktreeRetainedDetail: String? = null,
+  ): Boolean {
+    val completed = WorkflowStatus.COMPLETED.wireValue
+    val updated =
+      connection.prepareStatement(
+        """
+        UPDATE feature_verify_workflows
+        SET $OPERATOR_FINALIZED_AT_COLUMN = ?,
+          $BRANCH_WORKTREE_RETAINED_PATH_COLUMN = COALESCE(?, $BRANCH_WORKTREE_RETAINED_PATH_COLUMN),
+          $BRANCH_WORKTREE_RETAINED_DETAIL_COLUMN = COALESCE(?, $BRANCH_WORKTREE_RETAINED_DETAIL_COLUMN)
+        WHERE workflow_id = ?
+          AND finished_at IS NOT NULL
+          AND workflow_status = ?
+          AND $OPERATOR_FINALIZED_AT_COLUMN IS NULL
+        """.trimIndent(),
+      ).use { statement ->
+        statement.bindAll(
+          operatorFinalizedAt.toString(),
+          branchWorktreeRetainedPath,
+          branchWorktreeRetainedDetail,
+          workflowId,
+          completed,
+        )
+        statement.executeUpdate()
+      }
+    return updated == 1
+  }
 
   fun getSessionSummary(sessionId: String): WorkflowContinueSessionSummary? =
     connection.prepareStatement(

@@ -5,6 +5,8 @@ import skillbill.ports.idestatus.model.IdeStatusWorkflowRegistration
 import skillbill.ports.idestatus.model.StandaloneEligiblePage
 import skillbill.ports.idestatus.model.StandalonePhaseExecutionAnchor
 import skillbill.ports.idestatus.model.StandalonePhaseExecutionQuery
+import skillbill.ports.idestatus.model.StandalonePhaseFinalizeRequest
+import skillbill.ports.idestatus.model.StandalonePhaseFinalizeResult
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdate
@@ -13,8 +15,13 @@ import skillbill.ports.idestatus.model.StandaloneQaChecklist
 import skillbill.ports.idestatus.model.StandaloneQaChecklistWriteResult
 import java.time.Instant
 
+interface StandalonePhaseFinalizeRepository {
+  fun finalize(request: StandalonePhaseFinalizeRequest): StandalonePhaseFinalizeResult
+}
+
 interface StandalonePhaseStatusRepository :
   StandalonePhaseCancellationRepository,
+  StandalonePhaseFinalizeRepository,
   StandaloneValidationCheckRepository,
   StandaloneValidationBranchRepository,
   StandaloneOutputRepository {

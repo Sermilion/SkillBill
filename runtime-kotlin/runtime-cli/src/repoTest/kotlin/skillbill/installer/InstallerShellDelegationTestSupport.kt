@@ -586,6 +586,7 @@ internal object InstallerShellFixtures {
     cliBin.toFile().setExecutable(true)
     mcpBin.toFile().setExecutable(true)
     InstallerDesktopFixtures.writeBuildIdentity(cliBin.parent.parent)
+    InstallerDesktopFixtures.writeBuildIdentity(mcpBin.parent.parent)
   }
 
   private val fakeInstallerRuntimeMiddleBlocks: String =
@@ -715,6 +716,7 @@ internal object InstallerShellFixtures {
       |chmod +x "${'$'}cli_bin" "${'$'}mcp_bin"
       |cli_home="${'$'}root/runtime-cli/build/install/runtime-cli"
       |${InstallerDesktopFixtures.buildIdentityPrintf} > "${'$'}cli_home/build-identity.properties"
+      |${InstallerDesktopFixtures.buildIdentityPrintf} > "${'$'}root/runtime-mcp/build/install/runtime-mcp/build-identity.properties"
       """.trimMargin(),
     )
     gradlew.toFile().setExecutable(true)

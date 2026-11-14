@@ -215,6 +215,7 @@ PY
         fi
         ;;
       cursor)   echo "$effective_home/.cursor/skills" ;;
+      opencode) echo "$effective_home/.config/opencode/skills" ;;
       devin)    echo "$effective_home/.config/devin/skills" ;;
       *) echo "unknown agent: $agent" >&2; exit 1 ;;
     esac
@@ -976,7 +977,7 @@ if [[ "$TOKEN" == "windows-x64" ]]; then
   [[ -f "$FAKE_HOME/.local/bin/sona.cmd" ]] && pass "desktop app launcher installed" || fail "desktop app launcher is missing"
 else
   [[ -x "$DESKTOP_EXECUTABLE" ]] && pass "desktop app launcher is executable" || fail "desktop app launcher is not executable"
-  [[ -L "$FAKE_HOME/.local/bin/sona" ]] && pass "desktop app launcher symlink installed" || fail "desktop app launcher symlink is missing"
+  [[ -L "$FAKE_HOME/.local/bin/sona-app" && "$(readlink "$FAKE_HOME/.local/bin/sona-app")" == "$DESKTOP_EXECUTABLE" ]] && pass "desktop app launcher points to the packaged executable" || fail "desktop app launcher symlink is missing"
 fi
 if [[ "$TOKEN" == "linux-x64" ]]; then
   [[ -f "$FAKE_HOME/.local/share/applications/sona.desktop" ]] && pass "Linux desktop entry installed" || fail "Linux desktop entry is missing"
