@@ -965,3 +965,21 @@ policies and selects committed project checks or the current routed pack gate.
 It keeps the original descriptor and completed phase records. The admitted plan
 holds the selected command snapshot only for the current invocation. No stored
 schema or historical evidence changes, so this requires no data migration.
+
+## 2026-11-14: Retry failed project check discovery within the association budget
+
+A monitor repair launch rejected its required start write with "requires a
+validation command configuration" after the shared discovery outcome proved
+unavailable once. Contract rejections and transient launch failures — launch
+exceptions, spawn failures, timeouts, non-zero exits and truncated output — are
+nondeterministic, so refreshAndDiscover now returns to the resolver's bounded
+retry loop instead of committing the still-missing configuration. Denied,
+unsupported-agent and interrupted outcomes remain terminal: a denied spawn
+lacks authorization, an unsupported agent cannot launch, and an interrupted
+caller is tearing down. Every consumer — plan admission, validation and both
+monitor repair paths — inherits the retry since they share resolve.
+
+Reason: A single failed discovery spawn permanently blocked any phase requiring
+uncommitted validation commands even though a fresh launch would succeed. The
+four-attempt budget already bounds association retries, so discovery failures
+share it rather than gaining an unbounded loop.

@@ -38,11 +38,11 @@ public class ProjectCheckCommandResolver(
       }
       attempt++
       diagnostics.info(
-        "seam=project_check_resolver outcome=association_retry project=${snapshot.location.projectId}",
+        "seam=project_check_resolver outcome=resolution_retry project=${snapshot.location.projectId}",
       )
     }
     diagnostics.warning(
-      "seam=project_check_resolver outcome=association_retry_exhausted project=${lastProjectId ?: "<unresolved>"}",
+      "seam=project_check_resolver outcome=resolution_retry_exhausted project=${lastProjectId ?: "<unresolved>"}",
     )
     return configAccess.load(request.workingDirectory)
   }
@@ -81,11 +81,28 @@ public class ProjectCheckCommandResolver(
             "categories=${stillMissing.joinToString { it.wireValue }}",
           outcome.failure,
         )
-        refreshed
+        null
       }
-      is ProjectCheckCommandDiscoveryOutcome.Unavailable -> refreshed
+      is ProjectCheckCommandDiscoveryOutcome.Unavailable ->
+        if (outcome.reason.retryable) null else refreshed
     }
   }
+
+  private val ProjectCheckCommandDiscoveryUnavailableReason.retryable: Boolean
+    get() =
+      when (this) {
+        ProjectCheckCommandDiscoveryUnavailableReason.DENIED,
+        ProjectCheckCommandDiscoveryUnavailableReason.UNSUPPORTED_AGENT,
+        ProjectCheckCommandDiscoveryUnavailableReason.INTERRUPTED,
+        -> false
+
+        ProjectCheckCommandDiscoveryUnavailableReason.LAUNCH_FAILURE,
+        ProjectCheckCommandDiscoveryUnavailableReason.SPAWN_FAILED,
+        ProjectCheckCommandDiscoveryUnavailableReason.TIMED_OUT,
+        ProjectCheckCommandDiscoveryUnavailableReason.NON_ZERO_EXIT,
+        ProjectCheckCommandDiscoveryUnavailableReason.TRUNCATED_OUTPUT,
+        -> true
+      }
 
   private fun publishDiscovered(
     request: ProjectCheckCommandResolverRequest,
