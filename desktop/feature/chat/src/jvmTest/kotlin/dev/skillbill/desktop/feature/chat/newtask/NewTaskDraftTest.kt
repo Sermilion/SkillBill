@@ -87,12 +87,93 @@ class NewTaskDraftTest {
   private val chat = FakeExecutionChatRepository(supported = setOf("claude", "codex", "cursor"))
   private val root = createTempDirectory("new-task-repo").toString()
 
-  private fun TestScope.draft(chats: ExecutionChatRepository = chat, controls: FakeWorkControlRepository = FakeWorkControlRepository(), changes: ChatChangesRepository = UnavailableChatChanges) = NewTaskDraft(chats, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), Clock.System, changesRepository = changes, diagnostics = RecordingDiagnostics()).apply {
+  private fun TestScope.draft(chats: ExecutionChatRepository = chat, controls: FakeWorkControlRepository = FakeWorkControlRepository(), changes: ChatChangesRepository = UnavailableChatChanges, userHome: String = root) = NewTaskDraft(chats, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), Clock.System, changesRepository = changes, diagnostics = RecordingDiagnostics(), userHome = userHome).apply {
     chatDispatcher = StandardTestDispatcher(testScheduler)
     repository = NewTaskRepository(root, "repo")
     baseBranch = "main"
     agentId = "claude"
     selectedAgent = this@NewTaskDraftTest.chat.agent
+  }
+
+  @Test
+  fun `repository candidate reaches its draft only after completed turn settlement`() = runTest {
+    var turn = 0
+    chat.events = {
+      turn++
+      if (turn == 1) flowOf(ChatEvent.RepositoryCandidate("/tmp/first"), ChatEvent.Completed)
+      else flowOf(ChatEvent.RepositoryCandidate("/tmp/failed"), ChatEvent.Failed(ChatFailure.ProcessFailed, "failed"))
+    }
+    val draft = draft()
+    val delivered = mutableListOf<String>()
+    draft.onRepositoryCandidate = { owner, current, path, session, revision, request ->
+      assertEquals(draft, owner)
+      assertEquals(draft.chat.value, current)
+      assertEquals(current.sessionId, session)
+      assertEquals(draft.contextRevision, revision)
+      assertEquals(draft.repositoryRequestGeneration, request)
+      assertFalse(current.thread.busy.value)
+      delivered += path
+    }
+
+    draft.say("attach repository")
+    runCurrent()
+    draft.say("try again")
+    runCurrent()
+
+    assertEquals(listOf("/tmp/first"), delivered)
+    assertEquals(root, draft.repository?.root)
+    draft.dispose()
+  }
+
+  @Test
+  fun `follow-ups accepted during replacement save survive both commit and refusal`() = runTest {
+    for (saveReplacement in listOf(true, false)) {
+      val fake = FakeExecutionChatRepository()
+      val saving = CompletableDeferred<Unit>()
+      val releaseSave = CompletableDeferred<Unit>()
+      val nextRoot = createTempDirectory("next-repository").toString()
+      val repository = object : ExecutionChatRepository by fake {
+        override suspend fun saveNewTaskDraft(entry: ChatHistoryEntry): Boolean {
+          if (entry.sessionId !in fake.saved && fake.saved.isNotEmpty()) {
+            saving.complete(Unit)
+            releaseSave.await()
+            if (!saveReplacement) return false
+          }
+          fake.saveChat(entry)
+          return true
+        }
+      }
+      var firstTurn = true
+      fake.events = {
+        if (firstTurn) {
+          firstTurn = false
+          flowOf(ChatEvent.RepositoryCandidate(nextRoot), ChatEvent.Completed)
+        } else flowOf(ChatEvent.Completed)
+      }
+      val draft = draft(chats = repository)
+      draft.onRepositoryCandidate = { owner, _, path, _, _, _ ->
+        assertTrue(owner.rebindChat(requestedRepository = NewTaskRepository(path, "next"), requestedBranch = ""))
+        owner.awaitContextTransition()
+      }
+      draft.say("switch repositories")
+      runCurrent()
+      assertTrue(saving.isCompleted)
+      val original = checkNotNull(draft.chat.value)
+      val image = ChatImage(byteArrayOf(7), "image/png")
+      var accepted = 0
+      original.send("late follow-up", images = listOf(image), onAccepted = { accepted++ })
+      releaseSave.complete(Unit)
+      runCurrent()
+
+      assertEquals(1, accepted)
+      assertEquals(2, fake.requests.size)
+      val followUp = fake.requests.last()
+      assertTrue(followUp.prompt.endsWith("late follow-up"))
+      assertEquals(listOf(image), followUp.images)
+      assertEquals(if (saveReplacement) nextRoot else root, followUp.scope.repositoryRoot)
+      assertTrue(checkNotNull(draft.chat.value).thread.queued.value.isEmpty())
+      draft.disposeAndAwait()
+    }
   }
 
   @Test
@@ -503,6 +584,55 @@ class NewTaskDraftTest {
   }
 
   @Test
+  fun `a repository-free turn uses supplied home without capturing its git changes`() = runTest {
+    val home = createTempDirectory("new-task-home").toFile().apply { resolve(".git").mkdirs() }.absolutePath
+    val changes = FakeChatChangesRepository()
+    val draft = draft(changes = changes, userHome = home).apply { repository = null }
+
+    draft.say("create a note")
+    runCurrent()
+
+    val scope = chat.requests.single().scope as ChatScope.NewTask
+    assertEquals(home, scope.workingDirectory)
+    assertNull(scope.selectedRepositoryRoot)
+    assertEquals(ChatPermissionMode.Act, chat.requests.single().mode)
+    assertTrue(changes.captureCalls.isEmpty())
+    assertTrue(changes.currentReadCalls.isEmpty())
+    draft.say("edit the note")
+    runCurrent()
+    assertEquals(2, chat.requests.size)
+    assertTrue(changes.captureCalls.isEmpty())
+    assertTrue(changes.currentReadCalls.isEmpty())
+    draft.close()
+  }
+
+  @Test
+  fun `repository-free resume in a changed home starts a fresh provider context with transcript replay`() = runTest {
+    val oldHome = createTempDirectory("old-chat-home").toString()
+    val newHome = createTempDirectory("new-chat-home").toString()
+    val entry = ChatHistoryEntry(
+      "old-provider-session", null, checkNotNull(chat.agent), Clock.System.now(), "remember this",
+      listOf(ChatHistoryLine(ChatHistoryRole.Operator, "remember this"), ChatHistoryLine(ChatHistoryRole.Agent, "saved reply")),
+      ChatNewTaskContext(oldHome, null, sessionEstablished = true, selectedRepositoryRoot = null),
+    )
+    val draft = draft(userHome = newHome)
+
+    assertTrue(draft.resume(entry))
+    runCurrent()
+    draft.say("continue here")
+    runCurrent()
+
+    val request = chat.requests.single()
+    assertNotEquals(entry.sessionId, request.sessionId)
+    assertTrue(request.firstTurn)
+    val context = request.scope as ChatScope.NewTask
+    assertEquals(newHome, context.workingDirectory)
+    assertNull(context.selectedRepositoryRoot)
+    assertTrue("saved reply" in request.prompt)
+    draft.close()
+  }
+
+  @Test
   fun `a blank base branch reaches the new task chat as the default`() = runTest {
     val draft = draft().apply { baseBranch = "" }
     draft.say("add export")
@@ -622,7 +752,9 @@ class NewTaskDraftTest {
     val first = draft()
     first.say("add export")
     runCurrent()
-    val entry = checkNotNull(chat.saved.values.single()).let { it.copy(newTask = it.newTask?.copy(repositoryRoot = "$root/removed")) }
+    val entry = checkNotNull(chat.saved.values.single()).let {
+      it.copy(newTask = it.newTask?.copy(workingDirectory = "$root/removed", selectedRepositoryRoot = "$root/removed"))
+    }
     first.close()
 
     val draft = draft()
@@ -732,8 +864,47 @@ class NewTaskDraftTest {
 
     draft.say("continue")
     runCurrent()
-    assertEquals(ChatScope.NewTask(otherRoot, "main"), chat.requests.last().scope)
+    assertEquals(ChatScope.NewTask(otherRoot, otherRoot, "main", root), chat.requests.last().scope)
     assertTrue(chat.requests.last().firstTurn)
+    draft.close()
+  }
+
+  @Test
+  fun `rebind waits for provider cleanup and a refused replacement keeps the old conversation usable`() = runTest {
+    val providerEnded = CompletableDeferred<Unit>()
+    chat.awaitEndAction = { providerEnded.await() }
+    val repository = object : ExecutionChatRepository by chat {
+      override suspend fun saveNewTaskDraft(entry: ChatHistoryEntry): Boolean {
+        if (entry.sessionId !in chat.saved && chat.saved.isNotEmpty()) return false
+        chat.saveChat(entry)
+        return true
+      }
+    }
+    chat.events = { flowOf(ChatEvent.TextDelta("saved reply"), ChatEvent.Completed) }
+    val draft = draft(chats = repository)
+    draft.say("remember this")
+    runCurrent()
+    val original = checkNotNull(draft.chat.value)
+    val nextRoot = createTempDirectory("replacement-repo").toString()
+
+    assertTrue(draft.rebindChat(requestedRepository = NewTaskRepository(nextRoot, "replacement")))
+    runCurrent()
+
+    assertEquals(original, draft.chat.value)
+    assertEquals(setOf(original.sessionId), chat.saved.keys)
+    assertEquals(root, draft.repository?.root)
+    providerEnded.complete(Unit)
+    runCurrent()
+
+    assertEquals(original.sessionId, draft.chat.value?.sessionId)
+    assertEquals(root, draft.repository?.root)
+    assertEquals(setOf(original.sessionId), chat.saved.keys)
+    assertTrue(checkNotNull(draft.chat.value).thread.transcript.value.any { it is ChatMessage.Agent && it.text == "saved reply" })
+    draft.say("continue")
+    runCurrent()
+    assertEquals(original.sessionId, chat.requests.last().sessionId)
+    assertEquals(root, chat.requests.last().scope.repositoryRoot)
+    assertEquals("continue", chat.requests.last().prompt)
     draft.close()
   }
 
@@ -799,7 +970,8 @@ class NewTaskDraftTest {
     assertEquals("cursor", request.agent.agentId)
     assertEquals(1, request.prompt.split("Earlier in this chat").size - 1)
     assertTrue(request.prompt.startsWith("Earlier in this chat you were talking with claude."))
-    assertTrue("The repository changed from $root to $otherRoot." in request.prompt)
+    assertTrue("The effective working directory changed from $root to $otherRoot." in request.prompt)
+    assertTrue("The selected repository changed from $root to $otherRoot." in request.prompt)
     assertTrue(request.prompt.endsWith("\n\ncontinue"))
     draft.close()
   }
@@ -854,6 +1026,34 @@ class NewTaskDraftTest {
     assertTrue(checkNotNull(draft.chat.value).thread.transcript.value.none { it is ChatMessage.Notice })
     assertFalse(chat.requests.last().firstTurn)
     assertEquals("continue", chat.requests.last().prompt)
+    draft.close()
+  }
+
+  @Test
+  fun `a refused model save keeps the current model and provider binding`() = runTest {
+    var refuseSave = false
+    val repository = object : ExecutionChatRepository by chat {
+      override suspend fun saveNewTaskDraft(entry: ChatHistoryEntry): Boolean {
+        if (refuseSave) return false
+        chat.saveChat(entry)
+        return true
+      }
+    }
+    val draft = draft(chats = repository)
+    draft.say("remember this")
+    runCurrent()
+    val original = checkNotNull(draft.chat.value)
+    val originalAgent = original.agent
+    refuseSave = true
+
+    assertTrue(draft.rebindChat(requestedAgent = originalAgent.copy(model = "other")))
+    runCurrent()
+
+    assertEquals(original.sessionId, draft.chat.value?.sessionId)
+    assertEquals(originalAgent, draft.selectedAgent)
+    assertEquals(originalAgent, draft.chat.value?.agent)
+    assertEquals(originalAgent, chat.saved.getValue(original.sessionId).agent)
+    refuseSave = false
     draft.close()
   }
 

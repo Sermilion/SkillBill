@@ -15,6 +15,7 @@ internal data class NewTaskReplay(
   val repositoryRoot: String,
   val baseBranch: String?,
   val messages: List<ChatMessage>,
+  val selectedRepositoryRoot: String? = repositoryRoot,
 )
 
 /** One replayed message; [prefix] names who said [text]. */
@@ -24,7 +25,12 @@ private class ReplayLine(label: String, val text: String) {
 }
 
 /** The preamble for a session now bound to [repositoryRoot] and [baseBranch], or null when nothing is worth replaying. */
-internal fun newTaskReplayPreamble(replay: NewTaskReplay, repositoryRoot: String, baseBranch: String?): String? {
+internal fun newTaskReplayPreamble(
+  replay: NewTaskReplay,
+  repositoryRoot: String,
+  baseBranch: String?,
+  selectedRepositoryRoot: String? = repositoryRoot,
+): String? {
   val lines = replay.messages.mapNotNull { it.replayLine() }
   if (lines.isEmpty()) return null
   val kept = ArrayDeque<String>()
@@ -45,7 +51,10 @@ internal fun newTaskReplayPreamble(replay: NewTaskReplay, repositoryRoot: String
   val conversation = if (truncated || kept.size < lines.size) "$OMITTED_LINE$MESSAGE_SEPARATOR$body" else body
   return buildString {
     append("Earlier in this chat you were talking with ${replay.agentId}. Here is that conversation:")
-    if (replay.repositoryRoot != repositoryRoot) append("\nThe repository changed from ${replay.repositoryRoot} to $repositoryRoot.")
+    if (replay.repositoryRoot != repositoryRoot) append("\nThe effective working directory changed from ${replay.repositoryRoot} to $repositoryRoot.")
+    if (replay.selectedRepositoryRoot != selectedRepositoryRoot) {
+      append("\nThe selected repository changed from ${replay.selectedRepositoryRoot ?: "none"} to ${selectedRepositoryRoot ?: "none"}.")
+    }
     val oldBranch = replay.baseBranch.branchName()
     val newBranch = baseBranch.branchName()
     if (oldBranch != newBranch) append("\nThe base branch changed from $oldBranch to $newBranch.")

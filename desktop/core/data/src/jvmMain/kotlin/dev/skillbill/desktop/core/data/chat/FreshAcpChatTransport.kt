@@ -7,13 +7,13 @@ import dev.skillbill.desktop.core.domain.model.ChatFailure
 import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
 import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
 import dev.skillbill.desktop.core.domain.model.ChatScope
+import dev.skillbill.desktop.core.domain.model.ChatStoreRead
 import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
-import skillbill.contracts.system.AgentHomeEnvironmentKeys
 import skillbill.infrastructure.launcher.process.cursor.AcpProvider
 import java.util.concurrent.ConcurrentHashMap
 
@@ -22,7 +22,7 @@ private const val PROMPT_LIMIT = 120_000
 
 /**
  * Runs each turn as one ACP process whose permission requests reach approval cards. Each turn opens a new ACP session
- * and sends earlier conversation lines already saved in [ChatStore] with the new message.
+ * and sends the earlier turns of this chat, kept in [ChatStore], with the new message.
  */
 abstract class FreshAcpChatTransport(
   private val host: HostEnvironment,
@@ -44,29 +44,25 @@ abstract class FreshAcpChatTransport(
         "${provider.name} ACP requires an operator approval channel; the chat was not started."))
       return@flow
     }
-    val history = if (request.scope is ChatScope.NewTask) {
-      store.newTaskHistory(request.sessionId)
-    } else if (request.firstTurn) emptyList() else store.replayHistory(request.sessionId)
+    val historyRead = if (request.scope is ChatScope.NewTask) {
+      store.newTaskHistoryRead(request.sessionId)
+    } else if (request.firstTurn) ChatStoreRead.Value(emptyList()) else store.replayHistoryRead(request.sessionId)
+    if (historyRead is ChatStoreRead.Failed) {
+      val failure = historyRead.failure
+      emit(ChatEvent.Failed(ChatFailure.ProcessFailed,
+        "The saved chat history could not be read at ${failure.sourcePath}: ${failure.reason}. ${failure.recovery}"))
+      return@flow
+    }
+    val history = (historyRead as? ChatStoreRead.Value)?.value.orEmpty()
     val prompt = replayPrompt(scopeSystemPrompt(request.scope), history, request.prompt)
     val environment = host.variables + mapOf("HOME" to (host.variables["HOME"] ?: host.userHome))
     val job = currentCoroutineContext()[Job]
     if (job != null) turns[request.sessionId] = job
     try {
-      emitAll(acpTurn(
-        live,
-        authority,
-        store,
-        diagnostics,
-        launchFactory = { dependency ->
-          acpTurnLaunch(provider, host.variables["SHELL"], environment, request, null, prompt, dependency)
-        },
-        provider = provider,
-        profileIdentity = environment[AgentHomeEnvironmentKeys.CURSOR_CONFIG_DIR]
-          .takeIf { provider == AcpProvider.Cursor } ?: environment["HOME"].orEmpty(),
-        request = request,
-        saved = null,
-        binding = null,
-      ))
+      emitAll(
+        cursorAcpTurn(live, authority, store, diagnostics, host.variables["SHELL"], environment, request,
+          saved = null, binding = null, prompt = prompt, provider = provider),
+      )
     } finally {
       if (job != null) turns.remove(request.sessionId, job)
     }
@@ -75,7 +71,7 @@ abstract class FreshAcpChatTransport(
   override fun end(sessionId: String) { turns.remove(sessionId)?.cancel(); deleteChatImages(sessionId) }
 }
 
-/** The scope, then as much of the latest conversation history as fits, then the new message. */
+/** The scope, then as many of the latest conversation lines as fit, then the new message. */
 internal fun replayPrompt(scope: String, history: List<ChatHistoryLine>, prompt: String): String {
   val fixed = withScope(scope, prompt)
   var budget = PROMPT_LIMIT - fixed.length

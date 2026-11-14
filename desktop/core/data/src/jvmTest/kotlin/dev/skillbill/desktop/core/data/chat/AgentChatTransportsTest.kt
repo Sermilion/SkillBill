@@ -8,6 +8,7 @@ import dev.skillbill.desktop.core.domain.model.ChatImage
 import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
+import dev.skillbill.desktop.core.domain.model.ChatStoreRead
 import dev.skillbill.desktop.core.domain.model.CursorMcpDependency
 import dev.skillbill.desktop.core.testing.RecordingDiagnostics
 import kotlinx.coroutines.flow.Flow
@@ -68,7 +69,7 @@ class AgentChatTransportsTest {
       assertContains(failure.detail.orEmpty(), "operator approval channel")
       assertTrue(launcher.commands.isEmpty())
       assertEquals("saved-provider-thread", store.agentSession(request.sessionId))
-      assertEquals(history, store.replayHistory(request.sessionId))
+      assertEquals(history, (store.replayHistoryRead(request.sessionId) as ChatStoreRead.Value).value)
     }
   }
 

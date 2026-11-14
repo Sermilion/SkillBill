@@ -10,6 +10,27 @@ import kotlin.test.assertTrue
 class ChatSystemPromptTest {
   private val sharedStartWires = NewTaskActionKind.entries.map { it.wire }
 
+  @Test
+  fun `repository-free prompt allows ordinary work and requires selection before runs`() {
+    val prompt = scopeSystemPrompt(ChatScope.NewTask("/home/operator", null, null))
+
+    assertTrue("User home: /home/operator" in prompt)
+    assertTrue("Selected repository root: none" in prompt)
+    assertTrue("requested file creation and edits, saving and resuming chats are allowed" in prompt)
+    assertTrue("Effective working directory: /home/operator" in prompt)
+    assertTrue("Do not inspect repository branches, default branches or issue-key inventories" in prompt)
+    assertTrue("manual repository picker remains available after chat starts" in prompt)
+    assertTrue("Do not emit an executable start card or invoke a skill-bill CLI or MCP run command" in prompt)
+    assertTrue("Git metadata in home" in prompt)
+    assertFalse("\"start\":\"goal\"" in prompt)
+    assertFalse("Inspect the repository and connected context" in prompt)
+    assertTrue("skillbill-repository" in prompt)
+    assertTrue("contract_version\":\"1\"" in prompt)
+    assertFalse("Base branch:" in prompt)
+    assertFalse("Default branch" in prompt)
+    assertTrue("skillbill-actions" in prompt)
+  }
+
   // An agent told to act on "this execution" hunts for one.
   @Test
   fun `goal key proposals require explicit acceptance and stay scoped to the selected project`() {
@@ -85,6 +106,22 @@ class ChatSystemPromptTest {
   }
 
   @Test
+  fun `repository selection guidance uses distinct supplied context and the parser wire format`() {
+    val prompt = scopeSystemPrompt(ChatScope.NewTask("/work/repo", "/work/repo", "main", "/home/operator"))
+
+    assertTrue("User home: /home/operator" in prompt)
+    assertTrue("Effective working directory: /work/repo" in prompt)
+    assertTrue("Selected repository root: /work/repo" in prompt)
+    assertTrue("userHome/StudioProjects" in prompt)
+    assertTrue("If more than one repository could match, ask which one and emit no selection block." in prompt)
+    assertTrue("app validates a candidate and may reject it" in prompt)
+    assertTrue("Selection retains this conversation and never launches or retries work" in prompt)
+    assertTrue("```skillbill-repository" in prompt)
+    assertTrue("\"contract_version\":\"1\",\"path\":\"/absolute/repository/root\"" in prompt)
+    assertTrue("Do not combine this block with a skillbill-actions block" in prompt)
+  }
+
+  @Test
   fun `the new-task prompt permits goal and review start actions`() {
     val prompt = scopeSystemPrompt(ChatScope.NewTask("/work/app", null))
 
@@ -112,7 +149,7 @@ class ChatSystemPromptTest {
     assertTrue("never invent issue content" in prompt)
     assertTrue("instead of guessing or quietly doing the work yourself" in prompt)
     assertTrue("invoke it through the installed dispatcher" in prompt)
-    assertTrue("invoke the dispatcher only when its instruction requests such an operation or phase" in prompt)
+    assertTrue("Without a selected repository, do not invoke any run through the installed dispatcher" in prompt)
   }
 
   @Test

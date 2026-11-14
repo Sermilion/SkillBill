@@ -146,7 +146,13 @@ public class GoalRunner(
         executionCoordinator.runOwnedWithChildAdmissionLease(loadedState.parentWorkflowId, childAdmission, execute)
       }
     return when (owned) {
-      is GoalRunnerOwnedRun.Completed -> owned.value
+      is GoalRunnerOwnedRun.Completed -> {
+        val report = owned.value
+        if (report is GoalRunnerRunReport.Completed || report is GoalRunnerRunReport.CompletedNoChange) {
+          completionRecorder.settleWorktree(loadedState)
+        }
+        report
+      }
       is GoalRunnerOwnedRun.AlreadyRunning -> alreadyRunningReport(loadedState, owned.reason)
     }
   }
@@ -334,9 +340,6 @@ public class GoalRunner(
       val finalReport = requireNotNull(loopResult.report)
       closeGoalTelemetrySegment(telemetryEmitter, state, finalReport, loopResult.attempted)
       recordGoalCompletion(state.parentWorkflowId, finalReport)
-      if (finalReport is GoalRunnerRunReport.Completed || finalReport is GoalRunnerRunReport.CompletedNoChange) {
-        completionRecorder.settleWorktree(state)
-      }
       emitCompletedGoalEvent(effectiveRequest, finalReport)
       finalReport.withParentWorkflowId(state.parentWorkflowId)
     }.getOrElse { failure ->

@@ -37,6 +37,32 @@ import kotlin.time.Clock
 @OptIn(ExperimentalCoroutinesApi::class)
 class NewTaskDraftStartTest {
   @Test
+  fun `missing selection refuses visibly and selection does not retry the start`() = runTest {
+    val home = createTempDirectory("new-task-home-").toFile().apply { resolve(".git").mkdir() }
+    val chats = FakeExecutionChatRepository().apply { events = { kotlinx.coroutines.flow.flowOf(ChatEvent.Completed) } }
+    val controls = FakeWorkControlRepository()
+    val draft = draftWithFinishedTurn(chats, controls, "Keep this conversation", home.absolutePath)
+    val current = assertNotNull(draft.chat.value)
+    val transcriptBefore = current.thread.transcript.value
+
+    draft.repository = null
+    draft.start(NewTaskKind.Review)
+    runCurrent()
+
+    assertTrue(controls.newTaskRequests.isEmpty())
+    assertTrue(current.thread.transcript.value.any { it is ChatMessage.Notice && "select a repository" in it.text.lowercase() })
+    assertTrue(current.thread.transcript.value.any { it in transcriptBefore })
+
+    draft.repository = NewTaskRepository("/work/repo", "repo")
+    runCurrent()
+    assertTrue(controls.newTaskRequests.isEmpty())
+
+    draft.start(NewTaskKind.Review)
+    runCurrent()
+    assertEquals(1, controls.newTaskRequests.size)
+  }
+
+  @Test
   fun `reported cross project mention asks for a key and selection alone does not launch`() = runTest {
     val chats = FakeExecutionChatRepository().apply { events = { kotlinx.coroutines.flow.flowOf(ChatEvent.Completed) } }
     val controls = FakeWorkControlRepository().apply { newTaskOutcome = NewTaskStartOutcome.NeedsKey(listOf("SKILL-530")) }
@@ -160,14 +186,21 @@ class NewTaskDraftStartTest {
     assertEquals(listOf("Started goal run APP-1. Send another message to start again."), confirmations(chat))
   }
   @Test
-  fun `database change keeps the chat and retry uses the new session`() = runTest {
+  fun `database change during start keeps the original session and refuses retry`() = runTest {
     val sessions = object : DatabaseSessionController {
       override val state = MutableStateFlow<DatabaseSessionState>(DatabaseSessionState.Open("/old", 1L))
       override fun reopen() = Unit
     }
     val chats = FakeExecutionChatRepository().apply { events = { kotlinx.coroutines.flow.flowOf(ChatEvent.Completed) } }
     val controls = FakeWorkControlRepository()
-    val draft = NewTaskDraft(chats, controls, sessions, ToastQueue(), WindowCoroutineScope(backgroundScope), Clock.System, diagnostics = RecordingDiagnostics()).apply {
+    val workControls = object : WorkControlRepository by controls {
+      override suspend fun startNewTask(request: NewTaskStart): NewTaskStartOutcome {
+        controls.newTaskRequests += request
+        sessions.state.value = DatabaseSessionState.Open("/new", 2L)
+        return NewTaskStartOutcome.Refused("The database changed. Try again.")
+      }
+    }
+    val draft = NewTaskDraft(chats, workControls, sessions, ToastQueue(), WindowCoroutineScope(backgroundScope), Clock.System, diagnostics = RecordingDiagnostics()).apply {
       chatDispatcher = StandardTestDispatcher(testScheduler)
       repository = NewTaskRepository("/work/repo", "repo")
       agentId = "claude"
@@ -177,21 +210,22 @@ class NewTaskDraftStartTest {
     }
     runCurrent()
     val chat = assertNotNull(draft.chat.value)
-    sessions.state.value = DatabaseSessionState.Open("/new", 2L)
-    controls.newTaskOutcome = NewTaskStartOutcome.Refused("The database changed. Try again.")
 
     draft.start(NewTaskKind.GoalRun)
     runCurrent()
     assertEquals(1L, controls.newTaskRequests.single().expectedDatabaseSessionId)
     assertEquals(chat, draft.chat.value)
     assertEquals(listOf("The database changed. Try again."), errors(chat))
+    assertEquals(1L, chat.databaseSessionId)
     assertEquals(emptyList(), chats.ended)
 
-    controls.newTaskOutcome = NewTaskStartOutcome.Started("APP-1", NewTaskKind.GoalRun)
     draft.start(NewTaskKind.GoalRun)
     runCurrent()
-    assertEquals(2L, controls.newTaskRequests.last().expectedDatabaseSessionId)
+    assertEquals(1, controls.newTaskRequests.size)
     assertEquals(chat, draft.chat.value)
+    assertEquals(1L, chat.databaseSessionId)
+    assertEquals("The database changed. Reopen this chat before starting work.", errors(chat).last())
+    assertFalse(draft.offer.value.starting)
   }
 
   @Test
@@ -658,7 +692,7 @@ class NewTaskDraftStartTest {
   }
 
   @Test
-  fun `pending start on discarded chat leaves guard null on next chat`() = runTest {
+  fun `in flight start prevents discard until its result settles`() = runTest {
     val chats = FakeExecutionChatRepository().apply { events = { kotlinx.coroutines.flow.flowOf(ChatEvent.Completed) } }
     val controls = FakeWorkControlRepository()
     val result = CompletableDeferred<NewTaskStartOutcome>()
@@ -669,12 +703,20 @@ class NewTaskDraftStartTest {
       }
     }
     val draft = draftWithFinishedTurn(chats, workControls)
+    val chat = assertNotNull(draft.chat.value)
     draft.start(NewTaskKind.GoalRun)
     runCurrent()
-    draft.discard()
+    assertFalse(draft.discard())
     runCurrent()
+    assertEquals(chat, draft.chat.value)
+    assertTrue(draft.offer.value.starting)
+    assertTrue(chats.ended.isEmpty())
     result.complete(NewTaskStartOutcome.Started("APP-1", NewTaskKind.GoalRun))
     runCurrent()
+    assertEquals("Started goal run APP-1", draft.offer.value.started)
+    assertTrue(draft.discard())
+    runCurrent()
+    assertEquals(listOf(chat.sessionId), chats.ended)
     assertNull(draft.offer.value.started)
     assertFalse(draft.offer.value.starting)
     draft.text = "Fresh chat"
@@ -690,8 +732,9 @@ class NewTaskDraftStartTest {
     chats: FakeExecutionChatRepository,
     controls: WorkControlRepository,
     operatorText: String = "Add export",
+    userHome: String = "",
   ): NewTaskDraft {
-    return NewTaskDraft(chats, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), Clock.System, diagnostics = RecordingDiagnostics()).apply {
+    return NewTaskDraft(chats, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), Clock.System, diagnostics = RecordingDiagnostics(), userHome = userHome).apply {
       chatDispatcher = StandardTestDispatcher(testScheduler)
       repository = NewTaskRepository("/work/repo", "repo")
       agentId = "claude"

@@ -688,7 +688,7 @@
   /* ---------- Side pane (Specs) ---------- */
   function SidePane(o) {
     track('SidePane');
-    return `<aside class="sb-sidepane" aria-label="${esc(o.title)}"><div class="sb-sidepane-hd"><b>${esc(o.title)}</b>${o.head || ''}<span class="l-grow"></span>${join(o.actions)}</div>${o.bar ? `<div class="sb-filters">${o.bar}</div>` : ''}${o.body}</aside>`;
+    return `<aside class="${cx('sb-sidepane', o.docked && 'sb-sidepane--docked')}" aria-label="${esc(o.title)}"${o.width != null ? ` style="--chat-w:${Number(o.width)}px"` : ''}>${o.docked ? `<div class="sb-chat-grip" data-chat-grip tabindex="0" role="separator" aria-orientation="vertical" aria-label="Resize chat pane" aria-valuemin="300" aria-valuenow="${Number(o.width || 520)}" title="Drag to resize chat. Arrow keys resize. Double-click to reset."></div>` : ''}<div class="sb-sidepane-hd"><b>${esc(o.title)}</b>${o.head || ''}<span class="l-grow"></span>${join(o.actions)}</div>${o.bar ? `<div class="sb-filters">${o.bar}</div>` : ''}${o.body}</aside>`;
   }
 
   /* ---------- Small text and layout parts screens compose with ---------- */
@@ -720,7 +720,7 @@
   /* The app frame: sidebar (or the settings navigation) beside the inset main panel. */
   function AppShell(o) { track('AppShell'); return `<div class="${cx('sb-app', o.sideOpen && 'side-open')}">${o.side}<main class="sb-main">${o.main}</main></div>`; }
   /* A view inside the main panel: header, body, the docked terminal, and the Specs pane on the right. */
-  function WorkArea(o) { track('WorkArea'); return `<div class="sb-work"><div class="sb-work-main">${o.header}<div class="sb-work-body">${o.body}</div>${o.terminal || ''}</div>${o.side || ''}</div>`; }
+  function WorkArea(o) { track('WorkArea'); return `<div class="${cx('sb-work', o.docked && 'sb-work--docked')}"><div class="sb-work-main">${o.header}<div class="sb-work-content"><div class="sb-work-body">${o.body}</div>${o.terminal || ''}</div></div>${o.side || ''}</div>`; }
   /* A scrolling region; `doc` centers the 780px document column, `settings` the settings column. `id` keeps its scroll
    * position across renders; `zone` names it for keyboard focus. */
   function ScrollArea(o) { track('ScrollArea'); const inner = o.doc ? `<div class="sb-doc">${o.body}</div>` : o.settings ? `<div class="sb-set">${o.body}</div>` : o.body; return `<div class="sb-scroll"${o.id ? ` data-scroll="${esc(o.id)}"` : ''}${o.zone ? ` data-zone="${esc(o.zone)}"` : ''}${o.tabIndex != null ? ` tabindex="${o.tabIndex}"` : ''}${o.role ? ` role="${esc(o.role)}"` : ''}${o.label ? ` aria-label="${esc(o.label)}"` : ''}>${inner}</div>`; }

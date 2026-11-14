@@ -34,6 +34,20 @@ internal enum class OperationCardDecision { Confirm, Dismiss, Adjust }
 internal fun restoredDraft(queued: List<QueuedChatMessage>, draft: String): String =
   (queued.map { it.text } + listOf(draft).filter { it.isNotBlank() }).joinToString("\n\n")
 
+internal fun aggregateQueuedMessages(pending: List<QueuedChatMessage>): QueuedChatMessage? {
+  val first = pending.firstOrNull() ?: return null
+  return first.copy(
+    text = pending.map { it.text }.filter { it.isNotBlank() }.joinToString("\n\n"),
+    action = pending.singleOrNull()?.action,
+    pauseAndAct = pending.any { it.pauseAndAct },
+    images = pending.flatMap { it.images },
+    cursorMcpDependency = pending.map { it.cursorMcpDependency }.distinct().singleOrNull() ?: CursorMcpDependency.ProjectUserOnly,
+    onRejected = pending.mapNotNull { it.onRejected }.takeIf { it.isNotEmpty() }?.let { callbacks ->
+      { callbacks.forEach { callback -> callback() } }
+    },
+  )
+}
+
 /** One chat's messages and turn state, with or without an execution behind it. */
 internal class ChatThread(private val clock: Clock) {
   private val messages = MutableStateFlow<List<ChatMessage>>(emptyList())
@@ -168,19 +182,12 @@ internal class ChatThread(private val clock: Clock) {
     queuedState.value = entries
   }
 
+  fun restoreQueuedEntries(entries: List<QueuedChatMessage>) = synchronized(queueLock) {
+    queuedState.value = entries + queuedState.value
+  }
+
   fun takeQueuedMessage(): QueuedChatMessage? {
-    val pending = takeQueuedEntries()
-    val first = pending.firstOrNull() ?: return null
-    return first.copy(
-      text = pending.map { it.text }.filter { it.isNotBlank() }.joinToString("\n\n"),
-      action = pending.singleOrNull()?.action,
-      pauseAndAct = pending.any { it.pauseAndAct },
-      images = pending.flatMap { it.images },
-      cursorMcpDependency = pending.map { it.cursorMcpDependency }.distinct().singleOrNull() ?: CursorMcpDependency.ProjectUserOnly,
-      onRejected = pending.mapNotNull { it.onRejected }.takeIf { it.isNotEmpty() }?.let { callbacks ->
-        { callbacks.forEach { callback -> callback() } }
-      },
-    )
+    return aggregateQueuedMessages(takeQueuedEntries())
   }
 
   fun append(message: ChatMessage) = messages.update { it + message }
@@ -198,6 +205,16 @@ internal class ChatThread(private val clock: Clock) {
 
   fun replaceTranscript(transcript: List<ChatMessage>) {
     messages.value = transcript
+  }
+
+  fun repositorySwitchTranscript(): List<ChatMessage> = messages.value.map { message ->
+    when (message) {
+      is ChatMessage.Operator -> message.copy(action = null)
+      is ChatMessage.Agent -> message.copy(actions = emptyList())
+      is ChatMessage.Notice -> message.copy(confirmation = false, operationCard = null)
+      is ChatMessage.OperationCard -> ChatMessage.Notice("Earlier operation card: ${message.card.summary}")
+      else -> message
+    }
   }
 
   /**
@@ -445,6 +462,7 @@ internal fun ChatThread.show(agent: ChatAgent?, event: ChatEvent) {
     is ChatEvent.ToolUse -> appendTool(event.call)
     is ChatEvent.ToolResult -> recordToolResult(event)
     is ChatEvent.SuggestedActions -> suggestActions(event.actions)
+    is ChatEvent.RepositoryCandidate -> Unit
     is ChatEvent.ApprovalRequested -> showApproval(event.card)
     is ChatEvent.BackgroundTaskStarted -> backgroundTaskStarted(event.taskId, event.callId)
     is ChatEvent.BackgroundTaskEnded -> backgroundTaskEnded(event.taskId)

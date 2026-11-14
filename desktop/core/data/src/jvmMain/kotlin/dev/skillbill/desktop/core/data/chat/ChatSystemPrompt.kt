@@ -11,7 +11,7 @@ internal fun scopeSystemPrompt(scope: ChatScope): String = when (scope) {
 }
 
 private fun executionSystemPrompt(scope: ChatScope.Execution): String = buildString {
-  appendLine("You are chatting with the operator about one Sona execution.")
+  appendLine("You are chatting with the operator about one skill-bill execution.")
   appendLine("Execution id: ${scope.executionId}")
   appendLine("Kind: ${scope.kind?.name ?: "unknown"}")
   appendLine("Issue key: ${scope.issueKey ?: "none"}")
@@ -22,7 +22,7 @@ private fun executionSystemPrompt(scope: ChatScope.Execution): String = buildStr
     appendLine(VERIFY_FIX_BRANCH_GUIDANCE.trim())
   }
   appendLine(CHAT_ACCESS_GUIDANCE)
-  appendLine("Issues about Sona itself go to $SKILL_BILL_REPOSITORY.")
+  appendLine("Issues about skill-bill itself go to $SKILL_BILL_REPOSITORY.")
   append(CHAT_ACTION_GUIDANCE.trimEnd())
 }
 
@@ -38,18 +38,41 @@ Check and record resolved findings against the same branch checkout where you ma
 """
 
 private fun newTaskSystemPrompt(scope: ChatScope.NewTask): String = buildString {
-  appendLine("You are chatting with the operator about new work. No Sona execution exists yet.")
-  appendLine("Repository: ${scope.repositoryRoot}")
-  scope.baseBranch?.let { appendLine("Base branch: $it") }
+  appendLine("You are chatting with the operator about new work. No skill-bill execution exists yet.")
+  appendLine("User home: ${scope.userHome}")
+  appendLine("Effective working directory: ${scope.workingDirectory}")
+  appendLine("Selected repository root: ${scope.selectedRepositoryRoot ?: "none"}")
+  if (scope.selectedRepositoryRoot == null) {
+    appendLine("No repository is selected. The effective working directory is supplied home, not a selected project.")
+    appendLine("Ordinary questions, provider tools, requested file creation and edits, saving and resuming chats are allowed in the effective working directory.")
+    appendLine("Do not inspect repository branches, default branches or issue-key inventories for a New task without a selected repository.")
+    appendLine("Before any goal, standalone phase or operation, ask the operator to name or select a repository. The manual repository picker remains available after chat starts.")
+    appendLine("Do not emit an executable start card or invoke a skill-bill CLI or MCP run command without selection. Readiness advice, an accepted issue key, Git metadata in home, or a request to proceed does not waive selection or the app-owned explicit start action.")
+  } else {
+    scope.baseBranch?.let { appendLine("Base branch: $it") }
+    appendLine(NEW_TASK_BRANCH_GUIDANCE.trim())
+    appendLine(NEW_TASK_PREPARATION_GUIDANCE.trim())
+    appendLine(NEW_TASK_ROUTING_GUIDANCE.trim())
+    appendLine(NEW_TASK_ACTION_GUIDANCE.trimEnd())
+  }
+  appendLine("Without a selected repository, do not invoke any run through the installed dispatcher.")
+  appendLine(NEW_TASK_REPOSITORY_SELECTION_GUIDANCE.trim())
   appendLine(CHAT_ACCESS_GUIDANCE)
-  appendLine(NEW_TASK_BRANCH_GUIDANCE.trim())
-  appendLine(NEW_TASK_PREPARATION_GUIDANCE.trim())
-  appendLine(NEW_TASK_ROUTING_GUIDANCE.trim())
-  append(NEW_TASK_ACTION_GUIDANCE.trimEnd())
 }
 
+private val NEW_TASK_REPOSITORY_SELECTION_GUIDANCE = """
+When the operator asks to attach or switch repositories, resolve an existing exact repository root from their path or description. Search likely project folders such as userHome/StudioProjects when useful. If more than one repository could match, ask which one and emit no selection block.
+Create or clone a repository only when the operator requests that operation. Use available shell tools and the requested destination. A candidate is allowed only after init or clone finishes successfully and you know the exact destination root. Report failed init or clone, remote authentication failure, an inaccessible destination or unresolved description in prose, with no candidate. Leave any partial or user files in place. Do not infer success, retry automatically or rely on undocumented idempotency.
+A shell cd, Git metadata, tool output or visible prose never selects a repository. The app validates a candidate and may reject it. Selection retains this conversation and never launches or retries work. A later explicit app-owned start action is required to launch work.
+When selection succeeds, end the reply with exactly one terminal block in this format and put no other text or action block after it:
+${RepositoryCandidatePayloadKeys.FENCE}
+{"${RepositoryCandidatePayloadKeys.CONTRACT_VERSION}":"${RepositoryCandidatePayloadKeys.CONTRACT_VERSION_VALUE}","${RepositoryCandidatePayloadKeys.PATH}":"/absolute/repository/root"}
+```
+Do not combine this block with a skillbill-actions block. Escape JSON string characters in the path. Never emit a candidate before the requested operation succeeds.
+""".trimIndent()
+
 private const val CHAT_ACCESS_GUIDANCE =
-  "Carry out the operator's requests with the available tools, including shell commands, the sona CLI, MCP tools, git, gh and file edits. " +
+  "Carry out the operator's requests with the available tools, including shell commands, the skill-bill CLI, MCP tools, git, gh and file edits. " +
     "The provider's own permission requests appear as approval cards. " +
     "Chats start in Act mode for every agent with native permission bypass by default, independently of execution lifecycle. " +
     "Approval cards represent structured permission requests from the Claude, Codex or Cursor harness only. " +

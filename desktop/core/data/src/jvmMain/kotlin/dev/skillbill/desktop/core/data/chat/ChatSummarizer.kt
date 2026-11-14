@@ -7,6 +7,7 @@ import dev.skillbill.desktop.core.common.di.AppScope
 import dev.skillbill.desktop.core.data.session.SelectedAgentHomes
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
+import dev.skillbill.desktop.core.domain.model.ChatStoreRead
 import dev.skillbill.desktop.core.domain.settings.AppSettingsRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
@@ -71,14 +72,20 @@ class ChatSummarizer(
   fun start() {
     if (!started.compareAndSet(false, true)) return
     appScope.scope.launch(dispatcher) {
-      store.staleSummaries(STARTUP_LIMIT).forEach { request(it.sessionId) }
+      val stale = store.staleSummariesRead(STARTUP_LIMIT)
+      stale.failures.forEach { diagnostics.record("chat.summary_source_unreadable") }
+      stale.entries.forEach { request(it.sessionId) }
     }
   }
 
   private suspend fun work() {
     for (sessionId in queue) {
       try {
-        store.staleForSummary(sessionId)?.let { summarize(it) }
+        when (val stale = store.staleForSummaryRead(sessionId)) {
+          is ChatStoreRead.Failed -> diagnostics.record("chat.summary_source_unreadable")
+          ChatStoreRead.Missing -> Unit
+          is ChatStoreRead.Value -> stale.value?.let { summarize(it) }
+        }
       } catch (cancelled: CancellationException) {
         throw cancelled
       } catch (_: Exception) {
