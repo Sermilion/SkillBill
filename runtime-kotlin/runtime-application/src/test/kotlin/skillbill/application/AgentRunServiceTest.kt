@@ -5,6 +5,8 @@ import skillbill.application.agentrun.model.AgentRunStartRequest
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.AgentRunLauncher
 import skillbill.ports.agentrun.agentRunLaunchFacts
+import skillbill.ports.agentrun.model.AgentRunLaunchCapability
+import skillbill.ports.agentrun.model.AgentRunLaunchCapabilityRequest
 import skillbill.ports.agentrun.model.AgentRunLaunchModelRequest
 import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
 import skillbill.ports.agentrun.model.AgentRunLaunchRequest
@@ -82,6 +84,9 @@ class AgentRunServiceTest {
 }
 
 private class RecordingAgentRunLauncher : AgentRunLauncher {
+  override fun queryLaunchCapability(request: AgentRunLaunchCapabilityRequest): AgentRunLaunchCapability =
+    AgentRunLaunchCapability.Supported
+
   val requests: MutableList<AgentRunLaunchRequest> = mutableListOf()
 
   override fun resolveLaunchModel(request: AgentRunLaunchModelRequest): EffectiveLaunchModel =

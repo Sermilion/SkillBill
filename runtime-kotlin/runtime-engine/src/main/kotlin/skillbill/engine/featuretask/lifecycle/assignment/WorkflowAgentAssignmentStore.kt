@@ -116,7 +116,16 @@ public class WorkflowAgentAssignmentStore(
       if (!existing.canonicalBytes.contentEquals(source.canonicalBytes)) {
         unsafeMigration(targetWorkflowId, "target already has different admitted routing evidence")
       }
-      diagnostic(targetWorkflowId, "outcome=no_op reason=identical_current")
+      val selected =
+        existing.assignments.phaseAssignments
+          .toSortedMap()
+          .entries
+          .firstOrNull()
+      diagnostic(
+        targetWorkflowId,
+        "outcome=no_op reason=identical_current phase=${selected?.key ?: "unknown"} " +
+          "provider=${selected?.value?.agentId?.wireValue ?: "unknown"}",
+      )
       return WorkflowAgentAssignmentAdoption(
         existing,
         changed = false,
@@ -142,10 +151,16 @@ public class WorkflowAgentAssignmentStore(
     committed: Boolean,
   ) {
     if (adoption.changed) {
+      val selected =
+        adoption.inspection.assignments.phaseAssignments
+          .toSortedMap()
+          .entries
+          .firstOrNull()
       diagnostic(
         adoption.targetLabel,
         "outcome=${if (committed) "committed" else "rolled_back"} " +
-          "reason=legacy_adoption source=${adoption.sourceLabel}",
+          "reason=workflow_routing_adoption source=${adoption.sourceLabel} " +
+          "phase=${selected?.key ?: "unknown"} provider=${selected?.value?.agentId?.wireValue ?: "unknown"}",
       )
     }
   }
@@ -175,46 +190,68 @@ public class WorkflowAgentAssignmentStore(
         invokedAgentId = invoked,
         configuredAgentOverrideId = null,
         phaseAssignments =
-          plan.stepLaunchAssignments.map { (phase, launch) ->
-            val agent =
-              SupportedAgent.entries.firstOrNull { it.wireValue == launch.agentId }
-                ?: unsafeMigration(workflowId, "retained phase '$phase' has an unsupported provider")
-            val tier = ExecutionMatrix().tierOf(phase)
-            phase to WorkflowAgentPhaseAssignment(agent, tier, WorkflowAgentAssignmentSource.LEGACY_RECORDED)
-          }.toMap(),
+          plan.stepLaunchAssignments
+            .map { (phase, launch) ->
+              val agent =
+                SupportedAgent.entries.firstOrNull { it.wireValue == launch.agentId }
+                  ?: unsafeMigration(workflowId, "retained phase '$phase' has an unsupported provider")
+              val tier = ExecutionMatrix().tierOf(phase)
+              phase to WorkflowAgentPhaseAssignment(agent, tier, WorkflowAgentAssignmentSource.LEGACY_RECORDED)
+            }.toMap(),
       )
     val encoded = validator.canonicalize(encode(partial), sourceLabel(workflowId))
     validateRetainedEvidence(workflowId, artifacts, partial)
-    diagnostic(workflowId, "outcome=prepared reason=missing_artifact")
+    val selected =
+      partial.phaseAssignments
+        .toSortedMap()
+        .entries
+        .firstOrNull()
+    diagnostic(
+      workflowId,
+      "outcome=prepared reason=missing_artifact phase=${selected?.key ?: "unknown"} " +
+        "provider=${selected?.value?.agentId?.wireValue ?: invoked.wireValue}",
+    )
     return encoded.toString(Charsets.UTF_8)
   }
 
   private fun encode(assignments: ResolvedWorkflowAgentAssignments): ByteArray =
-    JsonCodec.mapToJsonString(
-      linkedMapOf(
-        Keys.CONTRACT_VERSION to WORKFLOW_AGENT_ASSIGNMENTS_CONTRACT_VERSION,
-        Keys.ADMISSION_WORKFLOW_ID to assignments.admissionWorkflowId,
-        Keys.POLICY_MODE to assignments.policyMode.id,
-        Keys.INVOKED_AGENT_ID to assignments.invokedAgentId.wireValue,
-        Keys.CONFIGURED_AGENT_OVERRIDE_ID to assignments.configuredAgentOverrideId?.wireValue,
-        Keys.PHASE_ASSIGNMENTS to
-          assignments.phaseAssignments.mapValues { (_, phase) ->
-            mapOf(Keys.AGENT_ID to phase.agentId.wireValue, Keys.TIER to phase.tier.id, Keys.SOURCE to phase.source.id)
-          },
-      ),
-    ).toByteArray(Charsets.UTF_8)
+    JsonCodec
+      .mapToJsonString(
+        linkedMapOf(
+          Keys.CONTRACT_VERSION to WORKFLOW_AGENT_ASSIGNMENTS_CONTRACT_VERSION,
+          Keys.ADMISSION_WORKFLOW_ID to assignments.admissionWorkflowId,
+          Keys.POLICY_MODE to assignments.policyMode.id,
+          Keys.INVOKED_AGENT_ID to assignments.invokedAgentId.wireValue,
+          Keys.CONFIGURED_AGENT_OVERRIDE_ID to assignments.configuredAgentOverrideId?.wireValue,
+          Keys.PHASE_ASSIGNMENTS to
+            assignments.phaseAssignments.mapValues { (_, phase) ->
+              mapOf(
+                Keys.AGENT_ID to phase.agentId.wireValue,
+                Keys.TIER to phase.tier.id,
+                Keys.SOURCE to phase.source.id,
+              )
+            },
+        ),
+      ).toByteArray(Charsets.UTF_8)
 
   private fun recordInspection(
     workflowId: String,
     result: WorkflowAgentAssignmentInspection,
   ) {
     when (result) {
-      Legacy -> diagnostic(workflowId, "outcome=classified reason=missing_artifact")
-      is Present ->
+      Legacy -> {
+        diagnostic(workflowId, "outcome=classified reason=missing_artifact")
+      }
+
+      is Present -> {
         if (result.assignments.policyMode == WorkflowAgentAssignmentPolicyMode.LEGACY) {
           diagnostic(workflowId, "outcome=classified reason=legacy_record")
         }
-      is Problem -> diagnostic(workflowId, "outcome=refused reason=${result.failureCode}")
+      }
+
+      is Problem -> {
+        diagnostic(workflowId, "outcome=refused reason=${result.failureCode}")
+      }
     }
   }
 

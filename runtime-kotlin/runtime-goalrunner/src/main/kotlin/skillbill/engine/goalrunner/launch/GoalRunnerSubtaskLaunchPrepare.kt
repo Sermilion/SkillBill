@@ -4,14 +4,7 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.application.decomposition.baseBranch
 import skillbill.application.workflow.persist.generateWorkflowId
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
-import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
-import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeStepLaunchAssignmentFactory
-import skillbill.engine.featuretask.lifecycle.execution.StepLaunchAssignmentInputs
 import skillbill.engine.featuretask.lifecycle.execution.governedFeatureTaskSpecPath
-import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeAgentAssignment
-import skillbill.engine.featuretask.model.execution.FeatureTaskRuntimeExecutionPlanCreationRequest
-import skillbill.engine.featuretask.slot.PhaseStrategyLookup
-import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
 import skillbill.engine.goal.GoalRunnerManifestState
 import skillbill.engine.goal.goalRepositoryIdentity
 import skillbill.engine.goalrunner.execution.core.StoppedReportArgs
@@ -38,13 +31,11 @@ import skillbill.error.core.failureCodeLabel
 import skillbill.goalrunner.GoalRunnerQualityGateSelectionResolver
 import skillbill.goalrunner.model.GoalRunnerSelection
 import skillbill.goalrunner.model.GoalRunnerStopReason
-import skillbill.ports.agentrun.AgentRunLauncher
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationConflict
 import skillbill.ports.goalrunner.runner.model.GoalRunnerReviewPolicy
 import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.repository.RepositoryEnclosingRootPort
-import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaselineResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
@@ -55,12 +46,8 @@ import skillbill.workflow.decomposition.withBranchSetupBlockedSubtask
 import skillbill.workflow.decomposition.withWorkflowId
 import skillbill.workflow.model.DecompositionStatus
 import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
-import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.model.decompositionStatus
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
-import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
-import skillbill.workflow.taskruntime.model.skeleton.LaunchEnvironmentKind
-import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Path
 import java.time.Clock
@@ -74,11 +61,9 @@ public class GoalRunnerSubtaskLaunchPrepare(
   private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
   private val clock: Clock,
   private val random: Random,
-  private val executionPlans: FeatureTaskRuntimeExecutionPlanResolver,
-  private val strategies: PhaseStrategyLookup,
-  private val agentRunLauncher: AgentRunLauncher,
   private val projectStore: ProjectStorePort,
   private val diagnostics: RuntimeDiagnostics,
+  private val childPlans: GoalChildExecutionPlanPreparation,
 ) {
   internal fun goalReviewBaseline(
     state: GoalRunnerManifestState,
@@ -88,7 +73,8 @@ public class GoalRunnerSubtaskLaunchPrepare(
     val existingWorkflowId = state.manifest.workflowIdFor(subtaskId)
     if (existingWorkflowId != null) {
       return catchingNonCancellation {
-        outcomeStore.goalSubtaskReviewState(existingWorkflowId)
+        outcomeStore
+          .goalSubtaskReviewState(existingWorkflowId)
           ?.let { reviewState ->
             GoalSubtaskReviewBaselineResult(
               status = WorkflowGitOperationStatus.OK,
@@ -111,7 +97,10 @@ public class GoalRunnerSubtaskLaunchPrepare(
       }
     }
     val branch =
-      state.manifest.branchPlanFor(subtaskId).branch.takeIf(String::isNotBlank)
+      state.manifest
+        .branchPlanFor(subtaskId)
+        .branch
+        .takeIf(String::isNotBlank)
         ?: state.manifest.featureBranch?.takeIf(String::isNotBlank)
         ?: return GoalSubtaskReviewBaselineResult(
           status = WorkflowGitOperationStatus.ERROR,
@@ -232,13 +221,14 @@ public class GoalRunnerSubtaskLaunchPrepare(
       priorWorkflowId?.let(outcomeStore::recordedQualityGateSelection)
         ?: GoalRunnerQualityGateSelectionResolver.resolve()
     val qaSelection = recordedChildQaSelection(priorWorkflowId)
-    val executionPlan = childExecutionPlan(request, reviewMode, qualityGate, priorWorkflowId)
+    val executionPlan = childPlans.prepare(state, request, reviewMode, qualityGate, priorWorkflowId)
     val firstRun = priorWorkflowId == null
     val resumesBlockedChild = subtask.status.decompositionStatus() == DecompositionStatus.BLOCKED && !firstRun
     val assignedWorkflowId = priorWorkflowId ?: generateWorkflowId(RUNTIME_WORKFLOW_ID_PREFIX, clock, random)
     val governedSpecPath = governedChildSpecPath(assignedWorkflowId, subtaskId, subtask.specPath, request.repoRoot)
     val attemptedManifest =
-      state.manifest.withAttemptedSubtask(subtaskId)
+      state.manifest
+        .withAttemptedSubtask(subtaskId)
         .let { manifest -> if (firstRun) manifest.withWorkflowId(subtaskId, assignedWorkflowId) else manifest }
     val saved =
       run {
@@ -268,8 +258,7 @@ public class GoalRunnerSubtaskLaunchPrepare(
               (
                 subtask.lastResumableStep?.takeIf(String::isNotBlank)
                   ?: FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT
-              )
-                .takeIf { resumesBlockedChild },
+              ).takeIf { resumesBlockedChild },
             operatorResumeReason =
               "Operator resumed the goal after a blocked stop at subtask $subtaskId."
                 .takeIf { resumesBlockedChild },
@@ -277,11 +266,15 @@ public class GoalRunnerSubtaskLaunchPrepare(
         )
       }
     return when (saved) {
-      is GoalRunnerChildWorkflowSaveResult.Conflicted -> GoalSubtaskLaunchPrepareResult.Conflicted(saved.conflict)
-      is GoalRunnerChildWorkflowSaveResult.Saved ->
+      is GoalRunnerChildWorkflowSaveResult.Conflicted -> {
+        GoalSubtaskLaunchPrepareResult.Conflicted(saved.conflict)
+      }
+
+      is GoalRunnerChildWorkflowSaveResult.Saved -> {
         GoalSubtaskLaunchPrepareResult.Prepared(
           PreparedLaunch(saved.state, assignedWorkflowId.takeIf { firstRun }),
         )
+      }
     }
   }
 
@@ -332,7 +325,8 @@ public class GoalRunnerSubtaskLaunchPrepare(
       if (checkout !is WorkflowGitOperationResult.Ok) {
         checkout.error
       } else if (branchPlan.validateBase) {
-        gitOperations.validateBranchBase(request.repoRoot, branchPlan.branch, branchPlan.baseBranch)
+        gitOperations
+          .validateBranchBase(request.repoRoot, branchPlan.branch, branchPlan.baseBranch)
           .takeUnless { it is WorkflowGitOperationResult.Ok }
           ?.error
           .orEmpty()
@@ -342,44 +336,6 @@ public class GoalRunnerSubtaskLaunchPrepare(
     return setupError.takeIf(String::isNotBlank)?.let { error ->
       blockedBranchSetupIteration(state, subtaskId, error, request)
     }
-  }
-
-  private fun childExecutionPlan(
-    request: GoalRunnerRunRequest,
-    reviewMode: CodeReviewExecutionMode,
-    qualityGate: FeatureTaskRuntimeQualityGateSelection?,
-    priorWorkflowId: String?,
-  ): ValidatedFeatureTaskRuntimeExecutionPlan {
-    val assignedQualityGate =
-      if (priorWorkflowId == null) executionPlans.creationQualityGate(request.repoRoot, qualityGate) else qualityGate
-    return executionPlans.resolveCreation(
-      FeatureTaskRuntimeExecutionPlanCreationRequest(
-        repoRoot = request.repoRoot,
-        definition = SkeletonDefinition.GOAL_CHILD_REVISION_5,
-        reviewMode = reviewMode,
-        qualityGate = qualityGate,
-        validationDepth = ValidationDepth.FULL,
-        timeout = request.timeout,
-        workflowId = priorWorkflowId,
-        stepLaunchAssignments =
-          FeatureTaskRuntimeStepLaunchAssignmentFactory.resolve(
-            launcher = agentRunLauncher,
-            lookup = strategies,
-            facts =
-              PhaseStrategySelectionFacts(
-                SkeletonDefinition.GOAL_CHILD_REVISION_5,
-                setOfNotNull(reviewMode, assignedQualityGate),
-              ),
-            inputs =
-              StepLaunchAssignmentInputs(
-                invokedAgentId = request.configuredAgentOverrideId ?: request.invokedAgentId,
-                agentAssignment = FeatureTaskRuntimeAgentAssignment(),
-                modelAssignment = request.modelAssignment,
-                environmentKind = LaunchEnvironmentKind.GOVERNED_CHILD,
-              ),
-          ),
-      ),
-    )
   }
 
   private fun blockedBranchSetupIteration(

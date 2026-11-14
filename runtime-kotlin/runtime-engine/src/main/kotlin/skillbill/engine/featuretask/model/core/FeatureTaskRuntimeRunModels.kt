@@ -5,6 +5,7 @@ import skillbill.agentaddon.model.HydratedAgentAddonSelection
 import skillbill.application.decomposition.decompositionManifestPath
 import skillbill.application.decomposition.parentSpecPath
 import skillbill.config.model.CompactionSettings
+import skillbill.config.model.ResolvedWorkflowAgentAssignments
 import skillbill.contracts.system.OpenCodeLaunchIdentity
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairRunState
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
@@ -99,6 +100,7 @@ public data class FeatureTaskRuntimeRunInput(
   public val operatorDecision: GoalSubtaskOperatorDecision?,
   public val agentAddonSelection: HydratedAgentAddonSelection,
   public val eventSink: FeatureTaskRuntimeRunEventSink,
+  public val workflowAgentAssignments: ResolvedWorkflowAgentAssignments? = null,
   public val definition: SkeletonDefinition? = null,
   internal val protectedSpecSha256: String? = null,
   internal val openArtifacts: WorkflowArtifactPatch = WorkflowArtifactPatch.EMPTY,
@@ -110,6 +112,7 @@ public data class FeatureTaskRuntimeRunInput(
   public val activityParentWorkflowId: String? = null,
   public val openCodeIdentity: OpenCodeLaunchIdentity? = null,
   public val workflowIdForCreation: String? = null,
+  public val routingContextPrepared: Boolean = false,
 )
 
 public data class FeatureTaskRuntimeGoalContinuationContext(
@@ -256,7 +259,9 @@ internal sealed interface FeatureTaskRuntimePlanningStopDecision {
     val report: FeatureTaskRuntimeRunReport.Decomposed,
   ) : FeatureTaskRuntimePlanningStopDecision
 
-  data class Blocked(val reason: String) : FeatureTaskRuntimePlanningStopDecision
+  data class Blocked(
+    val reason: String,
+  ) : FeatureTaskRuntimePlanningStopDecision
 }
 
 public sealed interface FeatureTaskRuntimeRunEvent {

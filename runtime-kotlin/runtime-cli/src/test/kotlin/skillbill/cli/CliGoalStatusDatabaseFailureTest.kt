@@ -2,6 +2,8 @@ package skillbill.cli
 
 import skillbill.cli.core.CliRuntime
 import skillbill.ports.agentrun.AgentRunLauncher
+import skillbill.ports.agentrun.model.AgentRunLaunchCapability
+import skillbill.ports.agentrun.model.AgentRunLaunchCapabilityRequest
 import skillbill.ports.agentrun.model.AgentRunLaunchModelRequest
 import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
 import skillbill.ports.agentrun.model.AgentRunLaunchRequest
@@ -152,6 +154,9 @@ class CliGoalStatusDatabaseFailureTest {
 private const val MAX_BOUNDED_REASON_CHARS = 240
 
 private object UnusedStatusAgentRunLauncher : AgentRunLauncher {
+  override fun queryLaunchCapability(request: AgentRunLaunchCapabilityRequest): AgentRunLaunchCapability =
+    AgentRunLaunchCapability.Supported
+
   override fun resolveLaunchModel(request: AgentRunLaunchModelRequest): EffectiveLaunchModel =
     passThroughResolvedLaunchModel(request)
 

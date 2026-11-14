@@ -1,6 +1,9 @@
 package skillbill.engine.goalrunner.model
 
 import skillbill.agentaddon.model.HydratedAgentAddonSelection
+import skillbill.config.model.CompactionSettings
+import skillbill.config.model.ResolvedWorkflowAgentAssignments
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeAgentAssignment
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeModelAssignment
 import skillbill.engine.featuretask.model.execution.QaNamedDevice
 import skillbill.engine.goal.GoalRunnerAppliedRepair
@@ -18,6 +21,8 @@ public data class GoalRunnerRunRequest(
   public val repoRoot: Path,
   public val invokedAgentId: String,
   public val configuredAgentOverrideId: String? = null,
+  public val agentAssignment: FeatureTaskRuntimeAgentAssignment = FeatureTaskRuntimeAgentAssignment(),
+  public val workflowAgentAssignments: ResolvedWorkflowAgentAssignments? = null,
   public val timeout: Duration? = null,
   public val progressIdleTimeout: Duration? = null,
   public val outputSink: AgentRunOutputSink = AgentRunOutputSink.NONE,
@@ -31,6 +36,8 @@ public data class GoalRunnerRunRequest(
   public val modelAssignment: FeatureTaskRuntimeModelAssignment = FeatureTaskRuntimeModelAssignment(),
   internal val executionGeneration: Long? = null,
   public val sourceRepoRoot: Path = repoRoot,
+  public val routingContextPrepared: Boolean = false,
+  public val compactionSettings: CompactionSettings = CompactionSettings.DEFAULT,
 ) {
   init {
     require(issueKey.isNotBlank()) { "issueKey is required." }
@@ -49,7 +56,9 @@ public data class GoalRunnerRunRequest(
 public sealed interface GoalRunnerRunEvent {
   public val issueKey: String
 
-  public data class Started(override val issueKey: String) : GoalRunnerRunEvent
+  public data class Started(
+    override val issueKey: String,
+  ) : GoalRunnerRunEvent
 
   public data class SubtaskStarted(
     override val issueKey: String,
@@ -124,7 +133,9 @@ public sealed interface GoalSubtaskQaSummary {
 
   public data object NotRecorded : GoalSubtaskQaSummary
 
-  public data class Recorded(public val outcome: FeatureTaskQaOutcome) : GoalSubtaskQaSummary
+  public data class Recorded(
+    public val outcome: FeatureTaskQaOutcome,
+  ) : GoalSubtaskQaSummary
 }
 
 public data class GoalUnknownScenario(
@@ -137,9 +148,13 @@ public sealed interface GoalSubtaskUnknownScenarios {
 
   public data object Empty : GoalSubtaskUnknownScenarios
 
-  public data class Malformed(public val reason: String) : GoalSubtaskUnknownScenarios
+  public data class Malformed(
+    public val reason: String,
+  ) : GoalSubtaskUnknownScenarios
 
-  public data class Recorded(public val scenarios: List<GoalUnknownScenario>) : GoalSubtaskUnknownScenarios
+  public data class Recorded(
+    public val scenarios: List<GoalUnknownScenario>,
+  ) : GoalSubtaskUnknownScenarios
 }
 
 public sealed interface GoalQaSummary {
@@ -147,7 +162,9 @@ public sealed interface GoalQaSummary {
 
   public data object NotRecorded : GoalQaSummary
 
-  public data class Recorded(public val outcome: FeatureTaskQaOutcome) : GoalQaSummary
+  public data class Recorded(
+    public val outcome: FeatureTaskQaOutcome,
+  ) : GoalQaSummary
 
   public data class Warned(
     public val reason: String,

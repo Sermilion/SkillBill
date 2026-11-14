@@ -18,6 +18,7 @@ import skillbill.engine.diagnostics.block.testBlockIncidentEntryReconciler
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeCrashReconciler
 import skillbill.engine.featuretask.lifecycle.execution.ExecutionPlanAdmissionFixture
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
+import skillbill.engine.featuretask.lifecycle.execution.workflowAgentAssignmentStoreForTests
 import skillbill.engine.featuretask.model.execution.FeatureTaskRuntimeExecutionPlanCreationRequest
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseQuery
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
@@ -38,6 +39,7 @@ import skillbill.engine.goalrunner.findings.UnaddressedFindingsLedgerService
 import skillbill.engine.goalrunner.intake.GoalIntakeAdmissionService
 import skillbill.engine.goalrunner.intake.GoalIntakePreparation
 import skillbill.engine.goalrunner.launch.GoalBranchCheckouts
+import skillbill.engine.goalrunner.launch.GoalChildExecutionPlanPreparation
 import skillbill.engine.goalrunner.launch.GoalExecutionRootResolver
 import skillbill.engine.goalrunner.launch.GoalRunnerLaunchReconciler
 import skillbill.engine.goalrunner.launch.GoalRunnerSubtaskLaunchPrepare
@@ -57,6 +59,8 @@ import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.goalrunner.model.history.GoalHistoryCompletion
 import skillbill.model.RepositoryRoot
 import skillbill.ports.agentrun.AgentRunLauncher
+import skillbill.ports.agentrun.model.AgentRunLaunchCapability
+import skillbill.ports.agentrun.model.AgentRunLaunchCapabilityRequest
 import skillbill.ports.agentrun.model.AgentRunLaunchModelRequest
 import skillbill.ports.agentrun.model.AgentRunLaunchRequest
 import skillbill.ports.agentrun.passThroughResolvedLaunchModel
@@ -175,8 +179,8 @@ internal data class GoalRunnerTestWiringParams(
   val unaddressedFindingsLedgerService: UnaddressedFindingsLedgerService? = null,
 )
 
-internal fun testGoalRunnerWiring(params: GoalRunnerTestWiringParams): GoalRunnerTestWiring {
-  return GoalRunnerTestWiring(
+internal fun testGoalRunnerWiring(params: GoalRunnerTestWiringParams): GoalRunnerTestWiring =
+  GoalRunnerTestWiring(
     manifestStore = params.manifestStore,
     subtaskLauncher = params.subtaskLauncher,
     outcomeStore = params.outcomeStore,
@@ -192,7 +196,6 @@ internal fun testGoalRunnerWiring(params: GoalRunnerTestWiringParams): GoalRunne
     diagnostics = NoopRuntimeDiagnostics,
     phaseRecorder = params.phaseRecorder,
   )
-}
 
 internal data class GoalRunnerTestInputs(
   val manifestStore: GoalRunnerManifestStore,
@@ -328,7 +331,14 @@ internal fun testGoalRunner(wiring: GoalRunnerTestWiring): GoalRunner {
     runPreparation = goalRunnerRunPreparation(wiring, executionPlans, crashReconciler),
     perRunLoopAssembler = perRunLoopAssembler,
     pauseBoundary = pauseBoundary,
-    intakeAdmission = GoalIntakeAdmissionService(wiring.manifestStore, intakePreparation),
+    intakeAdmission =
+      GoalIntakeAdmissionService(
+        wiring.manifestStore,
+        intakePreparation,
+        workflowAgentAssignmentStoreForTests(wiring.goalDatabase ?: goalRunnerTestDatabase(wiring.manifestStore)),
+        executionPlans,
+        wiring.diagnostics,
+      ),
   )
 }
 
@@ -427,11 +437,14 @@ private fun testGoalRunnerLoopAssembler(
       TestRepositoryEnclosingRoot,
       wiring.clock,
       Random(GOAL_RUNNER_TEST_WORKFLOW_ID_SEED),
-      executionPlans,
-      testPhaseStrategies(wiring.subtaskLauncher, wiring.gitOperations),
-      testAgentRunLauncher(),
       testProjectStore,
       wiring.diagnostics,
+      GoalChildExecutionPlanPreparation(
+        executionPlans,
+        testPhaseStrategies(wiring.subtaskLauncher, wiring.gitOperations),
+        testAgentRunLauncher(),
+        workflowAgentAssignmentStoreForTests(wiring.goalDatabase ?: goalRunnerTestDatabase(wiring.manifestStore)),
+      ),
     )
   val iterationOutcome =
     GoalRunnerIterationOutcome(
@@ -592,6 +605,9 @@ private fun goalRunnerExecutionPlans(
 
 private fun testAgentRunLauncher(): AgentRunLauncher =
   object : AgentRunLauncher {
+    override fun queryLaunchCapability(request: AgentRunLaunchCapabilityRequest): AgentRunLaunchCapability =
+      AgentRunLaunchCapability.Supported
+
     override fun resolveLaunchModel(request: AgentRunLaunchModelRequest) = passThroughResolvedLaunchModel(request)
 
     override fun launch(request: AgentRunLaunchRequest) =
@@ -671,16 +687,17 @@ private fun goalRunnerWorkflowStates(store: GoalRunnerManifestStore): WorkflowSt
     ) = if (family == WorkflowFamily.TASK_RUNTIME && store is InMemoryGoalManifestStore &&
       workflowId == store.parentWorkflowId
     ) {
-      taskRuntimeWorkflowRecord(workflowId).copy(
-        artifactsJson =
-          JsonCodec.mapToJsonString(
-            mapOf(
-              DurableWorkflowArtifactFamily.DECOMPOSITION_RUNTIME.entry(
-                testDecompositionManifestValidator.encodeManifestWireMap(store.manifest),
+      taskRuntimeWorkflowRecord(workflowId)
+        .copy(
+          artifactsJson =
+            JsonCodec.mapToJsonString(
+              mapOf(
+                DurableWorkflowArtifactFamily.DECOMPOSITION_RUNTIME.entry(
+                  testDecompositionManifestValidator.encodeManifestWireMap(store.manifest),
+                ),
               ),
             ),
-          ),
-      ).toSnapshot()
+        ).toSnapshot()
     } else {
       delegate.get(family, workflowId)
     }

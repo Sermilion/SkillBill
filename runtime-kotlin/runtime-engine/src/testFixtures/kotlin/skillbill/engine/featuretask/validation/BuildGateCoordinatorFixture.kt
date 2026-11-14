@@ -5,6 +5,7 @@ import skillbill.application.InMemoryWorkflowStates
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanCodec
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanCompatibility
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
+import skillbill.engine.featuretask.lifecycle.execution.routingConfigResolutionForTests
 import skillbill.engine.featuretask.lifecycle.execution.workflowAgentAssignmentStoreForTests
 import skillbill.engine.featuretask.slot.statusProjectionPhaseStrategies
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeExecutionPlanSchemaValidator
@@ -28,10 +29,17 @@ fun FeatureTaskRuntimeBuildGateCoordinator(
   val database = FakeDatabaseSessionFactory(InMemoryWorkflowStates())
   val plans =
     FeatureTaskRuntimeExecutionPlanResolver(
-      strategies, codec, validator, resolver, NoopWorkflowGitOperations, repoLocalConfig,
+      strategies,
+      codec,
+      validator,
+      resolver,
+      NoopWorkflowGitOperations,
+      repoLocalConfig,
       database,
-      FeatureTaskRuntimeExecutionPlanCompatibility(codec, strategies), diagnostics,
+      FeatureTaskRuntimeExecutionPlanCompatibility(codec, strategies),
+      diagnostics,
       workflowAgentAssignments = workflowAgentAssignmentStoreForTests(database),
+      configResolution = routingConfigResolutionForTests(),
     )
   return FeatureTaskRuntimeBuildGateCoordinator(resolver, runner, repoLocalConfig, diagnostics, plans, shutdownHooks)
 }

@@ -5,6 +5,8 @@ import skillbill.contracts.issuekey.issueAndFeature
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.AgentRunLauncher
 import skillbill.ports.agentrun.agentRunLaunchFacts
+import skillbill.ports.agentrun.model.AgentRunLaunchCapability
+import skillbill.ports.agentrun.model.AgentRunLaunchCapabilityRequest
 import skillbill.ports.agentrun.model.AgentRunLaunchModelRequest
 import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
 import skillbill.ports.agentrun.model.AgentRunLaunchRequest
@@ -22,6 +24,35 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class CliGoalIntakeTest {
+  @Test
+  fun `run wide override routes initial goal planning`() {
+    val root = Files.createTempDirectory("goal-intake-provider-override")
+    initGoalFixtureRepository(root)
+    val db = root.resolve("metrics.db")
+    val fixture = GoalCliFixture(root, db, root.resolve("unused.md"), emptyList())
+    val launcher = StoppedPlanningLauncher(db)
+    try {
+      val result =
+        CliRuntime.run(
+          listOf(
+            "--db",
+            db.toString(),
+            "APP-123 Refresh board filters.",
+            "--agent",
+            "codex",
+            "--agent-override",
+            "claude",
+          ),
+          fixture.context(launcher = launcher),
+        )
+      assertEquals(1, result.exitCode, result.stderr + result.stdout)
+      assertTrue(launcher.observedGoalPlanning)
+      assertEquals(listOf("claude"), launcher.planningAgentIds)
+    } finally {
+      root.toFile().deleteRecursively()
+    }
+  }
+
   @Test
   fun `failed progress output does not hide goal planning from the desktop`() {
     val root = Files.createTempDirectory("goal-intake-broken-output")
@@ -215,7 +246,11 @@ class CliGoalIntakeTest {
       assertFalse(Files.exists(root.resolve(".feature-specs")))
       val folder =
         Files.list(specsRoot).use { paths ->
-          paths.findFirst().orElseThrow().fileName.toString()
+          paths
+            .findFirst()
+            .orElseThrow()
+            .fileName
+            .toString()
         }
       val (key, feature) = issueAndFeature(folder)
       assertEquals(expectedKey, key)
@@ -261,8 +296,14 @@ class CliGoalIntakeTest {
     }
   }
 
-  private class StoppedPlanningLauncher(private val db: Path) : AgentRunLauncher {
+  private class StoppedPlanningLauncher(
+    private val db: Path,
+  ) : AgentRunLauncher {
+    override fun queryLaunchCapability(request: AgentRunLaunchCapabilityRequest): AgentRunLaunchCapability =
+      AgentRunLaunchCapability.Supported
+
     val prompts = mutableListOf<String>()
+    val planningAgentIds = mutableListOf<String>()
     var observedGoalPlanning = false
 
     override fun resolveLaunchModel(request: AgentRunLaunchModelRequest): EffectiveLaunchModel =
@@ -272,17 +313,19 @@ class CliGoalIntakeTest {
       assertEquals(0, parentCount(db))
       if (!request.skillRunRequest.issueKey.startsWith("bi_")) {
         prompts += request.skillRunRequest.promptOverride.orEmpty()
+        planningAgentIds += request.agentId
         DriverManager.getConnection("jdbc:sqlite:$db").use { connection ->
           connection.createStatement().use { statement ->
-            statement.executeQuery(
-              "SELECT launch_scope, current_step FROM standalone_phase_status WHERE lifecycle_state = 'active'",
-            ).use { rows ->
-              assertTrue(rows.next(), "Goal planning must be visible before launching preplan")
-              assertEquals("goal", rows.getString("launch_scope"))
-              assertEquals("preplan", rows.getString("current_step"))
-              assertFalse(rows.next())
-              observedGoalPlanning = true
-            }
+            statement
+              .executeQuery(
+                "SELECT launch_scope, current_step FROM standalone_phase_status WHERE lifecycle_state = 'active'",
+              ).use { rows ->
+                assertTrue(rows.next(), "Goal planning must be visible before launching preplan")
+                assertEquals("goal", rows.getString("launch_scope"))
+                assertEquals("preplan", rows.getString("current_step"))
+                assertFalse(rows.next())
+                observedGoalPlanning = true
+              }
           }
         }
       }

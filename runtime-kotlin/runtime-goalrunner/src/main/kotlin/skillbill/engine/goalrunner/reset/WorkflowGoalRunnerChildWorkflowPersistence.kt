@@ -9,6 +9,9 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.issuekey.normalizeRequiredIssueKey
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPlanKeys
+import skillbill.engine.featuretask.lifecycle.assignment.WorkflowAgentAssignmentAdoption
+import skillbill.engine.featuretask.lifecycle.assignment.WorkflowAgentAssignmentInspection
+import skillbill.engine.featuretask.lifecycle.assignment.WorkflowAgentAssignmentStore
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionAdmission
 import skillbill.engine.goal.GoalRunnerManifestState
 import skillbill.engine.goal.OperatorBlockedPhaseReopenRequest
@@ -22,9 +25,11 @@ import skillbill.engine.goalrunner.persist.quality.WorkflowGoalRunnerQualityExec
 import skillbill.engine.goalrunner.planning.hydration.GoalChildPlanningHydrateResult.Conflicted
 import skillbill.engine.goalrunner.planning.hydration.GoalChildPlanningHydrateResult.Hydrated
 import skillbill.engine.goalrunner.planning.hydration.GoalChildPlanningHydratorPort
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanConflictError
 import skillbill.error.featuretask.MissingFeatureTaskRuntimeExecutionPlanError
 import skillbill.goalrunner.GoalRunnerQualityGateSelectionResolver
+import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationConflict
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.projectstore.ProjectStorePort
@@ -66,13 +71,32 @@ public class WorkflowGoalRunnerChildWorkflowPersistence(
   private val historyEvidence: GoalChildHistoryEvidenceStore,
   private val qualityExecution: WorkflowGoalRunnerQualityExecutionStore,
   private val blockWrites: WorkflowGoalRunnerBlockWrites,
+  private val workflowAgentAssignmentStore: WorkflowAgentAssignmentStore,
+  private val database: DatabaseSessionFactory,
 ) {
   private val engine = WorkflowEngine()
+
+  internal fun save(
+    state: GoalRunnerManifestState,
+    setup: GoalRunnerChildWorkflowSetup,
+  ): GoalChildWorkflowSaveResult {
+    var pendingAdoption: WorkflowAgentAssignmentAdoption? = null
+    var committed = false
+    return try {
+      database
+        .transaction { unit ->
+          saveInTransaction(unit, state, setup) { pendingAdoption = it }
+        }.also { committed = true }
+    } finally {
+      pendingAdoption?.let { workflowAgentAssignmentStore.recordAdoptionOutcome(it, committed) }
+    }
+  }
 
   internal fun saveInTransaction(
     unitOfWork: UnitOfWork,
     state: GoalRunnerManifestState,
     setup: GoalRunnerChildWorkflowSetup,
+    onRoutingAdoption: (WorkflowAgentAssignmentAdoption) -> Unit = {},
   ): GoalChildWorkflowSaveResult {
     val existingChild = unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, setup.workflowId)
     childSetupConflict(unitOfWork, state, setup, existingChild)?.let {
@@ -107,8 +131,6 @@ public class WorkflowGoalRunnerChildWorkflowPersistence(
         existingChild
       }
     if (existingChild == null) {
-      qualityExecution.retireActiveExecution(unitOfWork, state.parentWorkflowId)
-      historyEvidence.retire(unitOfWork, state.parentWorkflowId, setup.subtaskId)
       unitOfWork.workflowStates.saveRecord(
         WorkflowFamily.TASK_RUNTIME,
         childUpdated.toRecord().copy(issueKey = normalizeRequiredIssueKey(state.manifest.issueKey)),
@@ -116,6 +138,11 @@ public class WorkflowGoalRunnerChildWorkflowPersistence(
       val identity = expectedChildIdentity(setup)
       FeatureTaskExecutionIdentityPolicy.validate(identity)
       unitOfWork.workflowStates.saveFeatureTaskExecutionIdentity(identity)
+    }
+    adoptParentRouting(unitOfWork, state.parentWorkflowId, setup.workflowId)?.let(onRoutingAdoption)
+    if (existingChild == null) {
+      qualityExecution.retireActiveExecution(unitOfWork, state.parentWorkflowId)
+      historyEvidence.retire(unitOfWork, state.parentWorkflowId, setup.subtaskId)
     }
     val refreshedParent =
       unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, parentUpdated.workflowId) ?: parentUpdated
@@ -132,6 +159,25 @@ public class WorkflowGoalRunnerChildWorkflowPersistence(
       ),
     )
   }
+
+  private fun adoptParentRouting(
+    unitOfWork: UnitOfWork,
+    parentWorkflowId: String,
+    childWorkflowId: String,
+  ): WorkflowAgentAssignmentAdoption? =
+    when (val parentRouting = workflowAgentAssignmentStore.inspect(unitOfWork, parentWorkflowId)) {
+      is WorkflowAgentAssignmentInspection.Present -> {
+        workflowAgentAssignmentStore.adopt(unitOfWork, parentWorkflowId, childWorkflowId)
+      }
+
+      WorkflowAgentAssignmentInspection.Legacy -> {
+        null
+      }
+
+      is WorkflowAgentAssignmentInspection.Problem -> {
+        throw SkillBillRuntimeException(parentRouting.failureCode, parentRouting.recoveryMessage)
+      }
+    }
 
   private fun childSetupConflict(
     unitOfWork: UnitOfWork,
@@ -229,8 +275,29 @@ public class WorkflowGoalRunnerChildWorkflowPersistence(
         null,
       )
     }
+    routingAdoptionConflict(unitOfWork, state.parentWorkflowId, setup.workflowId, setup.subtaskId)?.let { return it }
     return requireMatchingGoalContinuation(unitOfWork, existingChild, state, setup)
       ?: planningHydrator.requireMatchingImport(unitOfWork, existingChild, setup)
+  }
+
+  private fun routingAdoptionConflict(
+    unitOfWork: UnitOfWork,
+    parentWorkflowId: String,
+    childWorkflowId: String,
+    subtaskId: Int,
+  ): GoalPlanningPreparationConflict? {
+    val parent = workflowAgentAssignmentStore.inspect(unitOfWork, parentWorkflowId)
+    val child = workflowAgentAssignmentStore.inspect(unitOfWork, childWorkflowId)
+    if (parent !is WorkflowAgentAssignmentInspection.Present || child !is WorkflowAgentAssignmentInspection.Present) {
+      return null
+    }
+    if (parent.canonicalBytes.contentEquals(child.canonicalBytes)) return null
+    return GoalPlanningPreparationConflict(
+      parentWorkflowId,
+      subtaskId,
+      "existing child workflow has different frozen provider assignments",
+      null,
+    )
   }
 
   private fun expectedChildIdentity(setup: GoalRunnerChildWorkflowSetup) =
@@ -314,8 +381,11 @@ public class WorkflowGoalRunnerChildWorkflowPersistence(
         ),
       )
     val durableAssociation =
-      unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, state.parentWorkflowId)
-        ?.decompositionRuntime()?.subtasks?.singleOrNull { it.id == setup.subtaskId }
+      unitOfWork.workflowStates
+        .get(WorkflowFamily.TASK_RUNTIME, state.parentWorkflowId)
+        ?.decompositionRuntime()
+        ?.subtasks
+        ?.singleOrNull { it.id == setup.subtaskId }
         ?.workflowId == setup.workflowId
     val recordedParentMatches =
       continuation?.parentWorkflowId == state.parentWorkflowId ||
@@ -441,11 +511,12 @@ public class WorkflowGoalRunnerChildWorkflowPersistence(
       putAll(
         mapOf(
           DurableWorkflowArtifactFamily.GOAL_SUBTASK_REVIEW_STATE.entry(
-            GoalSubtaskReviewState.initial(
-              reviewBaseSha = setup.reviewBaseline.reviewBaseSha,
-              baselineUntrackedPaths = setup.reviewBaseline.baselineUntrackedPaths,
-              codeReviewMode = setup.reviewPolicy.codeReviewMode,
-            ).toPersistenceWire(),
+            GoalSubtaskReviewState
+              .initial(
+                reviewBaseSha = setup.reviewBaseline.reviewBaseSha,
+                baselineUntrackedPaths = setup.reviewBaseline.baselineUntrackedPaths,
+                codeReviewMode = setup.reviewPolicy.codeReviewMode,
+              ).toPersistenceWire(),
           ),
         ),
       )

@@ -60,6 +60,12 @@ public class GoalRunnerRunPreparation(
     request: GoalRunnerRunRequest,
   ): GoalRunPreparation = executionRoots.resolve(state, request)
 
+  internal fun recordedStepLaunchProviders(workflowId: String): Map<String, String>? =
+    executionPlans.recordedStepLaunchProviders(workflowId)
+
+  internal fun recordedProviderLimitStepLaunchProviders(workflowId: String): Map<String, String> =
+    executionPlans.recordedProviderLimitStepLaunchProviders(workflowId)
+
   internal fun guardEntry(
     blocked: (GoalRunnerRunReport) -> Boolean,
     run: () -> GoalRunnerRunReport,
@@ -166,9 +172,20 @@ public class GoalRunnerRunPreparation(
     val subtaskId = (selection as? GoalRunnerSelection.Run)?.decision?.subtask?.id ?: 0
     val branch =
       when (selection) {
-        is GoalRunnerSelection.Run -> state.manifest.branchPlanFor(subtaskId).branch.trim()
-        is GoalRunnerSelection.Done -> state.manifest.goalWorkBranch()?.trim() ?: return null
-        is GoalRunnerSelection.Blocked -> return null
+        is GoalRunnerSelection.Run -> {
+          state.manifest
+            .branchPlanFor(subtaskId)
+            .branch
+            .trim()
+        }
+
+        is GoalRunnerSelection.Done -> {
+          state.manifest.goalWorkBranch()?.trim() ?: return null
+        }
+
+        is GoalRunnerSelection.Blocked -> {
+          return null
+        }
       }
     val blockedReason =
       branchCheckouts.heldElsewhereReason(request.issueKey, branch, request.repoRoot)
@@ -198,12 +215,20 @@ public class GoalRunnerRunPreparation(
     if (branch.isBlank() || git.currentBranch(repoRoot).value.trim() == branch) return null
     val exists = git.branchExists(repoRoot, branch)
     return when {
-      exists !is WorkflowGitOperationResult.Ok -> exists.error
-      exists.value.trim() != "true" -> null
-      else ->
-        git.checkoutBranch(repoRoot, branch, baseBranch = null)
+      exists !is WorkflowGitOperationResult.Ok -> {
+        exists.error
+      }
+
+      exists.value.trim() != "true" -> {
+        null
+      }
+
+      else -> {
+        git
+          .checkoutBranch(repoRoot, branch, baseBranch = null)
           .takeUnless { it is WorkflowGitOperationResult.Ok }
           ?.error
+      }
     }
   }
 
@@ -305,11 +330,11 @@ public class GoalRunnerRunPreparation(
   }
 
   private fun inheritedQaSelection(state: GoalRunnerManifestState): FeatureTaskRuntimeQaSelection? =
-    state.manifest.subtasks.asSequence()
+    state.manifest.subtasks
+      .asSequence()
       .mapNotNull { subtask ->
         subtask.workflowId?.takeIf(String::isNotBlank)?.let { outcomeStore.childQaSelection(it, null) }
-      }
-      .firstOrNull()
+      }.firstOrNull()
 
   private fun qaSelectionMismatch(
     state: GoalRunnerManifestState,

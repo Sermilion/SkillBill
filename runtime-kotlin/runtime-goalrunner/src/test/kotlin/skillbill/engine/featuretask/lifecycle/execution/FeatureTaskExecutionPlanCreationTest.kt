@@ -112,16 +112,18 @@ class FeatureTaskExecutionPlanCreationTest {
     val newChild = ExecutionPlanAdmissionFixture(SkeletonDefinition.GOAL_CHILD)
     val created =
       newChild.codec.decodeForTest(
-        newChild.creationResolver().resolveCreation(
-          FeatureTaskRuntimeExecutionPlanCreationRequest(
-            testRepositoryRoot.path,
-            SkeletonDefinition.GOAL_CHILD,
-            CodeReviewExecutionMode.INLINE,
-            FeatureTaskRuntimeQualityGateSelection.VALIDATE,
-            ValidationDepth.FULL,
-            null,
-          ),
-        ).encoded(),
+        newChild
+          .creationResolver()
+          .resolveCreation(
+            FeatureTaskRuntimeExecutionPlanCreationRequest(
+              testRepositoryRoot.path,
+              SkeletonDefinition.GOAL_CHILD,
+              CodeReviewExecutionMode.INLINE,
+              FeatureTaskRuntimeQualityGateSelection.VALIDATE,
+              ValidationDepth.FULL,
+              null,
+            ),
+          ).encoded(),
       )
     assertNull(created.qaSelection)
     assertTrue(created.selectedStepIds.none { it == "qa" || it == "qa_fix" })
@@ -261,18 +263,25 @@ class FeatureTaskExecutionPlanCreationTest {
         assertNull(unit.workflowStates.getFeatureTaskExecutionIdentity(CHILD))
         assertEquals(
           listOf(PARENT),
-          unit.workflowStates.list(
-            WorkflowFamily.TASK_RUNTIME,
-            100,
-          ).map { it.workflowId },
+          unit.workflowStates
+            .list(
+              WorkflowFamily.TASK_RUNTIME,
+              100,
+            ).map { it.workflowId },
         )
         assertEquals(
           fixture.preplan,
-          unit.goalPlanningPreparations.findSharedPreplan(fixture.identity).foundCheckpoint()?.preplanPayload,
+          unit.goalPlanningPreparations
+            .findSharedPreplan(fixture.identity)
+            .foundCheckpoint()
+            ?.preplanPayload,
         )
         assertEquals(
           fixture.plan,
-          unit.goalPlanningPreparations.findSubtaskPlan(fixture.identity, 1, SPEC).foundPlan()?.planPayload,
+          unit.goalPlanningPreparations
+            .findSubtaskPlan(fixture.identity, 1, SPEC)
+            .foundPlan()
+            ?.planPayload,
         )
       }
 
@@ -422,10 +431,11 @@ class FeatureTaskExecutionPlanCreationTest {
       fixture.save(database)
       val before =
         database.read {
-          it.workflowStates.list(
-            WorkflowFamily.TASK_RUNTIME,
-            100,
-          ).map { row -> row.toRecord() }
+          it.workflowStates
+            .list(
+              WorkflowFamily.TASK_RUNTIME,
+              100,
+            ).map { row -> row.toRecord() }
         }
       val changed =
         ValidatedFeatureTaskRuntimeExecutionPlan.read(
@@ -506,37 +516,25 @@ class FeatureTaskExecutionPlanCreationTest {
         fixture.seed()
         fixture.save(database)
         if (changedFact == "descriptor") {
-          val row = database.read { assertNotNull(it.workflowStates.getFeatureTaskWorkflow(CHILD)) }
-          val descriptor =
-            fixture.setup.executionPlan!!.artifactValue.toMutableMap().apply {
-              val policies =
-                (
-                  get(
-                    Keys.EFFECTIVE_POLICIES,
-                  ) as List<*>
-                ).map { requireNotNull(JsonCodec.anyToStringAnyMap(it)) }
-              put(
-                Keys.EFFECTIVE_POLICIES,
-                policies.map { policy ->
-                  if (policy[Keys.ID] == "gate-commands") policy + (Keys.SEMANTIC_DIGEST to "0".repeat(64)) else policy
-                },
-              )
-            }
-          SlotBaselineSqlite.updateFeatureTaskArtifacts(
-            databasePath,
-            CHILD,
-            encodedArtifacts(row.toSnapshot().artifacts + family.entry(descriptor)),
-          )
+          corruptChildDescriptor(database, databasePath, fixture)
         } else {
           database.selfManagedWrite { unit ->
             val row = assertNotNull(unit.workflowStates.getFeatureTaskWorkflow(CHILD))
             assertTrue(
               unit.workflowStates.acquireFeatureTaskRuntimeWorker(
                 FeatureTaskRuntimeWorkerOwnership(
-                  workflowId = CHILD, generation = 1, ownerToken = "owner-token-reopen-0001",
-                  hostIdentity = "host", bootIdentity = "boot", pid = 4242, processBirthToken = "birth",
-                  leaseState = FeatureTaskRuntimeWorkerLeaseState.ACTIVE, heartbeatAt = "2026-09-28T00:00:00Z",
-                  expiresAt = "2026-09-28T00:00:30Z", phaseId = "implement", phaseAttempt = 1,
+                  workflowId = CHILD,
+                  generation = 1,
+                  ownerToken = "owner-token-reopen-0001",
+                  hostIdentity = "host",
+                  bootIdentity = "boot",
+                  pid = 4242,
+                  processBirthToken = "birth",
+                  leaseState = FeatureTaskRuntimeWorkerLeaseState.ACTIVE,
+                  heartbeatAt = "2026-09-28T00:00:00Z",
+                  expiresAt = "2026-09-28T00:00:30Z",
+                  phaseId = "implement",
+                  phaseAttempt = 1,
                 ),
                 row.updatedAt,
               ),
@@ -571,6 +569,34 @@ class FeatureTaskExecutionPlanCreationTest {
     }
   }
 
+  private fun corruptChildDescriptor(
+    database: DatabaseSessionFactory,
+    databasePath: Path,
+    fixture: ChildCreation,
+  ) {
+    val row = database.read { assertNotNull(it.workflowStates.getFeatureTaskWorkflow(CHILD)) }
+    val descriptor =
+      fixture.setup.executionPlan!!.artifactValue.toMutableMap().apply {
+        val policies =
+          (
+            get(
+              Keys.EFFECTIVE_POLICIES,
+            ) as List<*>
+          ).map { requireNotNull(JsonCodec.anyToStringAnyMap(it)) }
+        put(
+          Keys.EFFECTIVE_POLICIES,
+          policies.map { policy ->
+            if (policy[Keys.ID] == "gate-commands") policy + (Keys.SEMANTIC_DIGEST to "0".repeat(64)) else policy
+          },
+        )
+      }
+    SlotBaselineSqlite.updateFeatureTaskArtifacts(
+      databasePath,
+      CHILD,
+      encodedArtifacts(row.toSnapshot().artifacts + family.entry(descriptor)),
+    )
+  }
+
   @Test
   fun `goal child creation without a descriptor leaves parent and child untouched`() =
     withDatabase { database ->
@@ -578,10 +604,11 @@ class FeatureTaskExecutionPlanCreationTest {
       fixture.seed()
       val before =
         database.read {
-          it.workflowStates.list(
-            WorkflowFamily.TASK_RUNTIME,
-            100,
-          ).map { row -> row.toRecord() }
+          it.workflowStates
+            .list(
+              WorkflowFamily.TASK_RUNTIME,
+              100,
+            ).map { row -> row.toRecord() }
         }
       assertFailsWith<MissingFeatureTaskRuntimeExecutionPlanError> {
         fixture.save(database, fixture.setup.copy(executionPlan = null))
@@ -589,15 +616,18 @@ class FeatureTaskExecutionPlanCreationTest {
       database.read {
         assertEquals(
           before,
-          it.workflowStates.list(
-            WorkflowFamily.TASK_RUNTIME,
-            100,
-          ).map { row -> row.toRecord() },
+          it.workflowStates
+            .list(
+              WorkflowFamily.TASK_RUNTIME,
+              100,
+            ).map { row -> row.toRecord() },
         )
       }
     }
 
-  private class ChildCreation(val database: DatabaseSessionFactory) {
+  private class ChildCreation(
+    val database: DatabaseSessionFactory,
+  ) {
     val execution = ExecutionPlanAdmissionFixture(SkeletonDefinition.GOAL_CHILD)
     val identity = GoalPlanningIdentity(PARENT, ISSUE, REPOSITORY)
     private val provenance =
@@ -621,8 +651,12 @@ class FeatureTaskExecutionPlanCreationTest {
       )
     val setup =
       GoalRunnerChildWorkflowSetup(
-        subtaskId = 1, workflowId = CHILD, goalBranch = "feat/SKILL-384", normalizedIssueKey = ISSUE,
-        repositoryIdentity = REPOSITORY, governedSpecPath = SPEC,
+        subtaskId = 1,
+        workflowId = CHILD,
+        goalBranch = "feat/SKILL-384",
+        normalizedIssueKey = ISSUE,
+        repositoryIdentity = REPOSITORY,
+        governedSpecPath = SPEC,
         reviewBaseline = GoalSubtaskReviewBaseline("d".repeat(40), emptyList()),
         reviewPolicy = GoalRunnerReviewPolicy(CodeReviewExecutionMode.INLINE),
         planningHydration = GoalChildPlanningHydrationRequest(identity, provenance, descriptor),
@@ -654,12 +688,18 @@ class FeatureTaskExecutionPlanCreationTest {
         ),
         testWorkflowGoalRunnerQualityExecutionStore(database, testWorkflowSnapshotValidator),
         blockWrites = WorkflowGoalRunnerBlockWrites(testHarnessClock, NoopRuntimeDiagnostics),
+        workflowAgentAssignmentStore = workflowAgentAssignmentStoreForTests(database),
+        database = database,
       )
 
     fun store() =
       engineWorkflowGoalRunnerManifestStore(
-        database, testWorkflowSnapshotValidator, testDecompositionManifestValidator,
-        UnavailableDecompositionManifestStore, testHarnessClock, testDecompositionManifestWriter,
+        database,
+        testWorkflowSnapshotValidator,
+        testDecompositionManifestValidator,
+        UnavailableDecompositionManifestStore,
+        testHarnessClock,
+        testDecompositionManifestWriter,
         testRepositoryRoot,
         GoalChildPlanningHydratorPortAdapter(testHarnessClock),
         executionPlanCompatibility = execution.compatibility,
@@ -671,16 +711,18 @@ class FeatureTaskExecutionPlanCreationTest {
           val row = engine.openRecord(WorkflowFamily.TASK_RUNTIME.definition, PARENT, "parent-session", "plan")
           unit.workflowStates.saveRecord(
             WorkflowFamily.TASK_RUNTIME,
-            row.copy(
-              artifacts =
-                DurableWorkflowArtifacts.fromMap(
-                  mapOf(
-                    DurableWorkflowArtifactFamily.DECOMPOSITION_RUNTIME.entry(
-                      testDecompositionManifestValidator.encodeManifestWireMap(manifest),
+            row
+              .copy(
+                artifacts =
+                  DurableWorkflowArtifacts.fromMap(
+                    mapOf(
+                      DurableWorkflowArtifactFamily.DECOMPOSITION_RUNTIME.entry(
+                        testDecompositionManifestValidator.encodeManifestWireMap(manifest),
+                      ),
                     ),
                   ),
-                ),
-            ).toRecord().copy(issueKey = ISSUE),
+              ).toRecord()
+              .copy(issueKey = ISSUE),
           )
           unit.dbPath
         }
@@ -756,12 +798,18 @@ class FeatureTaskExecutionPlanCreationTest {
 
   private fun service(database: DatabaseSessionFactory) =
     WorkflowService(
-      database, NoopWorkflowGitOperations, UnavailableDecompositionManifestStore,
+      database,
+      NoopWorkflowGitOperations,
+      UnavailableDecompositionManifestStore,
       testWorkflowRecordPersistence(
         testWorkflowSnapshotValidator,
       ),
-      testDecompositionManifestValidator, testDecompositionManifestWriter, testRepositoryRoot,
-      AcceptingFeatureTaskRuntimeWireArtifactValidator, NoopRuntimeDiagnostics, testHarnessClock,
+      testDecompositionManifestValidator,
+      testDecompositionManifestWriter,
+      testRepositoryRoot,
+      AcceptingFeatureTaskRuntimeWireArtifactValidator,
+      NoopRuntimeDiagnostics,
+      testHarnessClock,
       ProjectCheckout(
         TestRepositoryEnclosingRoot,
         database,
@@ -830,44 +878,59 @@ class FeatureTaskExecutionPlanCreationTest {
     database: DatabaseSessionFactory,
     fixture: ChildCreation,
     invalidKind: String,
-  ): String {
-    return database.transaction { unit ->
+  ): String =
+    database.transaction { unit ->
       val row = assertNotNull(unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, CHILD))
       val stored = assertNotNull(JsonCodec.anyToStringAnyMap(family.value(row.artifacts)))
       val replacement =
         when (invalidKind) {
-          "missing" -> null
-          "corrupt" -> stored - Keys.SELECTED_STRATEGIES
-          "unsupported-version" -> stored + (Keys.CONTRACT_VERSION to "99.0")
-          "unsupported" ->
+          "missing" -> {
+            null
+          }
+
+          "corrupt" -> {
+            stored - Keys.SELECTED_STRATEGIES
+          }
+
+          "unsupported-version" -> {
+            stored + (Keys.CONTRACT_VERSION to "99.0")
+          }
+
+          "unsupported" -> {
             (
               stored + (
                 Keys.SELECTED_STRATEGIES to
-                  (stored[Keys.SELECTED_STRATEGIES] as List<*>).map {
-                    requireNotNull(
-                      JsonCodec.anyToStringAnyMap(it),
-                    )
-                  }.map { strategy ->
-                    strategy + (Keys.SEMANTIC_REVISION to 99)
-                  }
+                  (stored[Keys.SELECTED_STRATEGIES] as List<*>)
+                    .map {
+                      requireNotNull(
+                        JsonCodec.anyToStringAnyMap(it),
+                      )
+                    }.map { strategy ->
+                      strategy + (Keys.SEMANTIC_REVISION to 99)
+                    }
               )
             ).let { selected ->
               selected + (
                 Keys.DISPATCH_OWNERSHIP to
-                  (stored[Keys.DISPATCH_OWNERSHIP] as List<*>).map {
-                    requireNotNull(
-                      JsonCodec.anyToStringAnyMap(it),
-                    )
-                  }.map { dispatch ->
-                    dispatch + (Keys.SEMANTIC_REVISION to 99)
-                  }
+                  (stored[Keys.DISPATCH_OWNERSHIP] as List<*>)
+                    .map {
+                      requireNotNull(
+                        JsonCodec.anyToStringAnyMap(it),
+                      )
+                    }.map { dispatch ->
+                      dispatch + (Keys.SEMANTIC_REVISION to 99)
+                    }
               )
             }
-          else ->
-            fixture.execution.codec.encodeExecution(
-              fixture.execution.plan,
-              fixture.execution.inputs.copy(phaseTimeoutMillis = 1),
-            ).let { fixture.execution.validator.read(it, "changed execution policy") }
+          }
+
+          else -> {
+            fixture.execution.codec
+              .encodeExecution(
+                fixture.execution.plan,
+                fixture.execution.inputs.copy(phaseTimeoutMillis = 1),
+              ).let { fixture.execution.validator.read(it, "changed execution policy") }
+          }
         }
       SqliteWorkflowArtifactWireEncoder().encode(
         DurableWorkflowArtifacts.fromMap(
@@ -881,7 +944,6 @@ class FeatureTaskExecutionPlanCreationTest {
         ),
       )
     }
-  }
 
   private fun changeBlockedChildAdmission(
     database: DatabaseSessionFactory,
@@ -918,10 +980,18 @@ class FeatureTaskExecutionPlanCreationTest {
         assertTrue(
           unit.workflowStates.acquireFeatureTaskRuntimeWorker(
             FeatureTaskRuntimeWorkerOwnership(
-              workflowId = workflowId, generation = 1, ownerToken = "owner-token-child-0001",
-              hostIdentity = "host", bootIdentity = "boot", pid = 4242, processBirthToken = "birth",
-              leaseState = FeatureTaskRuntimeWorkerLeaseState.ACTIVE, heartbeatAt = "2026-09-28T00:00:00Z",
-              expiresAt = "2026-09-28T00:00:30Z", phaseId = "implement", phaseAttempt = 1,
+              workflowId = workflowId,
+              generation = 1,
+              ownerToken = "owner-token-child-0001",
+              hostIdentity = "host",
+              bootIdentity = "boot",
+              pid = 4242,
+              processBirthToken = "birth",
+              leaseState = FeatureTaskRuntimeWorkerLeaseState.ACTIVE,
+              heartbeatAt = "2026-09-28T00:00:00Z",
+              expiresAt = "2026-09-28T00:00:30Z",
+              phaseId = "implement",
+              phaseAttempt = 1,
             ),
             row.updatedAt,
           ),

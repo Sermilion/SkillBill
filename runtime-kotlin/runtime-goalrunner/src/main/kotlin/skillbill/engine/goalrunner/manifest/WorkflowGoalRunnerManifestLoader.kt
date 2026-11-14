@@ -14,6 +14,9 @@ import skillbill.application.workflow.decomposition.requireRuntimeModeForEngineW
 import skillbill.application.workflow.decomposition.withImportedPlan
 import skillbill.application.workflow.persist.generateWorkflowId
 import skillbill.contracts.issuekey.normalizeRequiredIssueKey
+import skillbill.engine.featuretask.lifecycle.assignment.WorkflowAgentAssignmentAdoption
+import skillbill.engine.featuretask.lifecycle.assignment.WorkflowAgentAssignmentInspection
+import skillbill.engine.featuretask.lifecycle.assignment.WorkflowAgentAssignmentStore
 import skillbill.engine.goal.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.OccupyingGoalParent
 import skillbill.engine.goalrunner.plan.GoalPlanningCheckoutOwnership
@@ -36,6 +39,7 @@ import skillbill.workflow.decomposition.runtime.decompositionRuntime
 import skillbill.workflow.decomposition.runtime.withImportedGoalQualityReadiness
 import skillbill.workflow.decomposition.withParentStatus
 import skillbill.workflow.engine.WorkflowEngine
+import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.engine.model.WorkflowUpdateInput
 import skillbill.workflow.model.DecompositionStatus
 import skillbill.workflow.model.WorkflowStatus
@@ -57,6 +61,7 @@ public class WorkflowGoalRunnerManifestLoader(
   private val parentProjection: GoalParentProjectionWriter,
   private val worktrees: GoalWorktreeResources,
   private val ownership: GoalPlanningCheckoutOwnership,
+  private val workflowAgentAssignmentStore: WorkflowAgentAssignmentStore,
 ) {
   private val engine = WorkflowEngine()
 
@@ -177,68 +182,129 @@ public class WorkflowGoalRunnerManifestLoader(
     repositoryIdentities: List<String?> = listOf(null),
     independentParent: Boolean = false,
     planningOwner: GoalPlanningOwnership? = null,
-  ): GoalRunnerManifestState? =
-    database.transaction { unitOfWork ->
-      if (independentParent && planningOwner == null) {
-        refuseConcurrentPlanningOwner(unitOfWork, repositoryIdentities, manifest.issueKey)
-      }
-      val selectedOwnedPlan = selectedOwnedPlan(unitOfWork, planningOwner, manifest.issueKey, repositoryIdentities)
-      val existingRecord =
-        if (independentParent) {
-          null
-        } else {
-          repositoryIdentities.firstNotNullOfOrNull { identity ->
-            unitOfWork.workflowStates.findDecomposedParentOrCorruptFallback(manifest.issueKey, manifest, identity)
-          }
+  ): GoalRunnerManifestState? {
+    var pendingAdoption: WorkflowAgentAssignmentAdoption? = null
+    var committed = false
+    return try {
+      database
+        .transaction { unitOfWork ->
+          importInTransaction(
+            unitOfWork,
+            manifest,
+            GoalParentImportSelection(repositoryIdentities, independentParent, planningOwner),
+          ) { pendingAdoption = it }
+        }.also { committed = true }
+    } finally {
+      pendingAdoption?.let { workflowAgentAssignmentStore.recordAdoptionOutcome(it, committed) }
+    }
+  }
+
+  private fun importInTransaction(
+    unitOfWork: UnitOfWork,
+    manifest: DecompositionManifest,
+    selection: GoalParentImportSelection,
+    onRoutingAdoption: (WorkflowAgentAssignmentAdoption) -> Unit,
+  ): GoalRunnerManifestState {
+    val repositoryIdentities = selection.repositoryIdentities
+    val independentParent = selection.independentParent
+    val planningOwner = selection.planningOwner
+    if (independentParent && planningOwner == null) {
+      refuseConcurrentPlanningOwner(unitOfWork, repositoryIdentities, manifest.issueKey)
+    }
+    val selectedOwnedPlan = selectedOwnedPlan(unitOfWork, planningOwner, manifest.issueKey, repositoryIdentities)
+    val existingRecord =
+      if (independentParent) {
+        null
+      } else {
+        repositoryIdentities.firstNotNullOfOrNull { identity ->
+          unitOfWork.workflowStates.findDecomposedParentOrCorruptFallback(manifest.issueKey, manifest, identity)
         }
-      existingRecord?.requireRuntimeModeForEngineWrite()
-      val existing = existingRecord?.toSnapshot()
-      val attachCompletedPlan = existing == null && (!independentParent || selectedOwnedPlan != null)
-      val base =
-        existing ?: engine.openRecord(
-          WorkflowFamily.TASK_RUNTIME.definition,
-          generateWorkflowId(WorkflowFamily.TASK_RUNTIME.definition.workflowIdPrefix, clock, random),
-          WorkflowFamily.TASK_RUNTIME.definition.defaultSessionPrefix,
-          "plan",
-        )
-      val (planWorkflowId, qualityPlanWorkflowId) =
-        completedPlanIds(unitOfWork, manifest, repositoryIdentities, attachCompletedPlan, selectedOwnedPlan)
-      val planningTime = unitOfWork.planWorkflowTiming(planWorkflowId)
-      val imported =
-        engine.updateRecord(
-          WorkflowFamily.TASK_RUNTIME.definition,
-          base.copy(startedAt = planningTime.startedAt ?: base.startedAt),
-          WorkflowUpdateInput(
-            workflowStatus = WorkflowStatus.PAUSED,
-            currentStepId = "plan",
-            stepUpdates = if (existing != null) null else importedPlanStepUpdates(planWorkflowId),
-            artifactsPatch =
-              parentProjection.artifacts(manifest, base.artifacts).withImportedPlan(planWorkflowId).let { patch ->
-                if (existing == null) patch.withImportedGoalQualityReadiness(manifest, qualityPlanWorkflowId) else patch
-              },
-            sessionId = base.sessionId.orEmpty(),
-            replaceArtifacts = true,
-          ),
-        )
-      unitOfWork.workflowStates.saveRecord(
-        WorkflowFamily.TASK_RUNTIME,
-        imported.toRecord().copy(issueKey = normalizeRequiredIssueKey(manifest.issueKey)),
-      )
-      if (existing == null) {
-        val control = unitOfWork.goalRunnerControls.controlState(imported.workflowId)
-        unitOfWork.goalRunnerControls.persistControlState(
-          imported.workflowId,
-          control.copy(activeDurationMs = planningTime.activeDurationMs),
-        )
       }
-      val saved = unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, imported.workflowId) ?: imported
-      GoalRunnerManifestState(
-        parentWorkflowId = saved.workflowId,
-        dbPath = unitOfWork.dbPath.toString(),
-        manifest = saved.decompositionRuntime() ?: manifest,
-        controlState = unitOfWork.goalRunnerControls.controlState(saved.workflowId),
+    existingRecord?.requireRuntimeModeForEngineWrite()
+    val existing = existingRecord?.toSnapshot()
+    val attachCompletedPlan = existing == null && (!independentParent || selectedOwnedPlan != null)
+    val base =
+      existing ?: engine.openRecord(
+        WorkflowFamily.TASK_RUNTIME.definition,
+        generateWorkflowId(WorkflowFamily.TASK_RUNTIME.definition.workflowIdPrefix, clock, random),
+        WorkflowFamily.TASK_RUNTIME.definition.defaultSessionPrefix,
+        "plan",
+      )
+    val (planWorkflowId, qualityPlanWorkflowId) =
+      completedPlanIds(unitOfWork, manifest, repositoryIdentities, attachCompletedPlan, selectedOwnedPlan)
+    val planningTime = unitOfWork.planWorkflowTiming(planWorkflowId)
+    val imported =
+      importedParent(
+        base.copy(startedAt = planningTime.startedAt ?: base.startedAt),
+        manifest,
+        existing != null,
+        planWorkflowId,
+        qualityPlanWorkflowId,
+      )
+    unitOfWork.workflowStates.saveRecord(
+      WorkflowFamily.TASK_RUNTIME,
+      imported.toRecord().copy(issueKey = normalizeRequiredIssueKey(manifest.issueKey)),
+    )
+    adoptPlanningRouting(unitOfWork, planWorkflowId, imported.workflowId)?.let(onRoutingAdoption)
+    if (existing == null) {
+      val control = unitOfWork.goalRunnerControls.controlState(imported.workflowId)
+      unitOfWork.goalRunnerControls.persistControlState(
+        imported.workflowId,
+        control.copy(activeDurationMs = planningTime.activeDurationMs),
       )
     }
+    val saved = unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, imported.workflowId) ?: imported
+    return GoalRunnerManifestState(
+      parentWorkflowId = saved.workflowId,
+      dbPath = unitOfWork.dbPath.toString(),
+      manifest = saved.decompositionRuntime() ?: manifest,
+      controlState = unitOfWork.goalRunnerControls.controlState(saved.workflowId),
+    )
+  }
+
+  private fun importedParent(
+    base: WorkflowStateSnapshot,
+    manifest: DecompositionManifest,
+    existing: Boolean,
+    planWorkflowId: String?,
+    qualityPlanWorkflowId: String?,
+  ): WorkflowStateSnapshot =
+    engine.updateRecord(
+      WorkflowFamily.TASK_RUNTIME.definition,
+      base,
+      WorkflowUpdateInput(
+        workflowStatus = WorkflowStatus.PAUSED,
+        currentStepId = "plan",
+        stepUpdates = if (existing) null else importedPlanStepUpdates(planWorkflowId),
+        artifactsPatch =
+          parentProjection.artifacts(manifest, base.artifacts).withImportedPlan(planWorkflowId).let { patch ->
+            if (existing) patch else patch.withImportedGoalQualityReadiness(manifest, qualityPlanWorkflowId)
+          },
+        sessionId = base.sessionId.orEmpty(),
+        replaceArtifacts = true,
+      ),
+    )
+
+  private fun adoptPlanningRouting(
+    unitOfWork: UnitOfWork,
+    sourceWorkflowId: String?,
+    targetWorkflowId: String,
+  ): WorkflowAgentAssignmentAdoption? {
+    if (sourceWorkflowId == null) return null
+    return when (val routing = workflowAgentAssignmentStore.inspect(unitOfWork, sourceWorkflowId)) {
+      WorkflowAgentAssignmentInspection.Legacy -> {
+        null
+      }
+
+      is WorkflowAgentAssignmentInspection.Present -> {
+        workflowAgentAssignmentStore.adopt(unitOfWork, sourceWorkflowId, targetWorkflowId)
+      }
+
+      is WorkflowAgentAssignmentInspection.Problem -> {
+        throw SkillBillRuntimeException(routing.failureCode, routing.recoveryMessage)
+      }
+    }
+  }
 
   private fun completedPlanIds(
     unitOfWork: UnitOfWork,
@@ -279,7 +345,8 @@ public class WorkflowGoalRunnerManifestLoader(
   ) {
     val active =
       repositoryIdentities.filterNotNull().firstNotNullOfOrNull { identity ->
-        unitOfWork.goalPlanningOwnership.findByIssue(identity, normalizeRequiredIssueKey(issueKey))
+        unitOfWork.goalPlanningOwnership
+          .findByIssue(identity, normalizeRequiredIssueKey(issueKey))
           ?.takeUnless {
             it.state == GoalPlanningOwnership.State.TRANSFERRED ||
               it.state == GoalPlanningOwnership.State.SUPERSEDED
@@ -332,20 +399,29 @@ public class WorkflowGoalRunnerManifestLoader(
     repoRoot: Path?,
   ): GoalRunnerManifestState? =
     when {
-      shouldRefreshFromCompleteProjection(stored, projected) ->
+      shouldRefreshFromCompleteProjection(stored, projected) -> {
         requireNotNull(stored).copy(
           manifest = requireNotNull(projected),
           repoRoot = repoRoot,
         )
-      stored != null -> stored.copy(repoRoot = repoRoot)
-      projected != null ->
+      }
+
+      stored != null -> {
+        stored.copy(repoRoot = repoRoot)
+      }
+
+      projected != null -> {
         GoalRunnerManifestState(
           parentWorkflowId = "",
           dbPath = "",
           manifest = projected,
           repoRoot = repoRoot,
         )
-      else -> null
+      }
+
+      else -> {
+        null
+      }
     }
 
   internal fun shouldRefreshFromCompleteProjection(
@@ -381,8 +457,10 @@ internal fun mergeConcurrentGoalProgress(
   val merged = incoming.copy(subtasks = mergedSubtasks)
   return if (
     persisted.currentSubtaskIntent.subtaskId > 0 &&
-    merged.subtasks.firstOrNull { it.id == persisted.currentSubtaskIntent.subtaskId }
-      ?.status.decompositionStatus() == DecompositionStatus.COMPLETE &&
+    merged.subtasks
+      .firstOrNull { it.id == persisted.currentSubtaskIntent.subtaskId }
+      ?.status
+      .decompositionStatus() == DecompositionStatus.COMPLETE &&
     merged.currentSubtaskIntent.subtaskId == persisted.currentSubtaskIntent.subtaskId
   ) {
     merged.copy(currentSubtaskIntent = persisted.currentSubtaskIntent).withParentStatus()
@@ -414,3 +492,9 @@ internal fun projectionStillReusableParentHistory(
       storedManifest.subtasks.any { it.workflowId == workflowId }
     }
 }
+
+private data class GoalParentImportSelection(
+  val repositoryIdentities: List<String?>,
+  val independentParent: Boolean,
+  val planningOwner: GoalPlanningOwnership?,
+)

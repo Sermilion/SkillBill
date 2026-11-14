@@ -8,6 +8,8 @@ import skillbill.install.model.SupportedAgent
 import skillbill.model.EnvironmentContext
 import skillbill.ports.agentrun.AgentRunLauncher
 import skillbill.ports.agentrun.ExecutableLookup
+import skillbill.ports.agentrun.model.AgentRunLaunchCapability
+import skillbill.ports.agentrun.model.AgentRunLaunchCapabilityRequest
 import skillbill.ports.agentrun.model.AgentRunLaunchModelRequest
 import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
 import skillbill.ports.agentrun.model.AgentRunLaunchRequest
@@ -67,6 +69,19 @@ class FileSystemAgentRunLauncher internal constructor(
 
   override fun resolveLaunchModel(request: AgentRunLaunchModelRequest): EffectiveLaunchModel =
     passThroughLaunchModel(request.requestedModel, request.requestedEffort)
+
+  override fun queryLaunchCapability(request: AgentRunLaunchCapabilityRequest): AgentRunLaunchCapability {
+    val agent =
+      SupportedAgent.fromWireOrNull(request.agentId)
+        ?: return AgentRunLaunchCapability.Unsupported("Agent '${request.agentId}' is not supported.")
+    return if (adapters.containsKey(agent)) {
+      AgentRunLaunchCapability.Supported
+    } else {
+      AgentRunLaunchCapability.Unsupported(
+        "Agent '${agent.id}' does not have a supported ${request.environmentKind.wireValue} launch path.",
+      )
+    }
+  }
 
   override fun launch(request: AgentRunLaunchRequest): AgentRunLaunchOutcome {
     val agent = SupportedAgent.fromNormalizedId(request.agentId)

@@ -8,6 +8,7 @@ import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskContinuati
 import skillbill.engine.featuretask.lifecycle.continuation.claimForTest
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeCrashReconciler
 import skillbill.engine.featuretask.lifecycle.execution.ExecutionPlanAdmissionFixture
+import skillbill.engine.featuretask.lifecycle.execution.workflowAgentAssignmentStoreForTests
 import skillbill.engine.featuretask.model.continuation.FeatureTaskContinuationLookupResult
 import skillbill.engine.featuretask.phase.planning.PlanBundleFeasibilityStateCodec
 import skillbill.engine.featuretask.phaserun.phaseRunDatabase
@@ -67,6 +68,8 @@ class PlanWorkflowLookupTest {
           database,
           PlanBundleFeasibilityStateCodec(featureTaskRuntimeWireArtifactValidatorForTest()),
           NoopRuntimeDiagnostics,
+          workflowAgentAssignmentStoreForTests(database),
+          execution.recoveryResolver(),
         )
       val identity = execution.identity(WORKFLOW)
 
@@ -185,12 +188,18 @@ class PlanWorkflowLookupTest {
 
   private fun ownership() =
     FeatureTaskRuntimeWorkerOwnership(
-      workflowId = WORKFLOW, generation = 1, ownerToken = OWNER,
-      hostIdentity = "host", bootIdentity = "boot", pid = 1234, processBirthToken = "birth",
+      workflowId = WORKFLOW,
+      generation = 1,
+      ownerToken = OWNER,
+      hostIdentity = "host",
+      bootIdentity = "boot",
+      pid = 1234,
+      processBirthToken = "birth",
       leaseState = FeatureTaskRuntimeWorkerLeaseState.ACTIVE,
       heartbeatAt = testHarnessClock.instant().toString(),
       expiresAt = testHarnessClock.instant().plusSeconds(300).toString(),
-      phaseId = "plan_subtasks", phaseAttempt = 1,
+      phaseId = "plan_subtasks",
+      phaseAttempt = 1,
     )
 
   private companion object {

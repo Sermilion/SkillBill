@@ -22,6 +22,8 @@ import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.AgentRunLauncher
 import skillbill.ports.agentrun.ExecutableLookup
 import skillbill.ports.agentrun.agentRunLaunchFacts
+import skillbill.ports.agentrun.model.AgentRunLaunchCapability
+import skillbill.ports.agentrun.model.AgentRunLaunchCapabilityRequest
 import skillbill.ports.agentrun.model.AgentRunLaunchModelRequest
 import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
 import skillbill.ports.agentrun.model.AgentRunLaunchRequest
@@ -69,27 +71,29 @@ internal fun startRunningRuntimeGoalChild(fixture: GoalCliFixture): String {
       fixture.context(launcher = NoopGoalTestAgentRunLauncher),
     )
   ensureTestDatabase(fixture.dbPath).use { connection ->
-    connection.prepareStatement(
-      "UPDATE feature_task_workflows SET artifacts_json = json_set(artifacts_json, '$.goal_continuation', " +
-        "json((SELECT json_extract(artifacts_json, '$.goal_continuation') FROM feature_task_workflows " +
-        "WHERE workflow_id = ?))), (parent_workflow_id, goal_subtask_id, goal_issue_key) = " +
-        "(SELECT parent_workflow_id, goal_subtask_id, goal_issue_key FROM feature_task_workflows " +
-        "WHERE workflow_id = ?) WHERE workflow_id = ? AND mode = 'runtime'",
-    ).use { statement ->
-      statement.setString(1, childWorkflowId)
-      statement.setString(2, childWorkflowId)
-      statement.setString(3, runtimeWorkflow["workflow_id"] as String)
-      assertEquals(1, statement.executeUpdate())
-    }
-    connection.prepareStatement(
-      "UPDATE feature_task_workflows SET artifacts_json = replace(artifacts_json, ?, ?) " +
-        "WHERE mode = 'runtime' AND instr(artifacts_json, ?) > 0",
-    ).use { statement ->
-      statement.setString(1, childWorkflowId)
-      statement.setString(2, runtimeWorkflow["workflow_id"] as String)
-      statement.setString(3, childWorkflowId)
-      assertTrue(statement.executeUpdate() >= 1)
-    }
+    connection
+      .prepareStatement(
+        "UPDATE feature_task_workflows SET artifacts_json = json_set(artifacts_json, '$.goal_continuation', " +
+          "json((SELECT json_extract(artifacts_json, '$.goal_continuation') FROM feature_task_workflows " +
+          "WHERE workflow_id = ?))), (parent_workflow_id, goal_subtask_id, goal_issue_key) = " +
+          "(SELECT parent_workflow_id, goal_subtask_id, goal_issue_key FROM feature_task_workflows " +
+          "WHERE workflow_id = ?) WHERE workflow_id = ? AND mode = 'runtime'",
+      ).use { statement ->
+        statement.setString(1, childWorkflowId)
+        statement.setString(2, childWorkflowId)
+        statement.setString(3, runtimeWorkflow["workflow_id"] as String)
+        assertEquals(1, statement.executeUpdate())
+      }
+    connection
+      .prepareStatement(
+        "UPDATE feature_task_workflows SET artifacts_json = replace(artifacts_json, ?, ?) " +
+          "WHERE mode = 'runtime' AND instr(artifacts_json, ?) > 0",
+      ).use { statement ->
+        statement.setString(1, childWorkflowId)
+        statement.setString(2, runtimeWorkflow["workflow_id"] as String)
+        statement.setString(3, childWorkflowId)
+        assertTrue(statement.executeUpdate() >= 1)
+      }
   }
   return runtimeWorkflow["workflow_id"] as String
 }
@@ -100,25 +104,26 @@ internal fun seedLiveWorkerLease(
 ) {
   val process = JdkFeatureTaskRuntimeWorkerSupervisor(NoopRuntimeDiagnostics, JdkHostPlatformPort).currentProcess()
   ensureTestDatabase(fixture.dbPath).use { connection ->
-    connection.prepareStatement(
-      """
-      INSERT OR REPLACE INTO feature_task_runtime_worker_leases (
-        workflow_id, contract_version, generation, owner_token, host_identity, boot_identity,
-        pid, process_birth_token, lease_state, heartbeat_at, expires_at, phase_id, phase_attempt
-      ) VALUES (?, ?, 1, ?, ?, ?, ?, ?, 'active', ?, ?, 'implement', 1)
-      """.trimIndent(),
-    ).use { statement ->
-      statement.setString(1, workflowId)
-      statement.setString(2, FEATURE_TASK_RUNTIME_WORKER_OWNERSHIP_CONTRACT_VERSION)
-      statement.setString(3, "owner-token-cli-watch")
-      statement.setString(4, process.hostIdentity)
-      statement.setString(5, process.bootIdentity)
-      statement.setLong(6, process.pid)
-      statement.setString(7, process.processBirthToken)
-      statement.setString(8, "2999-01-01T00:00:00Z")
-      statement.setString(9, "2999-01-01T00:01:00Z")
-      statement.executeUpdate()
-    }
+    connection
+      .prepareStatement(
+        """
+        INSERT OR REPLACE INTO feature_task_runtime_worker_leases (
+          workflow_id, contract_version, generation, owner_token, host_identity, boot_identity,
+          pid, process_birth_token, lease_state, heartbeat_at, expires_at, phase_id, phase_attempt
+        ) VALUES (?, ?, 1, ?, ?, ?, ?, ?, 'active', ?, ?, 'implement', 1)
+        """.trimIndent(),
+      ).use { statement ->
+        statement.setString(1, workflowId)
+        statement.setString(2, FEATURE_TASK_RUNTIME_WORKER_OWNERSHIP_CONTRACT_VERSION)
+        statement.setString(3, "owner-token-cli-watch")
+        statement.setString(4, process.hostIdentity)
+        statement.setString(5, process.bootIdentity)
+        statement.setLong(6, process.pid)
+        statement.setString(7, process.processBirthToken)
+        statement.setString(8, "2999-01-01T00:00:00Z")
+        statement.setString(9, "2999-01-01T00:01:00Z")
+        statement.executeUpdate()
+      }
   }
 }
 
@@ -127,12 +132,13 @@ internal fun clearWorkerLease(
   workflowId: String,
 ) {
   ensureTestDatabase(fixture.dbPath).use { connection ->
-    connection.prepareStatement(
-      "DELETE FROM feature_task_runtime_worker_leases WHERE workflow_id = ?",
-    ).use { statement ->
-      statement.setString(1, workflowId)
-      statement.executeUpdate()
-    }
+    connection
+      .prepareStatement(
+        "DELETE FROM feature_task_runtime_worker_leases WHERE workflow_id = ?",
+      ).use { statement ->
+        statement.setString(1, workflowId)
+        statement.executeUpdate()
+      }
   }
 }
 
@@ -141,42 +147,46 @@ internal fun seedExpiredWorkerLease(
   workflowId: String,
 ) {
   ensureTestDatabase(fixture.dbPath).use { connection ->
-    connection.prepareStatement(
-      """
-      INSERT OR REPLACE INTO feature_task_runtime_worker_leases (
-        workflow_id, contract_version, generation, owner_token, host_identity, boot_identity,
-        pid, process_birth_token, lease_state, heartbeat_at, expires_at, phase_id, phase_attempt
-      ) VALUES (?, ?, 1, ?, ?, ?, 1234, ?, 'active', ?, ?, 'implement', 1)
-      """.trimIndent(),
-    ).use { statement ->
-      statement.setString(1, workflowId)
-      statement.setString(2, FEATURE_TASK_RUNTIME_WORKER_OWNERSHIP_CONTRACT_VERSION)
-      statement.setString(3, "owner-token-expired-cli")
-      statement.setString(4, "test-host")
-      statement.setString(5, "test-boot")
-      statement.setString(6, "birth-1234")
-      statement.setString(7, "2000-01-01T00:00:00Z")
-      statement.setString(8, "2000-01-01T00:00:30Z")
-      statement.executeUpdate()
-    }
+    connection
+      .prepareStatement(
+        """
+        INSERT OR REPLACE INTO feature_task_runtime_worker_leases (
+          workflow_id, contract_version, generation, owner_token, host_identity, boot_identity,
+          pid, process_birth_token, lease_state, heartbeat_at, expires_at, phase_id, phase_attempt
+        ) VALUES (?, ?, 1, ?, ?, ?, 1234, ?, 'active', ?, ?, 'implement', 1)
+        """.trimIndent(),
+      ).use { statement ->
+        statement.setString(1, workflowId)
+        statement.setString(2, FEATURE_TASK_RUNTIME_WORKER_OWNERSHIP_CONTRACT_VERSION)
+        statement.setString(3, "owner-token-expired-cli")
+        statement.setString(4, "test-host")
+        statement.setString(5, "test-boot")
+        statement.setString(6, "birth-1234")
+        statement.setString(7, "2000-01-01T00:00:00Z")
+        statement.setString(8, "2000-01-01T00:00:30Z")
+        statement.executeUpdate()
+      }
   }
 }
 
 internal fun seedIssue342StaleParentControlState(fixture: GoalCliFixture) {
   DriverManager.getConnection("jdbc:sqlite:${fixture.dbPath}").use { connection ->
     val rows = mutableListOf<Pair<String, String>>()
-    connection.prepareStatement(
-      "SELECT parent_workflow_id, control_state_json FROM goal_runner_controls",
-    ).use { statement ->
-      statement.executeQuery().use { result ->
-        while (result.next()) rows += result.getString(1) to result.getString(2)
+    connection
+      .prepareStatement(
+        "SELECT parent_workflow_id, control_state_json FROM goal_runner_controls",
+      ).use { statement ->
+        statement.executeQuery().use { result ->
+          while (result.next()) rows += result.getString(1) to result.getString(2)
+        }
       }
-    }
     rows.forEach { (parentWorkflowId, json) ->
       val state =
-        JsonCodec.anyToStringAnyMap(
-          JsonCodec.jsonElementToValue(requireNotNull(JsonCodec.parseObjectOrNull(json))),
-        ).orEmpty().toMutableMap()
+        JsonCodec
+          .anyToStringAnyMap(
+            JsonCodec.jsonElementToValue(requireNotNull(JsonCodec.parseObjectOrNull(json))),
+          ).orEmpty()
+          .toMutableMap()
       state["paused"] = true
       state["pause_requested"] = true
       state["pause_consumed"] = true
@@ -193,13 +203,14 @@ internal fun seedIssue342StaleParentControlState(fixture: GoalCliFixture) {
           "heartbeat_at" to "2000-01-01T00:00:00Z",
           "expires_at" to "2000-01-01T00:00:30Z",
         )
-      connection.prepareStatement(
-        "UPDATE goal_runner_controls SET control_state_json = ? WHERE parent_workflow_id = ?",
-      ).use { statement ->
-        statement.setString(1, JsonCodec.mapToJsonString(state))
-        statement.setString(2, parentWorkflowId)
-        statement.executeUpdate()
-      }
+      connection
+        .prepareStatement(
+          "UPDATE goal_runner_controls SET control_state_json = ? WHERE parent_workflow_id = ?",
+        ).use { statement ->
+          statement.setString(1, JsonCodec.mapToJsonString(state))
+          statement.setString(2, parentWorkflowId)
+          statement.executeUpdate()
+        }
     }
   }
 }
@@ -209,27 +220,29 @@ internal fun workerLeaseRowCount(
   workflowId: String,
 ): Int =
   ensureTestDatabase(fixture.dbPath).use { connection ->
-    connection.prepareStatement(
-      "SELECT COUNT(*) FROM feature_task_runtime_worker_leases WHERE workflow_id = ?",
-    ).use { statement ->
-      statement.setString(1, workflowId)
-      statement.executeQuery().use { rows ->
-        check(rows.next())
-        rows.getInt(1)
+    connection
+      .prepareStatement(
+        "SELECT COUNT(*) FROM feature_task_runtime_worker_leases WHERE workflow_id = ?",
+      ).use { statement ->
+        statement.setString(1, workflowId)
+        statement.executeQuery().use { rows ->
+          check(rows.next())
+          rows.getInt(1)
+        }
       }
-    }
   }
 
 internal fun parentControlStateJson(fixture: GoalCliFixture): String =
   DriverManager.getConnection("jdbc:sqlite:${fixture.dbPath}").use { connection ->
-    connection.prepareStatement(
-      "SELECT control_state_json FROM goal_runner_controls LIMIT 1",
-    ).use { statement ->
-      statement.executeQuery().use { rows ->
-        check(rows.next())
-        rows.getString(1)
+    connection
+      .prepareStatement(
+        "SELECT control_state_json FROM goal_runner_controls LIMIT 1",
+      ).use { statement ->
+        statement.executeQuery().use { rows ->
+          check(rows.next())
+          rows.getString(1)
+        }
       }
-    }
   }
 
 internal fun startRunningGoalChild(fixture: GoalCliFixture): String =
@@ -369,16 +382,17 @@ private fun goalParentWorkflowId(
   childWorkflowId: String,
 ): String =
   ensureTestDatabase(fixture.dbPath).use { connection ->
-    connection.prepareStatement(
-      "SELECT workflow_id FROM feature_task_workflows WHERE issue_key = ? AND workflow_id <> ?",
-    ).use { statement ->
-      statement.setString(1, "SKILL-901")
-      statement.setString(2, childWorkflowId)
-      statement.executeQuery().use { rows ->
-        check(rows.next()) { "goal completion needs the decomposed parent workflow" }
-        rows.getString(1)
+    connection
+      .prepareStatement(
+        "SELECT workflow_id FROM feature_task_workflows WHERE issue_key = ? AND workflow_id <> ?",
+      ).use { statement ->
+        statement.setString(1, "SKILL-901")
+        statement.setString(2, childWorkflowId)
+        statement.executeQuery().use { rows ->
+          check(rows.next()) { "goal completion needs the decomposed parent workflow" }
+          rows.getString(1)
+        }
       }
-    }
   }
 
 internal data class GoalCliFixture(
@@ -421,7 +435,10 @@ internal data class GoalCliFixture(
     context(launcher = NoopGoalTestAgentRunLauncher, requester = requester),
   )
 
-  fun specLabel(path: Path): String = parentSpec.parent.parent.parent.relativize(path).joinToString("/")
+  fun specLabel(path: Path): String =
+    parentSpec.parent.parent.parent
+      .relativize(path)
+      .joinToString("/")
 
   fun goalCommand(
     dbPath: Path = this@GoalCliFixture.dbPath,
@@ -447,6 +464,9 @@ internal class GoalFixtureAgentRunLauncher(
   private val noTerminalSubtask: Int? = null,
   private val childDiagnosticChatterCount: Int = 1,
 ) : AgentRunLauncher {
+  override fun queryLaunchCapability(request: AgentRunLaunchCapabilityRequest): AgentRunLaunchCapability =
+    AgentRunLaunchCapability.Supported
+
   val requests: MutableList<AgentRunLaunchRequest> = mutableListOf()
   val childLaunches: MutableList<AgentRunLaunchRequest> = mutableListOf()
 
@@ -500,7 +520,8 @@ internal class GoalFixtureAgentRunLauncher(
     val phaseId =
       Regex("""Phase: (\w+) \(""")
         .find(skillRequest.promptOverride.orEmpty())
-        ?.groupValues?.get(1)
+        ?.groupValues
+        ?.get(1)
         ?: "preplan"
     val outcome =
       agentRunLaunchFacts(
@@ -640,29 +661,33 @@ internal fun goalControlCommand(
 internal fun forcePendingPauseRequest(dbPath: Path) {
   DriverManager.getConnection("jdbc:sqlite:$dbPath").use { connection ->
     val rows = mutableListOf<Pair<String, String>>()
-    connection.prepareStatement(
-      "SELECT parent_workflow_id, control_state_json FROM goal_runner_controls",
-    ).use { statement ->
-      statement.executeQuery().use { result ->
-        while (result.next()) rows += result.getString(1) to result.getString(2)
+    connection
+      .prepareStatement(
+        "SELECT parent_workflow_id, control_state_json FROM goal_runner_controls",
+      ).use { statement ->
+        statement.executeQuery().use { result ->
+          while (result.next()) rows += result.getString(1) to result.getString(2)
+        }
       }
-    }
     rows.forEach { (parentWorkflowId, json) ->
       val state =
-        JsonCodec.anyToStringAnyMap(
-          JsonCodec.jsonElementToValue(requireNotNull(JsonCodec.parseObjectOrNull(json))),
-        ).orEmpty().toMutableMap()
+        JsonCodec
+          .anyToStringAnyMap(
+            JsonCodec.jsonElementToValue(requireNotNull(JsonCodec.parseObjectOrNull(json))),
+          ).orEmpty()
+          .toMutableMap()
       state["paused"] = false
       state["pause_requested"] = true
       state["pause_consumed"] = false
       state["pause_reason"] = "operator_request"
-      connection.prepareStatement(
-        "UPDATE goal_runner_controls SET control_state_json = ? WHERE parent_workflow_id = ?",
-      ).use { statement ->
-        statement.setString(1, JsonCodec.mapToJsonString(state))
-        statement.setString(2, parentWorkflowId)
-        statement.executeUpdate()
-      }
+      connection
+        .prepareStatement(
+          "UPDATE goal_runner_controls SET control_state_json = ? WHERE parent_workflow_id = ?",
+        ).use { statement ->
+          statement.setString(1, JsonCodec.mapToJsonString(state))
+          statement.setString(2, parentWorkflowId)
+          statement.executeUpdate()
+        }
     }
   }
 }
@@ -858,8 +883,11 @@ internal fun phasePlanningPayload(
     if (snapshot.isNotEmpty()) {
       val fingerprint = snapshot.lineSequence().first { it.startsWith("Fingerprint: ") }.removePrefix("Fingerprint: ")
       val refs =
-        snapshot.lineSequence().first { it.startsWith("required_refs: ") }
-          .removePrefix("required_refs: ").split(", ")
+        snapshot
+          .lineSequence()
+          .first { it.startsWith("required_refs: ") }
+          .removePrefix("required_refs: ")
+          .split(", ")
       val evidence =
         buildString {
           appendLine("bundle-feasibility-v2: approved $fingerprint")
@@ -877,11 +905,17 @@ internal fun phasePlanningPayload(
 
 internal fun planningProjectionOutputs(phaseId: String): String? =
   when (phaseId) {
-    "preplan" ->
+    "preplan" -> {
       """{"value":"Fixture preplan prose for downstream plan."}"""
-    "plan" ->
+    }
+
+    "plan" -> {
       """{"value":"Fixture plan prose for downstream implement and audit."}"""
-    else -> null
+    }
+
+    else -> {
+      null
+    }
   }
 
 internal fun subtaskSpecText(id: Int): String =
@@ -889,6 +923,9 @@ internal fun subtaskSpecText(id: Int): String =
     "## Implementation Details\n\nPlanned implementation details for subtask $id.\n"
 
 internal object NoopGoalTestAgentRunLauncher : AgentRunLauncher {
+  override fun queryLaunchCapability(request: AgentRunLaunchCapabilityRequest): AgentRunLaunchCapability =
+    AgentRunLaunchCapability.Supported
+
   override fun resolveLaunchModel(request: AgentRunLaunchModelRequest): EffectiveLaunchModel =
     passThroughResolvedLaunchModel(request)
 
@@ -956,7 +993,8 @@ internal object GoalTestWorkflowGitOperations : WorkflowGitOperationsTestBase() 
   ): WorkflowGitOperationResult {
     val process =
       ProcessBuilder("git", "show-ref", "--verify", "--quiet", "refs/heads/$branch")
-        .directory(repoRoot.toFile()).start()
+        .directory(repoRoot.toFile())
+        .start()
     return WorkflowGitOperationResult.Ok(value = (process.waitFor() == 0).toString())
   }
 
@@ -995,7 +1033,11 @@ internal object GoalTestWorkflowGitOperations : WorkflowGitOperationsTestBase() 
 
   override fun headCommitSha(repoRoot: Path): WorkflowGitOperationResult {
     val process = ProcessBuilder("git", "rev-parse", "HEAD").directory(repoRoot.toFile()).start()
-    val output = process.inputStream.bufferedReader().use { it.readText() }.trim()
+    val output =
+      process.inputStream
+        .bufferedReader()
+        .use { it.readText() }
+        .trim()
     check(process.waitFor() == 0) { "could not read fixture HEAD" }
     return WorkflowGitOperationResult.Ok(value = output)
   }

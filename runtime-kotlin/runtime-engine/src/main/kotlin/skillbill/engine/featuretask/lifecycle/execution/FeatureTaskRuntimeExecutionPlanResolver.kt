@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.lifecycle.execution
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.application.config.ConfigResolutionService
 import skillbill.config.model.ExecutionMatrix
 import skillbill.config.model.ResolvedWorkflowAgentAssignments
 import skillbill.config.model.WORKFLOW_AGENT_ASSIGNMENT_PHASE_IDS
@@ -13,6 +14,7 @@ import skillbill.engine.featuretask.lifecycle.assignment.WorkflowAgentAssignment
 import skillbill.engine.featuretask.lifecycle.assignment.WorkflowAgentAssignmentStore
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeAgentAssignment
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeModelAssignment
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunInput
 import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
 import skillbill.engine.featuretask.model.execution.FeatureTaskRuntimeExecutionPlanCreationRequest
 import skillbill.engine.featuretask.model.execution.ValidationGateCommandFamily
@@ -37,6 +39,8 @@ import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.ports.workflow.model.toSnapshot
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.model.ValidationDepth
+import skillbill.workflow.model.WorkflowStepStatus
+import skillbill.workflow.taskruntime.artifact.phaseRecords
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
@@ -44,6 +48,7 @@ import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 import skillbill.workflow.taskruntime.model.skeleton.RuntimeReviewSelection
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.model.skeleton.boundedSafeModelIdentity
+import skillbill.workflow.taskruntime.validation.FeatureTaskRuntimeProviderLimitPause
 import java.nio.file.Path
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -61,7 +66,36 @@ public class FeatureTaskRuntimeExecutionPlanResolver(
   private val compatibility: FeatureTaskRuntimeExecutionPlanCompatibility,
   private val diagnostics: RuntimeDiagnostics,
   private val workflowAgentAssignments: WorkflowAgentAssignmentStore,
+  private val configResolution: ConfigResolutionService,
 ) {
+  internal fun prepareRoutingContext(input: FeatureTaskRuntimeRunInput): FeatureTaskRuntimeRunInput {
+    val hasPreparedMatrix = input.agentAssignment.matrix != null || input.modelAssignment.matrix != null
+    val hasRetainedRouting = input.explicitWorkflowId != null || input.workflowAgentAssignments != null
+    if (hasRetainedRouting || input.routingContextPrepared || hasPreparedMatrix) {
+      val matrix = input.modelAssignment.matrix ?: input.agentAssignment.matrix
+      return if (matrix == null) {
+        input
+      } else {
+        input.copy(
+          agentAssignment = input.agentAssignment.copy(matrix = matrix),
+          modelAssignment = input.modelAssignment.copy(matrix = matrix),
+          routingContextPrepared = true,
+        )
+      }
+    }
+    val configuration = configResolution.resolveRunConfiguration()
+    return input.copy(
+      agentAssignment = input.agentAssignment.copy(matrix = configuration.executionMatrix),
+      modelAssignment = input.modelAssignment.copy(matrix = configuration.executionMatrix),
+      compactionSettings = configuration.compactionSettings,
+      routingContextPrepared = true,
+    )
+  }
+
+  internal fun prepareRouting(
+    assignments: ResolvedWorkflowAgentAssignments,
+  ): WorkflowAgentAssignmentInspection.Present = workflowAgentAssignments.prepare(assignments)
+
   internal fun resolveAdmissionRouting(
     workflowId: String,
     invokedAgentId: String,
@@ -111,16 +145,73 @@ public class FeatureTaskRuntimeExecutionPlanResolver(
 
   public fun inspectResumeEvidence(workflowId: String): FeatureTaskRuntimeResumeEvidence =
     database.read { unit ->
+      val snapshot = unit.workflowStates.getFeatureTaskWorkflow(workflowId)?.toSnapshot()
       val routing = workflowAgentAssignments.inspect(unit, workflowId)
       if (routing is WorkflowAgentAssignmentInspection.Problem) {
         throw SkillBillRuntimeException(routing.failureCode, routing.recoveryMessage)
       }
       val descriptor =
-        unit.workflowStates.getFeatureTaskWorkflow(workflowId)?.toSnapshot()?.artifacts?.let {
-          DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.value(it)
-        }?.let { JsonCodec.valueToJsonString(it).toByteArray(Charsets.UTF_8) }
+        snapshot
+          ?.artifacts
+          ?.let {
+            DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.value(it)
+          }?.let { JsonCodec.valueToJsonString(it).toByteArray(Charsets.UTF_8) }
       val plan = compatibility.requireSupportedComposition(descriptor)
-      FeatureTaskRuntimeResumeEvidence(routing, plan)
+      FeatureTaskRuntimeResumeEvidence(
+        routing,
+        plan,
+        snapshot
+          ?.steps
+          .orEmpty()
+          .filter { it.status == WorkflowStepStatus.PAUSED }
+          .map { it.stepId }
+          .toSet(),
+      )
+    }
+
+  public fun agentBackedStepIds(plan: ResolvedPhaseExecutionPlan): List<String> =
+    FeatureTaskRuntimeStepLaunchAssignmentFactory.agentBackedStepIds(strategies, plan)
+
+  public fun recordedStepLaunchProviders(workflowId: String): Map<String, String>? =
+    database.read { unit ->
+      val descriptor =
+        unit.workflowStates
+          .getFeatureTaskWorkflow(workflowId)
+          ?.toSnapshot()
+          ?.artifacts
+          ?.let {
+            DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.value(it)
+          }?.let { JsonCodec.valueToJsonString(it).toByteArray(Charsets.UTF_8) }
+          ?: return@read null
+      compatibility.requireSupportedComposition(descriptor).stepLaunchAssignments.mapValues { (_, assignment) ->
+        assignment.agentId
+      }
+    }
+
+  public fun recordedProviderLimitStepLaunchProviders(workflowId: String): Map<String, String> =
+    database.read { unit ->
+      val snapshot = unit.workflowStates.getFeatureTaskWorkflow(workflowId)?.toSnapshot() ?: return@read emptyMap()
+      val descriptor =
+        DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN
+          .value(snapshot.artifacts)
+          ?.let { JsonCodec.valueToJsonString(it).toByteArray(Charsets.UTF_8) }
+          ?: return@read emptyMap()
+      val recorded =
+        compatibility.requireSupportedComposition(descriptor).stepLaunchAssignments
+      val pausedProviderLimitPhases =
+        unit.workflowStates
+          .readFeatureTaskArtifacts(
+            workflowId,
+            setOf(DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_RECORDS),
+          )?.phaseRecords()
+          .orEmpty()
+          .values
+          .filter { phase ->
+            phase.status == WorkflowStepStatus.PAUSED &&
+              FeatureTaskRuntimeProviderLimitPause.isProviderLimitPauseReason(phase.blockedReason.orEmpty())
+          }.map { it.phaseId }
+          .toSet()
+      recorded.filterKeys { it in pausedProviderLimitPhases }.mapValues { (_, assignment) -> assignment.agentId }
     }
 
   public fun resolveCreation(
@@ -206,9 +297,10 @@ public class FeatureTaskRuntimeExecutionPlanResolver(
       packSlug = pack,
       declaration = declaration,
       gradleWrapper =
-        config.readRepoLocalConfig(
-          ReadRepoLocalConfigRequest(repoRoot),
-        ).config.validationGate.gradleWrapper,
+        config
+          .readRepoLocalConfig(
+            ReadRepoLocalConfigRequest(repoRoot),
+          ).config.validationGate.gradleWrapper,
       validationDepth = validationDepth,
       phaseTimeoutMillis = timeout?.inWholeMilliseconds,
     ).also { it.canonicalInputs() }
@@ -219,7 +311,10 @@ public class FeatureTaskRuntimeExecutionPlanResolver(
     plan: ResolvedPhaseExecutionPlan,
   ): EffectiveGatePolicyInputs {
     val settings = plan.effectivePolicySettings ?: incompatible("Recorded execution settings are missing.")
-    val wrapper = config.readRepoLocalConfig(ReadRepoLocalConfigRequest(repoRoot)).config.validationGate.gradleWrapper
+    val wrapper =
+      config
+        .readRepoLocalConfig(ReadRepoLocalConfigRequest(repoRoot))
+        .config.validationGate.gradleWrapper
     val family =
       if (plan.qualityGateSelection == FeatureTaskRuntimeQualityGateSelection.BUILD) {
         ValidationGateCommandFamily.BUILD
@@ -227,24 +322,26 @@ public class FeatureTaskRuntimeExecutionPlanResolver(
         ValidationGateCommandFamily.VALIDATION
       }
     val recorded =
-      gateResolver.declaredCandidates().map { candidate ->
-        val slug =
-          when (candidate) {
-            is ValidationGateResolution.Declared -> candidate.packSlug
-            is ValidationGateResolution.Absent -> candidate.routedPackSlug
-            is ValidationGateResolution.Incompatible -> incompatible()
-          }
-        EffectiveGatePolicyInputs(
-          family,
-          slug,
-          (candidate as? ValidationGateResolution.Declared)?.declaration,
-          wrapper,
-          settings.validationDepth,
-          settings.phaseTimeoutMillis,
-        ).frozen()
-      }.singleOrNull { inputs ->
-        FeatureTaskRuntimeEffectivePolicies.resolve(plan, inputs).sortedBy { it.id } == plan.effectivePolicies
-      }
+      gateResolver
+        .declaredCandidates()
+        .map { candidate ->
+          val slug =
+            when (candidate) {
+              is ValidationGateResolution.Declared -> candidate.packSlug
+              is ValidationGateResolution.Absent -> candidate.routedPackSlug
+              is ValidationGateResolution.Incompatible -> incompatible()
+            }
+          EffectiveGatePolicyInputs(
+            family,
+            slug,
+            (candidate as? ValidationGateResolution.Declared)?.declaration,
+            wrapper,
+            settings.validationDepth,
+            settings.phaseTimeoutMillis,
+          ).frozen()
+        }.singleOrNull { inputs ->
+          FeatureTaskRuntimeEffectivePolicies.resolve(plan, inputs).sortedBy { it.id } == plan.effectivePolicies
+        }
     return recorded ?: currentGateForGatelessPlan(repoRoot, plan) ?: incompatible(
       "The recorded validation gate commands no longer match any declared platform-pack gate.",
     )
@@ -298,13 +395,17 @@ public class FeatureTaskRuntimeExecutionPlanResolver(
       val unknownReasons = participating.mapNotNull { it.launch.unknownReason }
       val profiles = participating.map { it.profile.wireValue }.distinct().joinToString(",")
       val requested =
-        participating.mapNotNull { assignment ->
-          assignment.launch.requestedModel?.let(::boundedSafeModelIdentity)
-        }.distinct().joinToString(",")
+        participating
+          .mapNotNull { assignment ->
+            assignment.launch.requestedModel?.let(::boundedSafeModelIdentity)
+          }.distinct()
+          .joinToString(",")
       val effective =
-        participating.mapNotNull { assignment ->
-          assignment.launch.effectiveModel?.let(::boundedSafeModelIdentity)
-        }.distinct().joinToString(",")
+        participating
+          .mapNotNull { assignment ->
+            assignment.launch.effectiveModel?.let(::boundedSafeModelIdentity)
+          }.distinct()
+          .joinToString(",")
       val provenance = participating.map { it.launch.provenance.wireValue }.distinct().joinToString(",")
       val reason = unknownReasons.map { it.wireValue }.distinct().joinToString(",")
       val detail =
@@ -407,4 +508,5 @@ public class FeatureTaskRuntimeExecutionPlanResolver(
 public data class FeatureTaskRuntimeResumeEvidence(
   public val routing: WorkflowAgentAssignmentInspection,
   public val plan: ResolvedPhaseExecutionPlan,
+  public val pausedStepIds: Set<String> = emptySet(),
 )

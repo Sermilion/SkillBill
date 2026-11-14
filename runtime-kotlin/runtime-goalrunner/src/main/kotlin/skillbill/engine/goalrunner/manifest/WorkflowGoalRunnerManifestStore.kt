@@ -128,36 +128,36 @@ public class WorkflowGoalRunnerManifestStore
       identities: List<String?>,
       repoRoot: Path?,
     ): GoalPlanningOwnership? =
-      database.read { unit ->
-        val normalizedIssueKey = FeatureTaskExecutionIdentityPolicy.canonicalIssueKey(issueKey)
-        identities.filterNotNull().firstNotNullOfOrNull { identity ->
-          unit.goalPlanningOwnership
-            .findByIssue(identity, normalizedIssueKey)
-            ?.takeUnless {
-              it.state == GoalPlanningOwnership.State.TRANSFERRED || it.state == GoalPlanningOwnership.State.SUPERSEDED
-            }
-            ?.takeUnless { owner ->
-              unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, owner.workflowId) == null &&
-                unit.workflowStates.getFeatureTaskExecutionIdentity(owner.workflowId) == null &&
-                unit.workflowStates.getFeatureTaskRuntimeWorkerOwnership(owner.workflowId) == null
-            }
-            ?.also { owner ->
-              val record = unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, owner.workflowId)
-              val executionIdentity = unit.workflowStates.getFeatureTaskExecutionIdentity(owner.workflowId)
-              val ownerMatches =
-                owner.state in setOf(GoalPlanningOwnership.State.INITIALIZED, GoalPlanningOwnership.State.RESERVED) &&
-                  owner.repositoryIdentity == identity && owner.normalizedIssueKey == normalizedIssueKey
-              val workflowMatches =
-                unit.workflowStates.getFeatureTaskRuntimeWorkerOwnership(owner.workflowId) == null &&
-                  record?.toRecord()?.isPlanWorkflow() == true &&
-                  executionIdentity?.repositoryIdentity == identity &&
-                  executionIdentity.normalizedIssueKey == normalizedIssueKey
-              if (!ownerMatches || !workflowMatches) {
-                ownershipRefused(owner)
+      database
+        .read { unit ->
+          val normalizedIssueKey = FeatureTaskExecutionIdentityPolicy.canonicalIssueKey(issueKey)
+          identities.filterNotNull().firstNotNullOfOrNull { identity ->
+            unit.goalPlanningOwnership
+              .findByIssue(identity, normalizedIssueKey)
+              ?.takeUnless {
+                it.state == GoalPlanningOwnership.State.TRANSFERRED ||
+                  it.state == GoalPlanningOwnership.State.SUPERSEDED
+              }?.takeUnless { owner ->
+                unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, owner.workflowId) == null &&
+                  unit.workflowStates.getFeatureTaskExecutionIdentity(owner.workflowId) == null &&
+                  unit.workflowStates.getFeatureTaskRuntimeWorkerOwnership(owner.workflowId) == null
+              }?.also { owner ->
+                val record = unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, owner.workflowId)
+                val executionIdentity = unit.workflowStates.getFeatureTaskExecutionIdentity(owner.workflowId)
+                val ownerMatches =
+                  owner.state in setOf(GoalPlanningOwnership.State.INITIALIZED, GoalPlanningOwnership.State.RESERVED) &&
+                    owner.repositoryIdentity == identity && owner.normalizedIssueKey == normalizedIssueKey
+                val workflowMatches =
+                  unit.workflowStates.getFeatureTaskRuntimeWorkerOwnership(owner.workflowId) == null &&
+                    record?.toRecord()?.isPlanWorkflow() == true &&
+                    executionIdentity?.repositoryIdentity == identity &&
+                    executionIdentity.normalizedIssueKey == normalizedIssueKey
+                if (!ownerMatches || !workflowMatches) {
+                  ownershipRefused(owner)
+                }
               }
-            }
-        }
-      }.let { owner -> reconcilePlanningOwner(owner, repoRoot, manifestLoader, database) }
+          }
+        }.let { owner -> reconcilePlanningOwner(owner, repoRoot, manifestLoader, database) }
 
     override fun readByIssueKey(
       issueKey: String,
@@ -199,9 +199,10 @@ public class WorkflowGoalRunnerManifestStore
       repoRoot: Path?,
     ): OccupyingGoalParent? {
       val projected = repoRoot?.let { root -> manifestLoader.findProjectedManifest(root, issueKey) }
-      return identityCandidates(repoRoot).firstNotNullOfOrNull { identity ->
-        manifestLoader.loadOccupyingFromWorkflowStore(issueKey, projected, identity)
-      }?.let { occupying -> occupying.copy(state = occupying.state.copy(repoRoot = repoRoot)) }
+      return identityCandidates(repoRoot)
+        .firstNotNullOfOrNull { identity ->
+          manifestLoader.loadOccupyingFromWorkflowStore(issueKey, projected, identity)
+        }?.let { occupying -> occupying.copy(state = occupying.state.copy(repoRoot = repoRoot)) }
     }
 
     override fun importIndependentParentFromProjection(
@@ -318,13 +319,18 @@ public class WorkflowGoalRunnerManifestStore
       subtaskId: Int,
     ): GoalRunnerCompletionPersistenceResult =
       controls.saveCompletedSubtaskAtBoundary(state, subtaskId) { unit ->
-        val childId = state.manifest.subtasks.single { it.id == subtaskId }.workflowId
+        val childId =
+          state.manifest.subtasks
+            .single { it.id == subtaskId }
+            .workflowId
         val current =
-          unit.workflowStates.get(
-            WorkflowFamily.TASK_RUNTIME,
-            state.parentWorkflowId,
-          )?.decompositionRuntime()
-            ?.subtasks?.singleOrNull { it.id == subtaskId }
+          unit.workflowStates
+            .get(
+              WorkflowFamily.TASK_RUNTIME,
+              state.parentWorkflowId,
+            )?.decompositionRuntime()
+            ?.subtasks
+            ?.singleOrNull { it.id == subtaskId }
         if (childId == null || current?.workflowId != childId ||
           !historyEvidence.hasRequired(unit, state.parentWorkflowId, subtaskId, childId)
         ) {
@@ -604,13 +610,12 @@ public class WorkflowGoalRunnerManifestStore
       state: GoalRunnerManifestState,
       setup: GoalRunnerChildWorkflowSetup,
     ): GoalRunnerChildWorkflowSaveResult {
-      return when (
-        val saved =
-          database.transaction { unitOfWork ->
-            childWorkflowPersistence.saveInTransaction(unitOfWork, state, setup)
-          }
-      ) {
-        is GoalChildWorkflowSaveResult.Conflicted -> GoalRunnerChildWorkflowSaveResult.Conflicted(saved.conflict)
+      val saved = childWorkflowPersistence.save(state, setup)
+      return when (saved) {
+        is GoalChildWorkflowSaveResult.Conflicted -> {
+          GoalRunnerChildWorkflowSaveResult.Conflicted(saved.conflict)
+        }
+
         is GoalChildWorkflowSaveResult.Saved -> {
           projectionPersistence.writeProjectionFile(state, saved.saved.projectionArtifacts)
           GoalRunnerChildWorkflowSaveResult.Saved(saved.saved.state)
@@ -681,14 +686,20 @@ public class WorkflowGoalRunnerManifestStore
       val result =
         database.transaction { unit ->
           val priorManifest =
-            unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, state.parentWorkflowId)
+            unit.workflowStates
+              .get(WorkflowFamily.TASK_RUNTIME, state.parentWorkflowId)
               ?.decompositionRuntime()
           val priorSubtask = priorManifest?.subtasks?.singleOrNull { it.id == acceptance.subtaskId }
           val priorRestoredChild = historyEvidence.restoredChildId(unit, state.parentWorkflowId, acceptance.subtaskId)
           when (val restored = restoreGoalChildHistoryAcceptance(unit, state, acceptance, historyEvidence)) {
-            is GoalChildHistoryAcceptanceRestoreResult.Refused -> restored to null
+            is GoalChildHistoryAcceptanceRestoreResult.Refused -> {
+              restored to null
+            }
+
             is GoalChildHistoryAcceptanceRestoreResult.Restored -> {
-              val restoredSubtask = restored.state.manifest.subtasks.single { it.id == acceptance.subtaskId }
+              val restoredSubtask =
+                restored.state.manifest.subtasks
+                  .single { it.id == acceptance.subtaskId }
               val restoredChild =
                 restoredSubtask.workflowId ?: historyEvidence.restoredChildId(
                   unit,

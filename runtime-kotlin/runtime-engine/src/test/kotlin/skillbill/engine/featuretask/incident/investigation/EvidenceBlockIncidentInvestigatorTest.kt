@@ -5,6 +5,8 @@ import skillbill.model.RepositoryRoot
 import skillbill.model.RuntimeVersion
 import skillbill.ports.agentrun.AgentRunLauncher
 import skillbill.ports.agentrun.agentRunLaunchFacts
+import skillbill.ports.agentrun.model.AgentRunLaunchCapability
+import skillbill.ports.agentrun.model.AgentRunLaunchCapabilityRequest
 import skillbill.ports.agentrun.model.AgentRunLaunchModelRequest
 import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
 import skillbill.ports.agentrun.model.AgentRunLaunchRequest
@@ -161,6 +163,9 @@ class EvidenceBlockIncidentInvestigatorTest {
     launches: MutableList<AgentRunLaunchRequest>,
     outcome: () -> AgentRunLaunchOutcome,
   ) = object : AgentRunLauncher {
+    override fun queryLaunchCapability(request: AgentRunLaunchCapabilityRequest): AgentRunLaunchCapability =
+      AgentRunLaunchCapability.Supported
+
     override fun resolveLaunchModel(request: AgentRunLaunchModelRequest) = passThroughResolvedLaunchModel(request)
 
     override fun launch(request: AgentRunLaunchRequest): AgentRunLaunchOutcome {
@@ -237,7 +242,9 @@ class EvidenceBlockIncidentInvestigatorTest {
       ),
     )
 
-  private class FakeDatabase(private val outputs: RejectedOutputDiagnosticRepository) : DatabaseSessionFactory {
+  private class FakeDatabase(
+    private val outputs: RejectedOutputDiagnosticRepository,
+  ) : DatabaseSessionFactory {
     override fun acquireDatabasePathProtection() =
       DatabasePathProtectionResult.Unavailable(
         "Database path protection is not available.",

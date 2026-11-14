@@ -1,6 +1,7 @@
 package skillbill.application.config
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.application.config.model.MachineRunConfiguration
 import skillbill.config.model.COMPACTION_KEY
 import skillbill.config.model.CompactionSettings
 import skillbill.config.model.CompactionSettingsParse
@@ -23,23 +24,53 @@ class ConfigResolutionService(
   private val repoLocalConfigPort: RepoLocalConfigPort,
   private val machineConfigStore: TelemetryConfigStore,
 ) {
+  fun resolveRunConfiguration(): MachineRunConfiguration {
+    val configPath = machineConfigStore.configPath()
+    val payload = readMachineConfigPayload(configPath)
+    return MachineRunConfiguration(
+      executionMatrix(payload, configPath),
+      compactionSettings(payload, configPath),
+    )
+  }
+
   fun resolveExecutionMatrix(): ExecutionMatrix? {
     val configPath = machineConfigStore.configPath()
-    val payload =
-      when (val read = machineConfigStore.read()) {
-        TelemetryConfigRead.Absent -> return null
-        is TelemetryConfigRead.Malformed ->
-          throw malformedMachineConfigError(
-            path = configPath.toString(),
-            key = "",
-            value = "<document>",
-            reason = "is not valid JSON.",
-          )
-        is TelemetryConfigRead.Present -> read.document.payload
+    return executionMatrix(readMachineConfigPayload(configPath), configPath)
+  }
+
+  fun resolveCompactionSettings(): CompactionSettings {
+    val configPath = machineConfigStore.configPath()
+    return compactionSettings(readMachineConfigPayload(configPath), configPath)
+  }
+
+  private fun readMachineConfigPayload(configPath: Path): Map<String, Any?> =
+    when (val read = machineConfigStore.read()) {
+      TelemetryConfigRead.Absent -> {
+        emptyMap()
       }
+
+      is TelemetryConfigRead.Malformed -> {
+        throw malformedMachineConfigError(
+          path = configPath.toString(),
+          key = "",
+          value = "<document>",
+          reason = "is not valid JSON.",
+        )
+      }
+
+      is TelemetryConfigRead.Present -> {
+        read.document.payload
+      }
+    }
+
+  private fun executionMatrix(
+    payload: Map<String, Any?>,
+    configPath: Path,
+  ): ExecutionMatrix? {
     if (!payload.containsKey(EXECUTION_MATRIX_KEY)) return null
     return when (val parsed = parseExecutionMatrix(payload[EXECUTION_MATRIX_KEY])) {
       is ExecutionMatrixParse.Valid -> parsed.matrix
+
       is ExecutionMatrixParse.Invalid -> throw malformedMachineConfigError(
         path = configPath.toString(),
         key = parsed.keyPath,
@@ -49,23 +80,14 @@ class ConfigResolutionService(
     }
   }
 
-  fun resolveCompactionSettings(): CompactionSettings {
-    val configPath = machineConfigStore.configPath()
-    val payload =
-      when (val read = machineConfigStore.read()) {
-        TelemetryConfigRead.Absent -> return CompactionSettings.DEFAULT
-        is TelemetryConfigRead.Malformed ->
-          throw malformedMachineConfigError(
-            path = configPath.toString(),
-            key = "",
-            value = "<document>",
-            reason = "is not valid JSON.",
-          )
-        is TelemetryConfigRead.Present -> read.document.payload
-      }
+  private fun compactionSettings(
+    payload: Map<String, Any?>,
+    configPath: Path,
+  ): CompactionSettings {
     if (!payload.containsKey(COMPACTION_KEY)) return CompactionSettings.DEFAULT
     return when (val parsed = parseCompactionSettings(payload[COMPACTION_KEY])) {
       is CompactionSettingsParse.Valid -> parsed.settings
+
       is CompactionSettingsParse.Invalid -> throw malformedMachineConfigError(
         path = configPath.toString(),
         key = parsed.keyPath,

@@ -2,12 +2,20 @@ package skillbill.engine.goalrunner.plan
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.workflow.decomposition.findCompletedPlanWorkflowId
+import skillbill.config.model.WORKFLOW_AGENT_ASSIGNMENT_PHASE_IDS
+import skillbill.config.model.WorkflowAgentAssignmentPolicyMode
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
+import skillbill.engine.featuretask.lifecycle.assignment.WorkflowAgentAssignmentInspection
+import skillbill.engine.featuretask.lifecycle.assignment.WorkflowAgentAssignmentStore
 import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskContinuationLookupService
+import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeAgentResolver
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeCrashReconciler
+import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
 import skillbill.engine.featuretask.model.continuation.FeatureTaskContinuationLookupResult
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeAgentAssignment
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.engine.featuretask.phase.planning.PlanBundleFeasibilityStateCodec
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.workflow.model.WorkflowFamily
@@ -29,18 +37,23 @@ public class PlanWorkflowLookup(
   private val database: DatabaseSessionFactory,
   private val feasibilityCodec: PlanBundleFeasibilityStateCodec,
   private val diagnostics: RuntimeDiagnostics,
+  private val workflowAgentAssignmentStore: WorkflowAgentAssignmentStore,
+  private val executionPlans: FeatureTaskRuntimeExecutionPlanResolver,
 ) {
   internal fun completedSelection(
     issueKey: String,
     repositoryIdentities: List<String>,
   ): PlanWorkflowSelection? =
     database.read { unitOfWork ->
-      repositoryIdentities.firstNotNullOfOrNull { identity ->
-        unitOfWork.workflowStates.findCompletedPlanWorkflowId(issueKey, identity)
-      }?.let { id ->
-        unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, id)?.takeIf { it.hasPlanSubtasksStep() }
-          ?.let { selected -> selectionOf(id, selected) }
-      }
+      repositoryIdentities
+        .firstNotNullOfOrNull { identity ->
+          unitOfWork.workflowStates.findCompletedPlanWorkflowId(issueKey, identity)
+        }?.let { id ->
+          unitOfWork.workflowStates
+            .get(WorkflowFamily.TASK_RUNTIME, id)
+            ?.takeIf { it.hasPlanSubtasksStep() }
+            ?.let { selected -> selectionOf(id, selected) }
+        }
     }
 
   internal fun selection(workflowId: String): PlanWorkflowSelection? =
@@ -123,6 +136,42 @@ public class PlanWorkflowLookup(
       )
     }
   }
+
+  public fun retainedGoalRoutingProviders(
+    workflowId: String,
+    invokedAgentId: String,
+    agentAssignment: FeatureTaskRuntimeAgentAssignment = FeatureTaskRuntimeAgentAssignment(),
+  ): Map<String, Set<String>>? =
+    when (val routing = workflowAgentAssignmentStore.inspect(workflowId)) {
+      is WorkflowAgentAssignmentInspection.Present -> {
+        if (routing.assignments.policyMode == WorkflowAgentAssignmentPolicyMode.FROZEN) {
+          routing.assignments.phaseAssignments.mapValues { (_, assignment) -> setOf(assignment.agentId.wireValue) }
+        } else {
+          legacyGoalRoutingProviders(workflowId, invokedAgentId, agentAssignment)
+        }
+      }
+
+      WorkflowAgentAssignmentInspection.Legacy -> {
+        legacyGoalRoutingProviders(workflowId, invokedAgentId, agentAssignment)
+      }
+
+      is WorkflowAgentAssignmentInspection.Problem -> {
+        throw SkillBillRuntimeException(routing.failureCode, routing.recoveryMessage)
+      }
+    }
+
+  private fun legacyGoalRoutingProviders(
+    workflowId: String,
+    invokedAgentId: String,
+    agentAssignment: FeatureTaskRuntimeAgentAssignment,
+  ): Map<String, Set<String>> {
+    val recordedProviders = executionPlans.recordedProviderLimitStepLaunchProviders(workflowId)
+    val compatibilityAssignment = agentAssignment.copy(matrix = null)
+    return WORKFLOW_AGENT_ASSIGNMENT_PHASE_IDS.associateWith { phaseId ->
+      val provider = FeatureTaskRuntimeAgentResolver.resolve(phaseId, compatibilityAssignment, invokedAgentId)
+      setOfNotNull(recordedProviders[phaseId], provider.resolvedAgentId)
+    }
+  }
 }
 
 internal data class PlanWorkflowSelection(
@@ -131,3 +180,11 @@ internal data class PlanWorkflowSelection(
   val feasibilityState: FeatureTaskRuntimePlanBundleFeasibilityState?,
   val phaseRecord: FeatureTaskRuntimePhaseRecord?,
 )
+
+internal fun FeatureTaskContinuationLookupResult.selectedWorkflowId(): String? =
+  when (this) {
+    is FeatureTaskContinuationLookupResult.Resumable -> candidate.workflowId
+    is FeatureTaskContinuationLookupResult.AlreadyRunning -> candidate.workflowId
+    is FeatureTaskContinuationLookupResult.NeedsIdentityRepair -> workflowId
+    else -> null
+  }

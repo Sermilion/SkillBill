@@ -30,6 +30,7 @@ import skillbill.error.core.catchingNonCancellation
 import skillbill.goalrunner.GoalRunnerOutcomeReconciler
 import skillbill.goalrunner.GoalRunnerQualityGateSelectionResolver
 import skillbill.goalrunner.model.GoalRunnerLaunchFacts
+import skillbill.goalrunner.model.GoalRunnerLaunchRefusal
 import skillbill.goalrunner.model.GoalRunnerLivenessSnapshot
 import skillbill.goalrunner.model.GoalRunnerLivenessState
 import skillbill.goalrunner.model.GoalRunnerReconciledOutcome
@@ -59,6 +60,9 @@ import java.nio.file.Path
 import java.time.Clock
 
 private const val CHILD_FAILURE_OUTPUT_EXCERPT_MAX_CHARS = 8192
+
+private const val MAX_DIAGNOSTIC_ID = 128
+private const val MAX_LAUNCH_REFUSAL_REASON = 300
 
 @Inject
 public class GoalRunnerLaunchReconciler(
@@ -101,7 +105,13 @@ public class GoalRunnerLaunchReconciler(
     val progressEmitter =
       GoalRunnerProgressEventEmitter(
         outcomeStore = outcomeStore,
-        resolveWorkflowId = { tickReader.progressState()?.subtask?.workflowId?.takeIf(String::isNotBlank) },
+        resolveWorkflowId = {
+          tickReader
+            .progressState()
+            ?.subtask
+            ?.workflowId
+            ?.takeIf(String::isNotBlank)
+        },
         issueKey = issueKey,
         clock = clock,
         diagnostics = diagnostics,
@@ -204,12 +214,19 @@ public class GoalRunnerLaunchReconciler(
   ): SkillRunGoalContinuationContext? {
     val state = manifestStore.loadByIssueKey(issueKey, request.repoRoot) ?: return null
     val branch =
-      state.manifest.branchPlanFor(subtaskId).branch.takeIf(String::isNotBlank)
+      state.manifest
+        .branchPlanFor(subtaskId)
+        .branch
+        .takeIf(String::isNotBlank)
         ?: state.manifest.featureBranch?.takeIf(String::isNotBlank)
     val subtask = state.manifest.subtasks.firstOrNull { it.id == subtaskId }
     val specPath =
       subtask?.specPath?.takeIf(String::isNotBlank)?.let { declared ->
-        projectStore.resolve(request.repoRoot).resolveSpecPath(declared, request.repoRoot).normalize().toString()
+        projectStore
+          .resolve(request.repoRoot)
+          .resolveSpecPath(declared, request.repoRoot)
+          .normalize()
+          .toString()
       }
     return if (branch != null && subtask != null && specPath != null) {
       val childWorkflowId =
@@ -231,13 +248,15 @@ public class GoalRunnerLaunchReconciler(
         codeReviewMode = request.codeReviewMode ?: CodeReviewExecutionMode.DEFAULT,
         validationDepth = ValidationDepth.FULL,
         qualityGateSelection =
-          state.manifest.workflowIdFor(subtaskId)
+          state.manifest
+            .workflowIdFor(subtaskId)
             ?.let(outcomeStore::recordedQualityGateSelection)
             ?: GoalRunnerQualityGateSelectionResolver.resolve(),
         qaSelection = state.manifest.workflowIdFor(subtaskId)?.let { outcomeStore.childQaSelection(it, null) },
         agentAddonSelection = manifestStore.effectiveAgentAddonSelection(state.parentWorkflowId, request),
         reviewBaseline =
-          state.manifest.workflowIdFor(subtaskId)
+          state.manifest
+            .workflowIdFor(subtaskId)
             ?.let { workflowId -> outcomeStore.goalSubtaskReviewState(workflowId) }
             ?.let { reviewState ->
               GoalSubtaskReviewBaseline(reviewState.reviewBaseSha, reviewState.baselineUntrackedPaths)
@@ -259,12 +278,27 @@ public class GoalRunnerLaunchReconciler(
       manifestStore.loadByIssueKey(request.issueKey, request.repoRoot)
         ?: attemptedState
     val childFailureOutput = retainFailedChildOutput(refreshed, subtaskId, request, launchOutcome)
-    val launchFacts = launchOutcome.toGoalRunnerLaunchFacts()
+    val outcome = storedOutcome(refreshed, subtaskId, request)
+    val refusalPhase =
+      outcome?.lastResumableStep ?: refreshed.manifest.subtasks
+        .firstOrNull { it.id == subtaskId }
+        ?.lastResumableStep ?: "preplan"
+    if (launchOutcome is UnsupportedAgentRunLaunch) {
+      RuntimeDiagnosticsBestEffortWarning.record(
+        diagnostics,
+        "seam=goal_runner_launch phase=${refusalPhase.take(
+          MAX_DIAGNOSTIC_ID,
+        )} provider=${launchOutcome.agent.wireValue} " +
+          "reason=selected_provider_unsupported outcome=refused " +
+          "parent=${refreshed.parentWorkflowId.take(MAX_DIAGNOSTIC_ID)}",
+      )
+    }
+    val launchFacts = launchOutcome.toGoalRunnerLaunchFacts(refusalPhase)
     val reconciled =
       GoalRunnerOutcomeReconciler.reconcile(
         subtaskId = subtaskId,
         launchFacts = launchFacts,
-        storedOutcome = storedOutcome(refreshed, subtaskId, request),
+        storedOutcome = outcome,
       )
     return launchReconciliation(refreshed, reconciled, launchOutcome, subtaskId, request)
       .copy(childFailureOutput = childFailureOutput)
@@ -282,7 +316,12 @@ public class GoalRunnerLaunchReconciler(
       recovery?.storedOutcome?.let { recoveredOutcome ->
         GoalRunnerOutcomeReconciler.reconcile(
           subtaskId = subtaskId,
-          launchFacts = launchOutcome.toGoalRunnerLaunchFacts(),
+          launchFacts =
+            launchOutcome.toGoalRunnerLaunchFacts(
+              recoveredOutcome.lastResumableStep ?: refreshed.manifest.subtasks
+                .firstOrNull { it.id == subtaskId }
+                ?.lastResumableStep ?: "preplan",
+            ),
           storedOutcome = recoveredOutcome,
         )
       } ?: reconciled
@@ -368,7 +407,9 @@ public class GoalRunnerLaunchReconciler(
     request: GoalRunnerRunRequest,
   ): GoalRunnerStoredOutcome? {
     val manifestWorkflowId =
-      state.manifest.subtasks.firstOrNull { it.id == subtaskId }?.workflowId
+      state.manifest.subtasks
+        .firstOrNull { it.id == subtaskId }
+        ?.workflowId
         ?.takeIf(String::isNotBlank)
     if (manifestWorkflowId != null) {
       return outcomeStore.recoverAndPersistTerminalOutcome(
@@ -388,9 +429,9 @@ public class GoalRunnerLaunchReconciler(
   }
 }
 
-internal fun AgentRunLaunchOutcome.toGoalRunnerLaunchFacts(): GoalRunnerLaunchFacts =
+internal fun AgentRunLaunchOutcome.toGoalRunnerLaunchFacts(refusalPhaseId: String = "preplan"): GoalRunnerLaunchFacts =
   when (this) {
-    is AgentRunLaunchFacts ->
+    is AgentRunLaunchFacts -> {
       GoalRunnerLaunchFacts(
         timedOut = termination == AgentRunTermination.TimedOut,
         interrupted = termination == AgentRunTermination.Interrupted,
@@ -418,6 +459,20 @@ internal fun AgentRunLaunchOutcome.toGoalRunnerLaunchFacts(): GoalRunnerLaunchFa
             )
           },
       )
-    is UnsupportedAgentRunLaunch -> GoalRunnerLaunchFacts(spawnFailed = true)
-    is AgentRunLaunchDenied -> error("A denied launch is paused before launch reconciliation and has no launch facts.")
+    }
+
+    is UnsupportedAgentRunLaunch -> {
+      GoalRunnerLaunchFacts(
+        launchRefusal =
+          GoalRunnerLaunchRefusal(
+            providerId = agent.wireValue,
+            phaseId = refusalPhaseId,
+            reason = reason.take(MAX_LAUNCH_REFUSAL_REASON),
+          ),
+      )
+    }
+
+    is AgentRunLaunchDenied -> {
+      error("A denied launch is paused before launch reconciliation and has no launch facts.")
+    }
   }

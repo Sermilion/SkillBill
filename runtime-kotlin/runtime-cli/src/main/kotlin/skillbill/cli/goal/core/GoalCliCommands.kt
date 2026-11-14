@@ -38,6 +38,7 @@ import skillbill.cli.goal.run.RUNTIME_CLASSPATH_ENV
 import skillbill.cli.goal.run.RUNTIME_EXECUTABLE_ENV
 import skillbill.cli.goal.run.RUNTIME_PATH_SEPARATOR_ENV
 import skillbill.cli.goal.run.goalIntakeRequestText
+import skillbill.cli.goal.run.isAgentBackedGoalPhase
 import skillbill.cli.goal.run.parseCodeReviewMode
 import skillbill.cli.goal.run.resolveInvokedAgentId
 import skillbill.cli.goal.status.GoalStatusCommand
@@ -59,9 +60,15 @@ import skillbill.cli.kernel.work.incidentTextLines
 import skillbill.cli.kernel.work.readGoalIncidentDetails
 import skillbill.cli.model.CliRunInputs
 import skillbill.cli.model.DEFAULT_GOAL_MAX_WALL_CLOCK_MINUTES
+import skillbill.config.model.CompactionSettings
+import skillbill.config.model.ExecutionMatrix
+import skillbill.config.model.WORKFLOW_AGENT_ASSIGNMENT_PHASE_IDS
+import skillbill.config.model.resolvePhaseAgent
 import skillbill.contracts.qa.QaDeviceLaunchTokens.QA_DEVICE_FLAG
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationLaunchTokens
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeAgentAssignment
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeModelAssignment
+import skillbill.engine.featuretask.model.execution.QaNamedDevice
 import skillbill.engine.goalrunner.GoalRunner
 import skillbill.engine.goalrunner.model.GoalIntakeAdmission
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
@@ -70,6 +77,10 @@ import skillbill.engine.work.IdeStatusService
 import skillbill.idestatus.model.IdeStatusLaunchScope
 import skillbill.ports.idestatus.model.WorkDetailRequest
 import skillbill.ports.system.HostPlatformPort
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
+import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Path
 import kotlin.time.Duration.Companion.minutes
 
@@ -211,7 +222,10 @@ class GoalRunCommand(
     repoRoot: Path,
   ): String? =
     when (val admission = goalRunner.admitIntake(intake, repoRoot)) {
-      is GoalIntakeAdmission.Admitted -> admission.issueKey
+      is GoalIntakeAdmission.Admitted -> {
+        admission.issueKey
+      }
+
       is GoalIntakeAdmission.NeedsInput -> {
         state.appendStderr(goalIntakeRequestText(admission))
         state.completeEmpty(exitCode = 1)
@@ -229,6 +243,8 @@ class GoalRunCommand(
     val intake = intakeTokens.joinToString(" ")
     val runIssueKey = admittedIssueKey(intake, effectiveRepoRoot) ?: return
     val invokedAgentId = resolveInvokedAgentId(agent, inputs.environment)
+    val retainedPlanningWorkflowId =
+      planLauncher.retainedGoalPlanningWorkflowId(runIssueKey, intake, effectiveRepoRoot)
     inputPreparation.validate(
       GoalRunInputValidationArgs(
         issueKey = intakeTokens.joinToString(" ").takeIf(String::isNotBlank),
@@ -239,21 +255,42 @@ class GoalRunCommand(
         agentOverride = agentOverride,
       ),
     )
-    val receivingAgents =
-      listOfNotNull(
+    val planningCheck =
+      GoalRunnerRunRequest(
+        runIssueKey,
+        effectiveRepoRoot,
         invokedAgentId,
-        agentOverride?.takeIf(String::isNotBlank),
-      ).distinct()
+        configuredAgentOverrideId = agentOverride,
+        intake = intake,
+      )
+    val routing = prepareRoutingInputs(planningCheck, retainedPlanningWorkflowId, qaSelection)
+    launchGoal(planningCheck, routing, qaSelection, qaDevice)
+  }
+
+  private fun launchGoal(
+    planningCheck: GoalRunnerRunRequest,
+    routing: GoalRoutingInputs,
+    qaSelection: FeatureTaskRuntimeQaSelection?,
+    qaDevice: QaNamedDevice?,
+  ) {
+    val effectiveRepoRoot = planningCheck.repoRoot
+    val runIssueKey = planningCheck.issueKey
     val hydratedSelection =
       inputPreparation.hydrateAgentAddonSelection(
         GoalRunAgentAddonHydrationArgs(
           agentAddonSlugs = agentAddonSlugs,
           agentAddonSelectionJson = agentAddonSelectionJson,
-          receivingAgents = receivingAgents,
+          receivingAgents = routing.receivingAgentIds,
           effectiveRepoRoot = effectiveRepoRoot,
         ),
       )
-    if (!planFirstWhenNoGoal(runIssueKey, intake, effectiveRepoRoot, invokedAgentId, hydratedSelection)) {
+    if (
+      !planFirstWhenNoGoal(
+        planningCheck,
+        hydratedSelection,
+        routing,
+      )
+    ) {
       return
     }
     val presenter =
@@ -273,42 +310,154 @@ class GoalRunCommand(
       )
     presenter.emitStartupProvenance()
     val request =
-      runRequest(runIssueKey, invokedAgentId, hydratedSelection, presenter, effectiveRepoRoot)
-        .copy(intake = intake, qaSelection = qaSelection, qaDevice = qaDevice)
+      runRequest(
+        planningCheck,
+        hydratedSelection,
+        presenter,
+        routing,
+      ).copy(qaSelection = qaSelection, qaDevice = qaDevice)
     val report = goalRunner.run(request)
     reportPresentation.complete(report)
   }
 
+  private fun prepareRoutingInputs(
+    request: GoalRunnerRunRequest,
+    retainedPlanningWorkflowId: String?,
+    qaSelection: FeatureTaskRuntimeQaSelection?,
+  ): GoalRoutingInputs {
+    val newGoalAdmission = goalRunner.isNewGoal(request) && retainedPlanningWorkflowId == null
+    val routingConfiguration =
+      if (newGoalAdmission) configResolutionService.resolveRunConfiguration() else null
+    val routingMatrix = routingConfiguration?.executionMatrix
+    val compactionSettings =
+      routingConfiguration?.compactionSettings
+        ?: retainedPlanningWorkflowId?.let { configResolutionService.resolveCompactionSettings() }
+    val agentAssignment =
+      FeatureTaskRuntimeAgentAssignment(override = request.configuredAgentOverrideId, matrix = routingMatrix)
+    val retainedPlanningRouting =
+      retainedPlanningWorkflowId?.let { workflowId ->
+        planLauncher.retainedGoalRoutingProviders(workflowId, request.invokedAgentId, agentAssignment)
+      }
+    val retainedRouting =
+      goalRunner.retainedRoutingProviders(request).orEmpty().toMutableMap().also { routing ->
+        retainedPlanningRouting.orEmpty().forEach { (phase, providers) ->
+          routing[phase] = routing[phase].orEmpty() + providers
+        }
+      }
+    if (retainedPlanningWorkflowId != null && retainedPlanningRouting == null) {
+      inputPreparation.recordLegacyRoutingUse(request.invokedAgentId)
+    }
+    val routingByPhase =
+      when {
+        retainedRouting.isNotEmpty() -> {
+          retainedRouting
+        }
+
+        newGoalAdmission || goalRunner.requiresPlanning(request) -> {
+          WORKFLOW_AGENT_ASSIGNMENT_PHASE_IDS.associateWith { phaseId ->
+            resolvePhaseAgent(
+              phaseId,
+              request.invokedAgentId,
+              agentAssignment.perPhaseAgentIds,
+              agentOverride,
+              routingMatrix,
+            ).providerId.let(::setOf)
+          }
+        }
+
+        else -> {
+          emptyMap()
+        }
+      }
+    val providersByPhase = applicableRoutingProviders(request, qaSelection, routingByPhase, retainedPlanningRouting)
+    inputPreparation.validateRoutingProviders(providersByPhase, retained = retainedRouting.isNotEmpty())
+    return GoalRoutingInputs(
+      agentAssignment,
+      routingMatrix,
+      compactionSettings,
+      retainedPlanningWorkflowId,
+      providersByPhase.values.flatten().distinct(),
+    )
+  }
+
+  private fun applicableRoutingProviders(
+    request: GoalRunnerRunRequest,
+    qaSelection: FeatureTaskRuntimeQaSelection?,
+    routingByPhase: Map<String, Set<String>>,
+    retainedPlanningRouting: Map<String, Set<String>>?,
+  ): Map<String, Set<String>> {
+    val compatibilityProvider = request.configuredAgentOverrideId?.takeIf(String::isNotBlank) ?: request.invokedAgentId
+    val compatibilityRouting =
+      listOf(
+        PhaseSlot.GOAL_ASSESSMENT,
+        PhaseSlot.WRITE_HISTORY,
+        PhaseSlot.PULL_REQUEST,
+        PhaseSlot.MONITOR,
+        PhaseSlot.QA,
+      ).associate { slot -> slot.steps.first() to setOf(compatibilityProvider) }
+    val effectiveQaSelection =
+      goalRunner.retainedQaSelection(request) ?: qaSelection ?: FeatureTaskRuntimeQaSelection.AUTO
+    val selectedChildPhases =
+      (
+        SkeletonDefinition.GOAL_CHILD_REVISION_5.stepIds +
+          if (effectiveQaSelection == FeatureTaskRuntimeQaSelection.AUTO) {
+            SkeletonDefinition.GOAL_QA.stepIds
+          } else {
+            emptyList()
+          }
+      ).filter(::isAgentBackedGoalPhase).toSet() + goalRunner.retainedLegacyLaunchPhases(request)
+    val applicableRouting =
+      routingByPhase.filter { (phaseId, _) ->
+        phaseId in selectedChildPhases &&
+          (effectiveQaSelection != FeatureTaskRuntimeQaSelection.OFF || PhaseSlot.slotForStep(phaseId) != PhaseSlot.QA)
+      }
+    val applicableCompatibility =
+      compatibilityRouting.filter { (phaseId, _) ->
+        effectiveQaSelection != FeatureTaskRuntimeQaSelection.OFF || PhaseSlot.slotForStep(phaseId) != PhaseSlot.QA
+      }
+    val applicablePlanningRouting =
+      retainedPlanningRouting.orEmpty().filterKeys {
+        it in
+          setOf(
+            FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PREPLAN,
+            FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN,
+            FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS,
+          )
+      }
+    return sequenceOf(applicableRouting, applicableCompatibility, applicablePlanningRouting)
+      .flatMap { it.asSequence() }
+      .groupBy({ it.key }, { it.value })
+      .mapValues { (_, providers) -> providers.flatten().toSet() }
+  }
+
   private fun planFirstWhenNoGoal(
-    runIssueKey: String,
-    intake: String,
-    effectiveRepoRoot: Path,
-    invokedAgentId: String,
+    planningCheck: GoalRunnerRunRequest,
     hydratedSelection: HydratedAgentAddonSelection,
+    routing: GoalRoutingInputs,
   ): Boolean {
-    val planningCheck =
-      GoalRunnerRunRequest(
-        issueKey = runIssueKey,
-        repoRoot = effectiveRepoRoot,
-        invokedAgentId = invokedAgentId,
-        intake = intake,
-      )
     val establishedExecution = goalRunner.hasEstablishedExecution(planningCheck)
     if (!goalRunner.requiresPlanning(planningCheck)) {
-      return establishedExecution || prepareExistingGoalCheckout(planningCheck, intake)
+      return establishedExecution || prepareExistingGoalCheckout(planningCheck)
     }
     val planned =
       planLauncher.run(
-        runIssueKey,
-        intake,
-        effectiveRepoRoot,
-        invokedAgentId,
+        planningCheck.issueKey,
+        planningCheck.intake,
+        planningCheck.repoRoot,
+        planningCheck.invokedAgentId,
         StandalonePlanOptions(
           timeout = maxWallClockMinutes.takeIf { it > 0 }?.minutes,
+          agentAssignment = routing.agentAssignment,
+          modelAssignment = FeatureTaskRuntimeModelAssignment(matrix = routing.matrix),
+          compactionSettings = routing.compactionSettings ?: CompactionSettings.DEFAULT,
+          routingContextPrepared = true,
+          selectedWorkflowId = routing.retainedPlanningWorkflowId,
           agentAddonSelection = hydratedSelection,
           eventSink =
             runtimeRunEventSink(inputs, monitor = !noLiveOutput) { workflowId ->
-              ideStatusService.detail(WorkDetailRequest(workflowId)).item
+              ideStatusService
+                .detail(WorkDetailRequest(workflowId))
+                .item
                 ?.let { incidentTextLines(it, false) }
                 .orEmpty()
             },
@@ -325,39 +474,32 @@ class GoalRunCommand(
         is StandalonePlanResult.Refused -> planned.workflowId
       }
     val detail =
-      planWorkflowId?.let {
-        readGoalIncidentDetails(ideStatusService, listOf("parent" to it), retainFailures = true)
-      }
-        .orEmpty()
+      planWorkflowId
+        ?.let {
+          readGoalIncidentDetails(ideStatusService, listOf("parent" to it), retainFailures = true)
+        }.orEmpty()
     state.completeText(
-      planned.planReportText(runIssueKey, detail.incidentText(false)),
+      planned.planReportText(planningCheck.issueKey, detail.incidentText(false)),
       mapOf(GoalIncidentPresentationKeys.INCIDENT_DETAILS to detail.incidentPayload()),
       exitCode = 1,
     )
     return false
   }
 
-  private fun prepareExistingGoalCheckout(
-    request: GoalRunnerRunRequest,
-    intake: String,
-  ): Boolean {
-    val refusal = planLauncher.prepareGoalCheckout(request.issueKey, intake, request.repoRoot) ?: return true
+  private fun prepareExistingGoalCheckout(request: GoalRunnerRunRequest): Boolean {
+    val refusal = planLauncher.prepareGoalCheckout(request.issueKey, request.intake, request.repoRoot) ?: return true
     state.completeText(refusal.planReportText(request.issueKey), emptyMap(), exitCode = 1)
     return false
   }
 
   private fun runRequest(
-    runIssueKey: String,
-    invokedAgentId: String,
+    request: GoalRunnerRunRequest,
     hydratedSelection: HydratedAgentAddonSelection,
     presenter: GoalRunPresenter,
-    effectiveRepoRoot: Path,
+    routing: GoalRoutingInputs,
   ): GoalRunnerRunRequest =
-    GoalRunnerRunRequest(
-      issueKey = runIssueKey,
-      repoRoot = effectiveRepoRoot,
-      invokedAgentId = invokedAgentId,
-      configuredAgentOverrideId = agentOverride,
+    request.copy(
+      agentAssignment = routing.agentAssignment,
       timeout = maxWallClockMinutes.takeIf { it > 0 }?.minutes,
       progressIdleTimeout = progressIdleTimeoutMinutes.takeIf { it > 0 }?.minutes,
       outputSink = presenter.outputSink(includeRawChildOutput = debugChildOutput),
@@ -371,7 +513,17 @@ class GoalRunCommand(
       codeReviewMode = parseCodeReviewMode(codeReviewMode),
       agentAddonSelection = hydratedSelection,
       stopAfterSubtaskId = stopAfterSubtask,
-      modelAssignment =
-        FeatureTaskRuntimeModelAssignment(matrix = configResolutionService.resolveExecutionMatrix()),
+      modelAssignment = FeatureTaskRuntimeModelAssignment(matrix = routing.matrix),
+      compactionSettings = routing.compactionSettings ?: CompactionSettings.DEFAULT,
+      routingContextPrepared =
+        routing.compactionSettings != null || routing.matrix != null || !goalRunner.isNewGoal(request),
     )
 }
+
+private data class GoalRoutingInputs(
+  val agentAssignment: FeatureTaskRuntimeAgentAssignment,
+  val matrix: ExecutionMatrix?,
+  val compactionSettings: CompactionSettings?,
+  val retainedPlanningWorkflowId: String?,
+  val receivingAgentIds: List<String>,
+)

@@ -11,6 +11,7 @@ import skillbill.engine.RecordingWorkflowGitOperations
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanCodec
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanCompatibility
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
+import skillbill.engine.featuretask.lifecycle.execution.routingConfigResolutionForTests
 import skillbill.engine.featuretask.lifecycle.execution.workflowAgentAssignmentStoreForTests
 import skillbill.engine.featuretask.phaserun.monitor.MonitorTargetResolver
 import skillbill.engine.featuretask.phaserun.monitor.StandaloneMonitorExecutionPreparer
@@ -33,6 +34,8 @@ import skillbill.infrastructure.workflow.featuretask.FileSystemFeatureTaskRuntim
 import skillbill.infrastructure.workflow.filesystem.FileSystemFeatureSpecPathResolver
 import skillbill.ports.agentrun.AgentRunChildDrain
 import skillbill.ports.agentrun.AgentRunLauncher
+import skillbill.ports.agentrun.model.AgentRunLaunchCapability
+import skillbill.ports.agentrun.model.AgentRunLaunchCapabilityRequest
 import skillbill.ports.agentrun.model.AgentRunLaunchModelRequest
 import skillbill.ports.agentrun.model.AgentRunLaunchRequest
 import skillbill.ports.agentrun.passThroughResolvedLaunchModel
@@ -243,7 +246,8 @@ fun RecordingWorkflowGitOperations.assertNoCommitOrCheckpointRef(headBefore: Str
 }
 
 fun DatabaseSessionFactory.outboxPayloads(eventName: String): List<Map<String, Any?>> =
-  SlotBaselineSqlite.rows(resolveDbPath(), "telemetry_outbox")
+  SlotBaselineSqlite
+    .rows(resolveDbPath(), "telemetry_outbox")
     .filter { row -> row["event_name"] == eventName }
     .map { row -> requireNotNull(JsonCodec.anyToStringAnyMap(row["payload_json"])) }
 
@@ -274,6 +278,9 @@ fun PhaseRunEntryFixture.plans(): PhaseRunPlanResolver {
     intakeResolver = testPhaseRunIntakeResolver(database),
     agentRunLauncher =
       object : AgentRunLauncher {
+        override fun queryLaunchCapability(request: AgentRunLaunchCapabilityRequest): AgentRunLaunchCapability =
+          AgentRunLaunchCapability.Supported
+
         override fun resolveLaunchModel(request: AgentRunLaunchModelRequest) = launchModelResolver(request)
 
         override fun launch(request: AgentRunLaunchRequest) =
@@ -283,9 +290,17 @@ fun PhaseRunEntryFixture.plans(): PhaseRunPlanResolver {
     executionPlanCompatibility = compatibility,
     executionPlanResolver =
       FeatureTaskRuntimeExecutionPlanResolver(
-        strategies, codec, validator, ValidationGateResolver { qaManifests }, gitOperations, config,
-        database, compatibility, diagnostics,
+        strategies,
+        codec,
+        validator,
+        ValidationGateResolver { qaManifests },
+        gitOperations,
+        config,
+        database,
+        compatibility,
+        diagnostics,
         workflowAgentAssignments = workflowAgentAssignmentStoreForTests(database),
+        configResolution = routingConfigResolutionForTests(),
       ),
   )
 }

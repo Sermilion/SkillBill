@@ -9,6 +9,8 @@ import skillbill.engine.featuretask.phase.core.scriptedPhaseValueRecord
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.AgentRunLauncher
 import skillbill.ports.agentrun.agentRunLaunchFacts
+import skillbill.ports.agentrun.model.AgentRunLaunchCapability
+import skillbill.ports.agentrun.model.AgentRunLaunchCapabilityRequest
 import skillbill.ports.agentrun.model.AgentRunLaunchModelRequest
 import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
 import skillbill.ports.agentrun.model.AgentRunLaunchRequest
@@ -77,8 +79,15 @@ class CliPhasePlanRuntimeTest {
     val tracked = Files.writeString(tempDir.resolve("operator.txt"), "baseline")
     git("add", "operator.txt")
     git(
-      "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
-      "-c", "commit.gpgsign=false", "commit", "-m", "tracked baseline",
+      "-c",
+      "user.name=Fixture",
+      "-c",
+      "user.email=fixture@example.invalid",
+      "-c",
+      "commit.gpgsign=false",
+      "commit",
+      "-m",
+      "tracked baseline",
     )
     publishInitialRevision()
     Files.writeString(tracked, "caller edit")
@@ -129,8 +138,15 @@ class CliPhasePlanRuntimeTest {
     val tracked = Files.writeString(tempDir.resolve("operator.txt"), "baseline")
     git("add", "operator.txt")
     git(
-      "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
-      "-c", "commit.gpgsign=false", "commit", "-m", "tracked baseline",
+      "-c",
+      "user.name=Fixture",
+      "-c",
+      "user.email=fixture@example.invalid",
+      "-c",
+      "commit.gpgsign=false",
+      "commit",
+      "-m",
+      "tracked baseline",
     )
     publishInitialRevision()
     Files.writeString(tracked, "caller edit")
@@ -155,7 +171,12 @@ class CliPhasePlanRuntimeTest {
     assertEquals(evidence, savedPlanEvidence())
     assertEquals(phases, planner.phaseIds.toList())
     assertEquals(1, goal.childLaunches.size)
-    assertEquals(checkout, goal.childLaunches.single().skillRunRequest.repoRoot)
+    assertEquals(
+      checkout,
+      goal.childLaunches
+        .single()
+        .skillRunRequest.repoRoot,
+    )
     assertEquals("caller edit", Files.readString(tracked))
     assertEquals("caller notes", Files.readString(untracked))
   }
@@ -382,12 +403,13 @@ class CliPhasePlanRuntimeTest {
     assertEquals("transferred" to checkout, planningOwnership())
     DriverManager.getConnection("jdbc:sqlite:${fixture.dbPath}").use { connection ->
       connection.createStatement().use { statement ->
-        statement.executeQuery(
-          "SELECT json_extract(control_state_json, '$.execution_worktree_path') FROM goal_runner_controls",
-        ).use { rows ->
-          assertTrue(rows.next())
-          assertEquals(checkout, rows.getString(1))
-        }
+        statement
+          .executeQuery(
+            "SELECT json_extract(control_state_json, '$.execution_worktree_path') FROM goal_runner_controls",
+          ).use { rows ->
+            assertTrue(rows.next())
+            assertEquals(checkout, rows.getString(1))
+          }
       }
     }
     assertEquals(listOf(Path.of(checkout)), planner.launchRoots.distinct())
@@ -485,8 +507,15 @@ class CliPhasePlanRuntimeTest {
     Files.writeString(tempDir.resolve("tracked-legacy.txt"), "base")
     git("add", "tracked-legacy.txt")
     git(
-      "-c", "user.name=Goal Fixture", "-c", "user.email=goal-fixture@example.invalid",
-      "-c", "commit.gpgsign=false", "commit", "-m", "legacy base",
+      "-c",
+      "user.name=Goal Fixture",
+      "-c",
+      "user.email=goal-fixture@example.invalid",
+      "-c",
+      "commit.gpgsign=false",
+      "commit",
+      "-m",
+      "legacy base",
     )
     val planner = PhasePlanLauncher(tempDir, authorNothingFirst = true)
     val context = fixture.context(launcher = planner).copy(repositoryRoot = tempDir)
@@ -561,9 +590,10 @@ class CliPhasePlanRuntimeTest {
       }
     Files.writeString(
       subtask,
-      Files.readString(
-        subtask,
-      ).replace("1. Subtask 1 works.", "1. Subtask 1 works with the changed acceptance boundary."),
+      Files
+        .readString(
+          subtask,
+        ).replace("1. Subtask 1 works.", "1. Subtask 1 works with the changed acceptance boundary."),
     )
     val goal = GoalFixtureAgentRunLauncher(fixture, noTerminalSubtask = 1)
 
@@ -640,25 +670,28 @@ class CliPhasePlanRuntimeTest {
 
   private fun planArtifacts(): DurableWorkflowArtifacts =
     DriverManager.getConnection("jdbc:sqlite:${fixture.dbPath}").use { connection ->
-      connection.prepareStatement("SELECT artifacts_json FROM feature_task_workflows WHERE workflow_id = ?").use {
-          query ->
-        query.setString(1, planWorkflowId())
-        query.executeQuery().use { rows ->
-          check(rows.next())
-          DurableWorkflowArtifacts.fromAny(JsonCodec.parseValue(rows.getString(1)))
+      connection
+        .prepareStatement(
+          "SELECT artifacts_json FROM feature_task_workflows WHERE workflow_id = ?",
+        ).use { query ->
+          query.setString(1, planWorkflowId())
+          query.executeQuery().use { rows ->
+            check(rows.next())
+            DurableWorkflowArtifacts.fromAny(JsonCodec.parseValue(rows.getString(1)))
+          }
         }
-      }
     }
 
   private fun workflowIdsMentioning(planWorkflowId: String): List<String> =
     DriverManager.getConnection("jdbc:sqlite:${fixture.dbPath}").use { connection ->
-      connection.prepareStatement(
-        "SELECT workflow_id FROM feature_task_workflows WHERE workflow_id <> ? AND steps_json LIKE '%' || ? || '%'",
-      ).use { query ->
-        query.setString(1, planWorkflowId)
-        query.setString(2, planWorkflowId)
-        query.executeQuery().use { rows -> buildList { while (rows.next()) add(rows.getString(1)) } }
-      }
+      connection
+        .prepareStatement(
+          "SELECT workflow_id FROM feature_task_workflows WHERE workflow_id <> ? AND steps_json LIKE '%' || ? || '%'",
+        ).use { query ->
+          query.setString(1, planWorkflowId)
+          query.setString(2, planWorkflowId)
+          query.executeQuery().use { rows -> buildList { while (rows.next()) add(rows.getString(1)) } }
+        }
     }
 
   private fun settledIntakeStep(): Map<String, Any?> =
@@ -702,8 +735,16 @@ class CliPhasePlanRuntimeTest {
     assertEquals(PLAN_LAUNCHES, launcher.phaseIds)
     assertEquals(3, rowCount("feature_task_workflows"))
     assertEquals(1, implementation.requests.size)
-    assertTrue(implementation.requests.single().skillRunRequest.goalContinuation != null)
-    val workflowId = goal.payload?.get("workflow_id")?.toString().orEmpty()
+    assertTrue(
+      implementation.requests
+        .single()
+        .skillRunRequest.goalContinuation != null,
+    )
+    val workflowId =
+      goal.payload
+        ?.get("workflow_id")
+        ?.toString()
+        .orEmpty()
     val child = RuntimeWorkflowTestSupport.get(fixture.dbPath, workflowId, fixture.context(launcher = implementation))
     assertEquals("implement", child["current_step_id"])
     val settled =
@@ -736,17 +777,18 @@ class CliPhasePlanRuntimeTest {
   private fun planLaunches(): List<Pair<String, List<String>>> =
     DriverManager.getConnection("jdbc:sqlite:${fixture.dbPath}").use { connection ->
       connection.createStatement().use { statement ->
-        statement.executeQuery(
-          "SELECT launch_scope, launch_arguments_json FROM standalone_phase_status WHERE phase_id = 'plan' " +
-            "ORDER BY run_sequence",
-        ).use { rows ->
-          buildList {
-            while (rows.next()) {
-              val arguments = JsonCodec.parseValue(rows.getString(2)) as List<*>
-              add(rows.getString(1) to arguments.map { it.toString() })
+        statement
+          .executeQuery(
+            "SELECT launch_scope, launch_arguments_json FROM standalone_phase_status WHERE phase_id = 'plan' " +
+              "ORDER BY run_sequence",
+          ).use { rows ->
+            buildList {
+              while (rows.next()) {
+                val arguments = JsonCodec.parseValue(rows.getString(2)) as List<*>
+                add(rows.getString(1) to arguments.map { it.toString() })
+              }
             }
           }
-        }
       }
     }
 
@@ -779,14 +821,15 @@ class CliPhasePlanRuntimeTest {
   private fun savedPlanEvidence(): List<String?> =
     DriverManager.getConnection("jdbc:sqlite:${fixture.dbPath}").use { connection ->
       connection.createStatement().use { statement ->
-        statement.executeQuery(
-          "SELECT owner.workflow_id, owner.reservation_id, owner.initial_commit, " +
-            "plan.steps_json, plan.artifacts_json FROM goal_planning_ownership owner " +
-            "JOIN feature_task_workflows plan ON owner.workflow_id = plan.workflow_id",
-        ).use { rows ->
-          assertTrue(rows.next())
-          (1..5).map(rows::getString)
-        }
+        statement
+          .executeQuery(
+            "SELECT owner.workflow_id, owner.reservation_id, owner.initial_commit, " +
+              "plan.steps_json, plan.artifacts_json FROM goal_planning_ownership owner " +
+              "JOIN feature_task_workflows plan ON owner.workflow_id = plan.workflow_id",
+          ).use { rows ->
+            assertTrue(rows.next())
+            (1..5).map(rows::getString)
+          }
       }
     }
 
@@ -802,24 +845,26 @@ class CliPhasePlanRuntimeTest {
   private fun planningOwnership(): Pair<String, String> =
     DriverManager.getConnection("jdbc:sqlite:${fixture.dbPath}").use { connection ->
       connection.createStatement().use { statement ->
-        statement.executeQuery(
-          "SELECT ownership_state, owned_path FROM goal_planning_ownership ORDER BY created_at DESC LIMIT 1",
-        ).use { rows ->
-          assertTrue(rows.next())
-          rows.getString(1) to rows.getString(2)
-        }
+        statement
+          .executeQuery(
+            "SELECT ownership_state, owned_path FROM goal_planning_ownership ORDER BY created_at DESC LIMIT 1",
+          ).use { rows ->
+            assertTrue(rows.next())
+            rows.getString(1) to rows.getString(2)
+          }
       }
     }
 
   private fun planningOwnershipWorkflowId(): String =
     DriverManager.getConnection("jdbc:sqlite:${fixture.dbPath}").use { connection ->
       connection.createStatement().use { statement ->
-        statement.executeQuery(
-          "SELECT workflow_id FROM goal_planning_ownership ORDER BY created_at DESC LIMIT 1",
-        ).use { rows ->
-          assertTrue(rows.next())
-          rows.getString(1)
-        }
+        statement
+          .executeQuery(
+            "SELECT workflow_id FROM goal_planning_ownership ORDER BY created_at DESC LIMIT 1",
+          ).use { rows ->
+            assertTrue(rows.next())
+            rows.getString(1)
+          }
       }
     }
 
@@ -844,6 +889,9 @@ class CliPhasePlanRuntimeTest {
     private val planner: PhasePlanLauncher,
     private val goal: GoalFixtureAgentRunLauncher,
   ) : AgentRunLauncher {
+    override fun queryLaunchCapability(request: AgentRunLaunchCapabilityRequest): AgentRunLaunchCapability =
+      AgentRunLaunchCapability.Supported
+
     override fun resolveLaunchModel(request: AgentRunLaunchModelRequest): EffectiveLaunchModel =
       passThroughResolvedLaunchModel(request)
 
@@ -865,6 +913,9 @@ class CliPhasePlanRuntimeTest {
     private val failPlanSubtasks: Boolean = false,
     private val bareScenariosFirst: Boolean = false,
   ) : AgentRunLauncher {
+    override fun queryLaunchCapability(request: AgentRunLaunchCapabilityRequest): AgentRunLaunchCapability =
+      AgentRunLaunchCapability.Supported
+
     val phaseIds = CopyOnWriteArrayList<String>()
     val planPrompts = CopyOnWriteArrayList<String>()
     val timeouts = CopyOnWriteArrayList<Duration?>()
@@ -972,8 +1023,12 @@ class CliPhasePlanRuntimeTest {
     fun storeSpecsRoot(checkoutHome: Path): Path =
       Files.walk(checkoutHome).use { paths ->
         paths
-          .filter { it.fileName?.toString() == "specs" && it.parent?.parent?.fileName?.toString() == "projects" }
-          .toList()
+          .filter {
+            it.fileName?.toString() == "specs" && it.parent
+              ?.parent
+              ?.fileName
+              ?.toString() == "projects"
+          }.toList()
           .single()
       }
 

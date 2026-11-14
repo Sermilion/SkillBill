@@ -11,6 +11,7 @@ import skillbill.config.model.ResolvedWorkflowAgentAssignments
 import skillbill.config.model.WorkflowAgentAssignmentPolicyMode
 import skillbill.config.model.checkFrozenWorkflowAgentOptions
 import skillbill.contracts.JsonCodec
+import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.incident.BlockIncidentEntryReconciler
 import skillbill.engine.featuretask.lifecycle.core.AcquiredFeatureTaskRuntimeWorker
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeAgentResolver
@@ -63,9 +64,13 @@ import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflow
 import java.nio.file.Path
 
 private sealed interface RepairInspection {
-  data class Ready(val runState: AcceptanceCriterionRepairRunState?) : RepairInspection
+  data class Ready(
+    val runState: AcceptanceCriterionRepairRunState?,
+  ) : RepairInspection
 
-  data class Refused(val reason: AcceptanceCriterionRepairRefusal) : RepairInspection
+  data class Refused(
+    val reason: AcceptanceCriterionRepairRefusal,
+  ) : RepairInspection
 }
 
 private const val INTAKE_PASS_CRITERION = "Intake writes or keeps the parent spec before run invariants are read."
@@ -106,7 +111,7 @@ public class FeatureTaskRuntimeRunEntry(
     captureStreamOutput: Boolean,
     afterStepSettlement: (() -> Unit)?,
   ): FeatureTaskRuntimeRunReport {
-    val request = planningResumeInput(input)
+    val request = planningResumeInput(executionPlans.prepareRoutingContext(input))
     val goalContinuation = request.goalContinuation
     val scope = routeScope(goalContinuation != null)
     val workflowId = request.explicitWorkflowId ?: open(request, scope, onOpenFailure)
@@ -178,9 +183,13 @@ public class FeatureTaskRuntimeRunEntry(
           )
         } ?: FrozenWorkflowAgentOptionCheck.Accepted
     ) {
-      FrozenWorkflowAgentOptionCheck.Accepted -> return null
-      is FrozenWorkflowAgentOptionCheck.Refused ->
+      FrozenWorkflowAgentOptionCheck.Accepted -> {
+        return null
+      }
+
+      is FrozenWorkflowAgentOptionCheck.Refused -> {
         return frozenAssignmentRefusal(request, acquiredWorker, optionCheck)
+      }
     }
   }
 
@@ -213,6 +222,15 @@ public class FeatureTaskRuntimeRunEntry(
     admittedExecution: AdmittedFeatureTaskRuntimeExecution,
   ) {
     val launchDefinition = admittedDefinition(request, admittedExecution)
+    val legacyPausedStepAssignments =
+      if (admittedExecution.workflowAgentAssignments?.policyMode == WorkflowAgentAssignmentPolicyMode.LEGACY) {
+        val pausedStepIds = executionPlans.inspectResumeEvidence(admittedExecution.identity.workflowId).pausedStepIds
+        admittedExecution.plan.stepLaunchAssignments
+          .filterKeys { it in pausedStepIds }
+          .mapValues { (_, assignment) -> assignment.agentId }
+      } else {
+        emptyMap()
+      }
     stepLaunches.verifyAddons(
       PhaseStrategySelectionFacts(
         launchDefinition,
@@ -234,6 +252,7 @@ public class FeatureTaskRuntimeRunEntry(
           },
         workflowAgentAssignments = admittedExecution.workflowAgentAssignments,
         agentAddonSelection = request.agentAddonSelection.persisted,
+        legacyPausedStepAssignments = legacyPausedStepAssignments,
       ),
     )
   }
@@ -243,15 +262,21 @@ public class FeatureTaskRuntimeRunEntry(
     worker: AcquiredFeatureTaskRuntimeWorker,
     refusal: FrozenWorkflowAgentOptionCheck.Refused,
   ): FeatureTaskRuntimeRunReport.Blocked {
-    diagnostics.warning(
+    RuntimeDiagnosticsBestEffortWarning.record(
+      diagnostics,
       "seam=workflow_agent_assignments value_expected=${refusal.retainedAgentId.take(MAX_DIAGNOSTIC_ID)} " +
-        "phase=${refusal.phaseId.take(MAX_DIAGNOSTIC_ID)} reason=explicit_provider_refused " +
+        "phase=${refusal.phaseId.take(MAX_DIAGNOSTIC_ID)} " +
+        "provider=${refusal.requestedAgentId.take(MAX_DIAGNOSTIC_ID)} reason=explicit_provider_refused " +
         "classification=${refusal.reason.name.lowercase()}",
     )
     return FeatureTaskRuntimeRunReport.Blocked(
       issueKey = request.issueKey,
       workflowId = worker.workflowId,
-      featureSize = runInvariantsSource.read(Path.of(request.specPath)).requireInvariants().featureSize.name,
+      featureSize =
+        runInvariantsSource
+          .read(Path.of(request.specPath))
+          .requireInvariants()
+          .featureSize.name,
       lastIncompletePhase = refusal.phaseId,
       blockedReason =
         if (refusal.reason == FrozenWorkflowAgentOptionCheck.Reason.UNKNOWN_PROVIDER) {
@@ -283,7 +308,11 @@ public class FeatureTaskRuntimeRunEntry(
     return FeatureTaskRuntimeRunReport.Blocked(
       issueKey = request.issueKey,
       workflowId = workflowId,
-      featureSize = runInvariantsSource.read(Path.of(request.specPath)).requireInvariants().featureSize.name,
+      featureSize =
+        runInvariantsSource
+          .read(Path.of(request.specPath))
+          .requireInvariants()
+          .featureSize.name,
       lastIncompletePhase = "resume_identity",
       blockedReason = refusal,
       completedPhaseIds = emptyList(),
@@ -314,9 +343,13 @@ public class FeatureTaskRuntimeRunEntry(
     val sourceInvariants = sourceRead.requireInvariants()
     val repairState =
       when (val inspection = inspectRepairState(request, acquiredWorker, sourceRead, admittedExecution)) {
-        is RepairInspection.Refused ->
+        is RepairInspection.Refused -> {
           return tracePreparationRefusal(request, acquiredWorker, sourceInvariants, inspection.reason)
-        is RepairInspection.Ready -> inspection.runState
+        }
+
+        is RepairInspection.Ready -> {
+          inspection.runState
+        }
       }
     if (repairState?.historicalAttributionUnavailable() == true) {
       return historicalRepairRefusal(request, acquiredWorker, sourceInvariants)
@@ -358,7 +391,11 @@ public class FeatureTaskRuntimeRunEntry(
     FeatureTaskRuntimeRunReport.Blocked(
       issueKey = input.issueKey,
       workflowId = worker.workflowId,
-      featureSize = runInvariantsSource.read(specPath).requireInvariants().featureSize.name,
+      featureSize =
+        runInvariantsSource
+          .read(specPath)
+          .requireInvariants()
+          .featureSize.name,
       lastIncompletePhase = worker.currentStepId,
       blockedReason =
         "Cannot change QA selection on resume; the recorded selection is " +
@@ -376,7 +413,11 @@ public class FeatureTaskRuntimeRunEntry(
     FeatureTaskRuntimeRunReport.Blocked(
       issueKey = input.issueKey,
       workflowId = worker.workflowId,
-      featureSize = runInvariantsSource.read(specPath).requireInvariants().featureSize.name,
+      featureSize =
+        runInvariantsSource
+          .read(specPath)
+          .requireInvariants()
+          .featureSize.name,
       lastIncompletePhase = worker.currentStepId,
       blockedReason =
         "Cannot regenerate the stored acceptance repair state at the current contract version; " +
@@ -498,12 +539,16 @@ public class FeatureTaskRuntimeRunEntry(
     return when (
       val result = InteractionScenarioSectionParser.parse(text, specDigest, InteractionScenarioSpecContext.Subtask)
     ) {
-      is InteractionScenarioParseResult.Parsed -> result.catalog.scenarios
-      is InteractionScenarioParseResult.Rejected ->
+      is InteractionScenarioParseResult.Parsed -> {
+        result.catalog.scenarios
+      }
+
+      is InteractionScenarioParseResult.Rejected -> {
         throw invalidInteractionScenarioCatalog(
           specPath,
           result.issues.first().let { "${it.fieldPath}: ${it.reason}" },
         )
+      }
     }
   }
 
@@ -573,12 +618,13 @@ public class FeatureTaskRuntimeRunEntry(
     val workflowId = input.workflowIdForCreation ?: workflowService.allocateWorkflowId(WorkflowFamilyKind.TASK_RUNTIME)
     val assignments =
       if (scope == FeatureTaskRouteScope.STANDALONE) {
-        executionPlans.resolveAdmissionRouting(
-          workflowId,
-          input.invokedAgentId,
-          input.agentAssignment,
-          input.modelAssignment,
-        )
+        input.workflowAgentAssignments?.let(executionPlans::prepareRouting)
+          ?: executionPlans.resolveAdmissionRouting(
+            workflowId,
+            input.invokedAgentId,
+            input.agentAssignment,
+            input.modelAssignment,
+          )
       } else {
         null
       }
@@ -634,17 +680,20 @@ public class FeatureTaskRuntimeRunEntry(
         validationDepth = input.goalContinuation?.validationDepth ?: ValidationDepth.DEFAULT,
         timeout = input.timeout,
         stepLaunchAssignments =
-          stepLaunches.resolve(
-            facts = facts,
-            inputs =
-              StepLaunchAssignmentInputs(
-                invokedAgentId = input.invokedAgentId,
-                agentAssignment = input.agentAssignment,
-                modelAssignment = input.modelAssignment,
-                workflowAgentAssignments = assignments,
-                agentAddonSelection = input.agentAddonSelection.persisted,
-              ),
-          ),
+          stepLaunches
+            .resolve(
+              facts = facts,
+              inputs =
+                StepLaunchAssignmentInputs(
+                  invokedAgentId = input.invokedAgentId,
+                  agentAssignment = input.agentAssignment,
+                  modelAssignment = input.modelAssignment,
+                  workflowAgentAssignments = assignments,
+                  agentAddonSelection = input.agentAddonSelection.persisted,
+                ),
+            ).also { assignments ->
+              stepLaunches.verifyLaunchCapability(assignments, LaunchEnvironmentKind.INHERITED, diagnostics)
+            },
       ),
     )
 
@@ -695,16 +744,17 @@ public class FeatureTaskRuntimeRunEntry(
           admittedExecution.plan.stepLaunchAssignments,
           resolved,
           { stepId ->
-            FeatureTaskRuntimeAgentResolver.resolve(
-              stepId,
-              input.agentAssignment.copy(
-                matrix =
-                  input.agentAssignment.matrix.takeIf {
-                    admittedExecution.workflowAgentAssignments?.policyMode != WorkflowAgentAssignmentPolicyMode.LEGACY
-                  },
-              ),
-              input.invokedAgentId,
-            ).resolvedAgentId
+            FeatureTaskRuntimeAgentResolver
+              .resolve(
+                stepId,
+                input.agentAssignment.copy(
+                  matrix =
+                    input.agentAssignment.matrix.takeIf {
+                      admittedExecution.workflowAgentAssignments?.policyMode != WorkflowAgentAssignmentPolicyMode.LEGACY
+                    },
+                ),
+                input.invokedAgentId,
+              ).resolvedAgentId
           },
         ),
       )
@@ -723,19 +773,23 @@ public class FeatureTaskRuntimeRunEntry(
       ?.takeIf { it.policyMode == WorkflowAgentAssignmentPolicyMode.FROZEN }
       ?.let { frozen ->
         val retained =
-          admittedExecution.plan.stepLaunchAssignments.keys.sorted().joinToString(";") { phaseId ->
-            "$phaseId=${frozen.phaseAssignments.getValue(phaseId).agentId.wireValue}"
-          }.ifBlank { "none" }
+          admittedExecution.plan.stepLaunchAssignments.keys
+            .sorted()
+            .joinToString(";") { phaseId ->
+              "$phaseId=${frozen.phaseAssignments.getValue(phaseId).agentId.wireValue}"
+            }.ifBlank { "none" }
         val current =
-          admittedExecution.plan.stepLaunchAssignments.keys.sorted().joinToString(";") { phaseId ->
-            val selected =
-              FeatureTaskRuntimeAgentResolver.resolve(
-                phaseId,
-                input.agentAssignment,
-                input.invokedAgentId,
-              )
-            "$phaseId=${selected.resolvedAgentId}"
-          }.ifBlank { "none" }
+          admittedExecution.plan.stepLaunchAssignments.keys
+            .sorted()
+            .joinToString(";") { phaseId ->
+              val selected =
+                FeatureTaskRuntimeAgentResolver.resolve(
+                  phaseId,
+                  input.agentAssignment,
+                  input.invokedAgentId,
+                )
+              "$phaseId=${selected.resolvedAgentId}"
+            }.ifBlank { "none" }
         if (retained != current || input.invokedAgentId != frozen.invokedAgentId.wireValue) {
           diagnostics.warning(
             "seam=workflow_agent_assignments value_expected=$retained value_used=$retained " +
@@ -748,10 +802,12 @@ public class FeatureTaskRuntimeRunEntry(
   }
 
   private fun boundedAssignmentIdentity(assignments: Map<String, StepLaunchAssignment>): String =
-    assignments.entries.sortedBy { it.key }.joinToString(";") { (stepId, assignment) ->
-      val model = assignment.launch.effectiveModel?.let(::boundedSafeModelIdentity) ?: "none"
-      "$stepId=$model/${assignment.profile.wireValue}"
-    }.ifBlank { "none" }
+    assignments.entries
+      .sortedBy { it.key }
+      .joinToString(";") { (stepId, assignment) ->
+        val model = assignment.launch.effectiveModel?.let(::boundedSafeModelIdentity) ?: "none"
+        "$stepId=$model/${assignment.profile.wireValue}"
+      }.ifBlank { "none" }
 
   private fun routeScope(goalChild: Boolean): FeatureTaskRouteScope =
     if (goalChild) FeatureTaskRouteScope.GOAL_CHILD else FeatureTaskRouteScope.STANDALONE

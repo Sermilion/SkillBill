@@ -5,6 +5,7 @@ import skillbill.application.testDecompositionManifestValidator
 import skillbill.application.testProjectStore
 import skillbill.application.testWorkflowSnapshotValidator
 import skillbill.contracts.workflow.goal.GoalQualityExecutionPayloadKeys
+import skillbill.engine.featuretask.lifecycle.execution.workflowAgentAssignmentStoreForTests
 import skillbill.engine.featuretask.slot.artifactValue
 import skillbill.engine.featuretask.slot.testExecutionPlan
 import skillbill.engine.goalrunner.persist.testGoalPlanningCheckoutOwnership
@@ -180,6 +181,7 @@ class GoalImportQualityReadinessTest {
     parentProjection = GoalParentProjectionWriter(testDecompositionManifestValidator),
     worktrees = InPlaceGoalWorktreeResources,
     ownership = testGoalPlanningCheckoutOwnership(database),
+    workflowAgentAssignmentStore = workflowAgentAssignmentStoreForTests(database),
   )
 
   private data class PlanIdentity(
@@ -217,7 +219,8 @@ class GoalImportQualityReadinessTest {
     identity: PlanIdentity?,
   ) {
     val plan =
-      WorkflowEngine().openRecord(WorkflowFamily.TASK_RUNTIME.definition, "plan-workflow", "ftr", "plan")
+      WorkflowEngine()
+        .openRecord(WorkflowFamily.TASK_RUNTIME.definition, "plan-workflow", "ftr", "plan")
         .copy(
           workflowStatus = WorkflowStatus.COMPLETED,
           mode = FeatureTaskWorkflowMode.RUNTIME,

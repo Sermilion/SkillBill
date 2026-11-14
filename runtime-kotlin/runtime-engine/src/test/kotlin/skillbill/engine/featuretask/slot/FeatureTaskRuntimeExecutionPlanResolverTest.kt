@@ -3,6 +3,7 @@ package skillbill.engine.featuretask.slot
 import skillbill.application.FakeDatabaseSessionFactory
 import skillbill.engine.featuretask.lifecycle.execution.ExecutionPlanAdmissionFixture
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
+import skillbill.engine.featuretask.lifecycle.execution.routingConfigResolutionForTests
 import skillbill.engine.featuretask.lifecycle.execution.workflowAgentAssignmentStoreForTests
 import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
 import skillbill.engine.featuretask.model.execution.FeatureTaskRuntimeExecutionPlanCreationRequest
@@ -342,12 +343,15 @@ class FeatureTaskRuntimeExecutionPlanResolverTest {
     val (planning, planStates) = driftedSeed(SkeletonDefinition.PLAN)
     val planBefore = planStates.getFeatureTaskWorkflow("wftr-drift")
     val resumed =
-      planning.recoveryResolver(wrapperForRoot = { "gradlew" })
+      planning
+        .recoveryResolver(wrapperForRoot = { "gradlew" })
         .resolveInputs(root, null, ValidationDepth.FULL, 7.minutes, "wftr-drift")
     assertEquals(planning.inputsFor("gradlew", 420000L).declaration, resumed.declaration)
     assertEquals(
       SkeletonDefinition.PLAN.id,
-      planning.admission.admit(planStates, "wftr-drift", resumed).plan.definitionId,
+      planning.admission
+        .admit(planStates, "wftr-drift", resumed)
+        .plan.definitionId,
     )
     assertEquals(planBefore, planStates.getFeatureTaskWorkflow("wftr-drift"))
 
@@ -396,9 +400,7 @@ class FeatureTaskRuntimeExecutionPlanResolverTest {
         execution.validator,
         ValidationGateResolver { packs },
         object : WorkflowGitOperations by NoopWorkflowGitOperations {
-          override fun repositoryOwnedPaths(repoRoot: Path): WorkflowGitNameListResult {
-            return inventory
-          }
+          override fun repositoryOwnedPaths(repoRoot: Path): WorkflowGitNameListResult = inventory
 
           override fun trackedPaths(repoRoot: Path): WorkflowGitNameListResult {
             inventoryRoot = repoRoot
@@ -410,6 +412,7 @@ class FeatureTaskRuntimeExecutionPlanResolverTest {
         execution.compatibility,
         diagnostics = NoopRuntimeDiagnostics,
         workflowAgentAssignments = workflowAgentAssignmentStoreForTests(database),
+        configResolution = routingConfigResolutionForTests(),
       )
 
     fun create() =

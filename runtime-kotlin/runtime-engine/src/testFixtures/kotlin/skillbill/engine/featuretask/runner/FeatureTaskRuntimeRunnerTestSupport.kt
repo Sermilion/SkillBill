@@ -34,6 +34,7 @@ import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskExecutionIden
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionEntry
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeStepLaunchResolver
+import skillbill.engine.featuretask.lifecycle.execution.routingConfigResolutionForTests
 import skillbill.engine.featuretask.lifecycle.execution.workflowAgentAssignmentStoreForTests
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeAgentAssignment
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeGoalContinuationContext
@@ -131,7 +132,10 @@ import skillbill.infrastructure.workflow.goalplanning.FileSystemGoalPlanningCont
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentaddon.RejectingAgentAddonSelectionPort
 import skillbill.ports.agentrun.AgentRunLauncher
+import skillbill.ports.agentrun.ExecutableLookup
 import skillbill.ports.agentrun.agentRunLaunchFacts
+import skillbill.ports.agentrun.model.AgentRunLaunchCapability
+import skillbill.ports.agentrun.model.AgentRunLaunchCapabilityRequest
 import skillbill.ports.agentrun.model.AgentRunLaunchModelRequest
 import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
 import skillbill.ports.agentrun.model.AgentRunLaunchRequest
@@ -444,11 +448,12 @@ class RunnerHarness(
   ): String {
     val state = requireNotNull(goalContinuationRecorder.reviewStateRecorder.reviewState(WORKFLOW_ID))
     return requireNotNull(
-      git.buildGoalSubtaskReviewInput(
-        repoRoot,
-        GoalSubtaskReviewBaseline(state.reviewBaseSha, state.baselineUntrackedPaths),
-        "feat/existing-runtime-branch",
-      ).input,
+      git
+        .buildGoalSubtaskReviewInput(
+          repoRoot,
+          GoalSubtaskReviewBaseline(state.reviewBaseSha, state.baselineUntrackedPaths),
+          "feat/existing-runtime-branch",
+        ).input,
     ).deltaDigest
   }
 
@@ -1445,8 +1450,16 @@ private fun telemetryHarnessRunner(
   val settlement = harnessPhaseSettlement().also { launcher.settlement = it }
   val executePrepared =
     TelemetryExecutePreparedSetup(
-      workflow, strategies, runtimeConfig, specGate,
-      runLoopEntry, launchOutcomes, settlement, branchSetupRunner, database, configuredEntry,
+      workflow,
+      strategies,
+      runtimeConfig,
+      specGate,
+      runLoopEntry,
+      launchOutcomes,
+      settlement,
+      branchSetupRunner,
+      database,
+      configuredEntry,
     ).executePrepared
   return AssembledFeatureTaskRuntimeRunner(
     runner =
@@ -1520,6 +1533,7 @@ private fun runnerExecutionEntry(
       fixture.compatibility,
       diagnostics = NoopRuntimeDiagnostics,
       workflowAgentAssignments = workflowAgentAssignmentStoreForTests(database),
+      configResolution = routingConfigResolutionForTests(),
     )
   if (!config.seedDurableWorkflow) {
     return FeatureTaskRuntimeExecutionEntry(
@@ -1661,6 +1675,9 @@ open class TestFeatureTaskRuntimeRunLoopEntry(
 private fun testStepLaunchResolver(): FeatureTaskRuntimeStepLaunchResolver =
   FeatureTaskRuntimeStepLaunchResolver(
     object : AgentRunLauncher {
+      override fun queryLaunchCapability(request: AgentRunLaunchCapabilityRequest): AgentRunLaunchCapability =
+        AgentRunLaunchCapability.Supported
+
       override fun resolveLaunchModel(request: AgentRunLaunchModelRequest) = passThroughResolvedLaunchModel(request)
 
       override fun launch(request: AgentRunLaunchRequest): AgentRunLaunchOutcome =
@@ -1668,6 +1685,7 @@ private fun testStepLaunchResolver(): FeatureTaskRuntimeStepLaunchResolver =
     },
     statusProjectionPhaseStrategies(),
     agentAddonSelectionPort = RejectingAgentAddonSelectionPort,
+    executableLookup = ExecutableLookup { true },
   )
 
 fun testDecompositionPlanner(): FeatureTaskRuntimeDecompositionPlanner =
@@ -2353,8 +2371,7 @@ class RuntimeFakeDatabaseSessionFactory(
                 it.key.workflowId == workflowId && it.key.phaseId == phaseId &&
                   it.key.attempt == attempt && it.key.agentId == agentId &&
                   it.key.generation <= generation
-              }
-              .maxWithOrNull(compareBy({ it.key.generation }, { it.key.repairTurn }))
+              }.maxWithOrNull(compareBy({ it.key.generation }, { it.key.repairTurn }))
               ?.value
           }
 
@@ -2383,7 +2400,11 @@ class RuntimeFakeDatabaseSessionFactory(
             ledgerRows.filter { it.workflowId == workflowId }
 
           override fun workflowIdsForIssue(issueKey: String): List<String> =
-            ledgerRows.filter { it.issueKey == issueKey }.map { it.workflowId }.distinct().sorted()
+            ledgerRows
+              .filter { it.issueKey == issueKey }
+              .map { it.workflowId }
+              .distinct()
+              .sorted()
 
           override fun recordOutcomes(outcomes: List<ReviewFindingOutcomeRecord>) {
             outcomeRows.removeAll { existing ->
@@ -2655,8 +2676,7 @@ class InMemoryRuntimeWorkflowRepository : WorkflowStateRepositoryDefaults() {
         it.normalizedIssueKey == normalizedIssueKey &&
           it.repositoryIdentity == repositoryIdentity &&
           it.routeScope == FeatureTaskRouteScope.GOAL_CHILD
-      }
-      .mapNotNull { identity ->
+      }.mapNotNull { identity ->
         getFeatureTaskWorkflow(identity.workflowId)?.let { FeatureTaskWorkflowCandidate(identity, it) }
       }
 
@@ -2676,7 +2696,10 @@ class InMemoryRuntimeWorkflowRepository : WorkflowStateRepositoryDefaults() {
         }
         taskRuntimeRows[row.workflowId] = row
       }
-      FeatureTaskWorkflowMode.PROSE -> implementRows[row.workflowId] = row
+
+      FeatureTaskWorkflowMode.PROSE -> {
+        implementRows[row.workflowId] = row
+      }
     }
   }
 
@@ -2719,7 +2742,8 @@ class InMemoryRuntimeWorkflowRepository : WorkflowStateRepositoryDefaults() {
 
   fun taskRuntimeArtifacts(workflowId: String): Map<String, Any?> {
     val record = requireNotNull(taskRuntimeRows[workflowId]) { "no runtime row for $workflowId" }
-    return JsonCodec.parseObjectOrNull(record.artifactsJson)
+    return JsonCodec
+      .parseObjectOrNull(record.artifactsJson)
       ?.let(JsonCodec::jsonElementToValue)
       ?.let(JsonCodec::anyToStringAnyMap)
       .orEmpty()
@@ -2790,8 +2814,16 @@ class InMemoryRuntimeWorkflowRepository : WorkflowStateRepositoryDefaults() {
     limit: Int,
   ): List<WorkflowStateSnapshot> =
     when (family) {
-      WorkflowFamily.VERIFY -> verifyRows.values.toList().asReversed().take(limit)
-      WorkflowFamily.TASK_RUNTIME -> listFeatureTaskWorkflows(FeatureTaskWorkflowMode.RUNTIME, limit)
+      WorkflowFamily.VERIFY -> {
+        verifyRows.values
+          .toList()
+          .asReversed()
+          .take(limit)
+      }
+
+      WorkflowFamily.TASK_RUNTIME -> {
+        listFeatureTaskWorkflows(FeatureTaskWorkflowMode.RUNTIME, limit)
+      }
     }.map(WorkflowStateRecord::toSnapshot)
 
   override fun latest(family: WorkflowFamily): WorkflowStateSnapshot? = list(family, 1).firstOrNull()

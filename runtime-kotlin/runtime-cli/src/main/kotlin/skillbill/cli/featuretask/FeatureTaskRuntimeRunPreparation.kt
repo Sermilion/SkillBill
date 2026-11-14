@@ -6,7 +6,6 @@ import skillbill.agentaddon.model.AgentAddonConsumer
 import skillbill.agentaddon.model.HydratedAgentAddonSelection
 import skillbill.application.config.ConfigResolutionService
 import skillbill.cli.kernel.agent.parseAgentAddonSelection
-import skillbill.cli.kernel.agent.refuseUnavailableAgentLaunchers
 import skillbill.cli.kernel.agent.refuseUnsupportedModelDirectives
 import skillbill.cli.kernel.cli.resolveCliRepositoryRoot
 import skillbill.cli.model.CliRunInputs
@@ -14,6 +13,7 @@ import skillbill.config.model.FrozenWorkflowAgentOptionCheck
 import skillbill.config.model.PhaseModelDirective
 import skillbill.config.model.WorkflowAgentAssignmentPolicyMode
 import skillbill.config.model.checkFrozenWorkflowAgentOptions
+import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.lifecycle.assignment.WorkflowAgentAssignmentInspection
 import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskContinuationLookupService
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeAgentResolver
@@ -25,13 +25,16 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeAgentAssignment
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeModelAssignment
 import skillbill.engine.goal.goalRepositoryIdentityCandidates
 import skillbill.install.model.SupportedAgent
+import skillbill.install.model.unavailableAgentLauncherReason
 import skillbill.ports.agentaddon.AgentAddonSelectionPort
 import skillbill.ports.agentrun.ExecutableLookup
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.workflow.model.FeatureTaskWorkflowMode
-import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Path
+
+private const val MAX_DIAGNOSTIC_ID = 128
 
 @Inject
 class FeatureTaskRuntimeRunPreparation(
@@ -43,6 +46,7 @@ class FeatureTaskRuntimeRunPreparation(
   private val projectStorePort: ProjectStorePort,
   private val inputs: CliRunInputs,
   private val executionPlans: FeatureTaskRuntimeExecutionPlanResolver,
+  private val diagnostics: RuntimeDiagnostics,
 ) {
   internal fun prepareResume(
     options: FeatureTaskRuntimePhaseAgentCommand,
@@ -57,22 +61,32 @@ class FeatureTaskRuntimeRunPreparation(
     val phaseAgents = parsePhaseAgents(options.phaseAgents)
     val evidence = executionPlans.inspectResumeEvidence(workflowId)
     val frozen =
-      (evidence.routing as? WorkflowAgentAssignmentInspection.Present)?.assignments
+      (evidence.routing as? WorkflowAgentAssignmentInspection.Present)
+        ?.assignments
         ?.takeIf { it.policyMode == WorkflowAgentAssignmentPolicyMode.FROZEN }
     if (frozen != null) {
       when (val check = checkFrozenWorkflowAgentOptions(frozen, options.agentOverride, phaseAgents)) {
-        FrozenWorkflowAgentOptionCheck.Accepted -> Unit
-        is FrozenWorkflowAgentOptionCheck.Refused -> throw UsageError(
-          if (check.reason == FrozenWorkflowAgentOptionCheck.Reason.UNKNOWN_PROVIDER) {
-            "Provider '${check.requestedAgentId}' is not supported for phase '${check.phaseId}'. " +
-              "Select a supported provider id and retry."
-          } else {
-            "Cannot resume frozen phase '${check.phaseId}' with provider '${check.requestedAgentId}'. " +
-              "The recorded provider is '${check.retainedAgentId}'. " +
-              "Remove the conflicting option or use the recorded provider; " +
-              "frozen assignments cannot be retargeted."
-          },
-        )
+        FrozenWorkflowAgentOptionCheck.Accepted -> {}
+
+        is FrozenWorkflowAgentOptionCheck.Refused -> {
+          recordRoutingOutcome(
+            check.phaseId,
+            check.requestedAgentId,
+            "explicit_provider_refused",
+            check.retainedAgentId,
+          )
+          throw UsageError(
+            if (check.reason == FrozenWorkflowAgentOptionCheck.Reason.UNKNOWN_PROVIDER) {
+              "Provider '${check.requestedAgentId}' is not supported for phase '${check.phaseId}'. " +
+                "Select a supported provider id and retry."
+            } else {
+              "Cannot resume frozen phase '${check.phaseId}' with provider '${check.requestedAgentId}'. " +
+                "The recorded provider is '${check.retainedAgentId}'. " +
+                "Remove the conflicting option or use the recorded provider; " +
+                "frozen assignments cannot be retargeted."
+            },
+          )
+        }
       }
     }
     return prepare(options, resolvedRepoRoot, issueKey, specPath, evidence)
@@ -128,8 +142,14 @@ class FeatureTaskRuntimeRunPreparation(
         override = agentOverride,
       )
     val frozen =
-      (evidence.routing as? WorkflowAgentAssignmentInspection.Present)?.assignments
+      (evidence.routing as? WorkflowAgentAssignmentInspection.Present)
+        ?.assignments
         ?.takeIf { it.policyMode == WorkflowAgentAssignmentPolicyMode.FROZEN }
+    val legacy =
+      evidence.routing == WorkflowAgentAssignmentInspection.Legacy ||
+        (evidence.routing as? WorkflowAgentAssignmentInspection.Present)
+          ?.assignments
+          ?.policyMode == WorkflowAgentAssignmentPolicyMode.LEGACY
     val modelAssignment =
       FeatureTaskRuntimeModelAssignment(
         perPhaseDirectives = parsePhaseModels(options.phaseModels),
@@ -137,29 +157,27 @@ class FeatureTaskRuntimeRunPreparation(
       )
     val agentAssignment = parsedAgentAssignment.copy(matrix = modelAssignment.matrix.takeIf { frozen != null })
     val compactionSettings = configResolutionService.resolveCompactionSettings()
-    val selectedPhaseIds =
-      evidence.plan.selectedStrategies.flatMap { it.steps }
-        .filter { it in FeatureTaskRuntimePhaseWorkflowDefinition.definition.stepIds }
-        .toSet()
+    val selectedPhaseIds = executionPlans.agentBackedStepIds(evidence.plan).toSet()
     val resolvedAgentIds =
       selectedPhaseIds.associateWith { phaseId ->
-        frozen?.phaseAssignments?.get(phaseId)?.agentId?.wireValue
+        val legacyPausedProvider =
+          if (legacy && phaseId in evidence.pausedStepIds) {
+            evidence.plan.stepLaunchAssignments[phaseId]?.agentId
+          } else {
+            null
+          }
+        frozen
+          ?.phaseAssignments
+          ?.get(phaseId)
+          ?.agentId
+          ?.wireValue
+          ?: legacyPausedProvider
           ?: FeatureTaskRuntimeAgentResolver.resolve(phaseId, agentAssignment, invokedAgentId).resolvedAgentId
       }
     val directives = resumeModelDirectives(evidence, resolvedAgentIds, modelAssignment, issueKey)
     refuseUnsupportedModelDirectives(directives, resolvedAgentIds)
-    val receivingAgents =
-      buildList {
-        addAll(resolvedAgentIds.values)
-        if (frozen == null) {
-          addAll(phaseAgentMap.values)
-          agentOverride?.let(::add)
-        }
-      }.distinct()
-    receivingAgents.firstOrNull { SupportedAgent.fromWireOrNull(it) == null }?.let { provider ->
-      throw UsageError("Provider '$provider' is not supported. Select a supported provider id and retry.")
-    }
-    refuseUnavailableAgentLaunchers(receivingAgents, executableLookup)
+    val receivingAgents = resolvedAgentIds.values.distinct()
+    validateResumeProviders(resolvedAgentIds)
     return PreparedRuntimeRun(
       issueKey,
       specPath,
@@ -173,6 +191,20 @@ class FeatureTaskRuntimeRunPreparation(
       qaSelection,
       operatorDecision,
     )
+  }
+
+  private fun validateResumeProviders(resolvedAgentIds: Map<String, String>) {
+    resolvedAgentIds.values.firstOrNull { SupportedAgent.fromWireOrNull(it) == null }?.let { provider ->
+      val phaseId = resolvedAgentIds.entries.firstOrNull { it.value == provider }?.key ?: "resume"
+      recordRoutingOutcome(phaseId, provider, "unknown_provider")
+      throw UsageError("Provider '$provider' is not supported. Select a supported provider id and retry.")
+    }
+    resolvedAgentIds.forEach { (phaseId, providerId) ->
+      unavailableAgentLauncherReason(providerId, executableLookup::onPath)?.let { reason ->
+        recordRoutingOutcome(phaseId, providerId, "executable_unavailable")
+        throw UsageError("$reason Selected for phase '$phaseId'.")
+      }
+    }
   }
 
   private fun hydrateResumeAddons(
@@ -194,20 +226,39 @@ class FeatureTaskRuntimeRunPreparation(
     issueKey: String,
   ): Map<String, PhaseModelDirective> {
     val frozen =
-      (evidence.routing as? WorkflowAgentAssignmentInspection.Present)?.assignments
+      (evidence.routing as? WorkflowAgentAssignmentInspection.Present)
+        ?.assignments
         ?.policyMode == WorkflowAgentAssignmentPolicyMode.FROZEN
-    return resolvedAgentIds.mapNotNull { (phaseId, resolvedAgentId) ->
-      val recorded = evidence.plan.stepLaunchAssignments[phaseId]
-      if (frozen && recorded != null && recorded.agentId != resolvedAgentId) {
-        throw UsageError("Workflow '$issueKey' has contradictory retained provider metadata for phase '$phaseId'.")
-      }
-      FeatureTaskRuntimeResumeLaunchAssignment.modelDirective(
-        recorded,
-        resolvedAgentId,
-        phaseId,
-        modelAssignment,
-      )?.let { phaseId to it }
-    }.toMap()
+    return resolvedAgentIds
+      .mapNotNull { (phaseId, resolvedAgentId) ->
+        val recorded = evidence.plan.stepLaunchAssignments[phaseId]
+        if (frozen && recorded != null && recorded.agentId != resolvedAgentId) {
+          recordRoutingOutcome(phaseId, resolvedAgentId, "contradictory_retained_provider", recorded.agentId)
+          throw UsageError("Workflow '$issueKey' has contradictory retained provider metadata for phase '$phaseId'.")
+        }
+        FeatureTaskRuntimeResumeLaunchAssignment
+          .modelDirective(
+            recorded,
+            resolvedAgentId,
+            phaseId,
+            modelAssignment,
+          )?.let { phaseId to it }
+      }.toMap()
+  }
+
+  private fun recordRoutingOutcome(
+    phaseId: String,
+    providerId: String,
+    reason: String,
+    retainedProvider: String? = null,
+  ) {
+    val retained = retainedProvider?.let { "retained=${it.take(MAX_DIAGNOSTIC_ID)} " }.orEmpty()
+    RuntimeDiagnosticsBestEffortWarning.record(
+      diagnostics,
+      "seam=workflow_agent_assignment phase=${phaseId.take(MAX_DIAGNOSTIC_ID)} " +
+        "provider=${providerId.take(MAX_DIAGNOSTIC_ID)} " +
+        "${retained}reason=$reason outcome=refused",
+    )
   }
 }
 
@@ -215,14 +266,24 @@ private fun resumableRuntimeCandidate(
   workflowId: String,
   result: FeatureTaskContinuationLookupResult,
 ) = when (result) {
-  is FeatureTaskContinuationLookupResult.Resumable -> result.candidate
-  is FeatureTaskContinuationLookupResult.AlreadyRunning -> result.candidate
-  is FeatureTaskContinuationLookupResult.TerminalOnly ->
+  is FeatureTaskContinuationLookupResult.Resumable -> {
+    result.candidate
+  }
+
+  is FeatureTaskContinuationLookupResult.AlreadyRunning -> {
+    result.candidate
+  }
+
+  is FeatureTaskContinuationLookupResult.TerminalOnly -> {
     throw UsageError("Workflow '$workflowId' is terminal and cannot be resumed; no phase was launched.")
+  }
+
   FeatureTaskContinuationLookupResult.NoMatch,
   is FeatureTaskContinuationLookupResult.GoalContinuation,
   is FeatureTaskContinuationLookupResult.NeedsIdentityRepair,
-  -> throw UsageError("Workflow '$workflowId' is not a resumable runtime workflow.")
+  -> {
+    throw UsageError("Workflow '$workflowId' is not a resumable runtime workflow.")
+  }
 }
 
 private fun requireRuntimeMode(

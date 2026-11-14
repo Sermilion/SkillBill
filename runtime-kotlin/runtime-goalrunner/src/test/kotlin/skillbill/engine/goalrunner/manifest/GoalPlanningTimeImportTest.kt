@@ -3,6 +3,7 @@ package skillbill.engine.goalrunner.manifest
 import skillbill.application.TestDecompositionManifestStore
 import skillbill.application.testDecompositionManifestValidator
 import skillbill.application.testProjectStore
+import skillbill.engine.featuretask.lifecycle.execution.workflowAgentAssignmentStoreForTests
 import skillbill.engine.featuretask.slot.artifactValue
 import skillbill.engine.featuretask.slot.testExecutionPlan
 import skillbill.engine.goalrunner.persist.testGoalPlanningCheckoutOwnership
@@ -63,6 +64,7 @@ class GoalPlanningTimeImportTest {
           parentProjection = GoalParentProjectionWriter(testDecompositionManifestValidator),
           worktrees = InPlaceGoalWorktreeResources,
           ownership = testGoalPlanningCheckoutOwnership(database),
+          workflowAgentAssignmentStore = workflowAgentAssignmentStoreForTests(database),
         )
 
       val imported = assertNotNull(loader.importFromManifestProjection(manifest))
@@ -93,7 +95,8 @@ class GoalPlanningTimeImportTest {
     issueKey: String,
   ) {
     val plan =
-      WorkflowEngine().openRecord(WorkflowFamily.TASK_RUNTIME.definition, "plan-workflow", "ftr", "plan")
+      WorkflowEngine()
+        .openRecord(WorkflowFamily.TASK_RUNTIME.definition, "plan-workflow", "ftr", "plan")
         .copy(
           workflowStatus = WorkflowStatus.COMPLETED,
           mode = FeatureTaskWorkflowMode.RUNTIME,
@@ -112,16 +115,34 @@ class GoalPlanningTimeImportTest {
       val record =
         unit.standalonePhaseStatuses.register(
           StandalonePhaseStatusRegistration(
-            "repository", "main", issueKey, plan.workflowId, id, "plan", "execution-$id",
-            "active", "preplan", at, id, 1, at.plusSeconds(3600), launchScope = IdeStatusLaunchScope.GOAL,
+            "repository",
+            "main",
+            issueKey,
+            plan.workflowId,
+            id,
+            "plan",
+            "execution-$id",
+            "active",
+            "preplan",
+            at,
+            id,
+            1,
+            at.plusSeconds(3600),
+            launchScope = IdeStatusLaunchScope.GOAL,
           ),
         )
       assertEquals(
         StandalonePhaseStatusUpdateResult.ACCEPTED,
         unit.standalonePhaseStatuses.update(
           StandalonePhaseStatusUpdate(
-            record.executionId, record.statusRevision, record.leaseOwner, record.leaseGeneration,
-            if (index == 0) "blocked" else "terminal", "plan", null, at.plusMillis(duration),
+            record.executionId,
+            record.statusRevision,
+            record.leaseOwner,
+            record.leaseGeneration,
+            if (index == 0) "blocked" else "terminal",
+            "plan",
+            null,
+            at.plusMillis(duration),
             activeDurationMs = duration,
           ),
         ),

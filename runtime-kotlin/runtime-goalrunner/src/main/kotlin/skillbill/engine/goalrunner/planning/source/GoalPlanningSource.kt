@@ -4,9 +4,9 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.application.workflow.decomposition.isPlanWorkflow
 import skillbill.application.workflow.model.FeatureTaskGovernedSpecPathResult
 import skillbill.application.workflow.resolveFeatureTaskGovernedSpecPath
-import skillbill.config.model.CompactionSettings
 import skillbill.contracts.workflow.goal.GOAL_PLANNING_PREPARATION_SCHEMA_ID
-import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeAgentAssignment
+import skillbill.engine.featuretask.lifecycle.assignment.WorkflowAgentAssignmentInspection
+import skillbill.engine.featuretask.lifecycle.assignment.WorkflowAgentAssignmentStore
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEventSink
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunInput
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
@@ -79,6 +79,7 @@ public class PlanWorkflowGoalPlanningSource(
   private val progressRecorder: GoalPlanningProgressRecorder,
   private val projectStore: ProjectStorePort,
   private val feasibilityCodec: PlanBundleFeasibilityStateCodec,
+  private val workflowAgentAssignmentStore: WorkflowAgentAssignmentStore,
 ) : GoalPlanningSource {
   private val snapshots = PlanBundleSnapshots(planner)
 
@@ -86,7 +87,23 @@ public class PlanWorkflowGoalPlanningSource(
     state: GoalRunnerManifestState,
     request: GoalRunnerRunRequest,
   ): GoalPlanningSweepOutcome {
-    val scope = scopeOf(state, request)
+    val admittedRouting =
+      request.workflowAgentAssignments
+        ?: when (val routing = workflowAgentAssignmentStore.inspect(state.parentWorkflowId)) {
+          WorkflowAgentAssignmentInspection.Legacy -> {
+            null
+          }
+
+          is WorkflowAgentAssignmentInspection.Present -> {
+            routing.assignments
+          }
+
+          is WorkflowAgentAssignmentInspection.Problem -> {
+            throw SkillBillRuntimeException(routing.failureCode, routing.recoveryMessage)
+          }
+        }
+    val admittedRequest = request.copy(workflowAgentAssignments = admittedRouting)
+    val scope = scopeOf(state, admittedRequest)
     return if (scope.planned.isEmpty()) {
       GoalPlanningSweepOutcome.PreparedAll()
     } else {
@@ -112,7 +129,10 @@ public class PlanWorkflowGoalPlanningSource(
     store = canonicalStore(projectStore.resolve(request.sourceRepoRoot), repositories),
     selectedPlanId =
       database.read { unit ->
-        unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, state.parentWorkflowId)?.step(PLAN_STEP_ID)?.planWorkflowId
+        unit.workflowStates
+          .get(WorkflowFamily.TASK_RUNTIME, state.parentWorkflowId)
+          ?.step(PLAN_STEP_ID)
+          ?.planWorkflowId
       },
   )
 
@@ -175,7 +195,7 @@ public class PlanWorkflowGoalPlanningSource(
     val agentId = request.configuredAgentOverrideId ?: request.invokedAgentId
     val progress = progressRecorder.sink(scope.state.parentWorkflowId, issueKey, agentId)
     val inputFor = { specPath: String ->
-      planInput(request, agentId, specPath).copy(
+      planInput(request, specPath).copy(
         eventSink = progress,
         activityParentWorkflowId = scope.state.parentWorkflowId,
       )
@@ -189,14 +209,14 @@ public class PlanWorkflowGoalPlanningSource(
       }
     val result =
       if (linked == null) {
-        planRun.run(
-          issueKey,
-          null,
-          request.sourceRepoRoot,
-          StandalonePlanLaunch(agentId, IdeStatusLaunchScope.GOAL, executionRoot = request.repoRoot),
-          inputFor,
-        )
-          .forceReplanOf(replanned, scope, agentId, inputFor)
+        planRun
+          .run(
+            issueKey,
+            null,
+            request.sourceRepoRoot,
+            StandalonePlanLaunch(agentId, IdeStatusLaunchScope.GOAL, executionRoot = request.repoRoot),
+            inputFor,
+          ).forceReplanOf(replanned, scope, agentId, inputFor)
       } else {
         planRun.replanSubtasks(
           PlanSubtasksReplan(
@@ -216,16 +236,23 @@ public class PlanWorkflowGoalPlanningSource(
         )
       }
     return when (result) {
-      is StandalonePlanResult.Completed ->
-        loadPlan(result.workflowId)?.let { plan -> preparedFromPlan(scope, plan) }
+      is StandalonePlanResult.Completed -> {
+        loadPlan(result.workflowId)
+          ?.let { plan -> preparedFromPlan(scope, plan) }
           ?.withClearedChildren(scope, replanned)
           ?: scope.stopped(
             "Plan workflow '${result.workflowId}' settled, but a pending subtask still has no Implementation " +
               "Details in its governed spec.",
           )
-      is StandalonePlanResult.Blocked ->
+      }
+
+      is StandalonePlanResult.Blocked -> {
         scope.stopped("Planning blocked in plan workflow '${result.workflowId}': ${result.reason}")
-      is StandalonePlanResult.Refused -> scope.stopped(result.reason)
+      }
+
+      is StandalonePlanResult.Refused -> {
+        scope.stopped(result.reason)
+      }
     }
   }
 
@@ -253,17 +280,17 @@ public class PlanWorkflowGoalPlanningSource(
 
   private fun planInput(
     request: GoalRunnerRunRequest,
-    agentId: String,
     specPath: String,
   ) = FeatureTaskRuntimeRunInput(
     issueKey = request.issueKey,
     specPath = specPath,
     repoRoot = request.repoRoot,
     explicitWorkflowId = null,
-    invokedAgentId = agentId,
-    agentAssignment = FeatureTaskRuntimeAgentAssignment(),
+    invokedAgentId = request.invokedAgentId,
+    agentAssignment = request.agentAssignment,
+    workflowAgentAssignments = request.workflowAgentAssignments,
     modelAssignment = request.modelAssignment,
-    compactionSettings = CompactionSettings.DEFAULT,
+    compactionSettings = request.compactionSettings,
     environment = emptyMap(),
     timeout = request.timeout,
     requestedCodeReviewMode = null,
@@ -271,6 +298,7 @@ public class PlanWorkflowGoalPlanningSource(
     operatorDecision = null,
     agentAddonSelection = request.agentAddonSelection,
     eventSink = FeatureTaskRuntimeRunEventSink.NONE,
+    routingContextPrepared = request.routingContextPrepared,
   )
 
   private fun StandalonePlanResult.forceReplanOf(
@@ -429,7 +457,8 @@ public class PlanWorkflowGoalPlanningSource(
       }
     if (snapshot.steps.none { it.stepId == PLAN_SUBTASKS_STEP_ID }) return null
     val bundle =
-      DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PLAN_BUNDLE.value(snapshot.artifacts)
+      DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PLAN_BUNDLE
+        .value(snapshot.artifacts)
         ?.let(::decodePlanBundleFromArtifact)
     return LinkedPlan(workflowId, bundle, decodePhaseRecords(snapshot.artifacts), feasibilityState)
   }

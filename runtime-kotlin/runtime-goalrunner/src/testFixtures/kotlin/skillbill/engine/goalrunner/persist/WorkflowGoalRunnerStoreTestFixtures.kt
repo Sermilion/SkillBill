@@ -11,6 +11,7 @@ import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecut
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanCodec
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanCompatibility
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
+import skillbill.engine.featuretask.lifecycle.execution.routingConfigResolutionForTests
 import skillbill.engine.featuretask.lifecycle.execution.workflowAgentAssignmentStoreForTests
 import skillbill.engine.featuretask.slot.statusProjectionPhaseStrategies
 import skillbill.engine.featuretask.testing.featureTaskRuntimeWireArtifactValidatorForTest
@@ -150,6 +151,7 @@ fun engineWorkflowGoalRunnerManifestStore(
         parentProjection,
         InPlaceGoalWorktreeResources,
         testGoalPlanningCheckoutOwnership(database, repositoryEnclosingRootPort),
+        workflowAgentAssignmentStoreForTests(database),
       ),
     repositoryEnclosingRootPort = repositoryEnclosingRootPort,
     executionAdmission = executionAdmission,
@@ -165,6 +167,8 @@ fun engineWorkflowGoalRunnerManifestStore(
         historyEvidence,
         qualityExecution,
         blockWrites,
+        workflowAgentAssignmentStoreForTests(database),
+        database,
       ),
     parentProjection = parentProjection,
   )
@@ -207,6 +211,7 @@ private fun testFeatureTaskRuntimeCrashReconciler(
       testExecutionPlanCompatibility(),
       NoopRuntimeDiagnostics,
       workflowAgentAssignments = workflowAgentAssignmentStoreForTests(database),
+      configResolution = routingConfigResolutionForTests(),
     ),
   )
 

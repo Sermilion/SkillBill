@@ -42,6 +42,7 @@ import skillbill.goalrunner.model.GoalRunnerStopReason
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.workflow.model.DecompositionStatus
 import skillbill.workflow.model.decompositionStatus
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
 import java.nio.file.Path
 
 @Inject
@@ -76,17 +77,51 @@ public class GoalRunner(
           manifestStore.readByIssueKeyIfPresent(request.issueKey, request.repoRoot) == null
       )
 
-  public fun run(request: GoalRunnerRunRequest): GoalRunnerRunReport =
-    runPreparation.guardEntry({
+  public fun isNewGoal(request: GoalRunnerRunRequest): Boolean =
+    manifestStore.loadOccupyingByIssueKey(request.issueKey, request.repoRoot) == null &&
+      manifestStore.loadDurableByIssueKey(request.issueKey, request.repoRoot) == null
+
+  public fun run(request: GoalRunnerRunRequest): GoalRunnerRunReport {
+    intakeAdmission.frozenOptionRefusal(request)?.let { return it }
+    return runPreparation.guardEntry({
       it is GoalRunnerRunReport.Stopped &&
         it.stop.reason in ACCEPTED_GOAL_BLOCK_REASONS
     }) {
-      runAfterReconciliation(request)
+      val prepared = intakeAdmission.prepareRoutingContext(request)
+      runAfterReconciliation(
+        prepared.copy(
+          agentAssignment =
+            prepared.agentAssignment.copy(
+              override = prepared.agentAssignment.override ?: prepared.configuredAgentOverrideId,
+            ),
+        ),
+      )
     }
+  }
+
+  public fun retainedRoutingProviders(request: GoalRunnerRunRequest): Map<String, Set<String>>? =
+    intakeAdmission.retainedRoutingProviders(request)
+
+  public fun retainedLegacyLaunchPhases(request: GoalRunnerRunRequest): Set<String> =
+    intakeAdmission.retainedLegacyLaunchPhases(request)
+
+  public fun retainedQaSelection(request: GoalRunnerRunRequest): FeatureTaskRuntimeQaSelection? {
+    val state =
+      manifestStore.loadOccupyingByIssueKey(request.issueKey, request.repoRoot)?.state
+        ?: manifestStore.loadDurableByIssueKey(request.issueKey, request.repoRoot)
+        ?: return null
+    return manifestStore.controlState(state.parentWorkflowId).qaSelection
+      ?: state.manifest.subtasks
+        .asSequence()
+        .mapNotNull { subtask ->
+          subtask.workflowId?.takeIf(String::isNotBlank)?.let { outcomeStore.childQaSelection(it, null) }
+        }.firstOrNull()
+  }
 
   private fun runAfterReconciliation(request: GoalRunnerRunRequest): GoalRunnerRunReport {
     val durableState =
-      manifestStore.loadOccupyingByIssueKey(request.issueKey, request.repoRoot)
+      manifestStore
+        .loadOccupyingByIssueKey(request.issueKey, request.repoRoot)
         ?.state
         ?.copy(repoRoot = request.repoRoot)
     val admittedState =
@@ -95,9 +130,13 @@ public class GoalRunner(
         ?: return unknownGoal(request.issueKey)
     alreadyCompleteReport(admittedState)?.let { return it }
     return when (val rooted = runPreparation.resolveExecutionRoot(admittedState, request)) {
-      is GoalRunPreparation.PreparationBlocked -> settleBlockedStart(admittedState, rooted.report)
-      is GoalRunPreparation.Prepared ->
+      is GoalRunPreparation.PreparationBlocked -> {
+        settleBlockedStart(admittedState, rooted.report)
+      }
+
+      is GoalRunPreparation.Prepared -> {
         runFromExecutionRoot(rooted.state, rooted.request, resumesExistingGoal = durableState != null)
+      }
     }
   }
 
@@ -196,8 +235,7 @@ public class GoalRunner(
       .filter {
         it.status.decompositionStatus() in
           setOf(DecompositionStatus.COMPLETE, DecompositionStatus.COMPLETED_NO_CHANGE)
-      }
-      .filterNot { subtask -> acceptances[subtask.id]?.let { it.commitSha == subtask.commitSha } == true }
+      }.filterNot { subtask -> acceptances[subtask.id]?.let { it.commitSha == subtask.commitSha } == true }
       .forEach { subtask ->
         val childWorkflowId =
           subtask.workflowId?.takeIf(String::isNotBlank)

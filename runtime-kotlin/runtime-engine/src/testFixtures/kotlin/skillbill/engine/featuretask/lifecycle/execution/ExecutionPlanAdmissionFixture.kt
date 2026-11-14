@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.lifecycle.execution
 
 import skillbill.application.FakeDatabaseSessionFactory
+import skillbill.application.config.ConfigResolutionService
 import skillbill.config.model.RepoLocalConfig
 import skillbill.config.model.ValidationGateRepoConfig
 import skillbill.contracts.JsonCodec
@@ -17,6 +18,7 @@ import skillbill.engine.featuretask.validation.repoLocalConfig
 import skillbill.infrastructure.contracts.workflow.featuretask.ContractFeatureTaskRuntimePhaseOutputMigration
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeExecutionPlanSchemaValidator
 import skillbill.ports.config.RepoLocalConfigPort
+import skillbill.ports.config.model.ConfigDocumentReplaceResult
 import skillbill.ports.config.model.ReadRepoLocalConfigRequest
 import skillbill.ports.config.model.ReadRepoLocalConfigResult
 import skillbill.ports.db.DatabaseSessionFactory
@@ -25,6 +27,11 @@ import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
+import skillbill.ports.telemetry.model.TelemetryConfigLevelWriteResult
+import skillbill.ports.telemetry.model.TelemetryConfigRead
+import skillbill.ports.telemetry.model.TelemetryConfigSnapshotRead
+import skillbill.ports.telemetry.model.TelemetryConfigWriteRequest
+import skillbill.ports.telemetry.transport.TelemetryConfigStore
 import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -32,6 +39,7 @@ import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.toRecord
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
+import skillbill.telemetry.model.TelemetryConfigDocument
 import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.model.FeatureTaskExecutionIdentity
@@ -128,12 +136,13 @@ class ExecutionPlanAdmissionFixture(
   ) {
     val existing =
       states.getFeatureTaskWorkflow(workflowId)
-        ?: WorkflowEngine().openRecord(
-          WorkflowFamily.TASK_RUNTIME.definition,
-          workflowId,
-          "session",
-          "implement",
-        ).toRecord()
+        ?: WorkflowEngine()
+          .openRecord(
+            WorkflowFamily.TASK_RUNTIME.definition,
+            workflowId,
+            "session",
+            "implement",
+          ).toRecord()
     states.saveFeatureTaskWorkflow(
       existing.copy(
         issueKey = issueKey,
@@ -174,6 +183,7 @@ class ExecutionPlanAdmissionFixture(
       compatibility,
       diagnostics = NoopRuntimeDiagnostics,
       workflowAgentAssignments = workflowAgentAssignmentStoreForTests(database),
+      configResolution = routingConfigResolutionForTests(),
     )
 
   fun recoveryResolver(
@@ -208,6 +218,7 @@ class ExecutionPlanAdmissionFixture(
       compatibility,
       diagnostics = NoopRuntimeDiagnostics,
       workflowAgentAssignments = workflowAgentAssignmentStoreForTests(database),
+      configResolution = routingConfigResolutionForTests(),
     )
 
   fun encoded(inputs: EffectiveGatePolicyInputs = this.inputs): ByteArray = codec.encodeExecution(plan, inputs)
@@ -226,3 +237,31 @@ class ExecutionPlanAdmissionFixture(
   fun descriptor(inputs: EffectiveGatePolicyInputs = this.inputs): Map<String, Any?> =
     validator.read(encoded(inputs), "test creation")
 }
+
+fun routingConfigResolutionForTests(): ConfigResolutionService =
+  ConfigResolutionService(
+    repoLocalConfig(),
+    object : TelemetryConfigStore {
+      override fun configPath(): Path = Path.of("test-machine-config.json")
+
+      override fun read(): TelemetryConfigRead = TelemetryConfigRead.Absent
+
+      override fun stateDir(): Path = error("Unexpected state directory lookup")
+
+      override fun configCandidatePaths(): List<Path> = error("Unexpected config candidates lookup")
+
+      override fun <T> withConfigTransaction(action: () -> T): T = error("Unexpected config transaction")
+
+      override fun newInstallIdCandidate(): String = error("Unexpected install id creation")
+
+      override fun readSnapshot(): TelemetryConfigSnapshotRead = error("Unexpected config snapshot")
+
+      override fun ensure(): TelemetryConfigDocument = error("Unexpected config creation")
+
+      override fun write(request: TelemetryConfigWriteRequest): ConfigDocumentReplaceResult =
+        error("Unexpected config write")
+
+      override fun mutateTelemetryLevelAtomically(level: String): TelemetryConfigLevelWriteResult =
+        error("Unexpected telemetry mutation")
+    },
+  )

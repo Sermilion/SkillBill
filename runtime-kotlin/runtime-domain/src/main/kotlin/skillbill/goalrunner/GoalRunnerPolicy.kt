@@ -28,7 +28,10 @@ object GoalRunnerQualityGateSelectionResolver {
 public fun DecompositionManifest.goalWorkBranch(): String? {
   val branch =
     when (executionModel) {
-      DecompositionExecutionModel.SAME_BRANCH_COMMIT_PER_SUBTASK -> featureBranch
+      DecompositionExecutionModel.SAME_BRANCH_COMMIT_PER_SUBTASK -> {
+        featureBranch
+      }
+
       DecompositionExecutionModel.STACKED_BRANCHES -> {
         val selected = (GoalRunnerPlanner.selectNext(this) as? GoalRunnerSelection.Run)?.decision?.subtask?.id
         stackBranches.firstOrNull { it.subtaskId == selected }?.branch ?: featureBranch
@@ -72,13 +75,16 @@ object GoalRunnerPlanner {
           )
         }
       }
+
       candidate.status.decompositionStatus() == DecompositionStatus.PENDING &&
-        !dependenciesComplete(manifest, candidate) ->
+        !dependenciesComplete(manifest, candidate) -> {
         GoalRunnerSelection.Blocked(
           subtask = candidate,
           reason = "Subtask ${candidate.id} is waiting for incomplete dependencies.",
         )
-      else ->
+      }
+
+      else -> {
         GoalRunnerSelection.Run(
           GoalRunnerSubtaskDecision(
             subtask = candidate,
@@ -90,6 +96,7 @@ object GoalRunnerPlanner {
               },
           ),
         )
+      }
     }
   }
 
@@ -101,7 +108,7 @@ object GoalRunnerPlanner {
     return subtask.dependencies.all { dependency ->
       val dependencySubtask = subtasksById[dependency.subtaskId] ?: return@all false
       dependencySubtask.status.decompositionStatus() in SETTLED_SUBTASK_STATUSES ||
-        dependency.optional && dependency.skipped
+        (dependency.optional && dependency.skipped)
     }
   }
 }
@@ -133,10 +140,13 @@ object GoalRunnerWorkerSubtaskScheduler {
               GoalRunnerWorkerSubtaskRequestOutcome.Accepted(outcome.request, subtask)
             }
           }
+
           is GoalRunnerWorkerSubtaskRequestOutcome.Accepted,
           is GoalRunnerWorkerSubtaskRequestOutcome.Rejected,
           is GoalRunnerWorkerSubtaskRequestOutcome.RequiresOperatorConfirmation,
-          -> outcome
+          -> {
+            outcome
+          }
         }
       }
     return GoalRunnerWorkerSubtaskSchedulingResult(nextManifest.withParentStatusForWorkerRequests(), scheduledOutcomes)
@@ -157,7 +167,10 @@ object GoalRunnerWorkerSubtaskScheduler {
   private fun GoalRunnerWorkerSubtaskRequest.normalizedDependencies(manifest: DecompositionManifest): List<Int> {
     val requestedDependencies =
       dependsOnSubtaskIds.ifEmpty {
-        manifest.currentSubtaskIntent.subtaskId.takeIf { it > 0 }?.let(::listOf).orEmpty()
+        manifest.currentSubtaskIntent.subtaskId
+          .takeIf { it > 0 }
+          ?.let(::listOf)
+          .orEmpty()
       }
     return requestedDependencies
       .filter { dependency -> manifest.subtasks.any { subtask -> subtask.id == dependency } }
@@ -179,21 +192,38 @@ object GoalRunnerOutcomeReconciler {
     storedOutcome: GoalRunnerStoredOutcome?,
   ): GoalRunnerReconciledOutcome =
     when {
-      launchFacts.interrupted ->
+      launchFacts.interrupted -> {
         stop(
           reason = GoalRunnerStopReason.INTERRUPTED,
           blockedReason = "Subtask $subtaskId was interrupted before a terminal workflow-store outcome was written.",
           storedOutcome = storedOutcome,
           liveness = launchFacts.liveness,
         )
-      launchFacts.timedOut ->
+      }
+
+      launchFacts.timedOut -> {
         stop(
           reason = GoalRunnerStopReason.TIMEOUT,
           blockedReason = "Subtask $subtaskId timed out before reaching a terminal workflow-store outcome.",
           storedOutcome = storedOutcome,
           liveness = launchFacts.liveness,
         )
-      launchFacts.spawnFailed ->
+      }
+
+      launchFacts.launchRefusal != null -> {
+        stop(
+          reason = GoalRunnerStopReason.BLOCKED,
+          blockedReason =
+            launchFacts.launchRefusal.let { refusal ->
+              "Provider '${refusal.providerId}' cannot launch phase '${refusal.phaseId}': " +
+                "${refusal.reason}. Restore that provider's launch capability and resume the goal."
+            },
+          storedOutcome = storedOutcome,
+          liveness = launchFacts.liveness,
+        )
+      }
+
+      launchFacts.spawnFailed -> {
         stop(
           reason = GoalRunnerStopReason.BLOCKED,
           blockedReason =
@@ -203,7 +233,9 @@ object GoalRunnerOutcomeReconciler {
           storedOutcome = storedOutcome,
           liveness = launchFacts.liveness,
         )
-      storedOutcome == null ->
+      }
+
+      storedOutcome == null -> {
         GoalRunnerReconciledOutcome.Stop(
           reason = GoalRunnerStopReason.NO_TERMINAL_STORE_OUTCOME,
           blockedReason = noTerminalStoreOutcomeReason(subtaskId, launchFacts),
@@ -212,14 +244,20 @@ object GoalRunnerOutcomeReconciler {
           lastResumableStep = "preplan",
           liveness = launchFacts.liveness,
         )
-      !storedOutcome.suppressPr ->
+      }
+
+      !storedOutcome.suppressPr -> {
         stop(
           reason = GoalRunnerStopReason.BLOCKED,
           blockedReason = "Subtask $subtaskId did not suppress per-subtask PR creation.",
           storedOutcome = storedOutcome,
           liveness = launchFacts.liveness,
         )
-      else -> reconcileStoredOutcome(subtaskId, storedOutcome, launchFacts)
+      }
+
+      else -> {
+        reconcileStoredOutcome(subtaskId, storedOutcome, launchFacts)
+      }
     }
 
   private fun reconcileStoredOutcome(
@@ -229,15 +267,20 @@ object GoalRunnerOutcomeReconciler {
   ): GoalRunnerReconciledOutcome {
     val liveness = launchFacts.liveness
     return when (storedOutcome.status) {
-      GoalRunnerTerminalStatus.COMPLETE -> completeOutcome(subtaskId, storedOutcome)
-      GoalRunnerTerminalStatus.FAILED ->
+      GoalRunnerTerminalStatus.COMPLETE -> {
+        completeOutcome(subtaskId, storedOutcome)
+      }
+
+      GoalRunnerTerminalStatus.FAILED -> {
         stop(
           reason = GoalRunnerStopReason.FAILED,
           blockedReason = storedOutcome.blockedReason.orEmpty().ifBlank { "Subtask $subtaskId failed." },
           storedOutcome = storedOutcome,
           liveness = liveness,
         )
-      GoalRunnerTerminalStatus.BLOCKED ->
+      }
+
+      GoalRunnerTerminalStatus.BLOCKED -> {
         stop(
           reason = GoalRunnerStopReason.BLOCKED,
           blockedReason =
@@ -248,26 +291,33 @@ object GoalRunnerOutcomeReconciler {
           storedOutcome = storedOutcome,
           liveness = liveness,
         )
-      GoalRunnerTerminalStatus.TIMEOUT ->
+      }
+
+      GoalRunnerTerminalStatus.TIMEOUT -> {
         stop(
           reason = GoalRunnerStopReason.TIMEOUT,
           blockedReason =
-            storedOutcome.blockedReason.orEmpty()
+            storedOutcome.blockedReason
+              .orEmpty()
               .ifBlank { "Subtask $subtaskId timed out before completion." },
           storedOutcome = storedOutcome,
           liveness = liveness,
         )
-      GoalRunnerTerminalStatus.NO_TERMINAL_STORE_OUTCOME ->
+      }
+
+      GoalRunnerTerminalStatus.NO_TERMINAL_STORE_OUTCOME -> {
         stop(
           reason = GoalRunnerStopReason.NO_TERMINAL_STORE_OUTCOME,
           blockedReason =
-            storedOutcome.blockedReason.orEmpty()
+            storedOutcome.blockedReason
+              .orEmpty()
               .ifBlank { "Subtask $subtaskId has no terminal workflow-store outcome." },
           storedOutcome = storedOutcome,
           liveness = liveness,
         )
+      }
 
-      GoalRunnerTerminalStatus.COMPLETED_NO_CHANGE ->
+      GoalRunnerTerminalStatus.COMPLETED_NO_CHANGE -> {
         stop(
           reason = GoalRunnerStopReason.BLOCKED,
           blockedReason =
@@ -275,22 +325,33 @@ object GoalRunnerOutcomeReconciler {
           storedOutcome = storedOutcome,
           liveness = liveness,
         )
+      }
 
-      GoalRunnerTerminalStatus.RECONCILABLE ->
-        stop(
-          reason = GoalRunnerStopReason.RECONCILED_RESUMABLE,
-          blockedReason =
-            storedOutcome.blockedReason.orEmpty().ifBlank {
-              "Subtask $subtaskId was interrupted by a crashed child and reconciled to a resumable state; " +
-                "resume the goal to continue from its last step."
-            },
-          storedOutcome = storedOutcome,
-          liveness = liveness,
-        )
+      GoalRunnerTerminalStatus.RECONCILABLE -> {
+        interruptedOutcome(subtaskId, storedOutcome, liveness)
+      }
 
-      GoalRunnerTerminalStatus.PAUSED -> pausedOutcome(subtaskId, storedOutcome, liveness)
+      GoalRunnerTerminalStatus.PAUSED -> {
+        pausedOutcome(subtaskId, storedOutcome, liveness)
+      }
     }
   }
+
+  private fun interruptedOutcome(
+    subtaskId: Int,
+    storedOutcome: GoalRunnerStoredOutcome,
+    liveness: GoalRunnerLivenessSnapshot?,
+  ): GoalRunnerReconciledOutcome =
+    stop(
+      reason = GoalRunnerStopReason.RECONCILED_RESUMABLE,
+      blockedReason =
+        storedOutcome.blockedReason.orEmpty().ifBlank {
+          "Subtask $subtaskId was interrupted by a crashed child and reconciled to a resumable state; " +
+            "resume the goal to continue from its last step."
+        },
+      storedOutcome = storedOutcome,
+      liveness = liveness,
+    )
 
   private fun pausedOutcome(
     subtaskId: Int,
@@ -358,15 +419,18 @@ object GoalRunnerOutcomeReconciler {
     val exitStatus = launchFacts.exitStatus
     val lead =
       when {
-        exitStatus != null && exitStatus != 0 ->
+        exitStatus != null && exitStatus != 0 -> {
           "Subtask $subtaskId finished without a terminal workflow-store outcome: the child process " +
             "exited with status $exitStatus before its workflow row reached a terminal state (complete " +
             "or durably blocked). A non-zero exit means the child errored out rather than stopping cleanly."
-        else ->
+        }
+
+        else -> {
           "Subtask $subtaskId finished without a terminal workflow-store outcome: the child process " +
             "exited cleanly (status ${exitStatus ?: "unknown"}) but its workflow row never reached a " +
             "terminal state. A clean exit without a terminal store-write usually means a model/usage " +
             "limit or a missed terminal MCP call before persisting."
+        }
       }
     val guidance = " Inspect the child workflow and its transcript to confirm, then resume from last_resumable_step."
     val stderrDetail =

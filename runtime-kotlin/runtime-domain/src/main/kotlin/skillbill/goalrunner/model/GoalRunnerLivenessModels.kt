@@ -7,6 +7,7 @@ data class GoalRunnerLaunchFacts(
   val exitStatus: Int? = null,
   val liveness: GoalRunnerLivenessSnapshot? = null,
   val stderrExcerpt: String? = null,
+  val launchRefusal: GoalRunnerLaunchRefusal? = null,
 ) {
   companion object {
     const val STDERR_EXCERPT_MAX_CHARS: Int = 3_000
@@ -15,7 +16,15 @@ data class GoalRunnerLaunchFacts(
   }
 }
 
-enum class GoalRunnerLivenessState(val wireValue: String) {
+data class GoalRunnerLaunchRefusal(
+  val providerId: String,
+  val phaseId: String,
+  val reason: String,
+)
+
+enum class GoalRunnerLivenessState(
+  val wireValue: String,
+) {
   WORKING("working"),
   PROGRESSING("progressing"),
   IDLE("idle"),
@@ -47,7 +56,9 @@ data class GoalRunnerLivenessDecision(
   val disarmIdleTimeout: Boolean get() = !armIdleTimeout
 }
 
-enum class GoalRunnerProcessState(val wireValue: String) {
+enum class GoalRunnerProcessState(
+  val wireValue: String,
+) {
   UNKNOWN("unknown"),
   KILLED("killed"),
   EXITED("exited"),
@@ -62,7 +73,9 @@ enum class GoalRunnerProcessState(val wireValue: String) {
   }
 }
 
-enum class GoalRunnerContinuationMode(val wireValue: String) {
+enum class GoalRunnerContinuationMode(
+  val wireValue: String,
+) {
   KILLED_UNRESPONSIVE_CHILD("killed_unresponsive_child"),
   KILLED_BY_PARENT_INTERRUPT("killed_by_parent_interrupt"),
   CONTINUE_INLINE("continue_inline"),

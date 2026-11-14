@@ -28,7 +28,6 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranc
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
-import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateProgress
@@ -92,9 +91,11 @@ public class PhaseRunPlanResolver(
         }
       }
       val requiredAssignments =
-        plan.selectedStepIds.filter { step ->
-          strategies.selectedOwnerOf(step, plan)?.slot !in setOf(PhaseSlot.INTAKE, PhaseSlot.COMMIT_PUSH)
-        }.toSet()
+        FeatureTaskRuntimeStepLaunchAssignmentFactory
+          .agentBackedStepIds(
+            strategies,
+            plan,
+          ).toSet()
       if (plan.stepLaunchAssignments.keys != requiredAssignments ||
         plan.stepLaunchAssignments.any { (step, assignment) ->
           assignment.stepId != step || assignment.agentId != expectedAgentId
@@ -119,49 +120,51 @@ public class PhaseRunPlanResolver(
     plan: ResolvedPhaseExecutionPlan,
     outcomeNamespace: String,
   ) {
-    progress.phaseRecords.values.filter { record ->
-      retainedRunningPhase(progress, plan, record) &&
-        strategies.qualityGateOperation(plan, record.phaseId) != PhaseQualityGateOperation.AgentValidation
-    }.forEach { record ->
-      val envelopeAccepted =
-        progress.acceptedEnvelopes.any {
-          it.phaseId == record.phaseId && it.attempt == record.attemptCount
-        }
-      when (val operation = strategies.qualityGateOperation(plan, record.phaseId)) {
-        is PhaseQualityGateOperation.PackGate -> {
-          validateRunningGate(
-            progress,
-            record,
-            operation.commandFamily,
-            packBuildGateProgressKey(
-              outcomeNamespace,
-              plan.definitionId,
-              record.phaseId,
-              record.attemptCount,
-              operation.commandFamily,
-            ),
-          )
-        }
-        else -> {
-          val policy = strategies.selectedOwnerOf(record.phaseId, plan)?.policyFor(record.phaseId)
-          val acceptedSource =
-            progress.acceptedSourceObservations.any {
-              it.phaseId == record.phaseId && it.attempt == record.attemptCount &&
-                it.acceptedOutputFingerprint != null
-            }
-          if (mutatingWithoutAcceptedSource(
-              envelopeAccepted,
-              policy?.mutating == true,
-              policy?.fileMutating == true,
-              acceptedSource,
-            )
-          ) {
-            unknownQualityStep(record)
+    progress.phaseRecords.values
+      .filter { record ->
+        retainedRunningPhase(progress, plan, record) &&
+          strategies.qualityGateOperation(plan, record.phaseId) != PhaseQualityGateOperation.AgentValidation
+      }.forEach { record ->
+        val envelopeAccepted =
+          progress.acceptedEnvelopes.any {
+            it.phaseId == record.phaseId && it.attempt == record.attemptCount
           }
-          if (!envelopeAccepted && !replayableReadOnlyStep(progress, record, plan)) unknownQualityStep(record)
+        when (val operation = strategies.qualityGateOperation(plan, record.phaseId)) {
+          is PhaseQualityGateOperation.PackGate -> {
+            validateRunningGate(
+              progress,
+              record,
+              operation.commandFamily,
+              packBuildGateProgressKey(
+                outcomeNamespace,
+                plan.definitionId,
+                record.phaseId,
+                record.attemptCount,
+                operation.commandFamily,
+              ),
+            )
+          }
+
+          else -> {
+            val policy = strategies.selectedOwnerOf(record.phaseId, plan)?.policyFor(record.phaseId)
+            val acceptedSource =
+              progress.acceptedSourceObservations.any {
+                it.phaseId == record.phaseId && it.attempt == record.attemptCount &&
+                  it.acceptedOutputFingerprint != null
+              }
+            if (mutatingWithoutAcceptedSource(
+                envelopeAccepted,
+                policy?.mutating == true,
+                policy?.fileMutating == true,
+                acceptedSource,
+              )
+            ) {
+              unknownQualityStep(record)
+            }
+            if (!envelopeAccepted && !replayableReadOnlyStep(progress, record, plan)) unknownQualityStep(record)
+          }
         }
       }
-    }
   }
 
   internal fun requiresTerminalQualitySourceEvidence(plan: ResolvedPhaseExecutionPlan): Boolean =
@@ -240,9 +243,13 @@ public class PhaseRunPlanResolver(
     if (terminalActions) unknownQualityStep(record)
     val (storedKey, nested) =
       when (commandFamily) {
-        ValidationGateCommandFamily.BUILD -> progress.buildGateProgressKey to progress.buildGateProgress
-        ValidationGateCommandFamily.VALIDATION ->
+        ValidationGateCommandFamily.BUILD -> {
+          progress.buildGateProgressKey to progress.buildGateProgress
+        }
+
+        ValidationGateCommandFamily.VALIDATION -> {
           progress.validationGateProgressKey to progress.validationGateProgress
+        }
       }
     if (storedKey != expectedKey || nested == null) unknownQualityStep(record)
     if (nested.interruptedInitialDiscovery(commandFamily)) return
@@ -292,8 +299,8 @@ public class PhaseRunPlanResolver(
   private fun hasTerminalAction(
     ledger: List<FeatureTaskRuntimePhaseLedgerEntry>,
     record: FeatureTaskRuntimePhaseRecord,
-  ): Boolean {
-    return ledger.any {
+  ): Boolean =
+    ledger.any {
       it.phaseId == record.phaseId && it.attemptCount == record.attemptCount &&
         it.action in
         setOf(
@@ -302,7 +309,6 @@ public class PhaseRunPlanResolver(
           FeatureTaskRuntimePhaseLedgerAction.PAUSED,
         )
     }
-  }
 
   public fun validateNestedProgressKeys(progress: GoalQualityPhaseProgress) {
     val invalidBuild =
@@ -456,22 +462,31 @@ private fun terminalEvent(
   record: FeatureTaskRuntimePhaseRecord,
 ): FeatureTaskRuntimePhaseLedgerEntry? =
   when (record.status) {
-    WorkflowStepStatus.BLOCKED -> progress.acceptedBlockedValidationEvent(record.phaseId, record.attemptCount)
-    WorkflowStepStatus.COMPLETED ->
-      progress.phaseLedger.filter {
-        it.phaseId == record.phaseId && it.attemptCount == record.attemptCount &&
-          it.action == FeatureTaskRuntimePhaseLedgerAction.COMPLETE
-      }.maxByOrNull { it.sequenceNumber }
-    else -> null
+    WorkflowStepStatus.BLOCKED -> {
+      progress.acceptedBlockedValidationEvent(record.phaseId, record.attemptCount)
+    }
+
+    WorkflowStepStatus.COMPLETED -> {
+      progress.phaseLedger
+        .filter {
+          it.phaseId == record.phaseId && it.attemptCount == record.attemptCount &&
+            it.action == FeatureTaskRuntimePhaseLedgerAction.COMPLETE
+        }.maxByOrNull { it.sequenceNumber }
+    }
+
+    else -> {
+      null
+    }
   }
 
 private fun retainedBlockedBoundary(progress: GoalQualityPhaseProgress): String? =
   progress.acceptedSourceObservations.lastOrNull()?.let { observation ->
-    progress.phaseRecords[observation.phaseId]?.takeIf { record ->
-      record.status == WorkflowStepStatus.BLOCKED && record.attemptCount == observation.attempt &&
-        progress.acceptedBlockedValidationEvent(record.phaseId, record.attemptCount)?.sequenceNumber ==
-        observation.completionSequenceNumber
-    }?.phaseId
+    progress.phaseRecords[observation.phaseId]
+      ?.takeIf { record ->
+        record.status == WorkflowStepStatus.BLOCKED && record.attemptCount == observation.attempt &&
+          progress.acceptedBlockedValidationEvent(record.phaseId, record.attemptCount)?.sequenceNumber ==
+          observation.completionSequenceNumber
+      }?.phaseId
   }
 
 private fun warningSourceIsCurrent(
@@ -557,11 +572,18 @@ private fun warningGateSourceIsCurrent(
     gate.terminalOutcome == "blocked" &&
       (gate.terminalFailureCode != null || gate.terminalFailureDisposition != null)
   return when {
-    knownRefusal -> true
-    gate.terminalOutcome != null -> false
-    else ->
+    knownRefusal -> {
+      true
+    }
+
+    gate.terminalOutcome != null -> {
+      false
+    }
+
+    else -> {
       gateRunSourceIsCurrent(gate, repoRoot, gitOperations) &&
         gate.gateRuns.last().outcome != ValidationGateRunOutcome.PASSED
+    }
   }
 }
 
@@ -691,8 +713,10 @@ private fun legacyGateSourceIsCurrent(
 }
 
 private fun sha256(value: String): String =
-  MessageDigest.getInstance("SHA-256")
-    .digest(value.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
+  MessageDigest
+    .getInstance("SHA-256")
+    .digest(value.toByteArray(Charsets.UTF_8))
+    .joinToString("") { "%02x".format(it) }
 
 public data class GoalQualityValidationSourceRequest(
   val progress: GoalQualityPhaseProgress,

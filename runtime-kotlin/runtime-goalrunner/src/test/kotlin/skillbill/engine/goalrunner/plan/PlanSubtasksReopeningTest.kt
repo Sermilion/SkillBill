@@ -12,6 +12,7 @@ import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskContinuati
 import skillbill.engine.featuretask.lifecycle.continuation.claimForTest
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeCrashReconciler
 import skillbill.engine.featuretask.lifecycle.execution.ExecutionPlanAdmissionFixture
+import skillbill.engine.featuretask.lifecycle.execution.workflowAgentAssignmentStoreForTests
 import skillbill.engine.featuretask.model.continuation.FeatureTaskContinuationLookupResult
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.engine.featuretask.phase.planning.FeatureTaskRuntimeDecompositionPlanner
@@ -50,6 +51,7 @@ import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.engine.model.WorkflowArtifactPatch
+import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.engine.model.WorkflowUpdateInput
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
@@ -437,28 +439,45 @@ class PlanSubtasksReopeningTest {
       records.filterKeys { it != "plan_subtasks" }.forEach { (phase, record) -> assertEquals(record, retained[phase]) }
       assertTrue(reopening.reopenWithRebasedBundle(replan))
       assertEquals(recovered, database.read { it.workflowStates.get(WorkflowFamily.TASK_RUNTIME, selectedId) })
-      database.transaction { unit ->
-        unit.workflowStates.saveAcceptedSnapshotMutation(
-          WorkflowFamily.TASK_RUNTIME,
-          recovered.copy(workflowStatus = WorkflowStatus.RUNNING),
-        )
-        val before = requireNotNull(unit.workflowStates.getFeatureTaskWorkflow(selectedId))
-        assertTrue(
-          unit.workflowStates.acquireFeatureTaskRuntimeWorker(
-            FeatureTaskRuntimeWorkerOwnership(
-              selectedId, 1, "plan-owner-token-12345678", "host", "boot", 1234, "birth",
-              FeatureTaskRuntimeWorkerLeaseState.ACTIVE, testHarnessClock.instant().toString(),
-              testHarnessClock.instant().plusSeconds(30).toString(), "plan_subtasks", 1,
-            ),
-            before.updatedAt,
-          ),
-        )
-      }
+      acquirePlanWorker(database, selectedId, recovered)
       val owned = database.read { it.workflowStates.get(WorkflowFamily.TASK_RUNTIME, selectedId) }
       assertFalse(reopening.reopenWithRebasedBundle(replan))
       assertEquals(owned, database.read { it.workflowStates.get(WorkflowFamily.TASK_RUNTIME, selectedId) })
     } finally {
       home.toFile().deleteRecursively()
+    }
+  }
+
+  private fun acquirePlanWorker(
+    database: DatabaseSessionFactory,
+    selectedId: String,
+    recovered: WorkflowStateSnapshot,
+  ) {
+    database.transaction { unit ->
+      unit.workflowStates.saveAcceptedSnapshotMutation(
+        WorkflowFamily.TASK_RUNTIME,
+        recovered.copy(workflowStatus = WorkflowStatus.RUNNING),
+      )
+      val before = requireNotNull(unit.workflowStates.getFeatureTaskWorkflow(selectedId))
+      assertTrue(
+        unit.workflowStates.acquireFeatureTaskRuntimeWorker(
+          FeatureTaskRuntimeWorkerOwnership(
+            selectedId,
+            1,
+            "plan-owner-token-12345678",
+            "host",
+            "boot",
+            1234,
+            "birth",
+            FeatureTaskRuntimeWorkerLeaseState.ACTIVE,
+            testHarnessClock.instant().toString(),
+            testHarnessClock.instant().plusSeconds(30).toString(),
+            "plan_subtasks",
+            1,
+          ),
+          before.updatedAt,
+        ),
+      )
     }
   }
 
@@ -501,7 +520,11 @@ class PlanSubtasksReopeningTest {
       assertTrue(state.currentCycleId.orEmpty().startsWith("$selectedId:plan_subtasks:retry-"))
       assertEquals(
         PlanBundleFeasibilityLaunchOutcome.BLOCKED,
-        state.cycleHistory.single().settledLaunches.single().outcome,
+        state.cycleHistory
+          .single()
+          .settledLaunches
+          .single()
+          .outcome,
       )
       assertEquals(WorkflowStepStatus.PENDING, decodePhaseRecords(reopened.artifacts)["plan_subtasks"]?.status)
       assertTrue(reopening.reopenWithRebasedBundle(replan))
@@ -711,11 +734,18 @@ class PlanSubtasksReopeningTest {
         parentGoalWorkflowId = identity.parentGoalWorkflowId,
         normalizedIssueKey = identity.normalizedIssueKey,
         repositoryIdentity = identity.repositoryIdentity,
-        parentSpecHash = "parent", decompositionManifestHash = "manifest",
-        planningContractId = "planning", planningContractVersion = "0.2",
-        phaseOutputContractId = "phase-output", phaseOutputContractVersion = "0.7",
-        subtaskId = 3, manifestOrder = 2, governedSubSpecPath = "subtask-3.md", subSpecHash = "spec",
-        preplanPayloadSha256 = "preplan", planPayloadSha256 = "plan",
+        parentSpecHash = "parent",
+        decompositionManifestHash = "manifest",
+        planningContractId = "planning",
+        planningContractVersion = "0.2",
+        phaseOutputContractId = "phase-output",
+        phaseOutputContractVersion = "0.7",
+        subtaskId = 3,
+        manifestOrder = 2,
+        governedSubSpecPath = "subtask-3.md",
+        subSpecHash = "spec",
+        preplanPayloadSha256 = "preplan",
+        planPayloadSha256 = "plan",
         source =
           FeatureTaskRuntimeGoalPlanningImportSource(
             FeatureTaskRuntimeGoalPlanningImportSource.PLAN_WORKFLOW,
@@ -757,6 +787,8 @@ class PlanSubtasksReopeningTest {
       database,
       PlanBundleFeasibilityStateCodec(featureTaskRuntimeWireArtifactValidatorForTest()),
       NoopRuntimeDiagnostics,
+      workflowAgentAssignmentStoreForTests(database),
+      execution.recoveryResolver(),
     )
 
   private fun acceptedRecords(): Map<String, FeatureTaskRuntimePhaseRecord> =

@@ -4,6 +4,7 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.agentaddon.model.HydratedAgentAddonSelection
 import skillbill.application.config.ConfigResolutionService
 import skillbill.cli.model.CliRunInputs
+import skillbill.config.model.CompactionSettings
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeAgentAssignment
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeModelAssignment
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEventSink
@@ -23,6 +24,18 @@ class StandalonePlanLauncher(
 ) {
   fun issueKeyOf(intake: String): String = planRun.issueKeyOf(intake)
 
+  fun retainedGoalPlanningWorkflowId(
+    issueKey: String,
+    intake: String?,
+    repoRoot: Path,
+  ): String? = planRun.retainedGoalPlanningWorkflowId(issueKey, intake, repoRoot)
+
+  fun retainedGoalRoutingProviders(
+    workflowId: String,
+    invokedAgentId: String,
+    agentAssignment: FeatureTaskRuntimeAgentAssignment = FeatureTaskRuntimeAgentAssignment(),
+  ): Map<String, Set<String>>? = planRun.retainedGoalRoutingProviders(workflowId, invokedAgentId, agentAssignment)
+
   fun prepareGoalCheckout(
     issueKey: String,
     intake: String?,
@@ -35,17 +48,43 @@ class StandalonePlanLauncher(
     repoRoot: Path,
     invokedAgentId: String,
     options: StandalonePlanOptions = StandalonePlanOptions(),
-  ): StandalonePlanResult =
-    planRun.run(issueKey, intake, repoRoot, StandalonePlanLaunch(invokedAgentId, options.launchScope)) { specPath ->
+  ): StandalonePlanResult {
+    val selectedWorkflowId =
+      options.selectedWorkflowId ?: if (options.launchScope == IdeStatusLaunchScope.GOAL) {
+        planRun.retainedGoalPlanningWorkflowId(issueKey, intake, repoRoot)
+      } else {
+        null
+      }
+    val hasPreparedMatrix = options.modelAssignment?.matrix != null || options.agentAssignment.matrix != null
+    val configuration =
+      if (selectedWorkflowId != null || options.routingContextPrepared || hasPreparedMatrix) {
+        null
+      } else {
+        configResolution.resolveRunConfiguration()
+      }
+    val matrix = options.modelAssignment?.matrix ?: options.agentAssignment.matrix ?: configuration?.executionMatrix
+    val compactionSettings =
+      if (selectedWorkflowId != null && options.compactionSettings == CompactionSettings.DEFAULT) {
+        configResolution.resolveCompactionSettings()
+      } else {
+        configuration?.compactionSettings ?: options.compactionSettings
+      }
+    return planRun.run(
+      issueKey,
+      intake,
+      repoRoot,
+      StandalonePlanLaunch(invokedAgentId, options.launchScope, retainedWorkflowId = selectedWorkflowId),
+    ) { specPath ->
       FeatureTaskRuntimeRunInput(
         issueKey = issueKey,
         specPath = specPath,
         repoRoot = repoRoot,
         explicitWorkflowId = null,
         invokedAgentId = invokedAgentId,
-        agentAssignment = FeatureTaskRuntimeAgentAssignment(),
-        modelAssignment = FeatureTaskRuntimeModelAssignment(matrix = configResolution.resolveExecutionMatrix()),
-        compactionSettings = configResolution.resolveCompactionSettings(),
+        agentAssignment = options.agentAssignment.copy(matrix = matrix),
+        modelAssignment =
+          options.modelAssignment?.copy(matrix = matrix) ?: FeatureTaskRuntimeModelAssignment(matrix = matrix),
+        compactionSettings = compactionSettings,
         environment = inputs.environment,
         timeout = options.timeout,
         requestedCodeReviewMode = null,
@@ -53,15 +92,22 @@ class StandalonePlanLauncher(
         operatorDecision = null,
         agentAddonSelection = options.agentAddonSelection,
         eventSink = options.eventSink,
+        routingContextPrepared = true,
       )
     }
+  }
 }
 
 data class StandalonePlanOptions(
   val timeout: Duration? = null,
+  val agentAssignment: FeatureTaskRuntimeAgentAssignment = FeatureTaskRuntimeAgentAssignment(),
+  val modelAssignment: FeatureTaskRuntimeModelAssignment? = null,
+  val compactionSettings: CompactionSettings = CompactionSettings.DEFAULT,
+  val routingContextPrepared: Boolean = false,
   val agentAddonSelection: HydratedAgentAddonSelection = HydratedAgentAddonSelection(),
   val eventSink: FeatureTaskRuntimeRunEventSink = FeatureTaskRuntimeRunEventSink.NONE,
   val launchScope: IdeStatusLaunchScope = IdeStatusLaunchScope.STANDALONE,
+  val selectedWorkflowId: String? = null,
 )
 
 fun StandalonePlanResult.planReportText(
@@ -70,16 +116,21 @@ fun StandalonePlanResult.planReportText(
 ): String =
   (
     when (this) {
-      is StandalonePlanResult.Completed ->
+      is StandalonePlanResult.Completed -> {
         (
           listOf("Parent spec: $parentSpecPath", "Manifest: $decompositionManifestPath") +
             subtaskSpecPaths.map { path -> "Subtask spec: $path" } +
             listOf("Plan workflow ID: $workflowId", "Run the goal with: sona $issueKey")
         ).joinToString("\n")
-      is StandalonePlanResult.Blocked ->
+      }
+
+      is StandalonePlanResult.Blocked -> {
         "Plan for $issueKey blocked: $reason\nPlan workflow ID: $workflowId\n" +
           "Resume with: sona phase plan $issueKey (or sona $issueKey)"
-      is StandalonePlanResult.Refused ->
+      }
+
+      is StandalonePlanResult.Refused -> {
         listOfNotNull(reason, workflowId?.let { "Plan workflow ID: $it" }).joinToString("\n")
+      }
     } + incidentLines.takeIf { it.isNotEmpty() }?.joinToString("\n", prefix = "\n").orEmpty()
   )
