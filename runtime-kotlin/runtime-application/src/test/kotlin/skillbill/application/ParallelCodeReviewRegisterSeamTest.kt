@@ -8,7 +8,6 @@ import skillbill.ports.agentrun.agentRunLaunchFacts
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import kotlin.test.Test
-import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
@@ -172,7 +171,7 @@ class ParallelCodeReviewRegisterSeamTest {
   }
 
   @Test
-  fun `an unmatched candidate remains in authoritative review output`() {
+  fun `a near miss confidence coerces to the closest admitted token and the candidate admits`() {
     val nearMiss = "[F-001] Major | architecture | path=\"A.kt\" | line=1 | missing validation"
     val runner =
       runner(
@@ -185,9 +184,9 @@ class ParallelCodeReviewRegisterSeamTest {
         baseRequest(scope = ParallelReviewScope.STAGED),
       )
 
-    assertTrue(result.mergeResult.findings.isEmpty())
-    assertContains(result.output, nearMiss)
-    assertContains(result.lane1.droppedCandidateDiagnostic.orEmpty(), "unmatched_candidate_line")
+    val finding = result.mergeResult.findings.single()
+    assertEquals("Medium", finding.confidence)
+    assertNull(result.lane1.droppedCandidateDiagnostic)
   }
 
   @Test

@@ -1,7 +1,9 @@
 
 package skillbill.review.parallel
 
+import skillbill.review.model.ParallelReviewFindingNormalizationField
 import skillbill.review.model.ParallelReviewFindingRejectionReason
+import skillbill.review.model.ParallelReviewSeverity
 import skillbill.review.model.ReviewClaimVerdict
 import skillbill.review.model.ReviewFindingCitation
 import kotlin.test.Test
@@ -195,22 +197,49 @@ class ParallelReviewFindingParserTest {
   }
 
   @Test
-  fun `one garbled register line is reported as a rejection without discarding its siblings`() {
+  fun `near miss severity and confidence coerce to the closest admitted tokens`() {
     val result =
       ParallelReviewFindingParser.parse(
         """
         - [F-001] Major | High | src/A.kt:1 | first
-        - [F-002] Bogus | High | src/B.kt:2 | garbled severity
+        - [F-002] Bogus | Moderate | specialist=bill-kmp-code-review-persistence | src/B.kt:2 | near miss
         - [F-003] Minor | Low | src/C.kt:3 | third
         """.trimIndent(),
       )
 
-    assertEquals(listOf("src/A.kt", "src/C.kt"), result.findings.map { it.repositoryPath })
-    val rejection = result.rejections.single()
-    assertEquals("- [F-002] Bogus | High | src/B.kt:2 | garbled severity", rejection.lineText)
-    assertEquals(2, rejection.linePosition)
-    assertEquals(ParallelReviewFindingRejectionReason.UNRECOGNIZED_SEVERITY, rejection.reason)
+    assertEquals(listOf("src/A.kt", "src/B.kt", "src/C.kt"), result.findings.map { it.repositoryPath })
+    assertEquals(ParallelReviewSeverity.MINOR, result.findings[1].severity)
+    assertEquals("Medium", result.findings[1].confidence)
+    assertEquals(emptyList(), result.rejections)
     assertEquals(3, result.candidateCount)
+    assertEquals(
+      listOf(
+        ParallelReviewFindingNormalizationField.SEVERITY,
+        ParallelReviewFindingNormalizationField.CONFIDENCE,
+      ),
+      result.normalizations.map { it.field },
+    )
+    assertEquals(listOf("Bogus", "Moderate"), result.normalizations.map { it.rawValue })
+    assertEquals(listOf("Minor", "Medium"), result.normalizations.map { it.normalizedValue })
+    assertEquals(listOf(2, 2), result.normalizations.map { it.linePosition })
+  }
+
+  @Test
+  fun `recognized alias severity and lowercase confidence admit with canonical tokens`() {
+    val parsed =
+      ParallelReviewFindingParser.parse(
+        """
+        - [F-001] critical | high | src/A.kt:1 | alias pair
+        - [F-002] nit | LOW | src/B.kt:2 | lowercase confidence
+        """.trimIndent(),
+      )
+
+    assertEquals(
+      listOf(ParallelReviewSeverity.BLOCKER, ParallelReviewSeverity.NIT),
+      parsed.findings.map { it.severity },
+    )
+    assertEquals(listOf("High", "Low"), parsed.findings.map { it.confidence })
+    assertEquals(emptyList(), parsed.rejections)
   }
 
   @Test

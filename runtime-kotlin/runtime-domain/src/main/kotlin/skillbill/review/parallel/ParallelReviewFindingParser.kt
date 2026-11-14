@@ -1,5 +1,7 @@
 package skillbill.review.parallel
 
+import skillbill.review.model.ParallelReviewFindingNormalization
+import skillbill.review.model.ParallelReviewFindingNormalizationField
 import skillbill.review.model.ParallelReviewFindingRejection
 import skillbill.review.model.ParallelReviewFindingRejectionReason
 import skillbill.review.model.ParallelReviewParseResult
@@ -22,8 +24,8 @@ object ParallelReviewFindingParser {
   val parallelFindingPattern: Regex =
     Regex(
       "^\\s*(?:-\\s+)?\\[(?<findingId>F-\\d{${PARALLEL_REVIEW_FINDING_ID_PAD_WIDTH}})]\\s+" +
-        "(?<severity>[A-Za-z]+)\\s+\\|\\s+" +
-        "(?<confidenceLevel>High|Medium|Low)\\s+\\|\\s+" +
+        "(?<severity>[^|\\r\\n]+?)\\s+\\|\\s+" +
+        "(?<confidenceLevel>[^|\\r\\n]+?)\\s+\\|\\s+" +
         "(?:specialist=(?<specialistSkillName>[a-z0-9-]+)(?:\\[[^\\]]*\\])?\\s+\\|\\s+)?" +
         "(?:commits=(?<commits>[^|\\r\\n]+?)\\s+\\|\\s+)?" +
         "(?:path=(?:(?<pathQuoted>\"(?:\\\\.|[^\"\\\\])*\")|(?<pathBare>[^|\\r\\n]+?))\\s+\\|\\s+" +
@@ -64,16 +66,19 @@ object ParallelReviewFindingParser {
     val admittedLinePositions = mutableListOf<Int>()
     val rejections = mutableListOf<ParallelReviewFindingRejection>()
     val citationDiagnostics = mutableListOf<ReviewFindingCitationDiagnosticWithFinding>()
+    val normalizations = mutableListOf<ParallelReviewFindingNormalization>()
     val matchedPositions = mutableSetOf<Int>()
     parallelFindingPattern.findAll(normalizedText).forEach { match ->
       val position = linePositionOfFindingToken(normalizedText, match)
       matchedPositions += position
-      val outcome = parseMatch(match)
+      val outcome =
+        parseMatch(match, position, lines.getOrElse(position - 1) { match.value }.trim())
       outcome.finding?.let {
         admitted += it
         admittedLinePositions += position
       }
       citationDiagnostics += outcome.citationDiagnostics
+      normalizations += outcome.normalizations
       outcome.reason?.let { reason ->
         rejections +=
           ParallelReviewFindingRejection(
@@ -101,6 +106,7 @@ object ParallelReviewFindingParser {
       candidateCount = candidateCount,
       citationDiagnostics = citationDiagnostics,
       admittedLinePositions = admittedLinePositions,
+      normalizations = normalizations.sortedBy(ParallelReviewFindingNormalization::linePosition),
     )
   }
 
@@ -152,6 +158,7 @@ object ParallelReviewFindingParser {
     val finding: ParallelReviewRawFinding? = null,
     val reason: ParallelReviewFindingRejectionReason? = null,
     val citationDiagnostics: List<ReviewFindingCitationDiagnosticWithFinding> = emptyList(),
+    val normalizations: List<ParallelReviewFindingNormalization> = emptyList(),
   )
 
   private data class ResolvedPath(
@@ -159,11 +166,40 @@ object ParallelReviewFindingParser {
     val reason: ParallelReviewFindingRejectionReason? = null,
   )
 
-  private fun parseMatch(match: MatchResult): MatchOutcome {
-    val severityStr = match.groups["severity"]?.value.orEmpty()
-    val severity =
-      mapSeverity(severityStr)
-        ?: return MatchOutcome(reason = ParallelReviewFindingRejectionReason.UNRECOGNIZED_SEVERITY)
+  private fun parseMatch(
+    match: MatchResult,
+    linePosition: Int,
+    rawLine: String,
+  ): MatchOutcome {
+    val severityStr = match.groups["severity"]?.value.orEmpty().trim()
+    val severity = normalizeSeverity(severityStr)
+    val confidenceStr = match.groups["confidenceLevel"]?.value.orEmpty().trim()
+    val confidence = normalizeConfidence(confidenceStr)
+    val normalizations =
+      buildList {
+        if (severity.displayName != severityStr) {
+          add(
+            ParallelReviewFindingNormalization(
+              lineText = rawLine,
+              linePosition = linePosition,
+              field = ParallelReviewFindingNormalizationField.SEVERITY,
+              rawValue = severityStr,
+              normalizedValue = severity.displayName,
+            ),
+          )
+        }
+        if (confidence != confidenceStr) {
+          add(
+            ParallelReviewFindingNormalization(
+              lineText = rawLine,
+              linePosition = linePosition,
+              field = ParallelReviewFindingNormalizationField.CONFIDENCE,
+              rawValue = confidenceStr,
+              normalizedValue = confidence,
+            ),
+          )
+        }
+      }
     val resolvedPath = resolvePath(match)
     resolvedPath.reason?.let { return MatchOutcome(reason = it) }
     val path = resolvedPath.path
@@ -177,7 +213,7 @@ object ParallelReviewFindingParser {
       finding =
         ParallelReviewRawFinding(
           severity = severity,
-          confidence = match.groups["confidenceLevel"]?.value.orEmpty(),
+          confidence = confidence,
           location = "$path:$line",
           description = peeled.description,
           specialistSkillName = match.groups["specialistSkillName"]?.value,
@@ -195,6 +231,7 @@ object ParallelReviewFindingParser {
         peeled.citationDiagnostics.map { diagnostic ->
           diagnostic.withFindingRef(findingRef)
         },
+      normalizations = normalizations,
     )
   }
 
@@ -222,12 +259,48 @@ object ParallelReviewFindingParser {
     return raw.split(',').map { it.trim() }.filter { it.isNotEmpty() }.distinct()
   }
 
-  private fun mapSeverity(severityStr: String): ParallelReviewSeverity? =
-    when (severityStr.lowercase()) {
-      "blocker", "critical" -> ParallelReviewSeverity.BLOCKER
-      "major" -> ParallelReviewSeverity.MAJOR
-      "minor" -> ParallelReviewSeverity.MINOR
-      "nit" -> ParallelReviewSeverity.NIT
-      else -> null
-    }
+  private fun normalizeSeverity(raw: String): ParallelReviewSeverity =
+    SEVERITY_NORMALIZATIONS[raw.trim().lowercase()] ?: ParallelReviewSeverity.MINOR
+
+  private fun normalizeConfidence(raw: String): String =
+    CONFIDENCE_NORMALIZATIONS[raw.trim().lowercase()] ?: CONFIDENCE_FALLBACK
+
+  private const val CONFIDENCE_FALLBACK = "Medium"
+
+  private val SEVERITY_NORMALIZATIONS: Map<String, ParallelReviewSeverity> =
+    mapOf(
+      "blocker" to ParallelReviewSeverity.BLOCKER,
+      "critical" to ParallelReviewSeverity.BLOCKER,
+      "severe" to ParallelReviewSeverity.BLOCKER,
+      "fatal" to ParallelReviewSeverity.BLOCKER,
+      "p0" to ParallelReviewSeverity.BLOCKER,
+      "p1" to ParallelReviewSeverity.BLOCKER,
+      "major" to ParallelReviewSeverity.MAJOR,
+      "high" to ParallelReviewSeverity.MAJOR,
+      "significant" to ParallelReviewSeverity.MAJOR,
+      "serious" to ParallelReviewSeverity.MAJOR,
+      "p2" to ParallelReviewSeverity.MAJOR,
+      "minor" to ParallelReviewSeverity.MINOR,
+      "medium" to ParallelReviewSeverity.MINOR,
+      "moderate" to ParallelReviewSeverity.MINOR,
+      "low" to ParallelReviewSeverity.MINOR,
+      "warning" to ParallelReviewSeverity.MINOR,
+      "info" to ParallelReviewSeverity.MINOR,
+      "informational" to ParallelReviewSeverity.MINOR,
+      "p3" to ParallelReviewSeverity.MINOR,
+      "nit" to ParallelReviewSeverity.NIT,
+      "trivial" to ParallelReviewSeverity.NIT,
+      "cosmetic" to ParallelReviewSeverity.NIT,
+      "suggestion" to ParallelReviewSeverity.NIT,
+      "note" to ParallelReviewSeverity.NIT,
+    )
+
+  private val CONFIDENCE_NORMALIZATIONS: Map<String, String> =
+    mapOf(
+      "high" to "High",
+      "medium" to "Medium",
+      "moderate" to "Medium",
+      "med" to "Medium",
+      "low" to "Low",
+    )
 }

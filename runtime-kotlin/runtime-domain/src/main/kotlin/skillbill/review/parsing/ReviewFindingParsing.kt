@@ -26,8 +26,8 @@ internal fun parseBulletFindings(text: String): List<ImportedFinding> {
     val provenance = findingProvenancePattern.find(rawDescription)
     ImportedFinding(
       findingId = findingId,
-      severity = match.groups["severity"]?.value.orEmpty(),
-      confidence = match.groups["confidenceLevel"]?.value.orEmpty(),
+      severity = normalizeSeverity(match.groups["severity"]?.value.orEmpty()),
+      confidence = normalizeConfidence(match.groups["confidenceLevel"]?.value.orEmpty()),
       location = match.groups["location"]?.value.orEmpty().trim(),
       description = provenance?.let { rawDescription.removeRange(it.range).trim() } ?: rawDescription,
       findingText = match.value.trim(),

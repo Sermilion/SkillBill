@@ -104,10 +104,13 @@ internal object StandaloneReviewReportAdmission {
       hasIncompleteReviewWarning = knownIncompleteReview,
       coverage = coverageLines.takeIf { it.isNotEmpty() }?.joinToString("\n"),
       diagnostics =
-        (
-          ParallelReviewFindingParser.parse(rawOutput).citationDiagnostics.map { it.toString() } +
-            ParallelReviewFindingParser.parse(rawOutput).rejections.map { it.toString() }
-        )
+        ParallelReviewFindingParser.parse(rawOutput).let { parsed ->
+          (
+            parsed.citationDiagnostics.map { it.toString() } +
+              parsed.rejections.map { it.toString() } +
+              (parent.normalizations + integration.normalizations).map { it.toString() }
+          )
+        }
           .take(MAX_REPORT_DIAGNOSTICS)
           .map { it.take(MAX_DIAGNOSTIC_CHARS) },
       rejectionReasons = reasons.distinct(),

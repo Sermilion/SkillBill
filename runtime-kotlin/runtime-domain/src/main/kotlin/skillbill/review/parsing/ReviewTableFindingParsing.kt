@@ -100,7 +100,11 @@ private fun buildLocation(
     else -> ""
   }
 
-private fun normalizeSeverity(rawValue: String): String = severityAliases[rawValue.trim().lowercase()] ?: "Minor"
+internal fun normalizeSeverity(rawValue: String): String = severityAliases[rawValue.trim().lowercase()] ?: "Minor"
 
-private fun normalizeConfidence(confidenceValue: String): String =
-  if (confidenceValue in setOf("High", "Medium", "Low")) confidenceValue else "Medium"
+internal fun normalizeConfidence(confidenceValue: String): String =
+  if (confidenceValue.trim().lowercase() in setOf("high", "medium", "low")) {
+    confidenceValue.trim().lowercase().replaceFirstChar(Char::uppercaseChar)
+  } else {
+    "Medium"
+  }

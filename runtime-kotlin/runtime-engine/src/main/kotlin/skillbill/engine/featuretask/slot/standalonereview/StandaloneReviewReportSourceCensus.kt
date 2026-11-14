@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.slot.standalonereview
 
+import skillbill.review.model.ParallelReviewFindingNormalization
 import skillbill.review.model.ParallelReviewParseResult
 import skillbill.review.model.ParallelReviewRawFinding
 import skillbill.review.parallel.ParallelReviewFindingParser
@@ -19,6 +20,7 @@ internal data class StandaloneReviewSourceCensus(
   val reviewEvidence: List<StandaloneReviewReviewEvidence>,
   val rejections: List<String>,
   val hasIncompleteReviewWarning: Boolean,
+  val normalizations: List<ParallelReviewFindingNormalization> = emptyList(),
 )
 
 internal data class StandaloneReviewReviewEvidence(
@@ -79,6 +81,7 @@ internal object StandaloneReviewReportSourceCensusBuilder {
         reviewEvidence,
         rejections,
         hasIncompleteReviewWarning,
+        parsed.normalizations,
       )
     }
 

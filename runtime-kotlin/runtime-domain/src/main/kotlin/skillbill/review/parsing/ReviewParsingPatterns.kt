@@ -28,8 +28,8 @@ internal val specialistReviewsPattern =
 internal val findingPattern =
   Regex(
     "^\\s*-\\s+\\[(?<findingId>F-\\d{3})]\\s+" +
-      "(?<severity>Blocker|Major|Minor)\\s+\\|\\s+" +
-      "(?<confidenceLevel>High|Medium|Low)\\s+\\|\\s+" +
+      "(?<severity>[^|\\r\\n]+?)\\s+\\|\\s+" +
+      "(?<confidenceLevel>[^|\\r\\n]+?)\\s+\\|\\s+" +
       "(?:specialist=(?<specialistSkillName>[a-z0-9-]+)\\s+\\|\\s+)?" +
       "(?<location>[^|]+?)\\s+\\|\\s+" +
       "(?<description>.+)$",
