@@ -1,6 +1,7 @@
 package skillbill.engine.work.control
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.contracts.operationcard.OperationCardExitCodes
 import skillbill.contracts.qa.QaDeviceLaunchTokens.QA_DEVICE_FLAG
 import skillbill.engine.featuretask.model.execution.QaNamedDevice
 import skillbill.engine.featuretask.model.execution.launchArguments
@@ -37,6 +38,7 @@ import skillbill.ports.system.CheckedOutBranchSource
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessInspection
 import skillbill.ports.work.WorkRunLauncher
+import skillbill.ports.work.model.WorkRunExit
 import skillbill.ports.work.model.WorkRunLaunchKind
 import skillbill.ports.work.model.WorkRunLaunchRequest
 import skillbill.ports.work.model.WorkRunLaunchResult
@@ -46,6 +48,9 @@ import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Path
 import java.time.Clock
+import java.util.concurrent.CompletionStage
+
+private const val RUN_FAILURE_REASON_LIMIT = 500
 
 @Inject
 public class WorkRunActions(
@@ -94,7 +99,8 @@ public class WorkRunActions(
         )
       when (val launched = launcher.start(request)) {
         is WorkRunLaunchResult.Refused -> WorkControlResult.LaunchFailed(launched.reason)
-        is WorkRunLaunchResult.Started, is WorkRunLaunchResult.AwaitingConfirmation -> WorkControlResult.Accepted
+        is WorkRunLaunchResult.Started -> launched.controlResult()
+        is WorkRunLaunchResult.AwaitingConfirmation -> WorkControlResult.Accepted
       }
     }
   }
@@ -140,7 +146,7 @@ public class WorkRunActions(
       if (item.snapshot.workflowFamily == IdeStatusWorkflowFamily.FEATURE_GOAL) {
         goals.resume(requireNotNull(item.snapshot.issueKey), target.repositoryRoot)
       }
-      WorkControlResult.Accepted
+      (result as? WorkRunLaunchResult.Started)?.controlResult() ?: WorkControlResult.Accepted
     }
     return when (val result = database.transactionFenced(target.databaseFileObservation, operation)) {
       FencedTransactionResult.ChangedTarget -> WorkControlResult.Rejected(WorkControlRejection.CHANGED_TARGET)
@@ -441,3 +447,25 @@ internal fun goalStartRefusal(result: GoalPreflightResult): String? {
 private fun blockedGateMessage(gate: GoalPreflightGateBlock): String =
   "${gate.issueKey} is blocked at the goal gate: no subtask of ${gate.featureName} is runnable. " +
     "Subtasks: ${gate.subtasks.joinToString { "${it.id} ${it.status}" }}."
+
+private fun WorkRunLaunchResult.Started.controlResult(): WorkControlResult =
+  exit?.let { WorkControlResult.Running(runFailure(it, logPath)) } ?: WorkControlResult.Accepted
+
+internal fun runFailure(
+  exit: CompletionStage<WorkRunExit>,
+  log: Path,
+): CompletionStage<String?> =
+  exit.handle { finished, failure ->
+    if (failure == null && finished.code in setOf(0, OperationCardExitCodes.AWAITING_CONFIRMATION)) {
+      null
+    } else {
+      "${stopReason(finished?.failureLogLines.orEmpty())} Full log: $log"
+    }
+  }
+
+private fun stopReason(logLines: List<String>): String {
+  val lines = logLines.map(String::trim).filter { it.isNotEmpty() && !it.startsWith("Picked up ") }
+  val stopLine = Regex("^(?:Phase '[^']+' blocked at |Operation '[^']+' (?:blocked|failed): )")
+  return (lines.lastOrNull(stopLine::containsMatchIn) ?: lines.lastOrNull())?.take(RUN_FAILURE_REASON_LIMIT)
+    ?: "The run exited without a reason."
+}

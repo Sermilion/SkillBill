@@ -86,7 +86,7 @@ class FeatureTaskRuntimeEffectivePoliciesTest {
         inputs,
       )
     }
-    restored.effectivePolicies.forEach { selected ->
+    restored.effectivePolicies.filterNot { it.id == "gate-commands" }.forEach { selected ->
       val changed =
         restored.effectivePolicies.map {
           if (it == selected) {
@@ -147,20 +147,9 @@ class FeatureTaskRuntimeEffectivePoliciesTest {
     assertContentEquals(original, codec.encode(compatibility.requireSupportedExecution(original, equivalent)))
     val changed =
       listOf(
-        inputs.copy(gradleWrapper = "different/gradlew"),
-        inputs.copy(packSlug = "custom-pack"),
         inputs.copy(phaseTimeoutMillis = null),
         inputs.copy(phaseTimeoutMillis = 0),
         inputs.copy(commandFamily = ValidationGateCommandFamily.VALIDATION),
-        inputs.copy(declaration = null),
-        inputs.copy(
-          declaration = declaration.copy(buildCommand = listOf("./gradlew", "--continue", "check")),
-        ),
-        inputs.copy(
-          declaration = declaration.copy(cacheBypassingBuildCommand = listOf("./gradlew", "check")),
-        ),
-        inputs.copy(declaration = declaration.copy(findings = declaration.findings.copy(executedWork = null))),
-        inputs.copy(declaration = declaration.copy(suppressionMarkers = emptyList())),
       )
     changed.forEach { current ->
       val error =
@@ -168,6 +157,13 @@ class FeatureTaskRuntimeEffectivePoliciesTest {
           compatibility.requireSupportedExecution(original, current)
         }
       assertFalse(error.message.orEmpty().contains("gradlew"))
+    }
+    listOf(
+      inputs.copy(gradleWrapper = "different/gradlew"),
+      inputs.copy(packSlug = "custom-pack"),
+      inputs.copy(declaration = declaration.copy(buildCommand = listOf("./gradlew", "new-check"))),
+    ).forEach { current ->
+      assertContentEquals(original, codec.encode(compatibility.requireSupportedExecution(original, current)))
     }
     assertNotEquals(effectivePolicyDigest(null), effectivePolicyDigest(emptyList<String>()))
     assertNotEquals(effectivePolicyDigest(listOf("a b")), effectivePolicyDigest(listOf("a", "b")))

@@ -59,6 +59,8 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import me.tatarka.inject.annotations.Inject
@@ -140,6 +142,24 @@ class RuntimeWorkControlRepository(
   private val appScope: ApplicationCoroutineScope,
   private val branches: RepositoryBranchesRepository,
 ) : WorkControlRepository {
+  private val launchFailureChannel = Channel<String>(Channel.BUFFERED)
+  override val launchFailures = launchFailureChannel.receiveAsFlow()
+
+  private fun WorkControlResult.observeLaunch(): WorkControlResult {
+    when (this) {
+      is WorkControlResult.Running -> appScope.scope.launch {
+        val reason = failure.await()
+        if (reason != null) {
+          diagnostics.record("desktop_run_launch_failed")
+          launchFailureChannel.send(reason)
+        }
+      }
+      is WorkControlResult.Recovered -> launch?.observeLaunch()
+      else -> Unit
+    }
+    return this
+  }
+
   init {
     appScope.scope.launch {
       combine(sessions.sessions, launches.keys) { session, keys -> session to keys.isNotEmpty() }
@@ -161,11 +181,11 @@ class RuntimeWorkControlRepository(
   override suspend fun pauseNow(item: WorkItem) = goalControl(item, WorkControlAction.STOP, ControlKind.PAUSE_NOW)
 
   override suspend fun cancel(item: WorkItem): ControlOutcome = runControl(item, "control_cancel") { runtime, target ->
-    runtime.workControlService.request(target, WorkControlAction.CANCEL).toControlOutcome(ControlKind.CANCEL, diagnostics)
+    runtime.workControlService.request(target, WorkControlAction.CANCEL).observeLaunch().toControlOutcome(ControlKind.CANCEL, diagnostics)
   }
 
   override suspend fun finalize(item: WorkItem): ControlOutcome = runControl(item, "control_finalize") { runtime, target ->
-    runtime.workControlService.request(target, WorkControlAction.FINALIZE).toControlOutcome(ControlKind.FINALIZE, diagnostics)
+    runtime.workControlService.request(target, WorkControlAction.FINALIZE).observeLaunch().toControlOutcome(ControlKind.FINALIZE, diagnostics)
   }
 
   override suspend fun launch(item: WorkItem, agentId: String?): ControlOutcome {
@@ -198,7 +218,7 @@ class RuntimeWorkControlRepository(
     }
     return reserved(handle) {
       runControl(item, "control_launch") { runtime, target ->
-        runtime.workControlService.request(target, WorkControlAction.LAUNCH, agentId, qaDevice).toControlOutcome(ControlKind.LAUNCH, diagnostics)
+        runtime.workControlService.request(target, WorkControlAction.LAUNCH, agentId, qaDevice).observeLaunch().toControlOutcome(ControlKind.LAUNCH, diagnostics)
       }
     }
   }
@@ -256,7 +276,7 @@ class RuntimeWorkControlRepository(
           else runtime.workControlService.startGoal(Path.of(repoRoot), issueKey, goalAgent, qaDevice)
         }) {
           FencedTransactionResult.ChangedTarget -> ControlOutcome.Refused(ControlRejection.CHANGED_TARGET, null)
-          is FencedTransactionResult.Committed -> result.value?.toControlOutcome(ControlKind.START_GOAL, diagnostics)
+          is FencedTransactionResult.Committed -> result.value?.observeLaunch()?.toControlOutcome(ControlKind.START_GOAL, diagnostics)
             ?: ControlOutcome.Refused(ControlRejection.CHANGED_TARGET, null)
         }
       }
@@ -680,7 +700,7 @@ class RuntimeWorkControlRepository(
         return@callInSession RecoveryOutcome.Refused(ControlRejection.CHANGED_TARGET, ControlRejection.CHANGED_TARGET.name)
       }
       val kinds = preview.confirmedPrerequisites.mapTo(mutableSetOf()) { it.toRuntime() }
-      runtime.workControlService.recover(target, preview.incidentToken, preview.incidentRevision, kinds).toRecoveryOutcome(diagnostics)
+      runtime.workControlService.recover(target, preview.incidentToken, preview.incidentRevision, kinds).observeLaunch().toRecoveryOutcome(diagnostics)
     }
   }
 
@@ -834,7 +854,7 @@ class RuntimeWorkControlRepository(
         sessionIsCurrent(session, item) &&
           target.databaseFileObservation == runtime.databaseSession.read { it.databaseFileObservation }
       }
-      runtime.workControlService.request(target, action, storeIsCurrent).toControlOutcome(kind, diagnostics)
+      runtime.workControlService.request(target, action, storeIsCurrent).observeLaunch().toControlOutcome(kind, diagnostics)
     }
   }
 
@@ -972,7 +992,7 @@ private fun WorkControlResult.toRecoveryOutcome(diagnostics: Diagnostics): Recov
       RecoveryOutcome.Applied(attemptId, status.toDomain(), launch?.toControlOutcome(ControlKind.LAUNCH, diagnostics))
     }
   is WorkControlResult.LaunchFailed -> RecoveryOutcome.Failed(ReadProblem.Runtime(reason))
-  WorkControlResult.Accepted, WorkControlResult.IntentRecorded, WorkControlResult.ExitConfirmed, WorkControlResult.TerminationAttempted -> {
+  is WorkControlResult.Running, WorkControlResult.Accepted, WorkControlResult.IntentRecorded, WorkControlResult.ExitConfirmed, WorkControlResult.TerminationAttempted -> {
     diagnostics.record("desktop_recovery_unexpected_run_control")
     RecoveryOutcome.Failed(ReadProblem.Runtime("The runtime returned a run control result for a recovery."))
   }

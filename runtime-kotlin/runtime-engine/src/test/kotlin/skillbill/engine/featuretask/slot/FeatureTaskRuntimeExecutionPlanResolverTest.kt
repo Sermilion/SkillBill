@@ -19,7 +19,6 @@ import skillbill.engine.featuretask.validation.validationGateTestDeclaration
 import skillbill.engine.featuretask.validation.validationGateTestRepoRoot
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
-import skillbill.error.featuretask.UnsupportedFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.shellcontent.ManifestFailureCode
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
@@ -77,12 +76,10 @@ class FeatureTaskRuntimeExecutionPlanResolverTest {
         ValidationDepth.FULL,
         7.minutes,
       )
-    assertFailsWith<UnsupportedFeatureTaskRuntimeExecutionPlanError> {
-      fixture.execution.compatibility.requireSupportedExecution(
-        fixture.execution.validator.write(descriptor.artifactValue, "created descriptor"),
-        changed,
-      )
-    }
+    fixture.execution.compatibility.requireSupportedExecution(
+      fixture.execution.validator.write(descriptor.artifactValue, "created descriptor"),
+      changed,
+    )
     val validation =
       resolver.resolveCreation(
         FeatureTaskRuntimeExecutionPlanCreationRequest(
@@ -220,7 +217,7 @@ class FeatureTaskRuntimeExecutionPlanResolverTest {
   }
 
   @Test
-  fun `clean or differently routed checkout resumes the recorded pack but changed commands are rejected`() {
+  fun `resume uses committed project checks when pack commands change`() {
     val fixture = Fixture()
     val resolver = fixture.resolver()
     val descriptor = fixture.create()
@@ -291,7 +288,36 @@ class FeatureTaskRuntimeExecutionPlanResolverTest {
   }
 
   @Test
-  fun `resume refuses a recorded fallback build plan without replacing it with fresh Kotlin routing`() {
+  fun `resume adopts updated project checks without rewriting saved records`() {
+    val fixture = Fixture()
+    val descriptor = fixture.create()
+    fixture.execution.seed(fixture.states, "wftr-clean", descriptor = descriptor.artifactValue)
+    val before = fixture.states.getFeatureTaskWorkflow("wftr-clean")
+    val changedConfig =
+      fixture.resolver(
+        committed = committedProjectCheckConfigForTests(buildArgv = listOf("./gradlew", "newBuild")),
+      )
+    repeat(2) {
+      val current =
+        changedConfig.resolveInputs(
+          root,
+          FeatureTaskRuntimeQualityGateSelection.BUILD,
+          ValidationDepth.FULL,
+          7.minutes,
+          "wftr-clean",
+        )
+      val admittedCurrent = fixture.execution.admission.admit(fixture.states, "wftr-clean", current)
+      assertEquals(
+        listOf("./gradlew", "newBuild"),
+        admittedCurrent.plan.projectCheckCommands?.buildCommandList?.single()?.argv,
+      )
+      assertEquals(before, fixture.states.getFeatureTaskWorkflow("wftr-clean"))
+    }
+    assertEquals(0, fixture.execution.launches)
+  }
+
+  @Test
+  fun `legacy resume uses current validation commands and preserves the original workflow on repeated admission`() {
     val fixture = Fixture()
     fixture.packs = fixture.packs + reviewFallbackPackWithoutGate()
     val original =
@@ -310,29 +336,26 @@ class FeatureTaskRuntimeExecutionPlanResolverTest {
       )
     val descriptor = ValidatedFeatureTaskRuntimeExecutionPlan.read(original, fixture.execution.validator)
     fixture.execution.seed(fixture.states, "wftr-fallback", descriptor = descriptor.artifactValue)
-    val error =
-      assertFailsWith<SkillBillRuntimeException> {
-        fixture.resolver().resolveCreation(
-          FeatureTaskRuntimeExecutionPlanCreationRequest(
-            root,
-            SkeletonDefinition.GOAL_CHILD,
-            CodeReviewExecutionMode.INLINE,
-            FeatureTaskRuntimeQualityGateSelection.BUILD,
-            ValidationDepth.FULL,
-            7.minutes,
-            "wftr-fallback",
-          ),
+    val before = fixture.states.getFeatureTaskWorkflow("wftr-fallback")
+    repeat(2) {
+      val inputs =
+        fixture.resolver().resolveInputs(
+          root,
+          FeatureTaskRuntimeQualityGateSelection.BUILD,
+          ValidationDepth.FULL,
+          7.minutes,
+          "wftr-fallback",
         )
-      }.also { failure ->
-        assertEquals(ManifestFailureCode.MANIFEST_FAILURE, failure.code)
-      }
-    assertTrue(requireNotNull(error.message).contains("Recorded build gate pack 'generic'"))
-    assertTrue(requireNotNull(error.message).contains("reviewed semantic mapping"))
+      val admitted = fixture.execution.admission.admit(fixture.states, "wftr-fallback", inputs)
+      assertEquals("kotlin", inputs.packSlug)
+      assertEquals(before, fixture.states.getFeatureTaskWorkflow("wftr-fallback"))
+      assertEquals(SkeletonDefinition.GOAL_CHILD.id, admitted.plan.definitionId)
+    }
     assertEquals(0, fixture.execution.launches)
   }
 
   @Test
-  fun `changed pack gate commands resume a plan workflow but still refuse a gated goal child`() {
+  fun `changed pack gate commands resume planning and goal children without rewriting history`() {
     fun driftedSeed(
       definition: SkeletonDefinition,
     ): Pair<ExecutionPlanAdmissionFixture, InMemoryRuntimeWorkflowRepository> {
@@ -369,8 +392,8 @@ class FeatureTaskRuntimeExecutionPlanResolverTest {
         "wftr-drift",
       )
     assertEquals(
-      child.inputs.projectCheckSnapshot?.validationCommandList,
-      resumedChild.projectCheckSnapshot?.validationCommandList,
+      child.inputsFor("gradlew", 420000L).declaration,
+      resumedChild.declaration,
     )
     assertTrue(childStates.getFeatureTaskWorkflow("wftr-drift") != null)
     assertEquals(0, planning.launches + child.launches)

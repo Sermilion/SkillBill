@@ -42,6 +42,8 @@ import dev.skillbill.desktop.core.domain.model.ChangeScope
 import dev.skillbill.desktop.core.ui.changes.ChangesSource
 import dev.skillbill.desktop.core.ui.changes.ChangesWindows
 import dev.skillbill.desktop.core.ui.input.LocalShellInput
+import dev.skillbill.desktop.core.ui.feedback.ToastMessage
+import dev.skillbill.desktop.core.ui.feedback.ToastTone
 import dev.skillbill.desktop.core.ui.navigation.AppRoute
 import dev.skillbill.desktop.core.ui.navigation.PaneSlot
 import dev.skillbill.desktop.core.ui.navigation.SettingsRoute
@@ -105,6 +107,13 @@ fun ApplicationScope.MainWindow(
     }
   }
   LaunchedEffect(window) { window.navigator.followSession() }
+  LaunchedEffect(window.controls) {
+    window.controls.launchFailures.collect { reason ->
+      window.toasts.show(ToastMessage(
+        ToastTone.Problem, reason,
+      ))
+    }
+  }
   val keyboard = window.keyboard
   val changesEntry by changes.current.collectAsState()
   val changesKeys = remember { ChangesWindowKeys() }

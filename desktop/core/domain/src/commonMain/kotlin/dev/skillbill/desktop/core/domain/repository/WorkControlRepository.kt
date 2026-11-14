@@ -17,9 +17,13 @@ import dev.skillbill.desktop.core.domain.model.RecoveryPreview
 import dev.skillbill.desktop.core.domain.model.RecoveryPreviewOutcome
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.Flow
 
 /** Run controls and goal writes. None changes a row; rows change when the commit signal re-reads the store. */
 interface WorkControlRepository {
+  /** Runner failures observed after a launch request returned. */
+  val launchFailures: Flow<String>
+
   /** The work keys (goal issue key, otherwise work id) with a launch in flight or waiting for the board, app-wide. */
   val reservations: StateFlow<Set<String>>
 

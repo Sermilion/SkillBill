@@ -1523,7 +1523,23 @@ private fun runnerExecutionEntry(
       config.gateRepoLocalConfig,
       database,
       fixture.compatibility,
-      projectCheckCommandResolverForTests(),
+      projectCheckCommandResolverForTests(
+        committed =
+          (
+            config.admittedProjectCheckSnapshot ?: testAdmittedProjectCheckSnapshot(
+              config.goalContinuation.qualityGateSelection,
+            )
+          )?.let {
+            skillbill.contracts.config.projectchecks.ProjectCheckConfig(
+              it.projectId,
+              it.buildCommands,
+              null,
+              null,
+              null,
+              it.validationCommands,
+            )
+          },
+      ),
       diagnostics = NoopRuntimeDiagnostics,
     )
   if (!config.seedDurableWorkflow) {

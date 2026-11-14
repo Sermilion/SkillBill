@@ -159,11 +159,12 @@ class WorkRunActionsTest {
       val status = ideStatusService(database, manifests)
       val goals = testGoalRunnerStatusService(manifests, EmptyOutcomeStore, database = database, clock = ideStatusClock)
       val launches = mutableListOf<WorkRunLaunchRequest>()
+      val exit = java.util.concurrent.CompletableFuture<skillbill.ports.work.model.WorkRunExit>()
       val launcher =
         object : WorkRunLauncher {
           override fun start(request: WorkRunLaunchRequest): WorkRunLaunchResult {
             launches += request
-            return WorkRunLaunchResult.Started(root.resolve("goal.log"))
+            return WorkRunLaunchResult.Started(root.resolve("goal.log"), exit)
           }
 
           override fun stop(request: WorkRunStopRequest) = WorkRunStopResult.NotRunning
@@ -202,10 +203,16 @@ class WorkRunActionsTest {
       )
       val actions = workRunActions(database, status, goals, launcher)
 
-      assertEquals(
-        WorkControlResult.Accepted,
-        actions.launchForTest(target(), "codex", QaNamedDevice(QaNamedDeviceKind.SERIAL, "R58M123")),
+      val running =
+        actions.launchForTest(target(), "codex", QaNamedDevice(QaNamedDeviceKind.SERIAL, "R58M123"))
+          as WorkControlResult.Running
+      val failure = running.failure.toCompletableFuture()
+      assertFalse(failure.isDone)
+      exit.complete(
+        skillbill.ports.work.model.WorkRunExit(1, listOf("Durable execution plan refused: incompatible_descriptor.")),
       )
+      assertTrue(requireNotNull(failure.join()).contains("incompatible_descriptor"))
+      assertTrue(requireNotNull(failure.join()).contains("goal.log"))
       assertTrue(
         (launches.single().kind as WorkRunLaunchKind.RuntimeCommand).arguments.containsAll(
           listOf("--qa-device", "serial:R58M123"),

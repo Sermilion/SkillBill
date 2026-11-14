@@ -70,6 +70,19 @@ keys select the verification commands but do not force cache bypass. The keys
 and persisted run format stay unchanged. Repository CI commands may still disable
 caching to avoid shared-cache contention.
 
+## Resume validation and launch failures
+
+On resume, select the current saved project check commands. If the requested category
+has no saved configuration, use the current routed platform-pack gate. Validation
+command changes do not block continuation. Freeze the selected commands for that
+invocation, and retain the original execution descriptor, completed work and historical
+validation evidence. Execution strategy, timeout and other policy checks still apply.
+This changes admission behavior without changing the persisted schema.
+
+Desktop resume controls observe the runner after launch admission. A failed runner
+reports its reason and full log path through an app-wide error notification, even
+when it exits after the initial launch request returned.
+
 ## New-task chat preparation and launch
 
 New-task chat gathers repository context, clarifies requirements, checks infrastructure

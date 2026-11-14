@@ -51,12 +51,18 @@ public class FeatureTaskRuntimeExecutionPlanCompatibility(
       }
     val supported = FeatureTaskRuntimeEffectivePolicies.resolve(plan, comparisonInputs).sortedBy { it.id }
     val supportedById = supported.associateBy { it.id }
-    if (plan.effectivePolicies.any { supportedById[it.id]?.semanticRevision != it.semanticRevision }) {
+    if (plan.effectivePolicies.any {
+        it.id != GATE_COMMANDS_POLICY_ID && supportedById[it.id]?.semanticRevision != it.semanticRevision
+      }
+    ) {
       throw UnsupportedFeatureTaskRuntimeExecutionPlanError()
     }
     if (!FeatureTaskRuntimeEffectivePolicies.matchesRecorded(plan, comparisonInputs)) incompatible()
     if (!codec.encode(plan).contentEquals(codec.encode(decodePlan(requireNotNull(encoded))))) onMapping?.invoke()
-    return SupportedExecution(plan, composition.recordedMonitorSemantics)
+    return SupportedExecution(
+      plan.withProjectCheckCommands(effectiveInputs.projectCheckSnapshot),
+      composition.recordedMonitorSemantics,
+    )
   }
 
   internal fun requireCompatibleExecution(

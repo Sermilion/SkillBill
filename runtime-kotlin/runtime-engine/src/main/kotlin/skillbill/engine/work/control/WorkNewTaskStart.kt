@@ -3,7 +3,6 @@ package skillbill.engine.work.control
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.issuekey.GOAL_INTAKE_URL_MARKER
 import skillbill.contracts.issuekey.TRACKER_STYLE_ISSUE_KEY_PATTERN
-import skillbill.contracts.operationcard.OperationCardExitCodes
 import skillbill.contracts.operationcard.OperationCardOperationIds
 import skillbill.contracts.operationcard.OperationCardProjection
 import skillbill.contracts.operationcard.OperationCardStatus
@@ -40,7 +39,6 @@ import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.work.WorkRunLauncher
-import skillbill.ports.work.model.WorkRunExit
 import skillbill.ports.work.model.WorkRunLaunchKind
 import skillbill.ports.work.model.WorkRunLaunchRequest
 import skillbill.ports.work.model.WorkRunLaunchResult
@@ -55,7 +53,6 @@ import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.workflowStatus
 import skillbill.workflow.verify.model.VerifyQaSelection
 import java.nio.file.Path
-import java.util.concurrent.CompletionStage
 
 @Inject
 public class WorkNewTaskStart(
@@ -717,27 +714,6 @@ public class WorkNewTaskStart(
   private fun String.startsWithPhaseOption(): Boolean =
     startsWith(PHASE_OPTION_MODE_PREFIX) || startsWith(PHASE_OPTION_TARGET_PREFIX)
 
-  private fun runFailure(
-    exit: CompletionStage<WorkRunExit>,
-    log: Path,
-  ): CompletionStage<String?> =
-    exit.handle { finished, failure ->
-      if (failure == null && finished.code in SUCCESSFUL_EXITS) {
-        null
-      } else {
-        "${stopReason(finished?.failureLogLines.orEmpty())} Full log: $log"
-      }
-    }
-
-  private fun stopReason(logLines: List<String>): String {
-    val lines =
-      logLines
-        .map(String::trim)
-        .filter { it.isNotEmpty() && !it.startsWith("Picked up ") }
-    return (lines.lastOrNull(STOP_LINE::containsMatchIn) ?: lines.lastOrNull())?.take(MAX_REASON_CHARS)
-      ?: "The run exited without a reason."
-  }
-
   private fun readyOrRefused(
     repoRoot: Path,
     request: NewTaskIntakeRequest,
@@ -889,9 +865,7 @@ public class WorkNewTaskStart(
     val ISSUE_KEY = Regex("(?i)$TRACKER_STYLE_ISSUE_KEY_PATTERN")
     val WHITESPACE = Regex("\\s+")
     val ASCII_WORD = Regex("[A-Za-z0-9]")
-    val STOP_LINE = Regex("^(?:Phase '[^']+' blocked at |Operation '[^']+' (?:blocked|failed): )")
     const val MAX_INTAKE_BYTES = 30_000
-    const val MAX_REASON_CHARS = 500
     const val MONITOR_PHASE = "monitor"
     const val QA_PHASE = "qa"
     val STANDALONE_PHASES = setOf("review", "validation", QA_PHASE, "pr", MONITOR_PHASE)
@@ -900,7 +874,6 @@ public class WorkNewTaskStart(
     const val PHASE_OPTION_TARGET_PREFIX = "target:"
     const val CONFIRM_PREFIX = "confirm:"
     const val SELECT_PREFIX = "select:"
-    val SUCCESSFUL_EXITS = setOf(0, OperationCardExitCodes.AWAITING_CONFIRMATION)
     val OCCUPIED_VERDICTS =
       setOf(
         GoalPreflightVerdict.ALREADY_RUNNING,

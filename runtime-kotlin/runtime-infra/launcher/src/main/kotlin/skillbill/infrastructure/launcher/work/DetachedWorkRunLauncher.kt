@@ -240,7 +240,11 @@ class DetachedWorkRunLauncher internal constructor(
       if (exitedEarly != null && exitedEarly != 0) {
         diagnostics.warning("seam=work-run.launch outcome=runner_failed log=$log")
         ownership().clear(owner, process.pid())
-        return refuse("The runner exited before starting. See $log")
+        return refuse(
+          "${failureLogLines(
+            log,
+          ).lastOrNull { it.isNotBlank() } ?: "The runner exited before starting."} Full log: $log",
+        )
       }
       diagnostics.info("seam=work-run.launch outcome=started log=$log")
       WorkRunLaunchResult.Started(log, requireNotNull(exit).thenApply { workRunExit(it.exitValue(), log) })

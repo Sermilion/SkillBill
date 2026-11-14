@@ -168,7 +168,7 @@ public class WorkControlRecovery(
         is BlockIncidentRecoveryResumeClaim.Claimed -> claimed
       }
     val launch = launchResumed(target, claim.attempt, agentId)
-    val launched = launch == WorkControlResult.Accepted
+    val launched = launch == WorkControlResult.Accepted || launch is WorkControlResult.Running
     return when (val settled = recovery.settleResume(target.databaseFileObservation, claim, launched)) {
       is BlockIncidentRecoveryResult.Resumed -> recovered(settled.attempt, launch)
       is BlockIncidentRecoveryResult.Failed -> recovered(settled.attempt, launch)

@@ -5,10 +5,12 @@ import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_BUILD_RECEI
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CHECKPOINT_IDENTITY_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_VALIDATION_EVIDENCE_CONTRACT_VERSION
 import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
+import skillbill.engine.featuretask.model.execution.ValidationGateCommandFamily
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeAttemptBudgets
 import skillbill.engine.featuretask.validation.FeatureTaskRuntimeBuildGateCoordinator
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.featuretask.InvalidFeatureTaskRuntimeExecutionPlanSchemaError
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedExecutionPolicy
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
@@ -60,16 +62,18 @@ public object FeatureTaskRuntimeEffectivePolicies {
     plan: ResolvedPhaseExecutionPlan,
     gate: EffectiveGatePolicyInputs,
   ): Boolean =
-    executionRelevant(plan, resolve(plan, gate).sortedBy { it.id }) == executionRelevant(plan, plan.effectivePolicies)
+    plan.effectivePolicySettings?.let {
+      it.validationDepth == gate.validationDepth && it.phaseTimeoutMillis == gate.phaseTimeoutMillis
+    } != false &&
+      (
+        plan.qualityGateSelection != FeatureTaskRuntimeQualityGateSelection.BUILD ||
+          gate.commandFamily == ValidationGateCommandFamily.BUILD
+      ) &&
+      resolve(plan, gate).sortedBy { it.id }.filterNot { it.id == GATE_COMMANDS_POLICY_ID } ==
+      plan.effectivePolicies.filterNot { it.id == GATE_COMMANDS_POLICY_ID }
 
   internal fun runsGateCommands(plan: ResolvedPhaseExecutionPlan): Boolean =
     PhaseSlot.QUALITY_GATE in plan.selectedSlots
-
-  private fun executionRelevant(
-    plan: ResolvedPhaseExecutionPlan,
-    policies: List<ResolvedExecutionPolicy>,
-  ): List<ResolvedExecutionPolicy> =
-    if (runsGateCommands(plan)) policies else policies.filterNot { it.id == GATE_COMMANDS_POLICY_ID }
 
   internal fun mapStepIdentityPolicies(
     recorded: ResolvedPhaseExecutionPlan,
