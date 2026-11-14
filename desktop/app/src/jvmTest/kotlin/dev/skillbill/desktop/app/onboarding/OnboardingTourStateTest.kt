@@ -57,6 +57,24 @@ class OnboardingTourStateTest {
   }
 
   @Test
+  fun `next walks a step's beats before advancing and back replays the previous step`() = runTest {
+    val tour = OnboardingTourState(FakeAppSettingsRepository(), WindowCoroutineScope(backgroundScope))
+    tour.show()
+    tour.goTo(1)
+
+    assertEquals(0, tour.beat)
+    tour.next()
+    assertEquals(1, tour.step)
+    assertEquals(1, tour.beat)
+    tour.next()
+    assertEquals(2, tour.step)
+    assertEquals(0, tour.beat)
+    tour.back()
+    assertEquals(1, tour.step)
+    assertEquals(0, tour.beat)
+  }
+
+  @Test
   fun `a previously seen tour stays closed on launch`() = runTest {
     val settings = FakeAppSettingsRepository().apply { onboardingTourSeen = true }
     val tour = OnboardingTourState(settings, WindowCoroutineScope(backgroundScope))

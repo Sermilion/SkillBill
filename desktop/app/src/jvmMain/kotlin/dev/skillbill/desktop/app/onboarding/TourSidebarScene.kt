@@ -56,14 +56,9 @@ internal data class TourSidebarState(
 internal fun tourSidebarTimeline(): TourTimeline<TourSidebarState> = TourTimeline(
   TourSidebarState(),
   listOf(
-    TourCue<TourSidebarState>(1100) { it.spot(Spotlight(TourTarget.NavNewTask, TourFixture.tipNavNewTask, pad = 3.dp, radius = 8.dp)) },
-    TourCue<TourSidebarState>(2800) { it.spot(Spotlight(TourTarget.NavWork, TourFixture.tipNavWork, pad = 3.dp, radius = 8.dp)) },
-    TourCue<TourSidebarState>(4500) { it.spot(Spotlight(TourTarget.NavHistory, TourFixture.tipNavHistory, pad = 3.dp, radius = 8.dp)) },
-    TourCue<TourSidebarState>(6200) { it.spot(Spotlight(TourTarget.NavSpecs, TourFixture.tipNavSpecs, pad = 3.dp, radius = 8.dp)) },
-    TourCue<TourSidebarState>(7900) { it.spot(Spotlight(TourTarget.NavSettings, TourFixture.tipNavSettings, pad = 3.dp, radius = 8.dp)) },
-    TourCue<TourSidebarState>(9600) { it.spot(Spotlight(TourTarget.Usage, TourFixture.tipUsage, TipSide.Right, pad = 3.dp)) },
+    TourBeat<TourSidebarState> { it.spot(Spotlight(TourTarget.NavGroup, TourFixture.tipNavGroup, TipSide.Right, pad = 4.dp, radius = 8.dp)) },
+    TourBeat<TourSidebarState> { it.spot(Spotlight(TourTarget.Usage, TourFixture.tipUsage, TipSide.Right, pad = 3.dp)) },
   ),
-  endMs = 11000,
 )
 
 private fun TourSidebarState.spot(spotlight: Spotlight) = copy(overlay = overlay.copy(spotlight = spotlight))
@@ -71,9 +66,9 @@ private fun TourSidebarState.spot(spotlight: Spotlight) = copy(overlay = overlay
 private val homePanelState = TourChatState()
 
 @Composable
-internal fun TourSidebarScene(step: Int, replayToken: Int, onEnd: () -> Unit) {
+internal fun TourSidebarScene(step: Int, replayToken: Int, beat: Int) {
   val timeline = remember { tourSidebarTimeline() }
-  val state by rememberTourTimeline(step, replayToken, timeline, LocalReducedMotion.current, onEnd)
+  val state = timeline.stateAt(beat)
   TourStageFrame(state.chrome, state.overlay) {
     TourNewTaskPanel(homePanelState)
   }

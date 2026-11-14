@@ -19,9 +19,9 @@ internal enum class TourNav { NewTask, Work, History, Specs, Settings }
 
 /** The tour targets primitives can point at; later steps append their own entries. */
 internal enum class TourTarget {
-  NavNewTask, NavWork, NavHistory, NavSpecs, NavSettings,
+  NavGroup, NavNewTask, NavWork, NavHistory, NavSpecs, NavSettings,
   Usage, StartCard, StartGoalButton,
-  LaneNeeds, LaneGoals, LanePhases, LaneOps, LaneDone, NewRow,
+  BoardLanes, LaneNeeds, LaneGoals, LanePhases, LaneOps, LaneDone, NewRow,
   Subtasks, Pipeline, ActivityLog,
   DiffLine, DiffPlus, AddReview, FinishSteps, PrCard, SparkLayer,
 }
@@ -293,19 +293,18 @@ internal object TourFixture {
   const val palettePlaceholder = "Type a command or search…"
   const val paletteQuery = "pause"
 
-  val tipNavNewTask = TourTip("New task", "Chat with your agent to shape the next piece of work.", listOf("G N"))
-  val tipNavWork = TourTip("Work", "Every running goal, phase and operation, grouped by what it needs.", listOf("G W"))
-  val tipNavHistory = TourTip("History", "Finished runs, with their full record.", listOf("G H"))
-  val tipNavSpecs = TourTip("Specs", "The plans Sona writes, stored as files in your repo.", listOf("G S"))
-  val tipNavSettings = TourTip("Settings", "Notifications, models, agents and paths.", listOf("G ,"))
+  val tipNavGroup = TourTip(
+    "One sidebar, five places",
+    "New task is where work starts. Work shows everything running. History, Specs and Settings cover the rest.",
+    listOf("G N", "G W", "G H", "G S", "G ,"),
+  )
   val tipUsage = TourTip("Usage", "How much of your agent's limits you have left, always in view.")
   val tipYourCall = TourTip("Your call", "Starting the goal is always a click. The agent never launches work on its own.")
   val tipStarted = TourTip("Started", "The goal is on your Work board now.")
-  val tipLaneNeeds = TourTip("Needs you", "Runs waiting on your decision. Empty is good.")
-  val tipLaneGoals = TourTip("Goal runs", "Features Sona plans, builds and ships end to end.")
-  val tipLanePhases = TourTip("Standalone phases", "One review, QA or validation pass on a branch.")
-  val tipLaneOps = TourTip("Operations", "Verify, release and other one-off jobs.")
-  val tipLaneDone = TourTip("Finished today", "Older runs move to History.")
+  val tipBoardLanes = TourTip(
+    "Grouped by what it needs",
+    "Needs you sits on top — paused runs and decisions wait there. Goal runs, phases and operations follow; finished runs sink to the bottom.",
+  )
   val tipNewGoal = TourTip("Your new goal", "Next, we open it.")
   val tipSubtasks = TourTip("Subtasks", "The plan, split into pieces small enough to review.")
   val tipPipeline = TourTip("The same steps every time", "Plan, implement, review, validate, commit. Failed checks loop back for a fix before anything is committed.")

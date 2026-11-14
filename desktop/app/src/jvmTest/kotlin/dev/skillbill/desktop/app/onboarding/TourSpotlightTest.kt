@@ -13,7 +13,7 @@ class TourSpotlightTest {
     mainClock.autoAdvance = false
     setContent {
       SkillBillTheme(reducedMotion = false) {
-        TourRunDetailScene(step = 4, replayToken = 0, onEnd = {})
+        TourRunDetailScene(step = 4, replayToken = 0, beat = 1)
       }
     }
 

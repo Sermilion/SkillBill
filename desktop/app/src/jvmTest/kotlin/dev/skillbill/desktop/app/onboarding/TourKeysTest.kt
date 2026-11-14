@@ -31,6 +31,8 @@ class TourKeysTest {
     applyTourAction(TourKeyAction.Swallow, tour)
     assertEquals(3, tour.step)
     applyTourAction(TourKeyAction.Next, tour)
+    assertEquals(3, tour.step)
+    repeat(tourBeatCount(3) - 1) { applyTourAction(TourKeyAction.Next, tour) }
     assertEquals(4, tour.step)
     applyTourAction(TourKeyAction.Back, tour)
     assertEquals(3, tour.step)

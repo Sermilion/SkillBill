@@ -26,7 +26,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -70,30 +69,29 @@ internal data class TourDetailState(
 )
 
 internal fun tourRunDetailTimeline(): TourTimeline<TourDetailState> {
-  fun spot(ms: Int, target: TourTarget, tip: TourTip, side: TipSide, pad: Dp): TourCue<TourDetailState> =
-    TourCue(ms) { it.copy(overlay = it.overlay.copy(spotlight = Spotlight(target, tip, side, pad))) }
+  fun spot(target: TourTarget, tip: TourTip, side: TipSide, pad: Dp): TourBeat<TourDetailState> =
+    TourBeat { it.copy(overlay = it.overlay.copy(spotlight = Spotlight(target, tip, side, pad))) }
   return TourTimeline(
     TourDetailState(),
     listOf(
-      TourCue(500) { it.runSubtask(0).copy(pipelineIndex = 0).appendLog(TourFixture.logPreplan) },
-      spot(700, TourTarget.Subtasks, TourFixture.tipSubtasks, TipSide.Right, (-4).dp),
-      TourCue(1400) { it.copy(pipelineIndex = 1).appendLog(TourFixture.logPlan) },
-      TourCue(2300) { it.copy(pipelineIndex = 2).appendLog(TourFixture.logEditCsv).appendLog(TourFixture.logEditCsvTest) },
-      TourCue(2600) { it.copy(changes = TourChanges(1, 64, 0)) },
-      spot(2700, TourTarget.Pipeline, TourFixture.tipPipeline, TipSide.Bottom, 2.dp),
-      TourCue(3200) { it.copy(pipelineIndex = 3).appendLog(TourFixture.logReview) },
-      TourCue(4100) { it.copy(pipelineIndex = 4).appendLog(TourFixture.logTest) },
-      TourCue(5000) { it.copy(pipelineIndex = 5).appendLog(TourFixture.logCommit) },
-      spot(5200, TourTarget.ActivityLog, TourFixture.tipActivity, TipSide.Top, 6.dp),
-      TourCue(5900) {
-        it.finishSubtask(0).copy(pipelineIndex = 6, changes = TourChanges(2, 105, 0)).appendLog(TourFixture.logSubtaskDone)
+      TourBeat { it.runSubtask(0).copy(pipelineIndex = 0).appendLog(TourFixture.logPreplan) },
+      spot(TourTarget.Subtasks, TourFixture.tipSubtasks, TipSide.Right, (-4).dp),
+      TourBeat {
+        it.copy(pipelineIndex = 4, changes = TourChanges(1, 64, 0))
+          .appendLog(TourFixture.logPlan)
+          .appendLog(TourFixture.logEditCsv)
+          .appendLog(TourFixture.logEditCsvTest)
+          .appendLog(TourFixture.logReview)
+          .appendLog(TourFixture.logTest)
       },
-      TourCue(6100) {
-        it.copy(overlay = it.overlay.copy(spotlight = null)).runSubtask(1).copy(pipelineIndex = 0)
+      spot(TourTarget.Pipeline, TourFixture.tipPipeline, TipSide.Bottom, 2.dp),
+      TourBeat {
+        it.copy(pipelineIndex = 5).appendLog(TourFixture.logCommit)
+          .finishSubtask(0).copy(changes = TourChanges(2, 105, 0)).appendLog(TourFixture.logSubtaskDone)
+          .runSubtask(1).copy(pipelineIndex = 1)
       },
-      TourCue(6800) { it.copy(pipelineIndex = 1) },
+      spot(TourTarget.ActivityLog, TourFixture.tipActivity, TipSide.Top, 6.dp),
     ),
-    endMs = 7600,
   )
 }
 
@@ -112,9 +110,9 @@ internal fun TourDetailState.finishSubtask(index: Int): TourDetailState = copy(
 )
 
 @Composable
-internal fun TourRunDetailScene(step: Int, replayToken: Int, onEnd: () -> Unit) {
+internal fun TourRunDetailScene(step: Int, replayToken: Int, beat: Int) {
   val timeline = remember { tourRunDetailTimeline() }
-  val state by rememberTourTimeline(step, replayToken, timeline, LocalReducedMotion.current, onEnd)
+  val state = timeline.stateAt(beat)
   TourStageFrame(state.chrome, state.overlay) {
     TourRunDetail(state)
   }

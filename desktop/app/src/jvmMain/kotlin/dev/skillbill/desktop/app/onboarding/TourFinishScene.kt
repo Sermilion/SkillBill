@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -52,50 +51,43 @@ internal data class TourFinishState(
  * Step 07 "From goal to pull request": the finishing phases complete in order, the PR card's checks
  * go green one by one, sparks fire once, and the final spotlight lands on the card with "Ready for you".
  */
-internal fun tourFinishTimeline(): TourTimeline<TourFinishState> {
-  val cues = mutableListOf<TourCue<TourFinishState>>()
-  fun at(ms: Int, apply: (TourFinishState) -> TourFinishState) { cues += TourCue(ms, apply) }
-  at(600) { it.copy(running = 0) }
-  at(1600) { it.copy(done = 1, running = 1) }
-  at(2600) { it.copy(done = 2, running = 2) }
-  at(3600) {
-    it.copy(
-      done = 3,
-      running = 3,
-      overlay = it.overlay.copy(
-        spotlight = Spotlight(TourTarget.FinishSteps, TourFixture.tipGoalFinish, TipSide.Right, pad = 4.dp),
-      ),
-    )
-  }
-  at(4600) { it.copy(done = 4, running = 4, prShown = true) }
-  at(4800) {
-    it.copy(
-      checks = List(TourFixture.checkNames.size) { StatusKind.Active },
-      overlay = it.overlay.copy(spotlight = null),
-    )
-  }
-  TourFixture.checkNames.indices.forEach { c ->
-    at(4900 + c * 280) { state ->
-      state.copy(checks = state.checks.mapIndexed { i, kind -> if (i == c) StatusKind.Completed else kind })
-    }
-  }
-  at(6580) { it.copy(done = 5, running = -1) }
-  at(6680) { it.copy(prReady = true, sparkBurst = it.sparkBurst + 1) }
-  at(7180) {
-    it.copy(
-      overlay = it.overlay.copy(
-        spotlight = Spotlight(TourTarget.PrCard, TourFixture.tipReadyForYou, TipSide.Bottom, pad = 6.dp, radius = 14.dp),
-      ),
-    )
-  }
-  return TourTimeline(TourFinishState(), cues, endMs = 7480)
-}
+internal fun tourFinishTimeline(): TourTimeline<TourFinishState> = TourTimeline(
+  TourFinishState(),
+  listOf(
+    TourBeat {
+      it.copy(
+        done = 3,
+        running = 3,
+        overlay = it.overlay.copy(
+          spotlight = Spotlight(TourTarget.FinishSteps, TourFixture.tipGoalFinish, TipSide.Right, pad = 4.dp),
+        ),
+      )
+    },
+    TourBeat {
+      it.copy(
+        done = 4, running = 4, prShown = true,
+        checks = List(TourFixture.checkNames.size) { StatusKind.Active },
+        overlay = it.overlay.copy(spotlight = null),
+      )
+    },
+    TourBeat {
+      it.copy(
+        done = TourFixture.finishSteps.size, running = -1,
+        checks = List(TourFixture.checkNames.size) { StatusKind.Completed },
+        prReady = true, sparkBurst = it.sparkBurst + 1,
+        overlay = it.overlay.copy(
+          spotlight = Spotlight(TourTarget.PrCard, TourFixture.tipReadyForYou, TipSide.Bottom, pad = 6.dp, radius = 14.dp),
+        ),
+      )
+    },
+  ),
+)
 
 @Composable
-internal fun TourFinishScene(step: Int, replayToken: Int, onEnd: () -> Unit) {
+internal fun TourFinishScene(step: Int, replayToken: Int, beat: Int) {
   val timeline = remember { tourFinishTimeline() }
   val reduced = LocalReducedMotion.current
-  val state by rememberTourTimeline(step, replayToken, timeline, reduced, onEnd)
+  val state = timeline.stateAt(beat)
   TourStageFrame(state.chrome, state.overlay) {
     Column(Modifier.fillMaxSize()) {
       TourFinishHeader(state)

@@ -49,26 +49,21 @@ internal fun tourFilteredCommandGroups(query: String): List<CommandGroup> =
     CommandGroup(group.head, group.items.filter { it.label.contains(query, ignoreCase = true) })
   }
 
-/** Step 08 "Keys for everything": the staged palette opens, "pause" is typed and the highlight moves. */
-internal fun tourCommandsTimeline(): TourTimeline<TourCommandsState> {
-  val cues = mutableListOf<TourCue<TourCommandsState>>()
-  fun at(ms: Int, apply: (TourCommandsState) -> TourCommandsState) { cues += TourCue(ms, apply) }
-  at(500) { it.copy(paletteOpen = true) }
-  val step = 1000 / 7
-  TourFixture.paletteQuery.indices.forEach { i ->
-    at(1300 + i * step) { it.copy(query = TourFixture.paletteQuery.substring(0, i + 1), highlight = 0) }
-  }
-  at(2660) { it.copy(highlight = 1) }
-  at(3260) { it.copy(highlight = 0) }
-  return TourTimeline(TourCommandsState(), cues, endMs = 4160)
-}
+/** Step 08 "Keys for everything": the staged palette opens, then "pause" is typed. */
+internal fun tourCommandsTimeline(): TourTimeline<TourCommandsState> = TourTimeline(
+  TourCommandsState(),
+  listOf(
+    TourBeat { it.copy(paletteOpen = true) },
+    TourBeat { it.copy(query = TourFixture.paletteQuery, highlight = 0) },
+  ),
+)
 
 @Composable
-internal fun TourCommandsScene(step: Int, replayToken: Int, onEnd: () -> Unit) {
+internal fun TourCommandsScene(step: Int, replayToken: Int, beat: Int) {
   val colors = SkillBillTheme.colors
   val type = SkillBillTheme.type
   val timeline = remember { tourCommandsTimeline() }
-  val state by rememberTourTimeline(step, replayToken, timeline, LocalReducedMotion.current, onEnd)
+  val state = timeline.stateAt(beat)
   var ran by remember(step, replayToken, state.highlight) { mutableStateOf<Int?>(null) }
   val groups = tourFilteredCommandGroups(state.query)
   TourStageFrame(state.chrome, state.overlay) {

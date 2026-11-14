@@ -24,7 +24,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -51,32 +50,26 @@ internal data class TourBoardState(
   val newRow: TourBoardRow? = null,
 )
 
-internal fun tourWorkTimeline(): TourTimeline<TourBoardState> {
-  fun spot(ms: Int, target: TourTarget, tip: TourTip): TourCue<TourBoardState> =
-    TourCue(ms) { it.copy(overlay = it.overlay.copy(spotlight = Spotlight(target, tip, TipSide.BottomLeft, 0.dp, 2.dp))) }
-  return TourTimeline(
-    TourBoardState(),
-    listOf(
-      TourCue(450) { it.copy(newRow = TourFixture.newGoalRow) },
-      TourCue(1700) { it.copy(newRow = TourFixture.newGoalRowActive) },
-      spot(2200, TourTarget.LaneNeeds, TourFixture.tipLaneNeeds),
-      TourCue(2400) { it.copy(newRow = it.newRow?.copy(fresh = false)) },
-      spot(3800, TourTarget.LaneGoals, TourFixture.tipLaneGoals),
-      spot(5400, TourTarget.LanePhases, TourFixture.tipLanePhases),
-      spot(7000, TourTarget.LaneOps, TourFixture.tipLaneOps),
-      spot(8600, TourTarget.LaneDone, TourFixture.tipLaneDone),
-      TourCue(10200) {
-        it.copy(overlay = it.overlay.copy(spotlight = Spotlight(TourTarget.NewRow, TourFixture.tipNewGoal, TipSide.Bottom, 0.dp, 2.dp)))
-      },
-    ),
-    endMs = 11200,
-  )
-}
+internal fun tourWorkTimeline(): TourTimeline<TourBoardState> = TourTimeline(
+  TourBoardState(),
+  listOf(
+    TourBeat {
+      it.copy(overlay = it.overlay.copy(spotlight = Spotlight(TourTarget.BoardLanes, TourFixture.tipBoardLanes, TipSide.Bottom, 0.dp, 2.dp)))
+    },
+    TourBeat {
+      it.copy(
+        newRow = TourFixture.newGoalRow,
+        overlay = it.overlay.copy(spotlight = Spotlight(TourTarget.NewRow, TourFixture.tipNewGoal, TipSide.Bottom, 0.dp, 2.dp)),
+      )
+    },
+    TourBeat { it.copy(newRow = TourFixture.newGoalRowActive.copy(fresh = false)) },
+  ),
+)
 
 @Composable
-internal fun TourWorkScene(step: Int, replayToken: Int, onEnd: () -> Unit) {
+internal fun TourWorkScene(step: Int, replayToken: Int, beat: Int) {
   val timeline = remember { tourWorkTimeline() }
-  val state by rememberTourTimeline(step, replayToken, timeline, LocalReducedMotion.current, onEnd)
+  val state = timeline.stateAt(beat)
   TourStageFrame(state.chrome, state.overlay) {
     TourWorkBoard(state.newRow)
   }
@@ -105,7 +98,7 @@ internal fun TourWorkBoard(newRow: TourBoardRow?, modifier: Modifier = Modifier)
         Kbd("/")
       }
     }
-    Column(Modifier.weight(1f).fillMaxWidth()) {
+    Column(Modifier.weight(1f).fillMaxWidth().tourTarget(TourTarget.BoardLanes)) {
       TourLane("Needs you", 0, TourTarget.LaneNeeds)
       TourEmptyRow("Nothing needs you right now.")
       TourLane("Goal runs", if (newRow != null) 2 else 1, TourTarget.LaneGoals)

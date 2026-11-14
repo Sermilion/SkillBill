@@ -145,16 +145,18 @@ private fun TourSidebar(chrome: StageChrome) {
       Spacer(Modifier.weight(1f))
       BasicText(TourFixture.workspace, Modifier.padding(end = 8.dp), style = type.tXs.copy(color = colors.fgFaint))
     }
-    TourFixture.navItems.forEach { entry ->
-      SidebarItem(
-        entry.label,
-        {},
-        modifier = Modifier.tourTarget(entry.target),
-        icon = entry.icon,
-        on = chrome.activeNav == entry.nav,
-        attention = if (entry.nav == TourNav.Work) chrome.workAttention else null,
-        tooltip = null,
-      )
+    Column(Modifier.tourTarget(TourTarget.NavGroup)) {
+      TourFixture.navItems.forEach { entry ->
+        SidebarItem(
+          entry.label,
+          {},
+          modifier = Modifier.tourTarget(entry.target),
+          icon = entry.icon,
+          on = chrome.activeNav == entry.nav,
+          attention = if (entry.nav == TourNav.Work) chrome.workAttention else null,
+          tooltip = null,
+        )
+      }
     }
     Box(Modifier.padding(horizontal = 6.dp, vertical = 7.dp).fillMaxWidth().height(1.dp).background(colors.borderSubtle))
     BasicText(

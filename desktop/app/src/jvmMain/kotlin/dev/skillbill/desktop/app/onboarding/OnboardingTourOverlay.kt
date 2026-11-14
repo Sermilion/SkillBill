@@ -62,6 +62,7 @@ import dev.skillbill.desktop.core.designsystem.layeredShadow
 import dev.skillbill.desktop.core.designsystem.icon.BrandMark
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.ui.pane.MOD_KEY
+import kotlinx.coroutines.delay
 
 @Composable
 fun OnboardingTourOverlay(tour: OnboardingTourState, onStartFirstTask: () -> Unit) {
@@ -69,7 +70,7 @@ fun OnboardingTourOverlay(tour: OnboardingTourState, onStartFirstTask: () -> Uni
   val focus = remember { FocusRequester() }
   val focusManager = LocalFocusManager.current
   val reduced = LocalReducedMotion.current
-  var timelineEnded by remember(tour.step, tour.replayToken) { mutableStateOf(false) }
+  val ended = tour.beat >= tourBeatCount(tour.step) - 1
   BoxWithConstraints(
     Modifier.fillMaxSize().background(colors.bgFrame)
       .focusRequester(focus).focusProperties { onExit = { cancelFocusChange() } }.focusGroup()
@@ -100,20 +101,20 @@ fun OnboardingTourOverlay(tour: OnboardingTourState, onStartFirstTask: () -> Uni
             val scale = tourFrameScale(maxWidth, maxHeight)
             ScaledTourFrame(scale) {
               when (tour.step) {
-                1 -> TourSidebarScene(tour.step, tour.replayToken, onEnd = { timelineEnded = true })
-                2 -> TourChatScene(tour.step, tour.replayToken, onEnd = { timelineEnded = true })
-                3 -> TourWorkScene(tour.step, tour.replayToken, onEnd = { timelineEnded = true })
-                4 -> TourRunDetailScene(tour.step, tour.replayToken, onEnd = { timelineEnded = true })
-                5 -> TourControlScene(tour.step, tour.replayToken, onEnd = { timelineEnded = true })
-                6 -> TourReviewScene(tour.step, tour.replayToken, onEnd = { timelineEnded = true })
-                7 -> TourFinishScene(tour.step, tour.replayToken, onEnd = { timelineEnded = true })
-                8 -> TourCommandsScene(tour.step, tour.replayToken, onEnd = { timelineEnded = true })
+                1 -> TourSidebarScene(tour.step, tour.replayToken, tour.beat)
+                2 -> TourChatScene(tour.step, tour.replayToken, tour.beat)
+                3 -> TourWorkScene(tour.step, tour.replayToken, tour.beat)
+                4 -> TourRunDetailScene(tour.step, tour.replayToken, tour.beat)
+                5 -> TourControlScene(tour.step, tour.replayToken, tour.beat)
+                6 -> TourReviewScene(tour.step, tour.replayToken, tour.beat)
+                7 -> TourFinishScene(tour.step, tour.replayToken, tour.beat)
+                8 -> TourCommandsScene(tour.step, tour.replayToken, tour.beat)
                 else -> EmptyStagedFrame(Modifier.fillMaxSize())
               }
             }
           }
           Spacer(Modifier.height(12.dp))
-          TourCaption(tour, frame.compact, timelineEnded)
+          TourCaption(tour, frame.compact, ended)
         }
       }
     }
@@ -180,7 +181,10 @@ private fun TourCaption(tour: OnboardingTourState, compact: Boolean, ended: Bool
         Row(verticalAlignment = Alignment.CenterVertically) {
           Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-              BasicText("%02d / 08".format(step), style = SkillBillTheme.type.monoSm.copy(color = colors.fgFaint))
+              BasicText(
+                "%02d / 08 · %d/%d".format(step, tour.beat + 1, tourBeatCount(step)),
+                style = SkillBillTheme.type.monoSm.copy(color = colors.fgFaint),
+              )
               BasicText(copy.title, style = SkillBillTheme.type.tMd.copy(color = colors.fg))
             }
             BasicText(copy.body, style = SkillBillTheme.type.tSm.copy(color = colors.fgMuted))
@@ -254,13 +258,22 @@ private fun TourNextButton(tour: OnboardingTourState, label: String, ended: Bool
 private fun TourHero(tour: OnboardingTourState, onStartFirstTask: () -> Unit, modifier: Modifier, reduced: Boolean, compact: Boolean) {
   val welcome = tour.step == OnboardingTourState.WELCOME_STEP
   val colors = SkillBillTheme.colors
-  val timeline = remember {
-    TourTimeline(HeroMarkState(0, false), listOf(
-      TourCue(150) { it.copy(bands = 1) }, TourCue(320) { it.copy(bands = 2) },
-      TourCue(490) { it.copy(bands = 3) }, TourCue(1300) { it.copy(ripples = true) },
-    ), 1390)
+  var mark by remember(tour.step, tour.replayToken) { mutableStateOf(HeroMarkState(0, false)) }
+  LaunchedEffect(tour.step, tour.replayToken, reduced) {
+    if (reduced) {
+      mark = HeroMarkState(3, true)
+      return@LaunchedEffect
+    }
+    mark = HeroMarkState(0, false)
+    delay(150)
+    mark = mark.copy(bands = 1)
+    delay(170)
+    mark = mark.copy(bands = 2)
+    delay(170)
+    mark = mark.copy(bands = 3)
+    delay(810)
+    mark = mark.copy(ripples = true)
   }
-  val mark by rememberTourTimeline(tour.step, tour.replayToken, timeline, reduced) {}
   Column(modifier.padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
     PingMark(mark.bands, mark.ripples)
     Spacer(Modifier.height(22.dp))

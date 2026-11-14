@@ -23,6 +23,8 @@ class OnboardingTourState(
     private set
   var step by mutableIntStateOf(WELCOME_STEP)
     private set
+  var beat by mutableIntStateOf(0)
+    private set
   var replayToken by mutableIntStateOf(0)
     private set
   private var launchStarted = false
@@ -40,20 +42,29 @@ class OnboardingTourState(
 
   fun show() {
     step = WELCOME_STEP
+    beat = 0
     open = true
     replayToken++
   }
 
-  fun next() = goTo(step + 1)
+  fun next() {
+    if (beat < tourBeatCount(step) - 1) beat++ else goTo(step + 1)
+  }
 
-  fun back() = goTo(step - 1)
+  fun back() {
+    if (beat > 0) beat-- else goTo(step - 1)
+  }
 
   fun goTo(step: Int) {
     this.step = step.coerceIn(WELCOME_STEP, LAST_STEP)
+    beat = 0
     replayToken++
   }
 
-  fun replayStep() { replayToken++ }
+  fun replayStep() {
+    beat = 0
+    replayToken++
+  }
 
   fun skip() = goTo(LAST_STEP)
 

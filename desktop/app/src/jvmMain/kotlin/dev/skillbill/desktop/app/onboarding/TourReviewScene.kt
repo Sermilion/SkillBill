@@ -40,63 +40,53 @@ internal data class TourReviewState(
  * review sends it, a toast confirms, and Claude's fix lands on line 8. Buttons are tour-only; a
  * click never reaches a review, a changes repository or the runtime.
  */
-internal fun tourReviewTimeline(): TourTimeline<TourReviewState> {
-  val cues = mutableListOf<TourCue<TourReviewState>>()
-  fun at(ms: Int, apply: (TourReviewState) -> TourReviewState) { cues += TourCue(ms, apply) }
-  fun press(ms: Int) = at(ms) {
-    it.copy(overlay = it.overlay.copy(cursor = it.overlay.cursor?.pressed()))
-  }
-  at(600) { it.copy(targetTint = true, plusShown = true) }
-  at(900) {
-    it.copy(
-      overlay = it.overlay.copy(
-        spotlight = Spotlight(TourTarget.DiffLine, TourFixture.tipCommentLine, TipSide.Bottom, pad = 2.dp, radius = 4.dp),
-      ),
-    )
-  }
-  at(1200) { it.copy(overlay = it.overlay.copy(cursor = DemoCursor(TourTarget.DiffPlus))) }
-  press(2700)
-  at(2860) { it.copy(plusShown = false, draft = "", overlay = it.overlay.copy(spotlight = null)) }
-  at(3060) { it.copy(overlay = it.overlay.copy(cursor = null)) }
-  TourFixture.reviewComment.indices.forEach { i ->
-    at(3160 + i * (1000 / 48)) { it.copy(draft = TourFixture.reviewComment.substring(0, i + 1)) }
-  }
-  at(5310) { it.copy(draft = null, youTag = "Pending", reviewLabel = "Add review · 1", reviewPrimary = true) }
-  at(5710) {
-    it.copy(
-      overlay = it.overlay.copy(
-        spotlight = Spotlight(TourTarget.AddReview, TourFixture.tipSendReview, TipSide.Bottom, pad = 4.dp),
-      ),
-    )
-  }
-  at(5910) { it.copy(overlay = it.overlay.copy(cursor = DemoCursor(TourTarget.AddReview))) }
-  press(7610)
-  at(7770) {
-    it.copy(
-      reviewLabel = "Review added",
-      reviewPrimary = false,
-      youTag = "Sent to agent",
-      toastShown = true,
-      overlay = it.overlay.copy(spotlight = null),
-    )
-  }
-  at(8170) { it.copy(overlay = it.overlay.copy(cursor = null)) }
-  at(9070) { it.copy(toastShown = false, claude = TourClaudeReply.Thinking) }
-  at(10270) {
-    it.copy(
-      claude = TourClaudeReply.Replied,
-      lineFlash = true,
-      targetTint = false,
-      rows = it.rows.map { row -> if (row.target) row.copy(text = TourFixture.csvFixedLine) else row },
-    )
-  }
-  return TourTimeline(TourReviewState(), cues, endMs = 10770)
-}
+internal fun tourReviewTimeline(): TourTimeline<TourReviewState> = TourTimeline(
+  TourReviewState(),
+  listOf(
+    TourBeat {
+      it.copy(
+        targetTint = true, plusShown = true,
+        overlay = it.overlay.copy(
+          spotlight = Spotlight(TourTarget.DiffLine, TourFixture.tipCommentLine, TipSide.Bottom, pad = 2.dp, radius = 4.dp),
+          cursor = DemoCursor(TourTarget.DiffPlus),
+        ),
+      )
+    },
+    TourBeat {
+      it.copy(
+        plusShown = false, draft = TourFixture.reviewComment,
+        overlay = it.overlay.copy(spotlight = null, cursor = it.overlay.cursor?.pressed()),
+      )
+    },
+    TourBeat {
+      it.copy(
+        draft = null, youTag = "Pending", reviewLabel = "Add review · 1", reviewPrimary = true,
+        overlay = it.overlay.copy(
+          spotlight = Spotlight(TourTarget.AddReview, TourFixture.tipSendReview, TipSide.Bottom, pad = 4.dp),
+          cursor = DemoCursor(TourTarget.AddReview),
+        ),
+      )
+    },
+    TourBeat {
+      it.copy(
+        reviewLabel = "Review added",
+        reviewPrimary = false,
+        youTag = "Sent to agent",
+        toastShown = true,
+        claude = TourClaudeReply.Replied,
+        lineFlash = true,
+        targetTint = false,
+        rows = it.rows.map { row -> if (row.target) row.copy(text = TourFixture.csvFixedLine) else row },
+        overlay = it.overlay.copy(spotlight = null, cursor = it.overlay.cursor?.pressed()),
+      )
+    },
+  ),
+)
 
 @Composable
-internal fun TourReviewScene(step: Int, replayToken: Int, onEnd: () -> Unit) {
+internal fun TourReviewScene(step: Int, replayToken: Int, beat: Int) {
   val timeline = remember { tourReviewTimeline() }
-  val state by rememberTourTimeline(step, replayToken, timeline, LocalReducedMotion.current, onEnd)
+  val state = timeline.stateAt(beat)
   var toastDismissed by remember(step, replayToken) { mutableStateOf(false) }
   TourStageFrame(state.chrome, state.overlay) {
     Column(Modifier.fillMaxSize()) {

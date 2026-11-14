@@ -10,12 +10,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import dev.skillbill.desktop.core.designsystem.LocalReducedMotion
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.SbButton
 import dev.skillbill.desktop.core.designsystem.component.SbButtonVariant
@@ -50,54 +48,44 @@ internal fun tourControlTimeline(): TourTimeline<TourDetailState> {
   return TourTimeline(
     initial,
     listOf(
-      TourCue(800) { it.copy(overlay = it.overlay.copy(keycap = Keycap("P", "Pause after subtask"))) },
-      TourCue(1500) {
+      TourBeat {
         it.copy(
           pill = TourDetailPill.PauseRequested,
-          overlay = it.overlay.copy(keycap = it.overlay.keycap?.pressed()),
+          overlay = it.overlay.copy(keycap = Keycap("P", "Pause after subtask", presses = 1)),
         ).appendLog(TourFixture.logPauseRequested)
       },
-      TourCue(2300) { it.copy(pipelineIndex = 3) },
-      TourCue(3000) { it.copy(pipelineIndex = 4) },
-      TourCue(3700) { it.copy(pipelineIndex = 5).appendLog(TourFixture.logCommitSubtaskTwo) },
-      TourCue(4300) {
+      TourBeat {
         it.finishSubtask(1).copy(
           pipelineIndex = 6,
           pill = TourDetailPill.Paused,
           banner = true,
           chrome = it.chrome.copy(workAttention = 1),
-          overlay = it.overlay.copy(keycap = null),
-        ).appendLog(TourFixture.logPaused)
-      },
-      TourCue(4900) {
-        it.copy(
           overlay = it.overlay.copy(
+            keycap = null,
             spotlight = Spotlight(TourTarget.NavWork, TourFixture.tipPausedNeedsYou, pad = 3.dp),
           ),
-        )
+        ).appendLog(TourFixture.logCommitSubtaskTwo).appendLog(TourFixture.logPaused)
       },
-      TourCue(7400) {
+      TourBeat {
         it.copy(overlay = it.overlay.copy(spotlight = null, keycap = Keycap("R", "Resume")))
       },
-      TourCue(8100) {
+      TourBeat {
         it.runSubtask(2).copy(
-          pipelineIndex = 0,
+          pipelineIndex = 1,
           pill = TourDetailPill.Active,
           banner = false,
           chrome = it.chrome.copy(workAttention = null),
           overlay = it.overlay.copy(keycap = it.overlay.keycap?.pressed()),
         ).appendLog(TourFixture.logResumed)
       },
-      TourCue(8900) { it.copy(pipelineIndex = 1, overlay = it.overlay.copy(keycap = null)) },
     ),
-    endMs = 8900,
   )
 }
 
 @Composable
-internal fun TourControlScene(step: Int, replayToken: Int, onEnd: () -> Unit) {
+internal fun TourControlScene(step: Int, replayToken: Int, beat: Int) {
   val timeline = remember { tourControlTimeline() }
-  val state by rememberTourTimeline(step, replayToken, timeline, LocalReducedMotion.current, onEnd)
+  val state = timeline.stateAt(beat)
   TourStageFrame(state.chrome, state.overlay) {
     TourRunDetail(state)
   }

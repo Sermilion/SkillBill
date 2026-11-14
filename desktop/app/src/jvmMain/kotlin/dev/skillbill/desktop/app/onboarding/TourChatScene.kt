@@ -21,7 +21,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -52,62 +51,63 @@ internal data class TourChatState(
 )
 
 /**
- * The step 02 timeline. Typing emits one cue per character at a fixed cadence — no jitter — so the
- * final state stays a pure fold of the cue list and lands the same under reduced motion.
+ * The step 02 timeline as manual beats: the first message typed, sent and answered; the second
+ * exchange; the start card with its "your call" tip; the press; the flight to Work; the landed tip.
  */
-internal fun tourChatTimeline(): TourTimeline<TourChatState> {
-  val cues = mutableListOf<TourCue<TourChatState>>()
-  fun at(ms: Int, apply: (TourChatState) -> TourChatState) { cues += TourCue(ms, apply) }
-  fun type(start: Int, text: String, cps: Int): Int {
-    val step = 1000 / cps
-    text.indices.forEach { i -> at(start + i * step) { it.copy(composerText = text.substring(0, i + 1), sendReady = true) } }
-    return start + text.length * step + step
-  }
-  fun send(t: Int): Int {
-    at(t) { it.copy(sendPressed = true) }
-    at(t + 140) {
+internal fun tourChatTimeline(): TourTimeline<TourChatState> = TourTimeline(
+  TourChatState(),
+  listOf(
+    TourBeat { it.copy(composerFocused = true, composerText = TourFixture.chatMessage1, sendReady = true) },
+    TourBeat {
       it.copy(
-        composerText = "", sendReady = false, sendPressed = false, homeVisible = false,
-        messages = it.messages + TourChatLine.User(it.composerText),
+        composerText = "", sendReady = false, homeVisible = false,
+        messages = listOf(
+          TourChatLine.User(TourFixture.chatMessage1),
+          TourChatLine.Agent(TourFixture.chatReply1),
+        ),
       )
-    }
-    return t + 140
-  }
-  fun reply(t: Int, text: String, think: Int): Int {
-    at(t) { it.copy(messages = it.messages + TourChatLine.AgentThinking) }
-    at(t + think) { it.copy(messages = it.messages.dropLast(1) + TourChatLine.Agent(text)) }
-    return t + think
-  }
-  at(350) { it.copy(composerFocused = true) }
-  val e1 = type(500, TourFixture.chatMessage1, 44)
-  val s1 = send(e1 + 350)
-  val r1 = reply(s1 + 400, TourFixture.chatReply1, 1100)
-  val e2 = type(r1 + 900, TourFixture.chatMessage2, 30)
-  val s2 = send(e2 + 300)
-  val r2 = reply(s2 + 400, TourFixture.chatReply2, 1200)
-  at(r2 + 500) { it.copy(startCard = StartCardStage.Shown) }
-  at(r2 + 1100) {
-    it.copy(overlay = it.overlay.copy(spotlight = Spotlight(TourTarget.StartCard, TourFixture.tipYourCall, TipSide.Bottom, pad = 5.dp)))
-  }
-  at(r2 + 1300) { it.copy(overlay = it.overlay.copy(cursor = DemoCursor(TourTarget.StartGoalButton))) }
-  at(r2 + 3000) { it.copy(overlay = it.overlay.copy(cursor = it.overlay.cursor?.copy(presses = 1))) }
-  at(r2 + 3160) { it.copy(startCard = StartCardStage.Starting, overlay = it.overlay.copy(spotlight = null)) }
-  at(r2 + 3510) {
-    it.copy(overlay = it.overlay.copy(cursor = null, flight = CardFlight(TourTarget.StartCard, TourTarget.NavWork, 1)))
-  }
-  at(r2 + 4460) {
-    it.copy(
-      chrome = it.chrome.copy(activeNav = TourNav.Work),
-      overlay = it.overlay.copy(flight = null, spotlight = Spotlight(TourTarget.NavWork, TourFixture.tipStarted, pad = 3.dp)),
-    )
-  }
-  return TourTimeline(TourChatState(), cues, r2 + 5000)
-}
+    },
+    TourBeat {
+      it.copy(
+        messages = it.messages + TourChatLine.User(TourFixture.chatMessage2) + TourChatLine.Agent(TourFixture.chatReply2),
+      )
+    },
+    TourBeat {
+      it.copy(
+        startCard = StartCardStage.Shown,
+        overlay = it.overlay.copy(
+          spotlight = Spotlight(TourTarget.StartCard, TourFixture.tipYourCall, TipSide.Bottom, pad = 5.dp),
+        ),
+      )
+    },
+    TourBeat {
+      it.copy(overlay = it.overlay.copy(cursor = DemoCursor(TourTarget.StartGoalButton, presses = 1)))
+    },
+    TourBeat {
+      it.copy(
+        startCard = StartCardStage.Starting,
+        overlay = it.overlay.copy(
+          spotlight = null, cursor = null,
+          flight = CardFlight(TourTarget.StartCard, TourTarget.NavWork, 1),
+        ),
+      )
+    },
+    TourBeat {
+      it.copy(
+        chrome = it.chrome.copy(activeNav = TourNav.Work),
+        overlay = it.overlay.copy(
+          flight = null,
+          spotlight = Spotlight(TourTarget.NavWork, TourFixture.tipStarted, pad = 3.dp),
+        ),
+      )
+    },
+  ),
+)
 
 @Composable
-internal fun TourChatScene(step: Int, replayToken: Int, onEnd: () -> Unit) {
+internal fun TourChatScene(step: Int, replayToken: Int, beat: Int) {
   val timeline = remember { tourChatTimeline() }
-  val state by rememberTourTimeline(step, replayToken, timeline, LocalReducedMotion.current, onEnd)
+  val state = timeline.stateAt(beat)
   TourStageFrame(
     state.chrome,
     state.overlay,
