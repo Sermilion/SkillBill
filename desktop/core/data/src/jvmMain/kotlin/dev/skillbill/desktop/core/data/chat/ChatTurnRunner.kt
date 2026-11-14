@@ -1,6 +1,7 @@
 package dev.skillbill.desktop.core.data.chat
 
 import dev.skillbill.desktop.core.common.Diagnostics
+import dev.skillbill.desktop.core.common.HostEnvironment
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatFailure
 import kotlinx.coroutines.flow.Flow
@@ -58,6 +59,10 @@ internal fun runChatTurn(
     events.none { it is ChatEvent.Completed || it is ChatEvent.Failed }
   }.collect(::emit)
 }
+
+/** The environment every agent process inherits: host variables plus a HOME fallback to the resolved user home. */
+internal fun HostEnvironment.agentEnvironment(): Map<String, String> =
+  variables + mapOf("HOME" to (variables["HOME"] ?: userHome))
 
 /** Runs [binary] through a POSIX login shell so the login PATH applies; fish and other shells read `$0`/`$@` differently, so they use `/bin/sh`. */
 internal fun agentCommand(binary: String, arguments: List<String>, shell: String?): List<String> {

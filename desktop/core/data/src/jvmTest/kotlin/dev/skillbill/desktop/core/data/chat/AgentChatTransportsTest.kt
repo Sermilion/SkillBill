@@ -56,9 +56,12 @@ class AgentChatTransportsTest {
       request.sessionId, "execution", request.agent, Clock.System.now(), "earlier question", history,
     )))
     store.saveAgentSession(request.sessionId, "saved-provider-thread")
+    val sessions = noSessionManager(backgroundScope, RecordingDiagnostics())
     val transports = listOf(
       CodexChatTransport(host, launcher, store, RecordingDiagnostics()),
       CursorChatTransport(host, store, RecordingDiagnostics(), liveLauncher = launcher),
+      DevinChatTransport(host, store, RecordingDiagnostics(), launcher, null, sessions),
+      OpenCodeChatTransport(host, store, RecordingDiagnostics(), launcher, launcher, null, sessions),
     )
     for (transport in transports) {
       val failure = assertIs<ChatEvent.Failed>(transport.run(request.copy(

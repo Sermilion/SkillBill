@@ -216,7 +216,7 @@ internal fun ChatComposer(
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
       ModeBadge(ChatPermissionMode.Act)
       AgentPicker(
-        agent, workspace.agents, session.item.repositoryRoot, enabled = delivery == null && !busy && !gone,
+        agent, workspace.agents, session.requestRoot, enabled = delivery == null && !busy && !gone,
         loadModels = workspace::models, onChooseModel = { workspace.switchModel(id, it) },
       ) { workspace.switchAgent(id, it) }
       if (agent?.agentId?.startsWith("cursor", ignoreCase = true) == true) {

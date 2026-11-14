@@ -2,16 +2,21 @@ package dev.skillbill.desktop.core.data.chat
 
 import dev.skillbill.desktop.core.common.HostEnvironment
 import dev.skillbill.desktop.core.data.usage.UsageProfileResolver
+import dev.skillbill.desktop.core.domain.model.AdvertisedAgentChoices
 import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatModel
 import dev.skillbill.desktop.core.domain.model.ChatModelsRead
 import dev.skillbill.desktop.core.testing.FakeAppSettingsRepository
 import dev.skillbill.desktop.core.testing.RecordingDiagnostics
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.JsonObject
+import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -90,6 +95,171 @@ class ChatModelCatalogTest {
     assertEquals(emptyList(), diagnostics.categories)
     assertEquals(emptyList(), connection.sent)
     assertEquals(false, connection.closed)
+  }
+
+  @Test
+  fun `devin lists ordered variant UIDs with label fallback and exact deduplication`() = runTest {
+    val json = """{"families":[
+      {"family_uid":"swe-2","slug":"swe-2","variants":[
+        {"model_uid":"swe-2-high","label":"SWE-2 High"},
+        {"model_uid":"swe-2-medium-lightning","label":""},
+        {"model_uid":"swe-2-high","label":"Duplicate"}
+      ]},
+      {"family_uid":"adaptive","variants":[{"model_uid":"adaptive"}]}
+    ]}"""
+    var command: ChatCommand? = null
+    val read = catalog(ModelConnection(emptyList()), processes = {
+      command = it
+      flowOf(
+        ChatProcessOutput.Line(json),
+        ChatProcessOutput.StdoutEnded(null, ""),
+        ChatProcessOutput.Exited(0, ""),
+      )
+    }).read(ChatAgent("devin", null, null), "/repo")
+    assertEquals(
+      listOf(
+        ChatModel("swe-2-high", "SWE-2 High"),
+        ChatModel("swe-2-medium-lightning", "swe-2-medium-lightning"),
+        ChatModel("adaptive", "adaptive"),
+      ),
+      assertIs<ChatModelsRead.Loaded>(read).models,
+    )
+    assertEquals(listOf("models", "list", "--format", "json"), command?.argv?.takeLast(4))
+    assertEquals("/home/test", command?.environment?.get("HOME"))
+    assertEquals("/repo", command?.workingDirectory)
+  }
+
+  @Test
+  fun `a malformed devin catalog fails the read instead of skipping bad variants`() = runTest {
+    val read = catalog(ModelConnection(emptyList()), processes = {
+      flowOf(
+        ChatProcessOutput.Line("""{"families":[{"variants":[{"model_uid":7,"label":"ok"}]}]}"""),
+        ChatProcessOutput.StdoutEnded(null, ""),
+        ChatProcessOutput.Exited(0, ""),
+      )
+    }).read(ChatAgent("devin", null, null), "/repo")
+    assertIs<ChatModelsRead.Failed>(read)
+  }
+
+  @Test
+  fun `an empty devin catalog and a nonzero exit surface as failed reads`() = runTest {
+    val empty = catalog(ModelConnection(emptyList()), processes = {
+      flowOf(
+        ChatProcessOutput.Line("""{"families":[]}"""),
+        ChatProcessOutput.StdoutEnded(null, ""),
+        ChatProcessOutput.Exited(0, ""),
+      )
+    }).read(ChatAgent("devin", null, null), "/repo")
+    assertIs<ChatModelsRead.Failed>(empty)
+    val failed = catalog(ModelConnection(emptyList()), processes = {
+      flowOf(ChatProcessOutput.Exited(1, "not signed in"))
+    }).read(ChatAgent("devin", null, null), "/repo")
+    val failure = assertIs<ChatModelsRead.Failed>(failed)
+    assertTrue("devin auth login" in failure.message)
+  }
+
+  @Test
+  fun `a devin profile refusal launches no process`() = runTest {
+    var started = false
+    val read = catalog(ModelConnection(emptyList()), processes = {
+      started = true
+      flowOf()
+    }).read(ChatAgent("devin", null, null, "/profiles/d"), "/repo")
+    val failure = assertIs<ChatModelsRead.Failed>(read)
+    assertTrue("default CLI environment" in failure.message)
+    assertEquals(false, started)
+  }
+
+  @Test
+  fun `oversized devin output stops capture and fails visibly`() = runTest {
+    var released = false
+    val read = catalog(ModelConnection(emptyList()), processes = {
+      flow<ChatProcessOutput> {
+        emit(ChatProcessOutput.Line("x".repeat(1_000_001)))
+        try {
+          awaitCancellation()
+        } finally {
+          released = true
+        }
+      }
+    }).read(ChatAgent("devin", null, null), "/repo")
+    assertIs<ChatModelsRead.Failed>(read)
+    assertTrue(released)
+  }
+
+  @Test
+  fun `cancelling devin discovery releases the process stream`() = runTest {
+    var released = false
+    val job = launch {
+      runCatching {
+        catalog(ModelConnection(emptyList()), processes = {
+          flow<ChatProcessOutput> {
+            emit(ChatProcessOutput.Line("{\"families\""))
+            try {
+              awaitCancellation()
+            } finally {
+              released = true
+            }
+          }
+        }).read(ChatAgent("devin", null, null), "/repo")
+      }
+    }
+    job.cancelAndJoin()
+    assertTrue(released)
+  }
+
+  @Test
+  fun `opencode discovery flattens advertised models under the selected profile and checkout without a prompt`() = runTest {
+    val root = createTempDirectory("oc-root").toString()
+    val connection = ModelConnection(listOf(
+      """{"id":1,"result":{"protocolVersion":1}}""",
+      """{"id":2,"result":{"sessionId":"s1","configOptions":[{"id":"model","currentValue":"open-a","options":[{"value":"open-a","name":"Open A"},{"value":"group","options":[{"value":"open-b","name":"Open B"}]}]}]}}""",
+    ))
+    var command: ChatCommand? = null
+    val read = catalog(connection, onStart = { command = it })
+      .read(ChatAgent("opencode", null, null, "/profiles/oc"), root)
+    assertEquals(
+      listOf(ChatModel("open-a", "Open A"), ChatModel("open-b", "Open B")),
+      assertIs<ChatModelsRead.Loaded>(read).models,
+    )
+    assertEquals("/profiles/oc", command?.environment?.get("OPENCODE_CONFIG_DIR"))
+    assertEquals(java.nio.file.Path.of(root).toRealPath().toString(), command?.workingDirectory)
+    assertEquals(listOf("initialize", "session/new"), connection.sent.map { it.string("method") })
+    assertTrue(connection.closed)
+  }
+
+  @Test
+  fun `opencode choices without a selected profile keep host defaults`() = runTest {
+    val root = createTempDirectory("oc-root").toString()
+    val connection = ModelConnection(listOf(
+      """{"id":1,"result":{"protocolVersion":1}}""",
+      """{"id":2,"result":{"sessionId":"s1","configOptions":[{"id":"model","currentValue":"open-a","options":[{"value":"open-a","name":"Open A"}]}]}}""",
+    ))
+    var command: ChatCommand? = null
+    val choices = catalog(connection, onStart = { command = it }).openCodeChoices(root, null)
+    val selected = assertIs<AdvertisedAgentChoices.Choices>(choices)
+    assertEquals(null, selected.binding.profile)
+    assertEquals(root, selected.binding.workingDirectory)
+    assertEquals(null, command?.environment?.get("OPENCODE_CONFIG_DIR"))
+  }
+
+  @Test
+  fun `opencode authentication refusal and an unadvertised selection stay failed and close the connection`() = runTest {
+    val root = createTempDirectory("oc-root").toString()
+    val auth = catalog(ModelConnection(listOf(
+      """{"id":1,"error":{"code":-32000,"message":"auth required"}}""",
+    )))
+    val authRead = auth.read(ChatAgent("opencode", null, null), root)
+    assertTrue("opencode auth login" in assertIs<ChatModelsRead.Failed>(authRead).message)
+
+    val connection = ModelConnection(listOf(
+      """{"id":1,"result":{"protocolVersion":1}}""",
+      """{"id":2,"result":{"sessionId":"s1","configOptions":[{"id":"model","currentValue":"open-a","options":[{"value":"open-a","name":"Open A"}]}]}}""",
+    ))
+    val read = catalog(connection).read(ChatAgent("opencode", "missing-model", null), root)
+    val failure = assertIs<ChatModelsRead.Failed>(read)
+    assertTrue("missing-model" in failure.message)
+    assertTrue(connection.closed)
   }
 
   private fun catalog(

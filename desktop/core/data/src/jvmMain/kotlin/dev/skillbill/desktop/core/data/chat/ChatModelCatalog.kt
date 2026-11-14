@@ -40,10 +40,17 @@ class ChatModelCatalog(
   private val settings: AppSettingsRepository,
   private val diagnostics: Diagnostics,
 ) {
-  suspend fun openCodeChoices(root: String, selectedModel: String?): AdvertisedAgentChoices = withContext(Dispatchers.IO) {
-    val profile = host.variables[AgentHomeEnvironmentKeys.OPENCODE_CONFIG_DIR]?.takeIf(String::isNotBlank)
-    val binding = AdvertisedAgentBinding(SupportedAgent.OPENCODE.wireValue, profile, root)
-    val command = ChatCommand(agentCommand("opencode", listOf("acp"), host.variables["SHELL"]), root, host.variables, "")
+  suspend fun openCodeChoices(
+    root: String,
+    selectedModel: String?,
+    profile: String? = null,
+  ): AdvertisedAgentChoices = withContext(Dispatchers.IO) {
+    val effectiveProfile = profile?.takeIf(String::isNotBlank)
+      ?: host.variables[AgentHomeEnvironmentKeys.OPENCODE_CONFIG_DIR]?.takeIf(String::isNotBlank)
+    val binding = AdvertisedAgentBinding(SupportedAgent.OPENCODE.wireValue, effectiveProfile, root)
+    val environment = host.agentEnvironment() +
+      effectiveProfile?.let { mapOf(AgentHomeEnvironmentKeys.OPENCODE_CONFIG_DIR to it) }.orEmpty()
+    val command = ChatCommand(agentCommand("opencode", listOf("acp"), host.variables["SHELL"]), root, environment, "")
     val started = try {
       launcher.start(command)
     } catch (cancelled: CancellationException) {
@@ -218,6 +225,10 @@ class ChatModelCatalog(
   }
 
   private suspend fun discover(agent: ChatAgent, root: String): ChatModelsRead {
+    when (agent.agentId) {
+      "devin" -> return devin(agent, root)
+      "opencode" -> return openCode(agent, root)
+    }
     val environment = when (agent.agentId) {
       "claude" -> profiles.claude(agent.profile ?: settings.settings.first().claudeConfigDir).environment
       "codex" -> codexEnvironment(host.variables, agent.profile)
@@ -244,6 +255,103 @@ class ChatModelCatalog(
       }
     } finally {
       withContext(NonCancellable) { connection.close() }
+    }
+  }
+
+  private suspend fun devin(agent: ChatAgent, root: String): ChatModelsRead {
+    if (agent.profile != null) {
+      return ChatModelsRead.Failed(
+        "Devin uses credentials from the default CLI environment. Remove the selected profile and retry.")
+    }
+    val environment = host.agentEnvironment()
+    val command = ChatCommand(
+      agentCommand("devin", listOf("models", "list", "--format", "json"), host.variables["SHELL"]),
+      root, environment, "", stdoutLimitBytes = MAX_DISCOVERY_STDOUT_BYTES,
+    )
+    val output = StringBuilder()
+    var exitCode: Int? = null
+    var stderrTail = ""
+    var readFailure: String? = null
+    var startFailure: String? = null
+    var oversized = false
+    processes.run(command).takeWhile { event ->
+      when (event) {
+        is ChatProcessOutput.Line -> {
+          if (output.length + event.text.length + 1 > MAX_DISCOVERY_CHARS) {
+            oversized = true
+            false
+          } else true
+        }
+        is ChatProcessOutput.StdoutEnded -> {
+          readFailure = event.readFailure
+          true
+        }
+        is ChatProcessOutput.Exited -> {
+          exitCode = event.code
+          stderrTail = event.stderrTail
+          false
+        }
+        is ChatProcessOutput.StartFailed -> {
+          startFailure = event.message
+          false
+        }
+      }
+    }.collect { event ->
+      if (event is ChatProcessOutput.Line) output.appendLine(event.text)
+    }
+    val startError = startFailure
+    val readError = readFailure
+    val detail = redactProviderDetail(stderrTail).takeIf(String::isNotBlank)?.let { " $it" }.orEmpty()
+    return when {
+      startError != null -> ChatModelsRead.Failed(
+        "Devin's model list did not start: ${redactProviderDetail(startError)} " +
+          "Install the Devin CLI and make it available on PATH, then retry.")
+      oversized -> ChatModelsRead.Failed(
+        "Devin's model list exceeded the discovery limit. Update the Devin CLI and retry.")
+      readError != null -> ChatModelsRead.Failed(
+        "Devin's model list could not be read: ${redactProviderDetail(readError)} Update the Devin CLI and retry.")
+      exitCode == null -> ChatModelsRead.Failed(
+        "Devin's model list ended without an exit result. Update the Devin CLI and retry.")
+      exitCode != 0 -> ChatModelsRead.Failed(
+        "Devin could not list models (exit $exitCode). Check the Devin CLI installation and `devin auth login` sign-in, then retry.$detail")
+      else -> when (val models = devinChatModels(output.toString())) {
+        null -> ChatModelsRead.Failed("Devin reported a malformed model list. Update the Devin CLI and retry.")
+        else -> if (models.isEmpty()) {
+          ChatModelsRead.Failed("Devin reported no models. Check `devin auth login` sign-in and update the Devin CLI, then retry.")
+        } else {
+          ChatModelsRead.Loaded(models)
+        }
+      }
+    }
+  }
+
+  private suspend fun openCode(agent: ChatAgent, root: String): ChatModelsRead {
+    val cwd = canonicalDirectory(root) ?: return ChatModelsRead.Failed(
+      "The OpenCode working directory cannot be resolved. Choose an existing checkout, then retry.")
+    return when (val choices = openCodeChoices(cwd, agent.model, agent.profile)) {
+      is AdvertisedAgentChoices.Choices -> choices.models.map { ChatModel(it.id, it.label) }.let { models ->
+        if (models.isEmpty()) {
+          ChatModelsRead.Failed("OpenCode reported no usable models. Update OpenCode, then retry.")
+        } else {
+          ChatModelsRead.Loaded(models)
+        }
+      }
+      is AdvertisedAgentChoices.Unavailable -> ChatModelsRead.Failed(when (choices.reason) {
+        AdvertisedAgentChoices.Unavailable.Reason.EXECUTABLE ->
+          "The OpenCode CLI is unavailable. Install OpenCode and make its CLI available on PATH, then retry."
+        AdvertisedAgentChoices.Unavailable.Reason.AUTHENTICATION ->
+          "OpenCode requires sign-in. Run `opencode auth login`, then retry."
+        AdvertisedAgentChoices.Unavailable.Reason.CAPABILITY ->
+          "This OpenCode installation does not advertise selectable models. Update OpenCode, then retry."
+      })
+      is AdvertisedAgentChoices.InvalidSelection -> ChatModelsRead.Failed(
+        "OpenCode does not advertise the selected model \"${choices.requestedModel}\". Choose an advertised model, then retry.")
+      is AdvertisedAgentChoices.Failed -> ChatModelsRead.Failed(when (choices.reason) {
+        AdvertisedAgentChoices.Failed.Reason.ACQUISITION ->
+          "Could not read OpenCode models. Check the OpenCode installation and sign-in, then retry."
+        AdvertisedAgentChoices.Failed.Reason.PROTOCOL ->
+          "OpenCode reported a malformed model response. Update OpenCode, then retry."
+      })
     }
   }
 
@@ -329,3 +437,6 @@ class ChatModelCatalog(
 
   private fun unavailable() = ChatModelsRead.Failed("Model list unavailable. Check this agent's installation and sign-in, then retry.")
 }
+
+private const val MAX_DISCOVERY_CHARS = 1_000_000
+private const val MAX_DISCOVERY_STDOUT_BYTES = 4_000_000

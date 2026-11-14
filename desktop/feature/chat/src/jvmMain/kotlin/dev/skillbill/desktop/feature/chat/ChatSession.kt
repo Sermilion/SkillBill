@@ -69,6 +69,9 @@ class ChatSession internal constructor(
   internal var capturedRoot: String? = null
   internal var providerCheckoutRefused: Boolean = false
 
+  /** The directory the next request launches in; model discovery binds to it and each request records it into [admittedRoots]. */
+  internal val requestRoot: String get() = capturedRoot ?: item.workingRoot()
+
   /** The effective directory the next request and approval registration use; a refused root change never updates it. */
   internal val admittedRoots = MutableStateFlow(initial.workingRoot())
   internal var openCodeCheckoutChangedNoticed: Boolean = false

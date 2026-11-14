@@ -74,6 +74,13 @@ class OpenCodeChatTransport(
         emit(requireNotNull(owner.disposition()))
         return@flow
       }
+      if (request.agent.effort != null) {
+        diagnostics.record("chat.opencode_effort_refused")
+        owner.record(ChatEvent.Failed(ChatFailure.AgentUnsupported,
+          "OpenCode chat cannot apply a separate effort setting. Remove the effort value and choose an advertised full model ID; the chat was not started."))
+        emit(requireNotNull(owner.disposition()))
+        return@flow
+      }
       val cwd = try {
         Path.of(request.scope.repositoryRoot).toRealPath().toString()
       } catch (_: Exception) {
@@ -82,7 +89,7 @@ class OpenCodeChatTransport(
         emit(failure)
         return@flow
       }
-      val environment = host.variables + mapOf("HOME" to (host.variables["HOME"] ?: host.userHome)) +
+      val environment = host.agentEnvironment() +
         request.agent.profile?.let { mapOf(AgentHomeEnvironmentKeys.OPENCODE_CONFIG_DIR to it) }.orEmpty()
       val identity = try {
         OpenCodeLaunchIdentity.capture(environment, Path.of(host.userHome), Path.of(cwd), request.agent.profile)

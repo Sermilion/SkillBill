@@ -143,7 +143,7 @@ class DevinChatTransport(
           "The Devin turn was stopped or its runtime context changed before launch.")))
         return@flow
       }
-      val environment = host.variables + mapOf("HOME" to (host.variables["HOME"] ?: host.userHome))
+      val environment = host.agentEnvironment()
       val prompt = if (saved == null || request.scope is ChatScope.NewTask) {
         withScope(scopeSystemPrompt(request.scope), request.prompt)
       } else request.prompt

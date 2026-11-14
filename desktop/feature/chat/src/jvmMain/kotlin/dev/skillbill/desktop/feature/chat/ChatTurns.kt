@@ -349,7 +349,7 @@ internal class ChatTurns(
     images: List<ChatImage>,
     cursorMcpDependency: CursorMcpDependency,
   ): Boolean {
-    val root = session.capturedRoot ?: header.workingRoot()
+    val root = session.requestRoot
     session.recordRequestRoot(root)
     val scope = ChatScope.Execution(
       header.id, header.kind, header.issueKey, header.title, root,

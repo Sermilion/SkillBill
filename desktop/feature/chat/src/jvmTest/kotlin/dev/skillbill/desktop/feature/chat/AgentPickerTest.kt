@@ -52,6 +52,22 @@ class AgentPickerTest {
     runOnIdle { assertEquals(ChatModel("new-model", "New model"), choice) }
   }
 
+  // A suffix-carrying variant UID must reach the callback whole, not collapse to its family or a truncated prefix.
+  @Test
+  fun `selecting a provider model copies its complete uid and shows the exact id`() = runComposeUiTest {
+    var choice: ChatModel? = null
+    picker(ChatAgent("devin", null, null), onChooseModel = { choice = it }) {
+      ChatModelsRead.Loaded(listOf(
+        ChatModel("swe-2-medium-lightning", "SWE-2 Medium Lightning"),
+        ChatModel("swe-2-high", "SWE-2 High"),
+      ))
+    }
+    onNodeWithText(chipText(ChatAgent("devin", null, null))).performClick()
+    onNodeWithText("swe-2-medium-lightning").assertExists()
+    onNodeWithText("SWE-2 Medium Lightning").performClick()
+    runOnIdle { assertEquals(ChatModel("swe-2-medium-lightning", "SWE-2 Medium Lightning"), choice) }
+  }
+
   @Test
   fun `agent default clears the explicit model`() = runComposeUiTest {
     var choice: ChatModel? = ChatModel("x", "x")

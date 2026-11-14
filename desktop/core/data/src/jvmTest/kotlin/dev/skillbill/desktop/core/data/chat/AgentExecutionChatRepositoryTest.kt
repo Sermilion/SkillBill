@@ -14,7 +14,10 @@ import dev.skillbill.desktop.core.common.HostEnvironment
 import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatFailure
+import dev.skillbill.desktop.core.domain.model.ChatStopSettlement
 import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
+import dev.skillbill.desktop.core.domain.model.ReadProblem
+import dev.skillbill.desktop.core.domain.repository.ConfigRead
 import dev.skillbill.desktop.core.domain.repository.RuntimeConfigRepository
 import dev.skillbill.desktop.core.testing.FakeAppSettingsRepository
 import dev.skillbill.desktop.core.testing.RecordingDiagnostics
@@ -72,6 +75,43 @@ class AgentExecutionChatRepositoryTest {
     assertEquals(ChatSteeringResult.Unsupported("missing", "Live delivery is unavailable"), repository.steer(ChatSteeringRequest("one", "absent", "missing", "guidance")))
     assertTrue("chat.steering_unsupported" in diagnostics.categories)
     assertEquals(false, ended)
+  }
+
+  // A registered provider must appear sorted in agents() and route its own turn, not just be listed.
+  @Test
+  fun `registered providers expose sorted identities and route their own turns`() = runTest {
+    val runs = mutableListOf<String>()
+    fun transport(id: String) = object : ChatTransport {
+      override val agentId = id
+      override fun run(request: ChatTurnRequest): Flow<ChatEvent> {
+        runs += request.agent.agentId
+        return flowOf(ChatEvent.Completed)
+      }
+    }
+    val diagnostics = RecordingDiagnostics()
+    val host = HostEnvironment(emptyMap(), createTempDirectory("chat-home").toString(), "")
+    val store = ChatStore(host, diagnostics, Clock.System)
+    val settings = FakeAppSettingsRepository()
+    val unusedConfig = Proxy.newProxyInstance(javaClass.classLoader, arrayOf(RuntimeConfigRepository::class.java)) { _, method, _ ->
+      if (method.name == "machineConfig") ConfigRead.Failed(ReadProblem.Runtime("unused"))
+      else error("unused")
+    } as RuntimeConfigRepository
+    val summarizer = ChatSummarizer(host, settings, { error("unused") }, store, diagnostics, ApplicationCoroutineScope(backgroundScope))
+    val catalog = AgentSessionCatalog(host, settings, store, diagnostics)
+    val repository = AgentExecutionChatRepository(
+      setOf(transport("claude"), transport("devin"), transport("opencode")),
+      unusedConfig, store, catalog, diagnostics, summarizer,
+      ChatModelCatalog(host, { error("unused") }, { error("unused") },
+        dev.skillbill.desktop.core.data.usage.UsageProfileResolver(host), settings, diagnostics),
+    )
+
+    assertEquals(listOf("claude", "devin", "opencode"), repository.agents())
+    assertTrue(repository.supports("devin") && repository.supports("opencode"))
+    assertEquals(ChatAgent("devin", null, null), repository.agentFor("devin"))
+    assertEquals(listOf<ChatEvent>(ChatEvent.Completed),
+      repository.send(chatRequest(agent = ChatAgent("opencode", null, null))).toList())
+    assertEquals(listOf("opencode"), runs)
+    assertEquals(ChatStopSettlement.AlreadyFinished, repository.stopTurn("session-1"))
   }
 
   // An unsupported agent must not silently fall through to the Claude process.
