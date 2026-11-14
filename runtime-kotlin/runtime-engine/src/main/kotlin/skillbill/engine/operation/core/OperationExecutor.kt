@@ -3,10 +3,6 @@ package skillbill.engine.operation.core
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.operationcard.OperationLaunchContext
 import skillbill.ports.projectstore.ProjectStorePort
-import skillbill.ports.workflow.branchworktree.BranchWorktreeResources
-import skillbill.ports.workflow.branchworktree.model.BranchWorktreeHolder
-import skillbill.ports.workflow.branchworktree.model.BranchWorktreeHolderKind
-import skillbill.ports.workflow.branchworktree.model.BranchWorktreeRelease
 import java.nio.file.Path
 import java.util.UUID
 
@@ -30,7 +26,6 @@ public class OperationExecutor(
   private val gate: OperationConfirmationGate,
   private val steps: OperationStepRunner,
   private val projectStore: ProjectStorePort,
-  private val branchWorktrees: BranchWorktreeResources,
   private val cards: OperationCardLifecycle,
 ) {
   public fun execute(request: OperationRequest): OperationResult {
@@ -90,13 +85,10 @@ public class OperationExecutor(
           else -> proceed(operation, context)
         }
     val published = publishCard(operation, context, launch, outcome)
-    val released =
-      if (published is OperationOutcome.AwaitingConfirmation) {
-        null
-      } else {
-        cards.settle(launch, token, invocationId, published)
-      }
-    return settleBranchWorktree(request, published, launch, released)
+    if (published !is OperationOutcome.AwaitingConfirmation) {
+      cards.settle(launch, token, invocationId, published)
+    }
+    return published
   }
 
   private fun publishCard(
@@ -113,22 +105,6 @@ public class OperationExecutor(
         OperationAuthority.Bind(operation.id, context)
       }
     return cards.publish(launch, context.invocationId, outcome, authority)
-  }
-
-  private fun settleBranchWorktree(
-    request: OperationRequest,
-    outcome: OperationOutcome,
-    launch: OperationLaunchContext?,
-    launchRelease: BranchWorktreeRelease?,
-  ): OperationOutcome {
-    if (outcome !is OperationOutcome.Completed) return outcome
-    val holder = BranchWorktreeHolder(BranchWorktreeHolderKind.OPERATION, request.operationId)
-    val release = if (launch != null) launchRelease else branchWorktrees.release(request.repoRoot, holder)
-    return when (val released = release) {
-      is BranchWorktreeRelease.Kept ->
-        outcome.copy(text = "${outcome.text.trimEnd()}\n\nKept worktree ${released.path}: ${released.detail}.")
-      else -> outcome
-    }
   }
 
   private fun proceed(

@@ -158,7 +158,7 @@ class PhaseStandaloneMonitorExecutionTest {
     val status = assertNotNull(database.read { it.standalonePhaseStatuses.readByInvocation(result.invocationId) })
     assertEquals("provider-model", status.reportedModel)
     assertEquals("configured-model", launcher.requests.single().skillRunRequest.modelOverride)
-    assertOwnedWorktreeRemoved(completed.targetReport)
+    assertOwnedWorktreeKeptUntilFinalize(completed.targetReport)
     assertEquals(COMMIT_PUSH, completed.completedStepIds.first(), "the publication step runs first as a no-op")
     val repair = forkHead()
     assertEquals(headSha, git(fork, "rev-parse", "$repair^"), "exactly one normal repair commit on the fork head")
@@ -257,7 +257,7 @@ class PhaseStandaloneMonitorExecutionTest {
     val completed = assertIs<PhaseRunResult.Completed>(result, result.toString())
     assertTrue("Branch target: https://github.com/acme/repo/tree/main" in completed.targetReport, completed.toString())
     assertTrue("Followed commits: ${assertNotNull(moved)}" in completed.targetReport, completed.toString())
-    assertOwnedWorktreeRemoved(completed.targetReport)
+    assertOwnedWorktreeKeptUntilFinalize(completed.targetReport)
   }
 
   @Test
@@ -301,7 +301,7 @@ class PhaseStandaloneMonitorExecutionTest {
     val next = assertIs<PhaseRunResult.Completed>(run())
 
     assertTrue(previous.invocationId != next.invocationId)
-    assertOwnedWorktreeRemoved(next.targetReport)
+    assertOwnedWorktreeKeptUntilFinalize(next.targetReport)
     assertEquals("class Fix1", Files.readString(oldWorktree.resolve("Fix.kt")).trim())
     val original = assertNotNull(database.read { it.standalonePhaseStatuses.readByInvocation(previous.invocationId) })
     val current = assertNotNull(database.read { it.standalonePhaseStatuses.readByInvocation(next.invocationId) })
@@ -316,7 +316,7 @@ class PhaseStandaloneMonitorExecutionTest {
     val result = run()
 
     val completed = assertIs<PhaseRunResult.Completed>(result, result.toString())
-    assertOwnedWorktreeRemoved(completed.targetReport)
+    assertOwnedWorktreeKeptUntilFinalize(completed.targetReport)
     assertEquals(headSha, forkHead())
     assertEquals(emptyList(), repairCwds)
     assertEquals(listOf("refs/heads/$FEATURE_BRANCH", "refs/heads/main"), refs(fork))
@@ -358,7 +358,7 @@ class PhaseStandaloneMonitorExecutionTest {
     val result = run()
 
     val completed = assertIs<PhaseRunResult.Completed>(result, result.toString())
-    assertOwnedWorktreeRemoved(completed.targetReport)
+    assertOwnedWorktreeKeptUntilFinalize(completed.targetReport)
     val merge = forkHead()
     assertEquals(listOf(headSha, pinnedBase), git(fork, "rev-list", "--parents", "-n", "1", merge).split(" ").drop(1))
     assertEquals("class Base", git(fork, "show", "$merge:Base.kt"))
@@ -557,6 +557,14 @@ class PhaseStandaloneMonitorExecutionTest {
     val path = Path.of(report.single { it.startsWith("Worktree: ") }.removePrefix("Worktree: "))
     assertFalse(Files.exists(path), "standalone monitor left $path")
     assertFalse(path.toString() in git(caller, "worktree", "list", "--porcelain"), "git still lists $path")
+  }
+
+  private fun assertOwnedWorktreeKeptUntilFinalize(report: List<String>) {
+    val cleanup = report.single { it.startsWith("Cleanup: ") }
+    assertTrue(cleanup.startsWith("Cleanup: retained (awaiting_finalize)"), cleanup)
+    val path = Path.of(report.single { it.startsWith("Worktree: ") }.removePrefix("Worktree: "))
+    assertTrue(Files.exists(path), "completed monitor must keep $path until finalize")
+    assertTrue(path.toString() in git(caller, "worktree", "list", "--porcelain"), "git must still list $path")
   }
 
   private fun run(

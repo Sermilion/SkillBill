@@ -29,6 +29,7 @@ import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 import skillbill.ports.idestatus.model.IdeStatusWorkflowRegistration
 import skillbill.ports.idestatus.model.WorkDetailRequest
 import skillbill.ports.idestatus.model.WorkLiveSection
+import skillbill.ports.monitor.NoopStandaloneMonitorResources
 import skillbill.ports.system.CheckedOutBranchSource
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
@@ -39,6 +40,7 @@ import skillbill.ports.work.model.WorkRunLaunchRequest
 import skillbill.ports.work.model.WorkRunLaunchResult
 import skillbill.ports.work.model.WorkRunStopRequest
 import skillbill.ports.work.model.WorkRunStopResult
+import skillbill.ports.workflow.branchworktree.RecordingBranchWorktreeResources
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Path
@@ -69,9 +71,8 @@ class WorkPlanResumeTest {
         }
       val supervisor =
         object : FeatureTaskRuntimeWorkerSupervisor by NoopFeatureTaskRuntimeWorkerSupervisor {
-          override fun inspect(ownership: FeatureTaskRuntimeWorkerOwnership): FeatureTaskRuntimeProcessInspection {
-            return FeatureTaskRuntimeProcessInspection.ExactLive
-          }
+          override fun inspect(ownership: FeatureTaskRuntimeWorkerOwnership) =
+            FeatureTaskRuntimeProcessInspection.ExactLive
         }
       val status = ideStatusService(database)
       val goalStatus =
@@ -93,6 +94,7 @@ class WorkPlanResumeTest {
           goalPreflightServiceForTests(database),
           EnvironmentContext(),
           TestRepositoryEnclosingRoot,
+          WorkRunFinalizer(RecordingBranchWorktreeResources(), NoopStandaloneMonitorResources),
         )
       val item = assertNotNull(status.detail(WorkDetailRequest(workflowId)).item)
       val options = database.read { actions.optionsForTest(item, it) }

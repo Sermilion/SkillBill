@@ -2,6 +2,10 @@ package skillbill.infrastructure.sqlite.idestatus
 
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.persistence.WorkBoardReadModelKeys
+import skillbill.contracts.persistence.WorkBoardReadModelPayloadKeys
+import skillbill.idestatus.model.IdeStatusLaunchScope
+import skillbill.idestatus.model.IdeStatusLifecycleState
+import skillbill.idestatus.model.IdeStatusWorkflowFamily
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.idestatus.WorkBoardReadModelRepository
@@ -128,6 +132,28 @@ internal class SqliteWorkBoardReadModelStore(
           "(${WorkBoardReadModelKeys.UPDATED_AT} < ? OR (${WorkBoardReadModelKeys.UPDATED_AT} = ? AND " +
           "${WorkBoardReadModelKeys.WORK_ID} > ?))))"
       }
+    val payload = WorkBoardReadModelKeys.PAYLOAD
+    val operatorFinalizedAtPayload =
+      "json_extract($payload, '\$.${WorkBoardReadModelPayloadKeys.OPERATOR_FINALIZED_AT}')"
+    val lifecyclePayload =
+      "json_extract($payload, '\$.${WorkBoardReadModelPayloadKeys.SNAPSHOT}." +
+        "${WorkBoardReadModelPayloadKeys.LIFECYCLE_STATE}')"
+    val workflowFamilyPayload =
+      "json_extract($payload, '\$.${WorkBoardReadModelPayloadKeys.SNAPSHOT}." +
+        "${WorkBoardReadModelPayloadKeys.WORKFLOW_FAMILY}')"
+    val launchScopePayload =
+      "json_extract($payload, '\$.${WorkBoardReadModelPayloadKeys.SNAPSHOT}." +
+        "${WorkBoardReadModelPayloadKeys.EXECUTION}.${WorkBoardReadModelPayloadKeys.LAUNCH_SCOPE}')"
+    val goalRow =
+      "($workflowFamilyPayload = '${IdeStatusWorkflowFamily.FEATURE_GOAL.wireValue}' OR " +
+        "$launchScopePayload = '${IdeStatusLaunchScope.GOAL.wireValue}')"
+    val unfinalizedTerminalRetention =
+      "($operatorFinalizedAtPayload IS NULL AND $lifecyclePayload = " +
+        "'${IdeStatusLifecycleState.TERMINAL.wireValue}' AND NOT $goalRow)"
+    val retention =
+      "(${WorkBoardReadModelKeys.FINISHED_AT} IS NULL " +
+        "OR $unfinalizedTerminalRetention " +
+        "OR julianday(COALESCE($operatorFinalizedAtPayload, ${WorkBoardReadModelKeys.FINISHED_AT})) >= julianday(?))"
     val sql =
       "SELECT ${WorkBoardReadModelKeys.WORK_ID}, ${WorkBoardReadModelKeys.DISPLAY_PRIORITY}, " +
         "${WorkBoardReadModelKeys.UPDATED_AT}, ${WorkBoardReadModelKeys.SEARCH_TEXT}, " +
@@ -135,7 +161,7 @@ internal class SqliteWorkBoardReadModelStore(
         "${WorkBoardReadModelKeys.MEMBERSHIP_DEADLINE}, " +
         "${WorkBoardReadModelKeys.PAYLOAD}, ${WorkBoardReadModelKeys.PROJECTED_AT} " +
         "FROM ${WorkBoardReadModelKeys.ITEMS_TABLE} " +
-        "WHERE (${WorkBoardReadModelKeys.FINISHED_AT} IS NULL OR ${WorkBoardReadModelKeys.FINISHED_AT} >= ?) " +
+        "WHERE $retention " +
         "AND (? IS NULL OR ${WorkBoardReadModelKeys.SEARCH_TEXT} LIKE '%' || ? || '%' ESCAPE '\\') AND $seek " +
         "ORDER BY ${WorkBoardReadModelKeys.DISPLAY_PRIORITY}, ${WorkBoardReadModelKeys.UPDATED_AT} DESC, " +
         "${WorkBoardReadModelKeys.WORK_ID} LIMIT ?"

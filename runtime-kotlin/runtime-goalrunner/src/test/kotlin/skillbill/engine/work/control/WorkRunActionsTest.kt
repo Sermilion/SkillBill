@@ -47,6 +47,7 @@ import skillbill.model.EnvironmentContext
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.idestatus.model.WorkDetailRequest
+import skillbill.ports.monitor.NoopStandaloneMonitorResources
 import skillbill.ports.operation.EmptyOperationCardRepository
 import skillbill.ports.system.CheckedOutBranchSource
 import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
@@ -543,6 +544,7 @@ class WorkRunActionsTest {
     preflight,
     EnvironmentContext(environment = mapOf("HOME" to TEST_HOME), userHome = Path.of(TEST_HOME)),
     TestRepositoryEnclosingRoot,
+    WorkRunFinalizer(RecordingBranchWorktreeResources(), NoopStandaloneMonitorResources),
   )
 
   private fun seedUnfinishedGoal(

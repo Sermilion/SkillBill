@@ -16,6 +16,8 @@ import java.time.Instant
 
 private const val NOT_ANCESTOR_EXIT_CODE = 1
 
+internal enum class MonitorWorktreeRemoval { FORCE, PLAIN, DEFER }
+
 internal fun monitorRefNamespace(ownerToken: String): String = "refs/skill-bill/monitor/$ownerToken"
 
 internal fun monitorBranchName(ownerToken: String): String = "skill-bill/monitor/$ownerToken"
@@ -33,18 +35,18 @@ internal class MonitorOwnedCleanup(
     record: MonitorOwnershipRecord,
     target: MonitorResolvedTarget?,
     outcome: MonitorPrimaryOutcome?,
-    removalAllowed: Boolean = true,
+    worktreeRemoval: MonitorWorktreeRemoval = MonitorWorktreeRemoval.FORCE,
   ): MonitorSettlement {
     val retention =
       when {
-        !removalAllowed -> childMayBeRunningRetention(record)
+        worktreeRemoval == MonitorWorktreeRemoval.DEFER -> childMayBeRunningRetention(record)
         outcome?.kind == MonitorOutcomeKind.CANCELLED -> ownershipRetention(directory, record)
         else -> retentionFor(directory, record, target)
       }
     return if (retention != null) {
       retain(directory, record, retention, outcome)
     } else {
-      removeOwned(directory, record, outcome)
+      removeOwned(directory, record, outcome, worktreeRemoval == MonitorWorktreeRemoval.FORCE)
     }
   }
 
@@ -169,10 +171,12 @@ internal class MonitorOwnedCleanup(
     directory: Path,
     record: MonitorOwnershipRecord,
     outcome: MonitorPrimaryOutcome?,
+    forceWorktreeRemoval: Boolean,
   ): MonitorSettlement {
     val primaryRoot = Path.of(record.primaryRoot)
     val failure =
-      removeWorktree(primaryRoot, record) ?: removeBranch(primaryRoot, record) ?: removeRefs(primaryRoot, record)
+      removeWorktree(primaryRoot, record, forceWorktreeRemoval)
+        ?: removeBranch(primaryRoot, record) ?: removeRefs(primaryRoot, record)
     return if (failure == null) {
       MonitorAdmissionFiles.write(
         directory,
@@ -204,6 +208,7 @@ internal class MonitorOwnedCleanup(
   private fun removeWorktree(
     primaryRoot: Path,
     record: MonitorOwnershipRecord,
+    force: Boolean,
   ): String? {
     val path = record.executionPath ?: return null
     val listing = monitorGit(primaryRoot, "worktree", "list", "--porcelain", "-z")
@@ -219,7 +224,12 @@ internal class MonitorOwnedCleanup(
     return if ("branch refs/heads/${record.executionBranch}" !in fields) {
       "the worktree registration no longer names the owned branch"
     } else {
-      val removal = monitorGit(primaryRoot, "worktree", "remove", "--force", path)
+      val removal =
+        if (force) {
+          monitorGit(primaryRoot, "worktree", "remove", "--force", path)
+        } else {
+          monitorGit(primaryRoot, "worktree", "remove", path)
+        }
       if (removal.ok) null else "git worktree remove failed: ${removal.output}"
     }
   }

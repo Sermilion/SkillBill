@@ -8,10 +8,6 @@ import skillbill.engine.featuretask.slot.state.PhaseLaunchState
 import skillbill.ports.operation.UnavailableOperationCardRepository
 import skillbill.ports.operation.UnavailableOperationProposalRepository
 import skillbill.ports.projectstore.FixedProjectStorePort
-import skillbill.ports.workflow.branchworktree.RecordingBranchWorktreeResources
-import skillbill.ports.workflow.branchworktree.model.BranchWorktreeHolder
-import skillbill.ports.workflow.branchworktree.model.BranchWorktreeHolderKind
-import skillbill.ports.workflow.branchworktree.model.BranchWorktreeRelease
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import java.nio.file.Files
 import java.nio.file.Path
@@ -19,11 +15,9 @@ import java.time.Clock
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
-import kotlin.test.assertTrue
 
 class OperationExecutorBranchWorktreeTest {
   private val repoRoot: Path = Files.createTempDirectory("operation-branch-worktree")
-  private val worktrees = RecordingBranchWorktreeResources()
   private var outcome: OperationOutcome = OperationOutcome.Completed("Verified.")
   private val executor =
     OperationExecutor(
@@ -53,22 +47,14 @@ class OperationExecutorBranchWorktreeTest {
         AgentBuildObserverFactory.NONE,
       ),
       FixedProjectStorePort(repoRoot.resolve("project-store")),
-      worktrees,
       NoOperationCardLifecycle,
     )
 
   @Test
-  fun `a completed operation releases its worktree and reports one it had to keep`() {
-    worktrees.releaseResult = BranchWorktreeRelease.Kept(repoRoot, "git worktree remove failed: dirty")
-
+  fun `a completed operation keeps its worktree until finalize`() {
     val completed = assertIs<OperationOutcome.Completed>(execute())
 
-    assertEquals(
-      listOf(repoRoot to BranchWorktreeHolder(BranchWorktreeHolderKind.OPERATION, "verify")),
-      worktrees.released,
-    )
-    assertTrue(completed.text.startsWith("Verified."), completed.text)
-    assertTrue(repoRoot.toString() in completed.text && "dirty" in completed.text, completed.text)
+    assertEquals("Verified.", completed.text)
   }
 
   @Test
@@ -81,8 +67,6 @@ class OperationExecutorBranchWorktreeTest {
       outcome = parked
       assertEquals(parked, execute())
     }
-
-    assertEquals(emptyList(), worktrees.released)
   }
 
   private fun execute(): OperationOutcome =

@@ -66,8 +66,9 @@ public interface OperationCardLifecycle {
   ): OperationOutcome
 
   /**
-   * Records how a confirm invocation ended, or with a null [token] ends a launch that published no card, and releases
-   * the launch holder once no card still awaits. Returns that release, or null when nothing was released.
+   * Records how a confirm invocation ended, or with a null [token] ends a launch that published no card.
+   * All such outcomes retain the launch holder; [OperationCardStatus.REFUSED] release stays on the confirm path.
+   * Returns holder release when one occurred, or null when the holder was kept.
    */
   public fun settle(
     launch: OperationLaunchContext?,
@@ -297,7 +298,9 @@ public class RepositoryOperationCardLifecycle(
     invocationId: String,
     outcome: OperationOutcome,
   ): BranchWorktreeRelease? {
-    if (token == null) return launch?.let(recovery::releaseHolder)
+    if (token == null) {
+      return null
+    }
     val card = cards.find(token)?.takeIf { it.status == OperationCardStatus.CONFIRMING }
     val active =
       cards.activeExecution(token)?.takeIf { execution ->
@@ -317,7 +320,14 @@ public class RepositoryOperationCardLifecycle(
     val settled = cards.settleConfirmation(card.token, active.executionId, target, evidence(outcome), now())
     if (!settled || target == OperationCardStatus.AWAITING_CONFIRMATION) return null
     if (target == OperationCardStatus.REFUSED) recovery.withdraw(card.operationId, card.token)
-    return recovery.releaseHolder(launch).also { cards.completeCleanup(active.executionId) }
+    val released =
+      if (target == OperationCardStatus.COMPLETED) {
+        null
+      } else {
+        recovery.releaseHolder(launch)
+      }
+    cards.completeCleanup(active.executionId)
+    return released
   }
 
   private fun settledStatus(

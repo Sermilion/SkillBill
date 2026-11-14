@@ -62,8 +62,6 @@ import skillbill.ports.review.EmptyReviewAttributionPort
 import skillbill.ports.review.ReviewContextEnvelopeValidator
 import skillbill.ports.taskruntime.FeatureTaskRuntimeRunInvariantsSource
 import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
-import skillbill.ports.workflow.branchworktree.BranchWorktreeResources
-import skillbill.ports.workflow.branchworktree.RecordingBranchWorktreeResources
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.scaffold.model.PlatformManifest
 import skillbill.workflow.taskruntime.model.skeleton.EffectiveLaunchModel
@@ -112,7 +110,6 @@ data class PhaseRunEntryFixture(
   val qaManifests: List<PlatformManifest> = emptyList(),
   val diagnostics: RuntimeDiagnostics = NoopRuntimeDiagnostics,
   val launchModelResolver: (AgentRunLaunchModelRequest) -> EffectiveLaunchModel = ::passThroughResolvedLaunchModel,
-  val branchWorktrees: BranchWorktreeResources = RecordingBranchWorktreeResources(),
 )
 
 fun PhaseRunEntryFixture.entry(): PhaseRunEntry =
@@ -153,7 +150,6 @@ fun PhaseRunEntryFixture.entry(): PhaseRunEntry =
         standaloneMonitorPreparer,
         qaStandalonePhaseRun(gitOperations, qaManifests),
       ),
-    branchWorktrees = branchWorktrees,
   )
 
 fun testPhaseRunIntakeResolver(
@@ -220,6 +216,11 @@ open class UnreachableMonitorResources : StandaloneMonitorResources {
   ): String? = unreachable("adoptHead")
 
   override fun settle(request: MonitorSettleRequest): MonitorSettlement = unreachable("settle")
+
+  override fun deferUntilFinalize(request: MonitorSettleRequest): MonitorSettlement = unreachable("deferUntilFinalize")
+
+  override fun finalizeDeferredRemoval(admissionDirectory: Path): MonitorSettlement =
+    unreachable("finalizeDeferredRemoval")
 
   override fun recoverStale(request: MonitorStaleRecoveryRequest): MonitorStaleRecovery = unreachable("recoverStale")
 

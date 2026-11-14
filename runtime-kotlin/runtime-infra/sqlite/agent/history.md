@@ -1,3 +1,14 @@
+## [2026-11-13] SONA-20 persist operator finalization
+Areas: runtime-infra/sqlite migrations, standalone and verify stores, work-board candidates and read model; runtime-contracts persistence; runtime-ports; runtime-domain idestatus
+- MEDIUM feature. Migration 127 adds nullable operator_finalized_at to standalone_phase_status and feature_verify_workflows. Successful historical completions backfill from finished_at; failed, blocked, and canceled rows stay unfinalized. New Complete writes omit the column.
+- Migrations 128 and 129 add retained sibling-worktree path and detail to those tables. DesktopReadSchema.VERSION is 129; ROOM_IDENTITY_HASH is unchanged. Migrations reinstall desktop change triggers and rebuild the board read model.
+- Unfinalized successful standalone and verify completions remain live without the settled retention cutoff. Finalized candidates and recentlyFinishedPhase use operatorFinalizedAt; goal windows remain on execution and goal-completion evidence.
+- Dedicated finalize writes update successful terminal rows without changing execution finishedAt. Sibling Kept path and detail use dedicated columns, separate from monitor cleanup.
+- reusable: optional operatorFinalizedAt on shared WorkflowStateRecord and the read-model payload key. Feature-task workflow SQL and goal tables do not acquire the column.
+- Limits: Finalize controls and holder release belong to runtime-engine and desktop. Unsupported or unsuccessful rows do not gain finalization through migration.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented across SONA-20; this boundary owns persistence and candidate selection.
+
 ## [2026-11-13] Crash-reconcile write without lease expiry
 Areas: runtime-infra/sqlite feature-task worker store
 - `reconcileFeatureTaskRuntimeCrashedWorker` fences owner_token, generation, and ACTIVE state. It still parses nowInstant and matches heartbeat_at and expires_at on DELETE, but no longer requires the lease to have expired.

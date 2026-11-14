@@ -32,6 +32,7 @@ Reason: Each consumer executes its own category without concatenating overlappin
 Context: Promoting a repository's first commit previously moved its no-commit store to a lineage ID, which would detach saved project commands from the assigned projectId.
 Decision: Record lineage, root commits, remote and lineage key kind in the existing directory while retaining the assigned projectId. Historically rekeyed IDs stay unchanged; explicit linking selects the target row without merging commands.
 Reason: Command rows key on ProjectStoreLocation.projectId. Moving the directory or replacing that ID would orphan populated configuration or require another association field and a transfer protocol.
+
 ## [2026-11-13] Exclude test value from goal assessment
 Context: Goal assessment produced test-value findings that remained open as report-only notes. The operator chose to remove this assessment scope.
 Decision: Remove test-value instructions and candidate parsing from new goal assessments. Keep the stored finding kind, schema and codecs so historical findings retain their evidence and status. Diagnose obsolete test-value output through the existing rejected-line warnings.
@@ -1949,6 +1950,7 @@ Decision: Validate may run only the pack `validation_gate.collect_all_full_gate_
 Reason: Agnix lints instruction files. It is not the Kotlin pack gate. Mixing the two made a green `./gradlew check` look blocked.
 
 Alternatives considered: Keep agnix on the maintainer list and hope the phase prompt wins (rejected: AGENTS.md is always applied).
+Superseded by: Prefer project instructions for ordinary check discovery (2026-11-13)
 
 ## [2026-08-29] Validate repair forbids mid-session proof commands
 

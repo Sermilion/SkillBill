@@ -29,6 +29,7 @@ import skillbill.workflow.model.isTerminal
 import java.sql.Connection
 import java.sql.SQLException
 import java.time.Clock
+import java.time.Instant
 
 private const val WORKFLOW_ID_BATCH_SIZE: Int = 900
 
@@ -240,4 +241,22 @@ internal class WorkflowStateStore private constructor(
       WorkflowFamily.TASK_RUNTIME -> WorkflowContinueSessionSummary.EMPTY
     }
   }
+
+  override fun finalizeOperatorCompletion(
+    family: WorkflowFamily,
+    workflowId: String,
+    operatorFinalizedAt: Instant,
+    branchWorktreeRetainedPath: String?,
+    branchWorktreeRetainedDetail: String?,
+  ): Boolean =
+    when (family) {
+      WorkflowFamily.VERIFY ->
+        verifyStore.finalizeOperatorCompletion(
+          workflowId,
+          operatorFinalizedAt,
+          branchWorktreeRetainedPath,
+          branchWorktreeRetainedDetail,
+        )
+      WorkflowFamily.TASK_RUNTIME -> false
+    }
 }

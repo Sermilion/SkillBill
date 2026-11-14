@@ -53,6 +53,14 @@ public class MonitorCleanupOwnership internal constructor(
   }
 
   @Synchronized
+  internal fun deferUntilFinalize(outcome: MonitorPrimaryOutcome): MonitorSettlement {
+    settlement?.let { return it }
+    return recordSettlement(outcome) { recorded ->
+      resources.deferUntilFinalize(MonitorSettleRequest(fence, recorded, removalAllowed = false))
+    }
+  }
+
+  @Synchronized
   internal fun settle(
     outcome: MonitorPrimaryOutcome,
     removalAllowed: Boolean = true,
@@ -60,27 +68,28 @@ public class MonitorCleanupOwnership internal constructor(
     settlement?.let { return it }
     val interrupted = Thread.interrupted()
     return try {
-      settleOwned(outcome, removalAllowed)
+      recordSettlement(outcome) { recorded ->
+        resources.settle(MonitorSettleRequest(fence, recorded, removalAllowed))
+      }
     } finally {
       if (interrupted) Thread.currentThread().interrupt()
     }
   }
 
-  private fun settleOwned(
+  private fun recordSettlement(
     outcome: MonitorPrimaryOutcome,
-    removalAllowed: Boolean,
+    persist: (MonitorPrimaryOutcome) -> MonitorSettlement,
   ): MonitorSettlement {
     val recorded = outcome.copy(detail = monitorOutcomeDetail(outcome.detail, outcome.kind.wireValue))
     val result =
-      catchingNonCancellation {
-        resources.settle(MonitorSettleRequest(fence, recorded, removalAllowed))
-      }.getOrElse { failure ->
-        MonitorSettlement.Retained(
-          MonitorRetentionReason.CLEANUP_FAILED,
-          knownPath,
-          monitorOutcomeDetail(failure.message, failure::class.java.simpleName),
-        )
-      }
+      catchingNonCancellation { persist(recorded) }
+        .getOrElse { failure ->
+          MonitorSettlement.Retained(
+            MonitorRetentionReason.CLEANUP_FAILED,
+            knownPath,
+            monitorOutcomeDetail(failure.message, failure::class.java.simpleName),
+          )
+        }
     settlement = result
     catchingNonCancellation { exitHook.unregister() }
       .onFailure { record("monitorCleanup.exit_hook_unregister", it) }
