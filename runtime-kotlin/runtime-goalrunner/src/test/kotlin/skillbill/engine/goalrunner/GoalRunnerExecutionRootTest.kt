@@ -129,6 +129,63 @@ class GoalRunnerExecutionRootTest {
   }
 
   @Test
+  fun `a completed goal removes its worktree after releasing its execution lease`() {
+    val worktree = Files.createTempDirectory("goal-cleanup-after-release").toRealPath()
+    val store = InMemoryGoalManifestStore(manifest = manifest(subtaskCount = 1))
+    val outcomes = RecordingOutcomeStore()
+    val launcher =
+      RecordingSubtaskLauncher {
+        store.mutate { current -> current.withWorkflowId(1, "wfl-1") }
+        outcomes["wfl-1"] = completeOutcome(1)
+        launchFacts()
+      }
+    var leaseHeld = false
+    val coordinator =
+      object : GoalRunnerExecutionCoordinator by DIRECT_GOAL_RUNNER_EXECUTION_COORDINATOR {
+        override fun <T> runOwnedWithLease(
+          parentWorkflowId: String,
+          purpose: GoalRunnerLeasePurpose,
+          block: (Long, String?) -> T,
+        ): GoalRunnerOwnedRun<T> {
+          leaseHeld = true
+          return try {
+            GoalRunnerOwnedRun.Completed(block(1, "owner"))
+          } finally {
+            leaseHeld = false
+          }
+        }
+      }
+    val settlementLeases = mutableListOf<Boolean>()
+    val settlementCompletions = mutableListOf<String?>()
+    val worktrees =
+      object : GoalWorktreeResources by RecordingGoalWorktrees(GoalWorktreeResult.Created(worktree)) {
+        override fun settle(request: GoalWorktreeSettleRequest): GoalWorktreeSettlement {
+          settlementLeases += leaseHeld
+          settlementCompletions += store.controlState.goalCompletedAt
+          return if (leaseHeld) {
+            GoalWorktreeSettlement.Retained(MonitorRetentionReason.UNOWNED_RESOURCE, worktree, "lease held")
+          } else {
+            GoalWorktreeSettlement.Removed
+          }
+        }
+      }
+    val runner =
+      testGoalRunner(
+        goalRunnerDeps(store, launcher, outcomes, RecordingPullRequestPort()).copy(
+          goalWorktrees = worktrees,
+          executionCoordinator = coordinator,
+        ),
+      )
+
+    assertIs<GoalRunnerRunReport.Completed>(runner.run(request()))
+
+    assertEquals(listOf(false), settlementLeases)
+    assertTrue(settlementCompletions.single() != null)
+    assertTrue(store.controlState.executionWorktreeRemovedAt != null)
+    assertEquals(null, store.controlState.executionWorktreeRetentionReason)
+  }
+
+  @Test
   fun `a new goal runs every branch checkout and child in the created worktree`() {
     val worktree = Files.createTempDirectory("goal-settlement-failure").toRealPath()
     val store = InMemoryGoalManifestStore(manifest = manifest(subtaskCount = 1))

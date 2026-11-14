@@ -748,6 +748,12 @@ cleanup. A goal-body or cancellation failure remains primary;
 secondary teardown failures attach as suppressed exceptions. A body that
 completed normally still fails the run when required teardown fails.
 
+Successful goal worktree settlement runs after the owned execution returns and
+releases its parent lease. Completion stays persisted before teardown. Settlement
+keeps its exclusive ownership checks, which require a completed goal with no parent
+execution lease or child worker lease. A teardown failure leaves the checkout for
+the existing pending-cleanup retry path.
+
 `GoalRunnerProgressEventEmitter` and `GoalRunnerProgressReader` propagate
 `CancellationException` and `InterruptedException` from workflow identity
 resolution instead of treating them as absent workflow identity. Optional
