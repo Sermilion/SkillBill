@@ -261,11 +261,12 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
             } else DetailHeader(item, state.stale, { onAction(DetailAction.RevealFolder) }, { item.branch?.let { onAction(DetailAction.OpenBranch(it)) } }, qa = if (qaRow) QaHeaderFacts(qaView?.testedCommit, qaView?.criteriaSource) else null, validation = validationRow, planReady = item.isStandalonePlan() && planFinished(item, loaded?.detail), planBlocked = item.isStandalonePlan() && hasBlockedSubtasks(loaded?.detail?.standalonePlan)) {
               if (state.sections != SectionsUi.Gone) {
                 val agentChoices = (state.sections as? SectionsUi.Loaded)?.runOptions?.agentChoices.orEmpty()
-                RunActions(view, agentChoices, state.controls.agentMenuOpen, recoverFocus, dispatchAction)
                 val report = validationResult
-                if (validationRow && item.lifecycle != Lifecycle.Active && !report.isNullOrBlank()) {
-                  SbButton("Copy report", { onAction(DetailAction.Copy(report)) })
-                }
+                RunActions(view, agentChoices, state.controls.agentMenuOpen, recoverFocus, trailing = {
+                  if (validationRow && item.lifecycle != Lifecycle.Active && !report.isNullOrBlank()) {
+                    SbButton("Copy report", { onAction(DetailAction.Copy(report)) })
+                  }
+                }, onAction = dispatchAction)
               }
             }
           }

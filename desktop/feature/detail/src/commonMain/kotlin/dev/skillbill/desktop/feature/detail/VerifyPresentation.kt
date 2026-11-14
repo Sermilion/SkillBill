@@ -87,6 +87,6 @@ internal fun VerifyHeaderActions(state: DetailUiState, run: VerifyRunDetails, vi
     SbButton("Adjust intake in Chat", { onOpenParkedVerify(true) })
   }
   val choices = (state.sections as? SectionsUi.Loaded)?.runOptions?.agentChoices.orEmpty()
-  RunActions(verifyRunActionsView(view, run), choices, state.controls.agentMenuOpen, recoverFocus, onAction)
+  RunActions(verifyRunActionsView(view, run), choices, state.controls.agentMenuOpen, recoverFocus, onAction = onAction)
   VerifyReportActions(state, run, onAction)
 }

@@ -35,6 +35,7 @@ internal fun RunActions(
   agentChoices: List<String>,
   menuOpen: Boolean,
   recoverFocus: FocusRequester,
+  trailing: (@Composable () -> Unit)? = null,
   onAction: (ControlsAction) -> Unit,
 ) {
   Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -55,6 +56,8 @@ internal fun RunActions(
       view.finalize?.let { ActionButton(it, LucideIcons.checkCircle) { onAction(ControlsAction.Finalize) } }
       view.cancel?.let { ActionButton(it, LucideIcons.x, variant = SbButtonVariant.Danger) { onAction(ControlsAction.Cancel) } }
       view.recover?.let { ActionButton(it, LucideIcons.refresh, modifier = Modifier.focusRequester(recoverFocus)) { onAction(ControlsAction.Recover) } }
+      // Sibling items of this column center on its full height, so header extras belong to the button row itself.
+      trailing?.invoke()
     }
     // `.t-faint` at `--t-xs`, regular weight.
     if (view.launchNote) BasicText("Starts the installed agent harness", style = SkillBillTheme.type.tXs.copy(color = SkillBillTheme.colors.fgFaint, fontWeight = FontWeight.Normal))

@@ -182,7 +182,7 @@ class PlanActionsTest {
     setContent {
       SkillBillTheme(reducedMotion = true) {
         val focus = remember { FocusRequester() }
-        RunActions(runActionsView(current.value), emptyList(), false, focus, actions::add)
+        RunActions(runActionsView(current.value), emptyList(), false, focus, onAction = actions::add)
       }
     }
     onNodeWithText("Implement").assertIsNotEnabled()
