@@ -31,7 +31,6 @@ internal class CursorSessionChannel(
   private val toolOutput = StringBuilder()
   private var deliveryFailed = false
   private var captureIncomplete = false
-  private var toolOutputTruncated = false
   private var captureFrozen = false
   private var frozenCapture: AgentRunSessionCapture? = null
   private val protocol =
@@ -74,10 +73,6 @@ internal class CursorSessionChannel(
         if (frame.isNotEmpty()) protocol.observe(frame)
       }
       if (protocol.outcome() != null) return
-      if (buffer.length + part.value.length > MAX_FRAME) {
-        protocol.stop("$providerName sent an oversized ACP frame.")
-        return
-      }
       buffer.append(part.value)
     }
   }
@@ -114,28 +109,16 @@ internal class CursorSessionChannel(
     val record = "$providerName tool update: $update\n"
     val retained =
       synchronized(captureLock) {
-        when {
-          captureFrozen -> null
-          toolOutputTruncated || deliveryFailed -> null
-          toolOutput.length + record.length > MAX_FRAME -> {
-            toolOutputTruncated = true
-            null
-          }
-          else -> {
-            toolOutput.append(record)
-            record
-          }
+        if (captureFrozen || deliveryFailed) {
+          null
+        } else {
+          toolOutput.append(record)
+          record
         }
       }
-    if (retained == null) {
-      val truncated = synchronized(captureLock) { toolOutputTruncated }
-      if (truncated) {
-        diagnostics.warning("seam=$seam outcome=tool_capture_truncated")
-        protocol.stop("$providerName tool output exceeded the capture limit.")
-      }
-      return
+    if (retained != null) {
+      deliver(AgentRunOutputStream.STDERR, retained, "tool_output")
     }
-    deliver(AgentRunOutputStream.STDERR, retained, "tool_output")
   }
 
   private fun deliver(
@@ -155,8 +138,8 @@ internal class CursorSessionChannel(
     synchronized(captureLock) {
       frozenCapture ?: AgentRunSessionCapture(
         text = protocol.textSnapshot(),
-        complete = !deliveryFailed && !captureIncomplete && !toolOutputTruncated && !protocol.textCaptureTruncated(),
-        truncated = toolOutputTruncated || protocol.textCaptureTruncated(),
+        complete = !deliveryFailed && !captureIncomplete,
+        truncated = false,
         deliveryFailed = deliveryFailed,
         providerDiagnostics = toolOutput.toString().takeIf(String::isNotBlank),
       ).also {
@@ -164,8 +147,4 @@ internal class CursorSessionChannel(
         frozenCapture = it
       }
     }
-
-  private companion object {
-    const val MAX_FRAME = 4_000_000
-  }
 }

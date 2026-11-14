@@ -110,7 +110,6 @@ class CursorAcpSession(
   private var closed = false
   private var closing = false
   private val text = StringBuilder()
-  private var textTruncated = false
   private var result: CursorAcpOutcome? = null
   private var permissions: CursorAcpPermissions? = null
   private var providerFailure: String? = null
@@ -150,7 +149,6 @@ class CursorAcpSession(
 
   fun observe(line: String) {
     if (outcome() != null) return
-    if (line.length > MAX_CAPTURE) return stop("$providerName sent an oversized ACP frame.")
     val message =
       catchingNonCancellation { Json.parseToJsonElement(line) }.getOrNull() as? JsonObject
         ?: return stop("$providerName sent a malformed ACP frame.")
@@ -497,23 +495,8 @@ class CursorAcpSession(
     val content = update.obj(K.CONTENT) ?: return stop("$providerName sent malformed assistant content.")
     if (content.text(K.TYPE) != "text") return stop("$providerName sent unsupported assistant content.")
     val chunk = content.text(K.TEXT) ?: return stop("$providerName sent malformed assistant text.")
-    val overflow =
-      synchronized(lock) {
-        if (text.length + chunk.length > MAX_CAPTURE) {
-          textTruncated = true
-          true
-        } else {
-          text.append(chunk)
-          false
-        }
-      }
-    if (overflow) {
-      stop(
-        "$providerName assistant output exceeded the capture limit.",
-      )
-    } else {
-      onEvent(CursorAcpEvent.Text(chunk))
-    }
+    synchronized(lock) { text.append(chunk) }
+    onEvent(CursorAcpEvent.Text(chunk))
   }
 
   private fun blocking(
@@ -581,8 +564,6 @@ class CursorAcpSession(
   }
 
   fun textSnapshot(): String = synchronized(lock) { text.toString() }
-
-  fun textCaptureTruncated(): Boolean = synchronized(lock) { textTruncated }
 
   fun outcome(): CursorAcpOutcome? = synchronized(lock) { result }
 
@@ -669,7 +650,6 @@ class CursorAcpSession(
   }
 
   private companion object {
-    const val MAX_CAPTURE = 4_000_000
     const val METHOD_NOT_FOUND = -32601
     val OPENING_TIMEOUT: Duration = Duration.ofSeconds(30)
   }

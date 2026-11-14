@@ -185,6 +185,26 @@ class CodexSessionChannelTest {
   }
 
   @Test
+  fun `assistant output beyond the former capture limit still completes the turn`() {
+    val channel = channel()
+    val text = "y".repeat(5_000_000)
+    try {
+      channel.attach(SessionProcess())
+      channel.observe("""{"id":1,"result":{"userAgent":"codex_cli_rs/0.166.0 (test)"}}""" + "\n")
+      channel.observe(threadResponse())
+      channel.observe("""{"id":3,"result":{"turn":{"id":"turn-1","status":"inProgress"}}}""" + "\n")
+      channel.observe(item(text))
+      channel.observe(terminal())
+
+      val outcome = assertNotNull(channel.outcome())
+      assertTrue(outcome.completed, outcome.failure)
+      assertEquals(text, outcome.text)
+    } finally {
+      channel.finish()
+    }
+  }
+
+  @Test
   fun `an approved command that exits non-zero is a tool result and the turn still completes`() {
     val outcome =
       approvedCommandTurn(
