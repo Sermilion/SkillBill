@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.key
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -57,39 +58,56 @@ internal fun NewTaskChangesPill(changes: ChatChanges, expanded: Boolean, focusRe
 @Composable
 internal fun ChatChangesAnchor(chat: NewTaskChat?, state: ChatChangesState, composerFocus: FocusRequester, onOpenChanges: (ChangesSource.Chat, String?) -> Unit = { _, _ -> }, repositoryRoot: String? = chat?.selectedRepositoryRoot) {
   LaunchedEffect(chat) { chat?.observeChanges() }
+  key(chat, repositoryRoot) {
+    ChangesAnchor(state, composerFocus) { worktreeRoot, path ->
+      val shown = state as? ChatChangesState.Shown ?: return@ChangesAnchor
+      openChatChanges(chat, shown, repositoryRoot, onOpenChanges, path, worktreeRoot)
+    }
+  }
+}
+
+@Composable
+internal fun ChangesAnchor(
+  state: ChatChangesState,
+  composerFocus: FocusRequester,
+  onOpen: (worktreeRoot: String?, path: String?) -> Unit,
+) {
   val pillFocus = remember { FocusRequester() }
-  var open by remember(chat) { mutableStateOf(false) }
+  var open by remember { mutableStateOf(false) }
   val shown = state as? ChatChangesState.Shown
-  LaunchedEffect(chat, shown == null) { if (shown == null) open = false }
+  LaunchedEffect(shown == null) { if (shown == null) open = false }
   val expanded = open && shown != null
   val density = LocalDensity.current
   val windowWidth = with(density) { LocalWindowInfo.current.containerSize.width.toDp() }
   val returnFocus = if (shown != null) pillFocus else composerFocus
+  fun openChanges(root: String?, path: String?) {
+    open = false
+    onOpen(root, path)
+  }
   Box {
     if (shown != null) NewTaskChangesPill(shown.changes, expanded, pillFocus) { open = !open }
     if (expanded) ShellLayer { open = false }
     SbPopover(
-    expanded = expanded,
-    onDismissRequest = { open = false },
-    width = minOf(440.dp, (windowWidth - 32.dp).coerceAtLeast(0.dp)),
-    maxWidth = 440.dp,
-    placement = SbPopoverPlacement.AboveEnd,
-    returnFocusTo = returnFocus,
-    arrowKeysMoveFocus = false,
-    title = "Changes",
+      expanded = expanded,
+      onDismissRequest = { open = false },
+      width = minOf(440.dp, (windowWidth - 32.dp).coerceAtLeast(0.dp)),
+      maxWidth = 440.dp,
+      placement = SbPopoverPlacement.AboveEnd,
+      returnFocusTo = returnFocus,
+      arrowKeysMoveFocus = false,
+      title = "Changes",
     ) {
       if (shown != null) NewTaskChangesPanel(
         shown,
-        onOpenDiff = { openChatChanges(chat, shown, repositoryRoot, onOpenChanges, null) { open = false } },
-        onOpenFile = { path -> openChatChanges(chat, shown, repositoryRoot, onOpenChanges, path) { open = false } },
-        onOpenWorktree = { worktree, path -> openChatChanges(chat, shown, repositoryRoot, onOpenChanges, path, worktree.repositoryRoot) { open = false } },
+        onOpenDiff = { openChanges(null, null) },
+        onOpenFile = { path -> openChanges(null, path) },
+        onOpenWorktree = { worktree, path -> openChanges(worktree.repositoryRoot, path) },
       )
     }
   }
 }
 
-private fun openChatChanges(chat: NewTaskChat?, current: ChatChangesState.Shown, repositoryRoot: String?, dispatch: (ChangesSource.Chat, String?) -> Unit, path: String?, worktreeRoot: String? = null, close: () -> Unit) {
-  close()
+private fun openChatChanges(chat: NewTaskChat?, current: ChatChangesState.Shown, repositoryRoot: String?, dispatch: (ChangesSource.Chat, String?) -> Unit, path: String?, worktreeRoot: String? = null) {
   val worktree = current.changes.worktrees.firstOrNull { it.repositoryRoot == worktreeRoot }
   if (worktreeRoot != null && worktree == null) return
   val root = worktree?.repositoryRoot ?: repositoryRoot ?: return

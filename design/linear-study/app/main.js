@@ -127,7 +127,10 @@
       if (phase) st.peekSel[`${r.id}|${r.inspector}`] = phase;
       st.propsOpen = true; st.specsOpen = false;
     }
-    if (r.dock) { st.chatOpen = r.dock === 'chat'; st.specsOpen = r.dock === 'plans'; st.termOpen = true; }
+    if (r.dock) {
+      st.chatOpen = r.dock === 'chat'; st.specsOpen = r.dock === 'plans'; st.termOpen = true;
+      if (st.chatOpen) X.ntChat(st).changes = D.CHAT_CHANGES.few;
+    }
     if (r.build) st.build = r.build;
     if (r.runApp) seedRunApp(r.runApp.scenario, r.runApp.id);
     if (r.devices) { st.qaDev.list = r.devices; st.qaDev.selected = 'auto'; }

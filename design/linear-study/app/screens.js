@@ -2728,7 +2728,7 @@
       st.nt.homeState ? examples : S.Section({ title: needs.length ? 'Needs you' : 'All clear', count: needs.length || null, end: [S.Button({ label: `${running} running · ${finished} finished today`, icon: 'arrowRight', variant: 'ghost', size: 'sm', act: 'nav', arg: 'work' })], body: needs.length ? S.InboxList({ id: 'nt-needs', label: 'Needs you', rows: needRows }) : '' }),
     ] });
   }
-  function ntComposer(st, c) {
+  function ntComposer(st, c, run = false) {
     const empty = chatEmpty(c);
     const pop = st.popover || {};
     const n = c.queue.length;
@@ -2737,6 +2737,7 @@
       : S.ChatPill({ icon: 'folder', html: repoAndBranch(c.repo, c.currentBranch || baseBranch(c)), tip: `${c.repo} / ${baseBranch(c)}` });
     const model = agentModel(c.agent);
     const chg = chatChanges(c);
+    const changesPill = chg ? S.ChatChangesPill(Object.assign({ act: 'chg-toggle', expanded: pop.type === 'changes', id: 'nt-changes' }, chg)) : '';
     const agentPill = S.ChatPill({ lead: agentDot(c.agent), text: model ? `${c.agent} · ${model}` : c.agent, chevron: 'chevronDown', act: 'nt-agent-menu', expanded: pop.type === 'nt-agent', disabled: !!c.stream, tip: c.stream ? 'Wait for the current reply to finish' : 'Change agent' });
     const warning = c.branchIntent && c.currentBranch !== defaultBranch(c.repo) && !c.branch
       ? `<div class="l-col g-2" role="status">${S.Callout({ tone: 'warn', body: `This checkout is on ${esc(c.currentBranch)}. New work normally starts from ${esc(defaultBranch(c.repo))}. Switch to ${esc(defaultBranch(c.repo))} or explicitly use ${esc(c.currentBranch)} as the base branch before starting.` })}<div class="l-row g-2 l-wrap">${S.Button({ label: `Switch to ${defaultBranch(c.repo)}`, size: 'sm', act: 'chat-default-branch', disabled: !!c.stream })}${S.Button({ label: 'Use current branch as base', size: 'sm', act: 'chat-current-base', disabled: !!c.stream })}</div></div>` : '';
@@ -2747,7 +2748,8 @@
       hint: qaDeviceName(st) ? 'QA runs use the device picked in the sidebar.' : null,
       queue: n ? S.ChatPill({ sans: true, text: `${n} ${n === 1 ? 'message' : 'messages'} queued`, chevron: 'chevronsUpDown', act: 'q-toggle', expanded: pop.type === 'queue', id: 'nt-queue' }) : '',
       pills: [repoPill, agentPill],
-      actions: [chg ? S.ChatChangesPill(Object.assign({ act: 'chg-toggle', expanded: pop.type === 'changes', id: 'nt-changes' }, chg)) : '', c.stream ? S.Button({ label: 'Stop', size: 'sm', act: 'chat-stop', tip: 'Stop the reply. Queued messages return to the draft.' }) : '', ntSendButton(c)],
+      changes: run ? changesPill : '',
+      actions: [run ? '' : changesPill, c.stream ? S.Button({ label: 'Stop', size: 'sm', act: 'chat-stop', tip: 'Stop the reply. Queued messages return to the draft.' }) : '', ntSendButton(c)],
     });
   }
   function newTask(st) {
@@ -2763,7 +2765,7 @@
       actions: [S.IconButton({ icon: 'x', label: 'Close chat pane', act: 'chat-pane-toggle', size: 'sm' })],
       body: S.ChatTabs({ count: st.nt.chats.length, tabs: st.nt.chats.map((t) => ({ id: t.id, label: chatLabel(t), status: chatStatus(t), on: t === c })) })
         + (chatEmpty(c) ? S.EmptyState({ icon: 'bot', title: 'New chat', body: 'Ask your agent about the work.' }) : ntTranscript(c))
-        + ntComposer(st, c),
+        + ntComposer(st, c, true),
     });
   }
 
@@ -2833,7 +2835,7 @@
     const filter = st.nt.chats.length > 8 ? S.FilterBar({ id: 'chat-menu-q', value: st.nt.menuQ, placeholder: `Filter ${st.nt.chats.length} open chats`, input: 'chat-menu-q' }) : '';
     return filter + S.Menu({ items: list.length ? list.map((c) => ({ lead: S.ChatStatusMark(chatStatus(c)), label: chatLabel(c), end: esc(c.repo || ''), checked: c === ntChat(st), act: 'chat-select', arg: c.id })) : [{ head: 'No open chat matches.' }] });
   }
-  /* The chat's changes against its baseline with line totals, or null before it changed a file (no pill then). */
+  /* Current uncommitted checkout changes, shared by new-task and docked run chats. A clean checkout has no pill. */
   function chatChanges(c) {
     const x = c && c.changes;
     if (!x || !x.files.length) return null;

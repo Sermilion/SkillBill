@@ -877,7 +877,7 @@
    * queue slot, then pills on the left and Stop and Send on the right. Enter sends, Shift+Enter starts a new line (main.js). */
   function Composer(o) {
     track('Composer');
-    return `<div class="sb-dock"><div class="sb-composer">${o.chips && o.chips.length ? `<div class="sb-suggests">${join(o.chips)}</div>${o.hint ? `<span class="sb-suggests-hint">${esc(o.hint)}</span>` : ''}` : ''}<textarea class="sb-composer-in" id="${esc(o.id)}" data-input="composer" data-chat="${esc(o.chatId)}" aria-label="${esc(o.label)}" placeholder="${esc(o.placeholder)}" spellcheck="false">${esc(o.value || '')}</textarea>${o.queue || ''}<div class="sb-composer-ft">${join(o.pills)}<span class="l-grow"></span>${join(o.actions)}</div></div></div>`;
+    return `<div class="sb-dock"><div class="sb-composer">${o.chips && o.chips.length ? `<div class="sb-suggests">${join(o.chips)}</div>${o.hint ? `<span class="sb-suggests-hint">${esc(o.hint)}</span>` : ''}` : ''}<textarea class="sb-composer-in" id="${esc(o.id)}" data-input="composer" data-chat="${esc(o.chatId)}" aria-label="${esc(o.label)}" placeholder="${esc(o.placeholder)}" spellcheck="false">${esc(o.value || '')}</textarea>${o.queue || ''}${o.changes ? `<div class="l-row"><span class="l-grow"></span>${o.changes}</div>` : ''}<div class="sb-composer-ft">${join(o.pills)}<span class="l-grow"></span>${join(o.actions)}</div></div></div>`;
   }
   /* The seven steps a goal run takes, with a sweep along the line. */
   function StepLine(steps) {
@@ -938,12 +938,12 @@
       ${o.undo ? `<div class="sb-queue-undo" role="status"><span>${esc(o.undo)}</span><span class="l-grow"></span>${Button({ label: 'Undo', variant: 'ghost', size: 'sm', act: 'q-undo', kbd: '⌘ Z' })}</div>` : ''}
       <div class="sb-queue-ft"><span>Sends in order when the current reply ends</span><span class="l-grow"></span>${Kbd('↑ ↓ Del')}</div></div>`;
   }
-  /* What this chat changed in its checkout, on the composer's right next to Send: file count and line totals. It opens
-   * ChatChangesPanel. Absent until the chat has changed a file. `o`: { files, ins, del, expanded, act, since }. */
+  /* Uncommitted checkout changes with file count and line totals. Both chat types open ChatChangesPanel.
+   * Clean checkouts hide the pill. `o`: { files, ins, del, expanded, act }. */
   function ChatChangesPill(o) {
     track('ChatChangesPill');
     const html = `${o.files} ${o.files === 1 ? 'file' : 'files'} <span class="ins">+${o.ins}</span> <span class="del">−${o.del}</span>`;
-    return `<span class="sb-chg-anchor">${ChatPill({ icon: 'diff', html, chevron: 'chevronsUpDown', act: o.act, expanded: o.expanded, id: o.id, tip: `Files this chat changed since ${o.since}` })}</span>`;
+    return `<span class="sb-chg-anchor">${ChatPill({ icon: 'diff', html, chevron: 'chevronsUpDown', act: o.act, expanded: o.expanded, id: o.id, tip: 'Uncommitted changes against the latest HEAD' })}</span>`;
   }
   const chgDir = (parts) => (parts.length > 3 ? `${parts[0]}/…/${parts.slice(-2).join('/')}` : parts.join('/'));
   /* One changed file: status letter (A added, M modified, D deleted, R renamed), file name, its folder shortened from the
