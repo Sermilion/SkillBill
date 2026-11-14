@@ -20,7 +20,7 @@ internal fun shortAgo(at: Instant, now: Instant): String {
 }
 
 internal fun chatRepoLabel(entry: ChatHistoryEntry, selectedRoot: String?): String? {
-  val root = entry.newTask?.repositoryRoot ?: return null
+  val root = entry.newTask?.selectedRepositoryRoot ?: return null
   return if (selectedRoot != null && File(root).normalize().path == File(selectedRoot).normalize().path) null else File(root).name
 }
 

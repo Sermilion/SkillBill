@@ -61,9 +61,9 @@ class NewTaskFeatureEntry(
       onOpenRun = { navigator.navigate(DetailRoute(it)) },
       onShowAllWork = { navigator.navigate(WorkRoute(null)) },
       onOpenChatChanges = { source, path -> changesWindows.openChat(source, ChangeScope.All, path) },
-      onStart = { wire, target, action ->
+      onStart = { origin, wire, target, action ->
         NewTaskActionKind.entries.firstOrNull { it.wire == wire }?.toNewTaskKind()?.let { kind ->
-          viewModel.start(kind, target, action)
+          viewModel.start(origin, kind, target, action)
         }
       },
     )

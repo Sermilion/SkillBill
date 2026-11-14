@@ -77,6 +77,37 @@ and access, and resolves blockers before it offers a goal start card. It infers 
 it can from available evidence and batches questions that affect the outcome. This
 preparation stays in chat. A standalone planning run is a separate explicit request.
 
+New-task chat receives the user's home, effective working directory and selected
+repository root as separate context values. With no selected repository, the
+effective working directory is supplied home. Chat can handle ordinary questions,
+provider tools, requested file creation and edits, saves and resume there. It does
+not inspect branch or issue-key state, prepare repository work, or start goals,
+standalone phases or operations. Ask the operator to name or select a repository
+before any run. Git metadata in home does not count as selection. Keep the manual
+repository picker available after chat starts.
+
+When the operator asks to attach or switch repositories, resolve an existing exact
+repository root from their path or description. Search likely project folders such
+as `userHome/StudioProjects` when useful. Ask for clarification when more than one
+repository could match. Create or clone only when the operator requests it, using
+available shell tools and the requested destination. Emit a repository candidate
+only after init or clone finishes successfully and the exact destination root is
+known. Report failed init or clone, remote authentication failure, inaccessible
+destinations and unresolved descriptions without a candidate. Leave partial and
+user files in place. Do not infer success, retry automatically or rely on
+undocumented idempotency.
+
+A shell `cd`, Git metadata, tool output or prose does not select a repository. The
+app validates the candidate and may reject it. A successful candidate is the final
+block of the reply, using exactly one `skillbill-repository` fence with a JSON
+object containing string `contract_version` value `1` and an absolute `path`.
+Repository and `skillbill-actions` blocks cannot appear in the same reply. Selection
+retains the conversation and never launches or retries work. A later fresh,
+explicit app-owned start action is required to launch work. Without a selected
+repository, do not emit executable start cards or invoke CLI/MCP run commands.
+Accepted issue keys and readiness overrides do not waive selection or the app's
+start action.
+
 Only the operator clicking the inline start card launches a goal from new-task chat.
 Chat replies, issue keys and requests to implement do not authorize a CLI or MCP
 launch. The app owns the start action and issue-key entry. An explicit request for
@@ -412,6 +443,15 @@ material questions without repeating answered questions. Discussion and context
 gathering do not start a standalone planning run. Plan runs require an explicit
 operator request.
 
+With no selected repository, allow ordinary chat and requested file work in the
+effective working directory, which is supplied home. Ask the operator to identify
+or select a repository before any goal, standalone phase or operation. Keep the
+manual picker available after chat starts. Home Git metadata, accepted issue
+keys, readiness overrides and requests to proceed do not authorize a run or a
+direct CLI/MCP bypass. Selecting a repository only updates chat context. The
+operator must make a separate fresh start request.
+
+With a selected repository, scope preparation and branch checks to that root.
 Readiness advice is advisory. When an operator requests a goal or plan with
 unresolved material questions or blockers, the agent names them, explains their
 consequences, recommends resolving them first, and asks once whether to proceed.

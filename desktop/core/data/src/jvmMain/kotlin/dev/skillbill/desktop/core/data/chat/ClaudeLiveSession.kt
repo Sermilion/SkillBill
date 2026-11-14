@@ -330,7 +330,7 @@ internal class ClaudeLiveSession(
   }
 
   private fun openReply() {
-    reply = ChatReplyStream(diagnostics)
+    reply = ChatReplyStream(diagnostics, allowRepositoryCandidates = target != null)
     wroteText = false
   }
 

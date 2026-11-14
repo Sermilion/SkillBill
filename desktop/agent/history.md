@@ -1,3 +1,18 @@
+## [2026-11-13] SONA-21 chat without a repository
+Areas: desktop/core/domain, desktop/core/data/chat, desktop/core/data/control, desktop/feature/chat and newtask, docs/runtime-command-guidance.md
+- MEDIUM feature. New task separates workingDirectory from nullable selectedRepositoryRoot. Window-supplied HostEnvironment.userHome supports ordinary chat, tools, file creation, saves and resume without selecting home through Git ancestry; branch and changes features require actual selection.
+- ChatStore context version 1 preserves explicit null selection. Legacy bound drafts migrate atomically before projection, retaining source fields, identities, provider bindings, transcript, summaries and metadata. Typed failures retain unreadable originals and protect them from updates and orphan sweeping.
+- One terminal skillbill-repository block proposes an exact path after successful completion. Guidance covers requested creation, cloning and StudioProjects lookup. Invalid metadata produces diagnostics and a visible notice; failed or stale validation retains selection and user files.
+- reusable: manual and chat candidates share canonical exact-root validation through RepositoryBranchesRepository. Project lookup supplies display metadata only; an identical root retains the session and accepted key.
+- Manual selection stays available after chat starts. Replacement waits for accepted saves and provider shutdown, persists before publication, and restores the old context on failure. Candidate settlement holds queue draining and carries ordinary queued text and images through replacement or recovery.
+- Repository changes retain visible conversation as inactive history and clear accepted keys, branch, offer, changes and repository-specific MCP state. Old operation requests, observations and callbacks lose authority after replacement commits.
+- reusable: OperationCardCoordinator accepts caller-owned admission checks and rechecks after saves. New task starts and card decisions require current selection and originating context/database authority; refusal never adopts a replacement database session or retries on selection.
+- RuntimeWorkControlRepository validates canonical selected-root equality before all nine NewTaskKind dispatches. Database changes take refusal precedence; only GoalRun and PlanOnly apply new-work base-branch policy.
+- Compatibility: legacy root-only constructors remain repository-bound, repositoryRoot remains the provider/approval directory, and execution-chat scope is unchanged. Changed-home resume stages a fresh provider session while retaining the original saved draft.
+- Limits: admission establishes validity at dispatch; later external deletion remains possible. No global CLI admission or repository-management service. The dedicated all-kind data-admission regression matrix is absent. Supplied capability_absent warning records code changes after QA settled; final-tree QA and native macOS/Windows behavior remain unverified.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
+
 ## [2026-11-13] SONA-20 desktop Finalize controls
 Areas: desktop/feature/detail and work; desktop/core/data, domain and ui; desktop/app/command; design/linear-study; docs/runtime-command-guidance.md
 - MEDIUM feature. Detail actions, the Work row menu and CommandCatalog offer Finalize from runtime canFinalize and retain Resume or Run again from canLaunch, including completed unfinalized rows.
