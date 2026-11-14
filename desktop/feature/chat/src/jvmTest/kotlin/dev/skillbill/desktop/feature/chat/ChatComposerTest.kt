@@ -301,7 +301,7 @@ class ChatComposerTest {
       val filter = onNode(hasSetTextAction() and hasText("Filter chats in this worktree"))
       filter.assertIsFocused()
       filter.performKeyInput { pressKey(Key.DirectionDown) }
-      onNodeWithText("This session lives in the codex CLI. Its messages load when you resume it.").assertExists()
+      onNodeWithText("This session lives in the Codex CLI. Its messages load when you resume it.").assertExists()
       filter.performKeyInput { pressKey(Key.Enter) }
       runOnIdle { assertNull(session.resumeChoices.value) }
     }

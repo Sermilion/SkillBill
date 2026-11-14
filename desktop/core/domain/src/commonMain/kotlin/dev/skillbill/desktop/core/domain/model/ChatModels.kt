@@ -2,6 +2,8 @@ package dev.skillbill.desktop.core.domain.model
 
 import kotlin.time.Instant
 
+const val UNAVAILABLE_AGENT_ID = "unavailable"
+
 /**
  * The agent a chat turn runs on; a null [model] or [effort] leaves the agent CLI's own default. [profile] is the agent's config
  * directory, such as `~/.codex-api`, when a resumed session came from it; null runs the agent as the app is configured to.

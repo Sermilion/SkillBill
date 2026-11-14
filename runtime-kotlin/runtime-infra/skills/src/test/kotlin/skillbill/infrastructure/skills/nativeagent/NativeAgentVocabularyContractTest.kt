@@ -9,20 +9,13 @@ import kotlin.test.assertFailsWith
 class NativeAgentVocabularyContractTest {
   @Test
   fun `domain declaration round trips every native provider without a second id vocabulary`() {
-    val agents = NativeAgentProvider.entries.map(NativeAgentProvider::supportedAgent)
+    val agents = SupportedAgent.entries
 
-    assertEquals(
-      listOf("claude", "codex", "junie", "cursor", "opencode", "devin"),
-      agents.map(SupportedAgent::wireValue),
-    )
+    assertEquals(listOf("claude", "codex", "cursor", "opencode", "devin"), agents.map(SupportedAgent::wireValue))
     agents.forEach { agent ->
       assertEquals(agent, SupportedAgent.fromWire(agent.wireValue.uppercase()))
       assertEquals(agent, NativeAgentProvider.forSupportedAgent(agent).supportedAgent)
     }
-    assertEquals(
-      SupportedAgent.OPENCODE,
-      NativeAgentProvider.forSupportedAgent(SupportedAgent.OPENCODE).supportedAgent,
-    )
     assertFailsWith<IllegalArgumentException> { SupportedAgent.fromWire("unsupported") }
   }
 }

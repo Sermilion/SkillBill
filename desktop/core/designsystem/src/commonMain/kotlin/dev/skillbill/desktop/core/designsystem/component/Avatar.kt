@@ -20,22 +20,27 @@ import dev.skillbill.desktop.core.designsystem.SkillBillColors
 import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 
-private object AgentIds { const val Claude = "claude"; const val Codex = "codex"; const val Cursor = "cursor"; const val Junie = "junie" }
+private object AgentIds { const val Claude = "claude"; const val Codex = "codex"; const val Cursor = "cursor" }
+
+fun agentDisplayName(agentId: String?): String = when (agentId) {
+  AgentIds.Claude -> "Claude"
+  AgentIds.Codex -> "Codex"
+  AgentIds.Cursor -> "Cursor"
+  else -> "Unavailable agent"
+}
 
 internal fun agentInitials(agentId: String): String = when (agentId) {
   AgentIds.Claude -> "Cl"
   AgentIds.Codex -> "Cx"
   AgentIds.Cursor -> "Cu"
-  AgentIds.Junie -> "Ju"
-  else -> agentId.take(2).replaceFirstChar { it.uppercase() }.ifBlank { "?" }
+  else -> "?"
 }
 
 fun agentDataSlot(agentId: String): Int = when (agentId) {
   AgentIds.Claude -> 4
   AgentIds.Codex -> 2
   AgentIds.Cursor -> 6
-  AgentIds.Junie -> 3
-  else -> (agentId.hashCode() % 6 + 6) % 6 + 1
+  else -> 1
 }
 
 fun SkillBillColors.dataColor(slot: Int): Color = when (slot) {
@@ -46,11 +51,11 @@ fun SkillBillColors.dataColor(slot: Int): Color = when (slot) {
 fun SkillBillColors.dataColorFor(key: String): Color = dataColor((key.hashCode() % 6 + 6) % 6 + 1)
 
 @Composable
-fun Avatar(agentId: String, small: Boolean = false, tooltip: String? = agentId) {
+fun Avatar(agentId: String, small: Boolean = false, tooltip: String? = agentDisplayName(agentId)) {
   val color = SkillBillTheme.colors.dataColor(agentDataSlot(agentId))
   val diameter = if (small) 16.dp else 18.dp
   val content: @Composable () -> Unit = {
-    Box(Modifier.size(diameter).background(color.copy(alpha = .22f), CircleShape).semantics { contentDescription = agentId }, contentAlignment = Alignment.Center) {
+    Box(Modifier.size(diameter).background(color.copy(alpha = .22f), CircleShape).semantics { contentDescription = agentDisplayName(agentId) }, contentAlignment = Alignment.Center) {
       BasicText(agentInitials(agentId), style = SkillBillTheme.type.tXs.copy(color = color, fontWeight = FontWeight.SemiBold, fontSize = if (small) 8.5.sp else 9.sp, letterSpacing = (-.02).em, lineHeight = 1.em), maxLines = 1, softWrap = false)
     }
   }

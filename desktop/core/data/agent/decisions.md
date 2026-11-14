@@ -3,8 +3,8 @@ Context: An app chat ID differs from its OpenCode handle, and saved records can 
 Decision: Save the handle and effective configuration and checkout binding before prompting. Resume only through session/load; expose unsafe records for recovery and require a separate new chat after refusal.
 Reason: A replacement session or transcript replay would disguise lost provider continuity. Optional binding fields keep older records readable.
 ## [2026-11-13] Run Devin chat as a fresh ACP session per turn with bounded replay
-Context: Devin chat needed conversation continuity. Junie already started a fresh ACP session each turn and replayed earlier exchanges within a 120,000-character budget.
-Decision: Move Junie's transport body into FreshAcpChatTransport, parameterized by AcpProvider, with Junie and Devin as thin subclasses. Add no persisted Devin session field and no latest-session continuation.
+Context: Devin chat needed conversation continuity. The retired fourth agent already started a fresh ACP session each turn and replayed earlier exchanges within a 120,000-character budget.
+Decision: Move the retired fourth agent's transport body into FreshAcpChatTransport, parameterized by AcpProvider, with the retired fourth agent and Devin as thin subclasses. Add no persisted Devin session field and no latest-session continuation.
 Reason: Persistent session reuse would need a new saved field and a migration path, and the spec lists it as a non-goal. One shared body keeps the replay budget and partial-save behavior identical across both providers.
 
 ## [2026-11-13] Refuse a separate effort for exact-model ACP providers
@@ -28,6 +28,6 @@ Decision: Use typed repository stop settlement before joining or cancelling exec
 Reason: The active collector must receive terminal delivery and cleanup failures before Stop releases it. A cancelled collector cannot establish delivery.
 
 ## [2026-11-08] Keep detailed chat dispatch rules with the installed skill
-Context: New-work chats share a scope prompt across agent transports, and Junie includes it within a bounded fixed-plus-history budget.
+Context: New-work chats share a scope prompt across agent transports, and the retired fourth agent includes it within a bounded fixed-plus-history budget.
 Decision: Keep routing and verify intake guidance concise in the shared new-task prompt; refer full syntax, options and confirmation rules to the installed skill. Preserve execution-attached guidance and app-owned start actions.
 Reason: The installed skill owns detailed dispatch and confirmation instructions. The spec requires concise shared guidance, preserves existing action ownership and excludes migration of live chat processes.

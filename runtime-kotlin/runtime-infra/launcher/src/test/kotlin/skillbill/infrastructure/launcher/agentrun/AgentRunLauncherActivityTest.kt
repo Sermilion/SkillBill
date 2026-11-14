@@ -27,7 +27,7 @@ import kotlin.time.Duration.Companion.seconds
 class AgentRunLauncherActivityTest {
   @Test
   fun `every provider forwards silent build process observations to the launch observer`() {
-    listOf(SupportedAgent.CODEX, SupportedAgent.CLAUDE, SupportedAgent.CURSOR, SupportedAgent.JUNIE).forEach { agent ->
+    listOf(SupportedAgent.CODEX, SupportedAgent.CLAUDE, SupportedAgent.CURSOR).forEach { agent ->
       val received = mutableListOf<List<AgentRunProcessSample>>()
       val observer =
         object : AgentRunBuildObserver {
@@ -112,7 +112,7 @@ class AgentRunLauncherActivityTest {
         diagnostics = NoopRuntimeDiagnostics,
         clock = LAUNCH_TEST_CLOCK,
       )
-    listOf(SupportedAgent.CODEX, SupportedAgent.CLAUDE, SupportedAgent.JUNIE, SupportedAgent.CURSOR).forEach { agent ->
+    listOf(SupportedAgent.CODEX, SupportedAgent.CLAUDE, SupportedAgent.CURSOR).forEach { agent ->
       val facts = requireNotNull(adapters[agent]).launchFacts(skillRunRequest())
       assertEquals("/tmp/skillbill-agent-run", facts.childSessionPath, "session path for $agent")
       val sessionId = requireNotNull(facts.childSessionId) { "session id for $agent" }

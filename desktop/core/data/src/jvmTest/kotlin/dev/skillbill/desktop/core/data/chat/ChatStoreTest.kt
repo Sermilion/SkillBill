@@ -12,6 +12,7 @@ import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
 import dev.skillbill.desktop.core.domain.model.ChatNewTaskContext
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatRecoveryReason
+import dev.skillbill.desktop.core.domain.model.ChatStoreRead
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.NewTaskActionKind
 import dev.skillbill.desktop.core.testing.RecordingDiagnostics
@@ -234,7 +235,7 @@ class ChatStoreTest {
 
     val reader = ChatStore(host, RecordingDiagnostics(), Clock.System)
     assertEquals(completed.newTask, reader.newTaskDrafts().entries.single().newTask)
-    assertEquals(listOf(ChatExchange("first", "first reply"), ChatExchange("second", "second reply")), reader.newTaskHistory("pending-chat"))
+    assertEquals(lines, reader.newTaskHistoryRead("pending-chat").let { (it as ChatStoreRead.Value).value })
     assertEquals("kept", Json.parseToJsonElement(file.readText()).jsonObject.getValue("custom_source").jsonPrimitive.content)
   }
 
@@ -376,6 +377,35 @@ class ChatStoreTest {
   }
 
   @Test
+  fun `unsupported saved agent is normalized without losing its chat or metadata`() {
+    val diagnostics = RecordingDiagnostics()
+    val clock = object : Clock {
+      override fun now() = Instant.fromEpochMilliseconds(10_000)
+    }
+    val file = File(host.userHome, "$CHAT_STORE_PATH/retired.json")
+    file.parentFile.mkdirs()
+    file.writeText(
+      """{"session_id":"retired","execution_id":"wf-1","agent_id":"retired-agent","model":"kept-model","effort":"high","profile":"/profiles/kept","updated_at_ms":1,"summary":"kept summary","agent_session":"kept-session","lines":[{"role":"Operator","text":"keep these lines"},{"role":"Agent","text":"reply"}]}""",
+    )
+    assertTrue(file.setLastModified(clock.now().toEpochMilliseconds()))
+
+    val store = ChatStore(host, diagnostics, clock)
+    val restored = store.savedChats("wf-1").entries.single()
+
+    assertEquals("unavailable", restored.agent.agentId)
+    assertEquals("kept-model", restored.agent.model)
+    assertEquals("high", restored.agent.effort)
+    assertEquals("/profiles/kept", restored.agent.profile)
+    assertEquals("kept summary", restored.summary)
+    assertEquals(listOf("keep these lines", "reply"), restored.lines.map { it.text })
+    assertEquals(listOf("chat.store_unsupported_agent_normalized"), diagnostics.categories)
+    assertTrue(store.saveSummary("retired", "updated summary", Instant.fromEpochMilliseconds(2)))
+    assertEquals("unavailable", Json.parseToJsonElement(file.readText()).jsonObject.getValue("agent_id").jsonPrimitive.content)
+    assertEquals("unavailable", store.savedChats("wf-1").entries.single().agent.agentId)
+    assertEquals(listOf("chat.store_unsupported_agent_normalized", "chat.store_unsupported_agent_normalized"), diagnostics.categories)
+  }
+
+  @Test
   fun `old chat lines without actions restore empty action metadata and malformed actions are recorded`() {
     val diagnostics = RecordingDiagnostics()
     val file = File(host.userHome, "$CHAT_STORE_PATH/legacy.json")
@@ -426,7 +456,7 @@ class ChatStoreTest {
   }
 
   @Test
-  fun `pending new-task turn index counts action-only replies`() {
+  fun `new-task replay history stops before the pending turn`() {
     val store = ChatStore(host, RecordingDiagnostics(), Clock.System)
     val draft = entry("pending", 10).copy(
       executionId = null,
@@ -439,7 +469,38 @@ class ChatStoreTest {
     )
     store.saveChat(draft)
 
-    assertEquals(listOf(ChatExchange("make a plan", "")), store.newTaskHistory("pending"))
+    assertEquals(listOf(
+      ChatHistoryLine(ChatHistoryRole.Operator, "make a plan"),
+      ChatHistoryLine(ChatHistoryRole.Agent, "", actions = listOf(ChatSuggestedAction("Review", "Review", ChatPermissionMode.ReadOnly))),
+    ), (store.newTaskHistoryRead("pending") as ChatStoreRead.Value).value)
+  }
+
+  @Test
+  fun `legacy replay array is ignored and removed on save while chat metadata survives`() {
+    val file = File(host.userHome, "$CHAT_STORE_PATH/legacy-exchanges.json")
+    file.parentFile.mkdirs()
+    file.writeText(
+      """{"session_id":"legacy-exchanges","execution_id":"wf-1","agent_id":"codex","model":"kept-model","effort":"high","profile":"/profiles/kept","updated_at_ms":1,"agent_session":"kept-session","summary":"kept summary","summary_source_updated_at_ms":1,"lines":[{"role":"Operator","text":"keep this line"}],"exchanges":[{"operator":"old prompt","agent":"old reply"}]}""",
+    )
+    val store = ChatStore(host, RecordingDiagnostics(), Clock.System)
+    val restored = store.savedChats("wf-1").entries.single()
+
+    assertEquals("kept-model", restored.agent.model)
+    assertEquals("high", restored.agent.effort)
+    assertEquals("/profiles/kept", restored.agent.profile)
+    assertEquals("kept summary", restored.summary)
+    assertEquals(listOf("keep this line"), restored.lines.map { it.text })
+    assertTrue(store.saveChat(restored))
+    assertTrue(store.saveChat(restored))
+
+    val saved = Json.parseToJsonElement(file.readText()).jsonObject
+    assertEquals(false, "exchanges" in saved)
+    assertEquals("kept-session", saved.getValue("agent_session").jsonPrimitive.content)
+    assertEquals("kept summary", saved.getValue("summary").jsonPrimitive.content)
+    assertEquals("kept-model", saved.getValue("model").jsonPrimitive.content)
+    assertEquals("high", saved.getValue("effort").jsonPrimitive.content)
+    assertEquals("/profiles/kept", saved.getValue("profile").jsonPrimitive.content)
+    assertEquals(listOf(ChatHistoryLine(ChatHistoryRole.Operator, "keep this line")), ChatStore(host, RecordingDiagnostics(), Clock.System).savedChats("wf-1").entries.single().lines)
   }
 
   // A conversation save that rebuilt the record would wipe the summary the background writer stored, and a malformed

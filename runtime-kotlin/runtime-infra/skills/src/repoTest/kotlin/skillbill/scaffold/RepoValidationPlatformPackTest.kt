@@ -118,27 +118,6 @@ class RepoValidationPlatformPackTest {
   }
 
   @Test
-  fun `repo validation rejects checked-in generated junie native agent artifact`() {
-    val repoRoot = Files.createTempDirectory("skillbill-native-agent-junie-checked-in")
-    createRepoValidationSkillFixture(repoRoot)
-    writeNativeAgentFixture(repoRoot.resolve("skills/skill-bill"), "bill-code-review-worker")
-    val generatedJunie = repoRoot.resolve("skills/skill-bill/junie-agents/bill-code-review-worker.md")
-    Files.createDirectories(generatedJunie.parent)
-    Files.writeString(generatedJunie, "checked-in junie file\n")
-
-    val report = RepoValidationRuntime.validateRepo(repoRoot, testNativeAgentCompositionContext(repoRoot))
-
-    assertFalse(report.passed)
-    assertTrue(
-      report.issues.any {
-        it.contains("junie-agents/bill-code-review-worker.md") &&
-          it.contains("must not be checked in")
-      },
-      report.issues.joinToString("\n"),
-    )
-  }
-
-  @Test
   fun `repo validation rejects bare orchestration path token in skill content_md`() {
     val repoRoot = Files.createTempDirectory("skillbill-orchestration-path-in-skill")
     createRepoValidationSkillFixture(repoRoot)

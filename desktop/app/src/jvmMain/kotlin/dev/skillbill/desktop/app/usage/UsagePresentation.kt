@@ -1,6 +1,7 @@
 package dev.skillbill.desktop.app.usage
 
 import dev.skillbill.desktop.core.designsystem.usage.UsageUiMeter
+import dev.skillbill.desktop.core.designsystem.component.agentDisplayName
 import dev.skillbill.desktop.core.designsystem.usage.UsageUiState
 import dev.skillbill.desktop.core.domain.usage.model.DecimalQuantity
 import dev.skillbill.desktop.core.domain.usage.model.PartialUsageField
@@ -32,7 +33,7 @@ internal fun UsageProvider.agentId() = when (this) {
 /** Agent name plus its allowance windows in the repository's ranked order. One short line replaces the meters when there are none. */
 internal fun UsageSidebarState.toUsageUiState(now: Instant): UsageUiState {
   // An agent without a usage source shows its name and nothing else: no meters, no "no data" line.
-  nameOnlyAgent?.let { return UsageUiState(provider = it.replaceFirstChar(Char::uppercase), agentId = it, nameOnly = true) }
+  nameOnlyAgent?.let { return UsageUiState(provider = agentDisplayName(it), agentId = it, nameOnly = true) }
   val meters = result?.meters().orEmpty().map { it.toUiMeter(now) }
   return UsageUiState(
     provider = provider?.uiName() ?: "Usage",

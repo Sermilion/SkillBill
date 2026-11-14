@@ -14,6 +14,7 @@ import dev.skillbill.desktop.core.domain.model.ChatToolCall
 import dev.skillbill.desktop.core.domain.model.OperationCardDetailsView
 import dev.skillbill.desktop.core.domain.model.OperationCardReference
 import dev.skillbill.desktop.core.domain.model.OperationCardView
+import dev.skillbill.desktop.core.designsystem.component.agentDisplayName
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -24,6 +25,7 @@ import kotlin.time.Clock
 private const val SAVED_LINES = 10
 
 internal const val STOPPED_NOTICE = "Stopped"
+internal const val UNAVAILABLE_AGENT_NOTICE = "This chat's agent is no longer available. Pick an agent to continue."
 
 internal const val START_AGAIN_SUFFIX = "Send another message to start again."
 
@@ -428,6 +430,13 @@ internal class ChatThread(private val clock: Clock) {
     }
   }
 
+  fun showUnavailableAgentNotice() {
+    messages.update { list ->
+      if (agentSupportedState.value || list.any { it is ChatMessage.Notice && it.text == UNAVAILABLE_AGENT_NOTICE }) list
+      else list + ChatMessage.Notice(UNAVAILABLE_AGENT_NOTICE)
+    }
+  }
+
   // A card stays where it was requested: output after it finishes the reply above and continues in a new reply below it.
   private fun updateStreaming(change: (ChatMessage.Agent) -> ChatMessage.Agent) = messages.update { list ->
     val last = list.lastOrNull()
@@ -462,7 +471,10 @@ internal fun ChatThread.show(agent: ChatAgent?, event: ChatEvent) {
       endStreaming()
       append(
         if (event.failure == ChatFailure.AgentUnsupported) {
-          ChatMessage.Notice("Chat is not available for agent ${event.detail ?: agent?.agentId} yet.")
+          val detail = event.detail
+          val agentId = agent?.agentId
+          val reason = if (detail == null || detail == agentId) agentDisplayName(agentId) else detail
+          ChatMessage.Notice("Chat is not available for agent $reason yet.")
         } else {
           ChatMessage.Error(event.failure, event.detail ?: event.failure.name)
         },

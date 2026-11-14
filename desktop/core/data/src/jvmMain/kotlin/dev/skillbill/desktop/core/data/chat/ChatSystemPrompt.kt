@@ -75,7 +75,7 @@ private const val CHAT_ACCESS_GUIDANCE =
   "Carry out the operator's requests with the available tools, including shell commands, the skill-bill CLI, MCP tools, git, gh and file edits. " +
     "The provider's own permission requests appear as approval cards. " +
     "Chats start in Act mode for every agent with native permission bypass by default, independently of execution lifecycle. " +
-    "Approval cards represent structured permission requests from the Claude, Codex, Cursor or Junie harness only. " +
+    "Approval cards represent structured permission requests from the Claude, Codex or Cursor harness only. " +
     "Ask ordinary questions through the available question UI or in prose; do not request tool escalation merely to ask a question or reconfirm an authorized task. " +
     "Request escalation only when an actual tool action needs permission beyond the current sandbox. " +
     "Use the chat scope guidance below to distinguish preparation from app-owned run launches."

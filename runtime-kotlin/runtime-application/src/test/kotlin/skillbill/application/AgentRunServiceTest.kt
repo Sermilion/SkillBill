@@ -45,14 +45,14 @@ class AgentRunServiceTest {
     val result =
       service.launch(
         AgentRunStartRequest(
-          invokedAgentId = "junie",
+          invokedAgentId = "cursor",
           configuredAgentOverrideId = null,
           skillRunRequest = skillRunRequest(),
         ),
       )
 
-    assertEquals(SupportedAgent.JUNIE, result.resolution.effectiveAgent)
-    assertEquals("junie", launcher.requests.single().agentId)
+    assertEquals(SupportedAgent.CURSOR, result.resolution.effectiveAgent)
+    assertEquals("cursor", launcher.requests.single().agentId)
   }
 
   @Test

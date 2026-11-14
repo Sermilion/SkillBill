@@ -372,10 +372,10 @@ class DefaultPhaseRunnerTest {
     assertNotSame(AgentRunMcpStartupProbe.NONE, capable.mcpStartupProbe)
     assertEquals(LiveChecksAvailability.UNAVAILABLE, liveChecks("phr-claude"))
 
-    val incapable = launch(PhaseLiveChecksLaunch("phr-junie", agentCapable = false))
+    val incapable = launch(PhaseLiveChecksLaunch("phr-incapable", agentCapable = false))
     assertNull(incapable.validationCheckInvocationId)
     assertSame(AgentRunMcpStartupProbe.NONE, incapable.mcpStartupProbe)
-    assertEquals(LiveChecksAvailability.UNAVAILABLE, liveChecks("phr-junie"))
+    assertEquals(LiveChecksAvailability.UNAVAILABLE, liveChecks("phr-incapable"))
 
     val other = launch(null)
     assertNull(other.validationCheckInvocationId)

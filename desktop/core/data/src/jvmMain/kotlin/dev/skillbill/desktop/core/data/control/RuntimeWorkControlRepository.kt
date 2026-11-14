@@ -196,11 +196,9 @@ class RuntimeWorkControlRepository(
       ReservationAdmission.ChangedSession -> return ControlOutcome.Refused(ControlRejection.CHANGED_TARGET, null)
       is ReservationAdmission.Reserved -> admission.handle
     }
-    // A run with a recorded agent keeps it; the default agent only fills a launch that names none.
-    val launchAgent = agentId ?: if (item.agentId == null) readDefaultAgent() else null
     return reserved(handle) {
       runControl(item, "control_launch") { runtime, target ->
-        runtime.workControlService.request(target, WorkControlAction.LAUNCH, launchAgent, qaDevice).toControlOutcome(ControlKind.LAUNCH, diagnostics)
+        runtime.workControlService.request(target, WorkControlAction.LAUNCH, agentId, qaDevice).toControlOutcome(ControlKind.LAUNCH, diagnostics)
       }
     }
   }

@@ -125,21 +125,21 @@ class ChatSummarizerTest {
     assertEquals("Investigate failing desktop builds and fix dependency resolution across all", store.savedFor("long-title")?.summary)
   }
 
-  // A failed call that saves its partial reply as the summary, or a Junie chat that launches an agent with no cheap model, both cost the operator.
+  // A failed call that saves its partial reply as the summary, or an unsupported agent that launches, costs the operator.
   @Test
   fun `a failed turn and an unsupported agent write nothing and only the supported one launches`() = runTest {
     val summarizer = summarizer()
     store.saveChat(entry("fails", "claude", 1))
-    store.saveChat(entry("junie", "junie", 2))
+    store.saveChat(entry("retired", "retired-agent", 2))
     reply = { listOf(claudeDelta("Partial answer about"), ChatProcessOutput.Exited(1, "rate limited")) }
 
     summarizer.request("fails")
-    summarizer.request("junie")
+    summarizer.request("retired")
     runCurrent()
 
     assertEquals(1, commands.size)
     assertEquals(null, store.savedFor("fails")?.summary)
-    assertEquals(null, store.savedFor("junie")?.summary)
+    assertEquals(null, store.savedFor("retired")?.summary)
     assertTrue("chat.summary_failed" in diagnostics.categories)
     assertTrue("chat.summary_unsupported_agent" in diagnostics.categories)
   }

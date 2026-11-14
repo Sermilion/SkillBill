@@ -72,7 +72,16 @@ with tempfile.TemporaryDirectory(prefix="skillbill-packaged-smoke-") as director
         for class_file in classes.rglob("*.class"):
             archive.write(class_file, class_file.relative_to(classes))
     content = cfg.read_text()
-    content = content.replace("[JavaOptions]", "app.classpath=$APPDIR/packaged-data-smoke.jar\n\n[JavaOptions]")
+    classpath_lines = [line for line in content.splitlines() if line.startswith("app.classpath=")]
+    if len(classpath_lines) != 1:
+        raise SystemExit(f"Expected one launcher classpath, found {len(classpath_lines)}.")
+    classpath_line = classpath_lines[0]
+    if not classpath_line.endswith("$APPDIR/*"):
+        content = content.replace(
+            classpath_line,
+            f"{classpath_line}{os.pathsep}$APPDIR/packaged-data-smoke.jar",
+            1,
+        )
     content += (
         f"\njava-options=-Dskillbill.desktop.mainClass=dev.skillbill.desktop.app.smoke.PackagedDataSmoke"
         f"\njava-options=-Duser.home={home}"

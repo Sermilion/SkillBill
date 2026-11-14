@@ -76,7 +76,7 @@ private fun bootstrapPreviousNativeAgentLinkInventory(
   val bootstrap =
     NativeAgentLinkInventoryBootstrap.bootstrap(request.home, trustedRoots, request.sourceRoot, request.environment)
   val preservedReplacements =
-    bootstrap.remove.filter { it.provider == request.provider }.filter { entry ->
+    bootstrap.remove.filter { entry ->
       NativeAgentLinkInventoryBootstrap.removeIfStillManaged(
         entry,
         request.home,

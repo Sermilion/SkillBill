@@ -65,7 +65,7 @@ Do not commit these under `skills/`:
   `telemetry-contract.md`, and stack-routing, review, delegation, add-on, or
   Android support pointer files
 - provider-specific generated native-agent directories such as
-  `claude-agents/`, `codex-agents/`, `junie-agents/`, or
+  `claude-agents/`, `codex-agents/`, and
   `cursor-agents/`
 - extra organization files such as `patterns.md`, `reference.md`, or
   `audit-rubrics.md`
@@ -521,7 +521,6 @@ cache, then links them into runtime-specific directories:
 
 - Claude: Markdown/YAML custom agents under `~/.claude/agents/`
 - Codex: TOML custom agents under `~/.codex/agents/`
-- Junie: Markdown/YAML custom agents under `~/.junie/agents/`
 - Cursor: Markdown/YAML custom agents under `~/.cursor/agents/`
 
 `~/.agents/agents/` exists only as a Skill Bill compatibility path for Codex
@@ -682,8 +681,8 @@ Do not:
 - commit `skills/<skill>/SKILL.md`
 - commit support pointer files under `skills/<skill>/`
 - split ordinary skill guidance into extra files under `skills/<skill>/`
-- commit `claude-agents/`, `codex-agents/`,
-  `junie-agents/`, or `cursor-agents/`
+- commit `claude-agents/`, `codex-agents/`, and
+  `cursor-agents/`
 - manually edit generated runtime staging directories as source
 - rely on direct source symlinks for content-managed skills
 

@@ -9,7 +9,7 @@ Acceptance criteria: 2/2 implemented
 
 ## [2026-11-11] SKILL-530 live chat steering and shared recovery
 Areas: desktop/feature/chat, desktop/feature/chat/newtask, desktop/core/domain, desktop/core/data/chat, desktop/core/testing, desktop/app, runtime-kotlin/runtime-infra/launcher
-- Claude and Codex Send now deliver queued text and images into active work in both chat types, preserving task context, reply collection and approvals. Stop remains explicit; Cursor and Junie retain their previous policy.
+- Claude and Codex Send now deliver queued text and images into active work in both chat types, preserving task context, reply collection and approvals. Stop remains explicit; Cursor and the retired fourth agent retain their previous policy.
 - reusable: ChatThread claims original queue entries once in order. ChatSteeringDelivery coordinates both consumers, retained delivery updates and retirement through the typed repository boundary.
 - Known rejection or proven non-delivery restores originals before later additions, with a visible reason and diagnostic. Provider policy stays separate from current live availability.
 - Possible transmission without acknowledgement retains visible text and images as uncertain and blocks automatic drain. Late matching acknowledgement accepts without replay; warned Retry retires the old identity before restoring originals. Discard requires confirmation.

@@ -1,17 +1,15 @@
-## [2026-11-13] SONA-21 chat without a repository
-Areas: desktop/core/domain, desktop/core/data/chat, desktop/core/data/control, desktop/feature/chat and newtask, docs/runtime-command-guidance.md
-- MEDIUM feature. New task separates workingDirectory from nullable selectedRepositoryRoot. Window-supplied HostEnvironment.userHome supports ordinary chat, tools, file creation, saves and resume without selecting home through Git ancestry; branch and changes features require actual selection.
-- ChatStore context version 1 preserves explicit null selection. Legacy bound drafts migrate atomically before projection, retaining source fields, identities, provider bindings, transcript, summaries and metadata. Typed failures retain unreadable originals and protect them from updates and orphan sweeping.
-- One terminal skillbill-repository block proposes an exact path after successful completion. Guidance covers requested creation, cloning and StudioProjects lookup. Invalid metadata produces diagnostics and a visible notice; failed or stale validation retains selection and user files.
-- reusable: manual and chat candidates share canonical exact-root validation through RepositoryBranchesRepository. Project lookup supplies display metadata only; an identical root retains the session and accepted key.
-- Manual selection stays available after chat starts. Replacement waits for accepted saves and provider shutdown, persists before publication, and restores the old context on failure. Candidate settlement holds queue draining and carries ordinary queued text and images through replacement or recovery.
-- Repository changes retain visible conversation as inactive history and clear accepted keys, branch, offer, changes and repository-specific MCP state. Old operation requests, observations and callbacks lose authority after replacement commits.
-- reusable: OperationCardCoordinator accepts caller-owned admission checks and rechecks after saves. New task starts and card decisions require current selection and originating context/database authority; refusal never adopts a replacement database session or retries on selection.
-- RuntimeWorkControlRepository validates canonical selected-root equality before all nine NewTaskKind dispatches. Database changes take refusal precedence; only GoalRun and PlanOnly apply new-work base-branch policy.
-- Compatibility: legacy root-only constructors remain repository-bound, repositoryRoot remains the provider/approval directory, and execution-chat scope is unchanged. Changed-home resume stages a fresh provider session while retaining the original saved draft.
-- Limits: admission establishes validity at dispatch; later external deletion remains possible. No global CLI admission or repository-management service. The dedicated all-kind data-admission regression matrix is absent. Supplied capability_absent warning records code changes after QA settled; final-tree QA and native macOS/Windows behavior remain unverified.
+## [2026-11-13] SONA-19 unavailable-agent compatibility
+Areas: core/domain, core/data/chat, core/designsystem, feature/chat, feature/detail, feature/specs, app/usage, build-logic
+- MEDIUM feature retains saved chats with unsupported non-null agent ids as unavailable, preserving transcript, model, effort, profile, summary and session data. Ordinary saves persist the sentinel; normalization diagnostics omit raw ids and chat content.
+- reusable: agentDisplayName and neutral avatar presentation cover chips, transcripts, resume lists, run details, specs and usage. Chat registers only Claude, Codex and Cursor; runtime-derived menus can also offer OpenCode and Devin.
+- Restored execution and New Task chats keep their saved lines and show one pick-an-agent notice. Support checks gate Send, Send now, admission and queue drain until the operator chooses a supported agent.
+- Removed the retired fourth agent's transport and discovery paths. Legacy exchanges arrays are ignored on read and omitted by the next atomic save; remaining chat data stays intact.
+- reusable: compactLauncherClasspath moves the Linux packaged launcher's ordered dependencies into launcher-classpath.jar's manifest while preserving main class, JVM options and bundled jars.
+- Accepted QA repair gives both expected agent lists in PlanActionsTest an explicit nullable element type, matching the captured lists.
+- Limits: no startup bulk rewrite or retired-provider file cleanup. Validation changed code after QA settled, so QA does not cover the final tree. Native Debian/RPM packaging tools and macOS/Windows hosts were unavailable.
+- Acceptance discrepancy: runtime-derived agent choices still exceed the spec's three-agent set. Parent AC-002, AC-004 and AC-005 remain incomplete.
 Feature flag: N/A
-Acceptance criteria: 5/5 implemented
+Acceptance criteria: 2/5 parent criteria implemented across the affected boundaries
 
 ## [2026-11-13] SONA-20 desktop Finalize controls
 Areas: desktop/feature/detail and work; desktop/core/data, domain and ui; desktop/app/command; design/linear-study; docs/runtime-command-guidance.md
@@ -59,7 +57,7 @@ Acceptance criteria: 3/3 placement subtask criteria implemented; 5/5 parent crit
 
 ## [2026-11-08] SKILL-520 contextual usage limits
 Areas: desktop/app/usage, desktop/app/shell, desktop/app/di, desktop/core/domain/usage, desktop/core/data/usage, desktop/core/data/chat, desktop/core/data/session, desktop/core/ui, desktop/core/designsystem, desktop/feature/chat
-- MEDIUM feature. Added a usage card above Specs in the fixed sidebar footer and a 316 dp details popup. It follows the selected New task chat or open run; Work and History remember a provider per window. Junie and unknown contextual providers hide the card.
+- MEDIUM feature. Added a usage card above Specs in the fixed sidebar footer and a 316 dp details popup. It follows the selected New task chat or open run; Work and History remember a provider per window. The retired fourth agent and unknown contextual providers hide the card.
 - Typed usage separates unverified profile lookups, verified account/workspace subjects and session-only status. Exact decimal amounts retain units, currency, periods and observation times; missing data cannot imply unlimited allowance or request permission. UsageRepository and UsageObservationSink are reusable contracts.
 - Codex capability acquisition uses the selected execution environment and a separate bounded ChatProcessLauncher mode. UTF-8 input has a 256 KiB line cap, 1 MiB response budget and 32-message queue; startup/initialize and reads have deadlines, and one application-wide startup slot stays owned through cleanup.
 - Production numeric admission remains closed. Codex reports explicit capability/identity outcomes, Claude supplies only nonnumeric status from existing desktop sessions, and Cursor has no supported personal snapshot. Fixtures do not authorize a production numeric source.
@@ -82,7 +80,7 @@ Areas: desktop/app, desktop/core/data chat, desktop/core/domain, desktop/core/de
 - Transcript input keeps the first operator line and newest operator/agent lines within 12,000 characters, with 2,000 per line. Output takes the first nonblank line, strips markers and quotes, and cuts at a word within 200 characters.
 - QA repairs append an actual operator/agent turn before stale-summary assertions in ChatStoreTest and ChatSummarizerTest. A timestamp-only resave no longer represents a changed conversation.
 - DesktopLauncher defaults Skiko to SOFTWARE on Linux before Compose starts and honors explicit skiko.renderApi and SKIKO_RENDER_API overrides.
-- Limits: Junie and unmapped agents receive no summary; CLI sessions the app never saved keep fallback titles. Live summary QA needs an installed agent, which the isolated home lacks. The store format and repository API additions preserve existing callers.
+- Limits: The retired fourth agent and unmapped agents receive no summary; CLI sessions the app never saved keep fallback titles. Live summary QA needs an installed agent, which the isolated home lacks. The store format and repository API additions preserve existing callers.
 Feature flag: N/A
 Acceptance criteria: 5/5 implemented
 
@@ -155,10 +153,10 @@ Acceptance criteria: 5/5 implemented
 Areas: desktop/core/data, desktop/core/domain, desktop/core/testing, desktop/feature/chat, desktop/feature/terminal, desktop/feature/changes, desktop/feature/detail
 - A goal worktree row reads as Removed when its directory is gone from disk, even if the runtime reports Active or Retained. The shared mapper keeps path, retention and main-checkout outcome fields, and the detail header explains removal by outcome.
 - Chat resolves its root from the work item: the worktree if it exists, else the repository root. A live session in a vanished worktree ends and resumes at the repository root; the Claude transport restarts a process whose directory changed. reusable
-- ExecutionChatRepository.moveSessions moves saved Claude session files and rewrites the first-line cwd of Codex sessions, returning claude, codex and failed counts. Started Claude or Codex chats keep their session id; Cursor, Junie and failed moves start fresh.
+- ExecutionChatRepository.moveSessions moves saved Claude session files and rewrites the first-line cwd of Codex sessions, returning claude, codex and failed counts. Started Claude or Codex chats keep their session id; Cursor, the retired fourth agent and failed moves start fresh.
 - The chat notice names the main checkout and says whether the chat continues or restarts, plus a not-switched notice when the outcome was skipped or failed. Resume and the history picker follow the removal first.
 - The terminal opens at the repository root; the changes window opens committed-range files only while the main checkout is on the goal's branch.
-- Limits: existence is checked once per row at mapping time; Cursor and Junie sessions never move; the Codex scan stops at the existing limit; the terminal root has no test.
+- Limits: existence is checked once per row at mapping time; Cursor and the retired fourth agent sessions never move; the Codex scan stops at the existing limit; the terminal root has no test.
 Feature flag: N/A
 Acceptance criteria: 11/11 implemented
 
@@ -205,7 +203,7 @@ Areas: desktop/core/data chat
 - ChatProcesses.destroyTree snapshots descendants, sends SIGTERM, waits STOP_GRACE_MS (3s), force-kills survivors, records chat.process_force_killed once, then waits FORCE_WAIT_MS (1s). live.remove makes a second destroyTree from killer plus outer finally a no-op. The JVM shutdown hook uses signalTree, SIGTERM with no wait.
 - runProcess reads stdout on daemon thread chat-stdout through a buffered Channel. Cancel closes the channel and still runs destroyTree, even if an orphan holds the pipe.
 - ClaudeChatTransport.stopping joins the prior session job up to STOP_WAIT_MS (5s) before registered. Timeout records chat.stop_wait_expired and opens anyway. Different session ids do not wait on each other.
-- JunieChatTransport.onCompletion saves a cancelled execution turn when the reply is non-blank and scope is not NewTask.
+- The retired fourth agent's chat transport saves a cancelled execution turn in onCompletion when the reply is non-blank and scope is not NewTask.
 - Limits: AC-002 has no unit test because the holder case differs only in elapsed time. A descendant still cleaning up after SIGTERM can be force-killed once the parent exits. A blocked stdin write can still delay stop. Real CLI resume after kill stays with QA.
 Feature flag: N/A
 Acceptance criteria: 4/4 implemented
@@ -224,10 +222,10 @@ Acceptance criteria: 2/2 implemented
 Areas: desktop/core/domain, desktop/core/data
 - ChatImage (bytes, mediaType) is a plain class with content-based equals and hashCode. ChatTurnRequest gains images as its last, defaulted parameter, so existing callers are unchanged. (reusable)
 - Claude turns send user content as an array: a text block (omitted when the text is blank) then one base64 image block per image, in order. A turn with no images still sends plain string content, as before.
-- Codex, Cursor and Junie cannot take inline bytes. Each image is written to a temp file and the prompt gains an "Attached images" footer with one "[Image #N] <path>" line per image; the footer stands alone when the text is blank. turnWithImages in ChatImageFiles.kt wraps those transports and does no IO without images. (reusable)
+- Codex, Cursor and the retired fourth agent cannot take inline bytes. Each image is written to a temp file and the prompt gains an "Attached images" footer with one "[Image #N] <path>" line per image; the footer stands alone when the text is blank. turnWithImages in ChatImageFiles.kt wraps those transports and does no IO without images. (reusable)
 - Files live under the system temp dir in skill-bill-chat-images/<sanitized session id>/, are .png unless the media type is image/jpeg, and are reported by real path. Each of the three transports deletes its session directory in end(sessionId); a session id resolving outside the root is rejected on write and ignored on delete. Deletion does not follow symlinks.
 - A write failure emits ChatEvent.Failed(ProcessFailed, "Could not save a pasted image: ...") and starts no process; the next text-only turn runs normally.
-- Junie's resent history keeps only the typed text, never the footer or temp paths. The Claude session reader keeps only text blocks, so image blocks do not reach the transcript.
+- The retired fourth agent's resent history keeps only the typed text, never the footer or temp paths. The Claude session reader keeps only text blocks, so image blocks do not reach the transcript.
 - Limits: Claude CLI acceptance of image blocks was not exercised against the real CLI. Session files persist until the transport's end or JVM exit.
 Feature flag: N/A
 Acceptance criteria: 4/4 implemented
@@ -269,14 +267,14 @@ Acceptance criteria: 4/4 implemented
 
 ## [2026-10-31] SKILL-453 execution agent chat panel
 Areas: desktop/core/domain, desktop/core/data, desktop/core/ui, desktop/core/designsystem, desktop/core/testing, desktop/feature/chat, desktop/feature/detail, desktop/app, desktop/gradle
-- ExecutionChatRepository and the per-agent ChatTransport seam stream chat events; Claude, Codex, Cursor and Junie have transports. Agent and reasoning model resolve from the execution and configuration, with recorded fallbacks. reusable
-- Claude and other transports run CLI turns through a shared launcher; cancellation destroys the process, shutdown destroys live processes, and stderr draining is bounded. Sessions resume where supported; Junie resends earlier exchanges.
+- ExecutionChatRepository and the per-agent ChatTransport seam stream chat events; Claude, Codex, Cursor and the retired fourth agent have transports. Agent and reasoning model resolve from the execution and configuration, with recorded fallbacks. reusable
+- Claude and other transports run CLI turns through a shared launcher; cancellation destroys the process, shutdown destroys live processes, and stderr draining is bounded. Sessions resume where supported; the retired fourth agent resends earlier exchanges.
 - ChatWorkspace keeps an in-memory session per execution, sends a full snapshot first and diffs later, and owns pause, act and resume. Closing a tab discards its session. reusable
 - ReadOnly and Act select the scope prompt and pause-and-act behavior, but do not enforce tool restrictions. Agents run with execution permissions, including Claude's permission bypass. This departs from the spec's hard allowlist and read-only requirements.
 - The pane shares the right slot with Specs, opens from the detail header or mod+L, and renders streamed Markdown, tool groups and suggested actions. ChatCommands and FloatingPane are reusable.
 - TerminalPaneChrome accepts chat-specific labels and controls; SbInput supports multiline input. FakeExecutionChatRepository supports chat consumers. reusable
 - The packaged launcher prioritizes the app jar so its patched Linux tray library loads, and the tray script maps right-click to the click callback.
-- Limits: chat state is not persisted by the app; Codex and Cursor stream shapes were not checked against live CLIs and Junie was unavailable. No Bedrock or Vertex model remapping. CHAT_SHORTCUT uses os.name in commonMain and relies on the desktop JVM target.
+- Limits: chat state is not persisted by the app; Codex and Cursor stream shapes were not checked against live CLIs and the retired fourth agent was unavailable. No Bedrock or Vertex model remapping. CHAT_SHORTCUT uses os.name in commonMain and relies on the desktop JVM target.
 Feature flag: N/A
 Acceptance criteria: 2/4 implemented; criteria 1 and 3 lack the specified hard permission restrictions.
 

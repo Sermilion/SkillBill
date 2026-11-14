@@ -133,7 +133,6 @@ class InstallNativeAgentLinkApplyCursorTest : InstallNativeAgentLinkApplyTestSup
     seedHarborAddonPack(fixture.repoRoot)
     Files.createDirectories(fixture.home.resolve(".claude"))
     Files.createDirectories(fixture.home.resolve(".codex"))
-    Files.createDirectories(fixture.home.resolve(".junie"))
     Files.createDirectories(fixture.home.resolve(".cursor"))
     Files.createDirectories(fixture.home.resolve(".config/devin"))
     val result =
@@ -463,7 +462,7 @@ class InstallNativeAgentLinkApplyCursorTest : InstallNativeAgentLinkApplyTestSup
     val targetDir = Files.createTempDirectory("skillbill-native-readonly-target").also(tempDirs::add)
     val managedRoot = Files.createTempDirectory("skillbill-native-managed-root").also(tempDirs::add)
     val newRoot = Files.createTempDirectory("skillbill-native-new-root").also(tempDirs::add)
-    val oldSource = NativeAgentProvider.Junie.cacheArtifactPath(managedRoot, "bill-worker")
+    val oldSource = NativeAgentProvider.Devin.cacheArtifactPath(managedRoot, "bill-worker")
     Files.createDirectories(oldSource.parent)
     val newSource = newRoot.resolve("bill-worker.md")
     Files.writeString(oldSource, "old")
@@ -490,9 +489,9 @@ class InstallNativeAgentLinkApplyCursorTest : InstallNativeAgentLinkApplyTestSup
         runCatching {
           installNativeAgentFile(
             source = newSource,
-            agentTarget = AgentTarget("junie", targetDir.toFileLocation()),
+            agentTarget = AgentTarget("devin", targetDir.toFileLocation()),
             managedSourceRoots = listOf(managedRoot),
-            ownership = NativeAgentLinkOwnership(managedRoot, NativeAgentProvider.Junie, "bill-worker", oldSource),
+            ownership = NativeAgentLinkOwnership(managedRoot, NativeAgentProvider.Devin, "bill-worker", oldSource),
           )
         }.exceptionOrNull()
 

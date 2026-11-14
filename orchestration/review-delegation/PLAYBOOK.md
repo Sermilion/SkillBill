@@ -126,7 +126,3 @@ Governed add-ons may narrow or enrich delegated review instructions only after t
 - If the parent answers a lane's rubric in its own context, that is an inline review and must be reported as such — not as delegated coverage.
 - Distinguish Cursor entry points when launch fails. The Cursor IDE agent UI can spawn installed user-scope or project-scope Cursor agent specialists by name. The Cursor `agent` CLI — and any Cursor session whose `Task` tool only exposes built-in types such as `generalPurpose` — cannot. When those specialist files are installed but this session cannot launch them by name, stop and report that delegated specialist lanes cannot run on the Cursor `agent` CLI harness: re-run `mode:delegated` from the Cursor IDE agent chat, or use `mode:inline` here. Do not silently downgrade to inline, substitute a built-in worker, or claim delegated coverage from the parent context.
 - If the Cursor harness cannot launch subagents for another reason (subagents unavailable in the IDE surface, or no installed agent matching a selected lane), stop and report that delegated review is required for this scope but unavailable here. Do not silently downgrade to inline.
-
-## Junie
-
-Junie delegated review is intentionally unsupported.

@@ -40,8 +40,8 @@ internal const val ACT_PREFIX =
 internal const val ALREADY_RUNNING_NOTICE = "The execution is already running again; the app did not relaunch it."
 internal const val REMOVED_WORKTREE_CHAT_NOTICE = "This goal's worktree was removed. New turns run in"
 private const val REMOVED_EXECUTION_CHAT_NOTICE = "worktree was removed when it finished. New turns run in"
-internal const val SESSIONS_MOVED_SENTENCE = "Earlier Claude and Codex chats were moved there and can be resumed; Cursor and Junie chats start fresh."
-internal const val NOTHING_TO_MOVE_SENTENCE = "Cursor and Junie chats start fresh."
+internal const val SESSIONS_MOVED_SENTENCE = "Earlier Claude and Codex chats were moved there and can be resumed; Cursor chats start fresh."
+internal const val NOTHING_TO_MOVE_SENTENCE = "Cursor chats start fresh."
 internal const val MOVE_FAILED_SENTENCE = "Some earlier chats could not be moved and start fresh."
 internal const val MAIN_CHECKOUT_NOT_SWITCHED_NOTICE = "The main checkout was not switched to the goal branch"
 
@@ -64,7 +64,7 @@ internal fun isSerializedRemovalNotice(text: String): Boolean {
   return REMOVAL_RESULT_SENTENCES.any { sentence ->
     val ending = ". $sentence"
     body.endsWith(ending) && body.dropLast(ending.length).isNotBlank()
-  }
+  } || LEGACY_REMOVAL_RESULT.matches(body)
 }
 
 internal fun isSerializedMainCheckoutNotice(text: String): Boolean {
@@ -74,7 +74,11 @@ internal fun isSerializedMainCheckoutNotice(text: String): Boolean {
 }
 
 /** Agents whose sessions the move can carry to the selected root; every other agent's chat restarts there. */
-private val CONTINUABLE_AGENTS = setOf("claude", "codex")
+internal val CONTINUABLE_AGENTS = setOf("claude", "codex")
+
+private val LEGACY_REMOVAL_RESULT = Regex(
+  "^.*\\S\\. (?:Earlier Claude and Codex chats were moved there and can be resumed; )?Cursor and [A-Za-z]+ chats start fresh\\.$",
+)
 
 internal data class WorktreeMoveOutcome(val result: SessionMoveResult?) {
   val continuesProviderSession: Boolean get() = result?.failed == 0
@@ -261,7 +265,7 @@ internal class ChatTurns(
     session.append(ChatMessage.Notice(GONE_NOTICE))
   }
 
-  /** Sends [text] with the full snapshot on a first turn and the diff since the last delivered one after that. */
+  /** Sends [text] with the full snapshot for fresh provider sessions, otherwise the diff since the last delivered turn. */
   suspend fun turn(
     session: ChatSession,
     read: ExecutionRead,
@@ -276,7 +280,11 @@ internal class ChatTurns(
     }
     val current = snapshot(read.header, read.detail)
     val delivered = session.delivered
-    val context = if (session.started && delivered != null) diff(delivered, current).render() else current.render()
+    val context = if (session.started && delivered != null) {
+      diff(delivered, current).render()
+    } else {
+      current.render()
+    }
     val prompt = listOfNotNull(prefix, context, text.takeIf { it.isNotBlank() }).joinToString("\n\n")
     return stream(session, agent, read.header, prompt, current, images, cursorMcpDependency)
   }
@@ -291,6 +299,7 @@ internal class ChatTurns(
       session.agentState.value = it
       session.agentSupportedState.value = chat.supports(it.agentId)
       session.thread.showCapability(it)
+      session.thread.showUnavailableAgentNotice()
     }
 
   // A provider session and snapshot count as delivered only after a non-failure update. Refused setup leaves saved history intact.

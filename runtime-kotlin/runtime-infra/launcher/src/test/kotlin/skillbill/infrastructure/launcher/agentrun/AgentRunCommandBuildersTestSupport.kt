@@ -37,7 +37,7 @@ internal fun assertGovernedReviewLaunch(
     assertTrue(
       message.contains("missing capability 'governed-only tooling'") ||
         message.contains("missing capability 'MCP isolation'"),
-      "Junie must name the missing capability, got '$message'",
+      "The builder must name the missing capability, got '$message'",
     )
     return
   }
@@ -51,7 +51,8 @@ internal fun assertGovernedReviewLaunch(
     SupportedAgent.CLAUDE -> assertClaudeGovernedLaunch(built.command)
     SupportedAgent.CODEX -> assertCodexGovernedLaunch(built.command)
     SupportedAgent.CURSOR -> assertCursorGovernedLaunch(built, governed, rawFilesystemTools)
-    else -> error("unexpected provider ${builder.agent.id}")
+    SupportedAgent.OPENCODE, SupportedAgent.DEVIN ->
+      error("${builder.agent.id} must not advertise governed review launch capabilities")
   }
 }
 

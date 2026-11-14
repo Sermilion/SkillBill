@@ -61,7 +61,7 @@ internal class DetailControls(
       ControlsAction.Finalize -> runControl(ui, view, view.finalize, InFlightControl.Finalize, ControlAction.Finalize) { controls.finalize(item) }
       ControlsAction.ImplementPlan -> implementPlan(ui)
       ControlsAction.Launch -> {
-        val agentId = view.agentId
+        val agentId = view.resumeAgentId
         if (agentId == null && view.launch?.enabled == true) {
           mutableState.update { it.copy(agentMenuOpen = true) }
           true
@@ -85,9 +85,10 @@ internal class DetailControls(
 
   private fun implementPlan(ui: DetailUiState): Boolean {
     val key = ui.header.issueKey ?: return false
-    if (runActionsView(ui).implement?.enabled != true) return false
+    val view = runActionsView(ui)
+    if (view.implement?.enabled != true) return false
     return call(InFlightControl.Launch) {
-      val agent = runActionsView(ui).agentId ?: ui.header.agentId
+      val agent = view.implementationAgentId
       val outcome = controls.startGoal(ui.header.repositoryRoot, key, agent)
       if (outcome == ControlOutcome.RequestAccepted) {
         mutableState.update { it.copy(implementationStarted = true) }

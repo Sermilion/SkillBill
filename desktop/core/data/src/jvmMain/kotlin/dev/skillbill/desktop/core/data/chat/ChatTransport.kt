@@ -2,8 +2,8 @@ package dev.skillbill.desktop.core.data.chat
 
 import dev.skillbill.desktop.core.common.di.AppScope
 import dev.skillbill.desktop.core.domain.model.ChatEvent
-import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
 import dev.skillbill.desktop.core.domain.model.ChatStopSettlement
+import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
 import dev.skillbill.desktop.core.domain.model.ChatSteeringPolicy
 import dev.skillbill.desktop.core.domain.model.ChatSteeringRequest
 import dev.skillbill.desktop.core.domain.model.ChatSteeringResult
@@ -68,16 +68,4 @@ interface ChatTransportBindings {
   @Provides
   @IntoSet
   fun cursor(transport: CursorChatTransport): ChatTransport = transport
-
-  @Provides
-  @IntoSet
-  fun junie(transport: JunieChatTransport): ChatTransport = transport
-
-  @Provides
-  @IntoSet
-  fun openCode(transport: OpenCodeChatTransport): ChatTransport = transport
-
-  @Provides
-  @IntoSet
-  fun devin(transport: DevinChatTransport): ChatTransport = transport
 }

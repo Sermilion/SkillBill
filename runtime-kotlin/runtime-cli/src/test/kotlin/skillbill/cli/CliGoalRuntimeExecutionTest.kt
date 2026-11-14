@@ -330,7 +330,7 @@ class CliGoalRuntimeExecutionTest {
           goalPullRequestPort = fixture.pullRequests,
           pullRequestIdentityLookup = OpenPullRequestIdentityLookup(GoalTestWorkflowGitOperations),
           pullRequestChecksLookup = PassingPullRequestChecksLookup,
-          environment = mapOf("CLAUDECODE" to "1", "SKILL_BILL_AGENT" to "junie"),
+          environment = mapOf("CLAUDECODE" to "1", "SKILL_BILL_AGENT" to "cursor"),
           executableLookup = ExecutableLookup { true },
         ),
       )

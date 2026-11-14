@@ -273,9 +273,10 @@ class UsageSidebarModelTest {
     assertEquals(UsageUiState(provider = "Cursor", agentId = "cursor", nameOnly = true), fixture.model.view.value.toUsageUiState(Instant.fromEpochSeconds(0)))
     assertTrue(fixture.usage.demands.isEmpty())
 
-    fixture.chat.selectedNewTaskUsageContext.value = SelectedNewTaskUsageContext.Ready(3, ChatAgent("junie", null, null), null, false)
+    fixture.chat.selectedNewTaskUsageContext.value = SelectedNewTaskUsageContext.Ready(3, ChatAgent("retired-agent", null, null), null, false)
     runCurrent()
-    assertEquals("junie", fixture.model.view.value.nameOnlyAgent)
+    assertEquals("retired-agent", fixture.model.view.value.nameOnlyAgent)
+    assertEquals("Unavailable agent", fixture.model.view.value.toUsageUiState(Instant.fromEpochSeconds(0)).provider)
 
     fixture.chat.selectedNewTaskUsageContext.value = SelectedNewTaskUsageContext.Ready(4, ChatAgent("codex", "actual-model", null), "chat-session", false)
     runCurrent()
@@ -300,9 +301,9 @@ class UsageSidebarModelTest {
     assertEquals(UsageProvider.Claude, fixture.model.view.value.provider)
     assertNull(fixture.model.view.value.nameOnlyAgent)
 
-    fixture.chat.selectedNewTaskUsageContext.value = SelectedNewTaskUsageContext.Ready(3, ChatAgent("junie", null, null), null, false)
+    fixture.chat.selectedNewTaskUsageContext.value = SelectedNewTaskUsageContext.Ready(3, ChatAgent("retired-agent", null, null), null, false)
     runCurrent()
-    assertEquals("junie", fixture.model.view.value.nameOnlyAgent)
+    assertEquals("retired-agent", fixture.model.view.value.nameOnlyAgent)
   }
 
   @Test

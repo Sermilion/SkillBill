@@ -130,7 +130,7 @@ class ChatSession internal constructor(
     val moveOutcome = worktreeMoveOutcome
     if (moveOutcome != null) return moveOutcome.canContinue(entry.agent.agentId)
     if (entry.executionCheckoutRoot != null) return false
-    return entry.agent.agentId != "cursor" && entry.agent.agentId != "junie"
+    return entry.agent.agentId in CONTINUABLE_AGENTS
   }
 
   internal var steering: ChatSteeringDelivery? = null

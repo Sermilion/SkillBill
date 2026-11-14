@@ -125,12 +125,12 @@ Areas: runtime-engine work/control (WorkRunActions, WorkControlService), goalrun
 Feature flag: N/A
 Acceptance criteria: implemented per spec (validate ran full check green; packaged-data smoke left to CI)
 
-## [2026-10-23] SKILL-441 subtask 5: spec write side, legacy intake routing and Cursor/Junie staging
+## [2026-10-23] SKILL-441 subtask 5: spec write side, legacy intake routing and agent staging
 Areas: runtime-engine featuretask prepare, phase/planning, runloop/planning, slot/plan, slot/attempt, phaserun, lifecycle; runtime-engine goalrunner intake, plan, model; runtime-application decomposition; runtime-domain install model; runtime-contracts projectstore, issuekey; runtime-cli featuretask; engine directive resources
 - New specs are written to the project store specs root (`<specsRoot>/<KEY>-<slug>/`). Manifest paths are store-relative `specs/<bundle>/...` for store bundles and stay `.feature-specs/...` for legacy ones, through one repoRelativePath(repoRoot, store, path) rule shared by the writer and StandalonePlanRun. reusable
 - Plan agents are told the absolute bundle directory is the only writable place. PlanBundleTarget (Store, Legacy, Staged) picks it; PlanBundleAuthorization allows exactly one bundle directory per root and keeps the "more than one bundle" refusal. Store and Staged targets are checked through PlanBundleListing because the git file manifest cannot see store writes.
 - LegacySpecIntake is the single decision function (NotLegacy, ResumeInPlace, Replan) used by GoalIntakePreparation. A legacy spec path replans into the store with the legacy file untouched, unless a non-terminal workflow already records that legacy path. It never blocks; lookup or read errors degrade to a fresh intake with a warning. reusable
-- SupportedAgent.honorsAdditionalWritableDirectories is true for Claude and Codex, false for Cursor and Junie (conservative, unverified). False providers plan into `<checkout>/.skill-bill/staging/<workflowId>/specs/<KEY>-<slug>/`, seeded from the store.
+- SupportedAgent.honorsAdditionalWritableDirectories is true for Claude and Codex, false for Cursor and the retired fourth agent (conservative, unverified). False providers plan into `<checkout>/.skill-bill/staging/<workflowId>/specs/<KEY>-<slug>/`, seeded from the store.
 - PlanBundleStagingPromotion copies staged files into the store with per-file atomic writes before bundle validation, deletes only that workflow's staging directory and refuses roots outside `.skill-bill/staging/`. IOException warns and keeps staging; it does not rethrow. A protected operator-authored parent spec.md is not overwritten.
 - GOAL_INTAKE_FEATURE_SPECS_MARKER is gone; LegacyProjectStatePaths holds the remaining `.feature-specs` and staging literals. Prompts and the feature-spec, pr-description and boundary-history directives name the store; legacy appears only as the in-place compatibility case.
 - Limits: PhaseRunIntakeResolver takes the store but does not call LegacySpecIntake (GoalIntakePreparation is the routed path); pr-review-fix thread-directive still names `.feature-specs`; an untracked staging directory exists in the checkout during staged planning.
@@ -146,7 +146,7 @@ Areas: runtime-engine featuretask, goalrunner, operation core/verify, diagnostic
 - Spec-intent provenance paths are store-relative or repo-relative, never absolute, to satisfy the review-context `path` schema (SpecIntentProvenancePath).
 - Every agent launch grants the store root: PhaseRun.projectStoreRoot feeds additionalWritableDirectories (plus the QA workspace, de-duplicated); OperationContext carries it to each operation step; BlockIncidentAgentPass takes ProjectStorePort. Claude and Codex map the list to --add-dir.
 - Detekt fixes extracted GoalSpecScratchCleanup, FeatureTaskExecutionIdentityResolver, ProjectCheckout and SpecBundleScope; WorkflowGoalRunnerChildWorkflowPersistence is now an injected class.
-- Limits: resolvedParentSpecPath has an optional store param that engine and writer callers do not pass yet (legacy-only), left for subtask 5, as is Cursor and Junie additional-dir support. TestDecompositionManifestStore stays legacy-only.
+- Limits: resolvedParentSpecPath has an optional store param that engine and writer callers do not pass yet (legacy-only), left for subtask 5. Cursor and fourth-agent additional-directory support also remain deferred. TestDecompositionManifestStore stays legacy-only.
 Feature flag: N/A
 Acceptance criteria: 4/4 implemented (validate ran full check green)
 ## [2026-10-24] SKILL-443 subtask 3: IdeStatus workflow QA outcome and desktop QA could-not-complete notification

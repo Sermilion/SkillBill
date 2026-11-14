@@ -263,7 +263,7 @@ internal class NewTaskChat(
   }
 
   fun sendNow() = synchronized(transitionLock) {
-    if (recoveryOnly || !thread.stoppable.value || thread.queued.value.isEmpty() || closing || rotationInProgress || transitionReserved()) return@synchronized
+    if (recoveryOnly || !thread.agentSupportedState.value || !thread.stoppable.value || thread.queued.value.isEmpty() || closing || rotationInProgress || transitionReserved()) return@synchronized
     if (chat.steeringPolicy(agent.agentId) == ChatSteeringPolicy.LegacySendNow) {
       interrupt()
     } else {
@@ -276,7 +276,7 @@ internal class NewTaskChat(
   }
 
   private fun drainQueue() = synchronized(transitionLock) {
-    if (recoveryOnly || closing || rotationInProgress || transitionReserved() || repositorySettlement || repositoryMissing || thread.busyState.value || turnJob != null || turnRunning) return
+    if (recoveryOnly || !thread.agentSupportedState.value || closing || rotationInProgress || transitionReserved() || repositorySettlement || repositoryMissing || thread.busyState.value || turnJob != null || turnRunning) return
     val next = thread.takeQueuedMessage() ?: return
     startTurn(next.text, next.action, next.images, next.cursorMcpDependency, next.onRejected)
   }

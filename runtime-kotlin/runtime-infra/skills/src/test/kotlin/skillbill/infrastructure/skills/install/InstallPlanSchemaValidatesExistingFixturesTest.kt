@@ -81,7 +81,6 @@ class InstallPlanSchemaValidatesExistingFixturesTest {
     val fixture = setupFixture()
     Files.createDirectories(fixture.home.resolve(".claude"))
     Files.createDirectories(fixture.home.resolve(".codex"))
-    Files.createDirectories(fixture.home.resolve(".junie"))
     Files.createDirectories(fixture.home.resolve(".cursor"))
     val plan =
       planInstallForTest(

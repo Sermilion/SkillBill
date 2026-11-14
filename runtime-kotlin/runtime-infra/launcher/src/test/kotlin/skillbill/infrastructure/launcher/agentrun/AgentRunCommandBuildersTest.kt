@@ -72,7 +72,6 @@ class AgentRunCommandBuildersTest {
       listOf(
         ClaudeAgentRunCommandBuilder(databasePath = database),
         CodexAgentRunCommandBuilder(databasePath = database),
-        JunieAgentRunCommandBuilder(databasePath = database),
         CursorAgentRunCommandBuilder(databasePath = database),
       )
 
@@ -245,7 +244,6 @@ class AgentRunCommandBuildersTest {
     val streaming = request().copy(streamOutputForLiveness = true)
 
     assertEquals(AgentRunIdlePolicy.HEARTBEAT_EXTENDED, CodexAgentRunCommandBuilder().build(streaming).idlePolicy)
-    assertEquals(AgentRunIdlePolicy.HEARTBEAT_EXTENDED, JunieAgentRunCommandBuilder().build(streaming).idlePolicy)
     assertEquals(AgentRunIdlePolicy.DB_PROGRESS_ONLY, CodexAgentRunCommandBuilder().build(request()).idlePolicy)
   }
 
@@ -408,9 +406,6 @@ class AgentRunCommandBuildersTest {
 
     assertEquals(MODEL_DIRECTIVE_CAPABLE_AGENTS, builders.map { it.agent }.toSet())
     assertEquals("model[effort=high]", CursorAgentRunCommandBuilder().build(request("model", "high")).sessionModel)
-    val openCode = OpenCodeAgentRunCommandBuilder().build(request("anthropic/model", "high"))
-    assertEquals("anthropic/model", openCode.sessionModel)
-    assertEquals("high", openCode.sessionEffort)
     builders.filter { it.agent == SupportedAgent.CLAUDE }.forEach { builder ->
       val command = builder.build(request(model = "model", effort = "high")).command
       assertTrue(command.contains("--model"))
@@ -423,23 +418,6 @@ class AgentRunCommandBuildersTest {
         "builder ${builder.agent.id} must render effort for a model+effort directive: $command",
       )
     }
-  }
-
-  @Test
-  fun `junie rejects model and effort directives`() {
-    assertFailsWith<IllegalArgumentException> {
-      JunieAgentRunCommandBuilder().build(request(model = "model", effort = "high"))
-    }
-  }
-
-  @Test
-  fun `junie accepts a directive free request`() {
-    val command =
-      JunieAgentRunCommandBuilder().build(
-        request(),
-      ).command
-
-    assertEquals(SupportedAgent.JUNIE.id, command.first())
   }
 
   @Test
@@ -492,7 +470,6 @@ class AgentRunCommandBuildersTest {
       ClaudeAgentRunCommandBuilder(),
       CodexAgentRunCommandBuilder(),
       CursorAgentRunCommandBuilder(),
-      JunieAgentRunCommandBuilder(),
     ).forEach { builder ->
       assertGovernedReviewLaunch(builder, governed)
     }
@@ -569,7 +546,6 @@ class AgentRunCommandBuildersTest {
 
     assertEquals(AgentRunIdlePolicy.HEARTBEAT_EXTENDED, ClaudeAgentRunCommandBuilder().build(readOnly).idlePolicy)
     assertEquals(AgentRunIdlePolicy.DB_PROGRESS_ONLY, CodexAgentRunCommandBuilder().build(readOnly).idlePolicy)
-    assertEquals(AgentRunIdlePolicy.HEARTBEAT_EXTENDED, JunieAgentRunCommandBuilder().build(readOnly).idlePolicy)
   }
 
   @Test
@@ -587,7 +563,6 @@ class AgentRunCommandBuildersTest {
   fun `non-read-only non-streaming phases keep db-progress-only idle policy`() {
     assertEquals(AgentRunIdlePolicy.DB_PROGRESS_ONLY, ClaudeAgentRunCommandBuilder().build(request()).idlePolicy)
     assertEquals(AgentRunIdlePolicy.DB_PROGRESS_ONLY, CodexAgentRunCommandBuilder().build(request()).idlePolicy)
-    assertEquals(AgentRunIdlePolicy.DB_PROGRESS_ONLY, JunieAgentRunCommandBuilder().build(request()).idlePolicy)
   }
 
   @Test

@@ -30,6 +30,17 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class CursorAcpSessionTest {
+  private val exactProvider =
+    AcpProvider(
+      "fixture",
+      "Fixture",
+      listOf("acp"),
+      null,
+      false,
+      exactModels = true,
+      loginCommand = "fixture auth login",
+    )
+
   private val runtimeMcp =
     AcpStdioMcpServer(
       "skill-bill",
@@ -42,7 +53,7 @@ class CursorAcpSessionTest {
   fun `session new and load repeat the complete MCP list and additional roots in ACP shape`() {
     listOf(null, "saved-1").forEach { saved ->
       val harness =
-        Harness(saved = saved, provider = AcpProvider.Devin, mcpServers = listOf(runtimeMcp), roots = listOf("/state"))
+        Harness(saved = saved, provider = exactProvider, mcpServers = listOf(runtimeMcp), roots = listOf("/state"))
       harness.session.start()
       harness.respond(
         """{"protocolVersion":1,"agentCapabilities":{"loadSession":true,""" +
@@ -64,7 +75,7 @@ class CursorAcpSessionTest {
 
   @Test
   fun `required roots without the advertised capability stop setup before any session or prompt`() {
-    val harness = Harness(provider = AcpProvider.Devin, mcpServers = listOf(runtimeMcp), roots = listOf("/state"))
+    val harness = Harness(provider = exactProvider, mcpServers = listOf(runtimeMcp), roots = listOf("/state"))
     harness.session.start()
     harness.respond("""{"protocolVersion":1,"agentCapabilities":{}}""")
 
@@ -73,22 +84,22 @@ class CursorAcpSessionTest {
   }
 
   @Test
-  fun `devin selects only the exact advertised model and never aliases a variant`() {
-    val exact = Harness(model = "swe-2-high", provider = AcpProvider.Devin)
+  fun `exact provider selects only the exact advertised model and never aliases a variant`() {
+    val exact = Harness(model = "swe-2-high", provider = exactProvider)
     exact.session.start()
     exact.respond("""{"protocolVersion":1,"agentCapabilities":{}}""")
     exact.respond("""{"sessionId":"s","models":{"currentModelId":"swe-2","availableModels":[{"modelId":"swe-2"}]}}""")
     assertContains(requireNotNull(exact.session.outcome()?.failure), "swe-2-high")
     assertTrue(exact.frames.none { it.text(CursorAcpKeys.METHOD) == "session/prompt" })
 
-    val unconfirmed = Harness(model = "swe-2-high", provider = AcpProvider.Devin)
+    val unconfirmed = Harness(model = "swe-2-high", provider = exactProvider)
     unconfirmed.session.start()
     unconfirmed.respond("""{"protocolVersion":1,"agentCapabilities":{}}""")
     unconfirmed.respond("""{"sessionId":"s"}""")
     assertContains(requireNotNull(unconfirmed.session.outcome()?.failure), "swe-2-high")
     assertTrue(unconfirmed.frames.none { it.text(CursorAcpKeys.METHOD) == "session/prompt" })
 
-    val absent = Harness(model = "swe-2-high", provider = AcpProvider.Devin, modelOnCommandLine = true)
+    val absent = Harness(model = "swe-2-high", provider = exactProvider, modelOnCommandLine = true)
     absent.session.start()
     absent.respond("""{"protocolVersion":1,"agentCapabilities":{}}""")
     absent.respond("""{"sessionId":"s"}""")
@@ -99,8 +110,8 @@ class CursorAcpSessionTest {
   }
 
   @Test
-  fun `devin legacy set model acknowledgement without an echoed model reports no identity`() {
-    val harness = legacyDevin()
+  fun `exact provider legacy set model acknowledgement without an echoed model reports no identity`() {
+    val harness = legacyExactProvider()
     val selection = harness.frames.last()
     assertEquals("session/set_model", selection.text(CursorAcpKeys.METHOD))
     assertEquals("swe-2-high", selection.obj(CursorAcpKeys.PARAMS)?.text(CursorAcpKeys.MODEL_ID))
@@ -113,8 +124,8 @@ class CursorAcpSessionTest {
   }
 
   @Test
-  fun `devin legacy set model reports the model the provider echoes back`() {
-    val harness = legacyDevin()
+  fun `exact provider legacy set model reports the model the provider echoes back`() {
+    val harness = legacyExactProvider()
     harness.respond("""{"modelId":"swe-2-high"}""")
     assertTrue(harness.session.ready)
     harness.respond("""{"stopReason":"end_turn"}""")
@@ -123,8 +134,8 @@ class CursorAcpSessionTest {
   }
 
   @Test
-  fun `devin reports the model a later config option update names`() {
-    val harness = legacyDevin()
+  fun `exact provider reports the model a later config option update names`() {
+    val harness = legacyExactProvider()
     harness.respond("""{"modelId":"swe-2-high"}""")
     harness.session.observe(
       """{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s",""" +
@@ -154,8 +165,8 @@ class CursorAcpSessionTest {
     assertEquals("gpt-5", harness.session.outcome()?.model)
   }
 
-  private fun legacyDevin(): Harness {
-    val harness = Harness(model = "swe-2-high", provider = AcpProvider.Devin)
+  private fun legacyExactProvider(): Harness {
+    val harness = Harness(model = "swe-2-high", provider = exactProvider)
     harness.session.start()
     harness.respond("""{"protocolVersion":1,"agentCapabilities":{}}""")
     harness.respond(
@@ -167,7 +178,7 @@ class CursorAcpSessionTest {
 
   @Test
   fun `an unparseable session path is refused before any session or prompt`() {
-    val harness = Harness(provider = AcpProvider.Devin, roots = listOf("/state\u0000bad"))
+    val harness = Harness(provider = exactProvider, roots = listOf("/state\u0000bad"))
     harness.session.start()
     harness.respond(
       """{"protocolVersion":1,"agentCapabilities":{"sessionCapabilities":{"additionalDirectories":{}}}}""",
@@ -178,13 +189,13 @@ class CursorAcpSessionTest {
   }
 
   @Test
-  fun `devin auth required names the CLI login recovery and sends no prompt`() {
-    val harness = Harness(provider = AcpProvider.Devin)
+  fun `exact provider auth required names the CLI login recovery and sends no prompt`() {
+    val harness = Harness(provider = exactProvider)
     harness.session.start()
     harness.respond("""{"protocolVersion":1,"agentCapabilities":{}}""")
     harness.reject(-32000)
 
-    assertContains(requireNotNull(harness.session.outcome()?.failure), "devin auth login")
+    assertContains(requireNotNull(harness.session.outcome()?.failure), "fixture auth login")
     assertFalse(harness.session.ready)
   }
 
@@ -211,77 +222,30 @@ class CursorAcpSessionTest {
   }
 
   @Test
-  fun `Junie enables Brave mode before prompting and retains cards for actual provider requests`() {
-    val harness = Harness(dependency = CursorAcpMcpDependency.TeamDashboardRequired, provider = AcpProvider.Junie)
-    harness.session.start()
-    harness.respond("""{"protocolVersion":1,"agentCapabilities":{},"authMethods":[{"id":"cursor_login"}]}""")
-    assertEquals(JsonPrimitive("session/new"), harness.frames.last()[CursorAcpKeys.METHOD])
-    harness.respond("""{"sessionId":"s"}""")
-    assertEquals(JsonPrimitive("session/set_config_option"), harness.frames.last()[CursorAcpKeys.METHOD])
-    assertFalse(harness.session.ready)
-    harness.respond("""{"configOptions":[{"id":"brave_mode","currentValue":true}]}""")
-    assertEquals(JsonPrimitive("session/prompt"), harness.frames.last()[CursorAcpKeys.METHOD])
-    assertTrue(harness.session.ready)
+  fun `Cursor publishing requests show full cards and wait for the operator choice`() {
+    val harness = Harness(provider = AcpProvider.Cursor)
+    harness.open()
+    val command = "gh issue create --repo example/tools --body 'Include the exact payload'"
+    val before = harness.frames.toList()
 
-    harness.permission("1", "a", "ls")
-    val card = harness.owner.requests.single().request
-    assertEquals("junie", card.provider)
-    assertTrue(card.approvalId.startsWith("junie:"))
+    harness.permission("17", "publish", command)
+
+    val card = harness.cards.single()
+    assertEquals(AcpProvider.Cursor.id, card.provider)
+    assertContains(card.inputText, command)
+    assertEquals(ApprovalState.PENDING, card.state)
+    assertEquals(before, harness.frames)
+    assertNull(harness.session.outcome())
+
     assertEquals(
       ApprovalDeliveryState.WRITTEN,
-      harness.session.deliver(card.copy(state = ApprovalState.ALLOWED, selectedOptionId = "once-a")),
+      harness.session.deliver(card.copy(state = ApprovalState.ALLOWED, selectedOptionId = "once-publish")),
     )
-    assertContains(harness.frames.last().toString(), "once-a")
+    assertEquals(
+      Json.parseToJsonElement("""{"outcome":{"outcome":"selected","optionId":"once-publish"}}"""),
+      harness.frames.last()[CursorAcpKeys.RESULT],
+    )
     harness.session.close()
-  }
-
-  @Test
-  fun `Junie refuses an unacknowledged Brave mode before sending a prompt`() {
-    val harness = Harness(provider = AcpProvider.Junie)
-    harness.session.start()
-    harness.respond("""{"protocolVersion":1,"agentCapabilities":{}}""")
-    harness.respond("""{"sessionId":"s"}""")
-    harness.respond("""{"configOptions":[{"id":"brave_mode","currentValue":false}]}""")
-
-    assertNotNull(harness.session.outcome()?.failure)
-    assertFalse(harness.frames.any { it.text(CursorAcpKeys.METHOD) == "session/prompt" })
-    harness.session.close()
-  }
-
-  @Test
-  fun `Cursor and Junie publishing requests show full cards and wait for the operator choice`() {
-    for (provider in listOf(AcpProvider.Cursor, AcpProvider.Junie)) {
-      val harness = Harness(provider = provider)
-      if (provider == AcpProvider.Cursor) {
-        harness.open()
-      } else {
-        harness.session.start()
-        harness.respond("""{"protocolVersion":1,"agentCapabilities":{}}""")
-        harness.respond("""{"sessionId":"s"}""")
-        harness.respond("""{"configOptions":[{"id":"brave_mode","currentValue":"on"}]}""")
-      }
-      val command = "gh issue create --repo example/tools --body 'Include the exact payload'"
-      val before = harness.frames.toList()
-
-      harness.permission("17", "publish", command)
-
-      val card = harness.cards.single()
-      assertEquals(provider.id, card.provider)
-      assertContains(card.inputText, command)
-      assertEquals(ApprovalState.PENDING, card.state)
-      assertEquals(before, harness.frames)
-      assertNull(harness.session.outcome())
-
-      assertEquals(
-        ApprovalDeliveryState.WRITTEN,
-        harness.session.deliver(card.copy(state = ApprovalState.ALLOWED, selectedOptionId = "once-publish")),
-      )
-      assertEquals(
-        Json.parseToJsonElement("""{"outcome":{"outcome":"selected","optionId":"once-publish"}}"""),
-        harness.frames.last()[CursorAcpKeys.RESULT],
-      )
-      harness.session.close()
-    }
   }
 
   @Test
@@ -423,46 +387,28 @@ class CursorAcpSessionTest {
         """{"jsonrpc":"2.0","id":"future","method":"future/blocker",""" +
           """"params":{"sessionId":"s","title":"full question"}}""" to "accepted",
       )
-    for (provider in listOf(AcpProvider.Cursor, AcpProvider.Junie)) {
-      for ((payload, outcome) in cases) {
-        val harness = Harness(provider = provider)
-        if (provider == AcpProvider.Cursor) {
-          harness.open()
-        } else {
-          harness.session.start()
-          harness.respond("""{"protocolVersion":1,"agentCapabilities":{}}""")
-          harness.respond("""{"sessionId":"s"}""")
-          harness.respond("""{"configOptions":[{"id":"brave_mode","currentValue":true}]}""")
-        }
-        harness.session.observe(payload)
-        assertNull(harness.session.outcome())
-        assertTrue(harness.events.none { it is CursorAcpEvent.Unsupported })
-        assertContains(harness.frames.last { it[CursorAcpKeys.RESULT] != null }.toString(), outcome)
-        harness.session.close()
-      }
+    for ((payload, outcome) in cases) {
+      val harness = Harness(provider = AcpProvider.Cursor)
+      harness.open()
+      harness.session.observe(payload)
+      assertNull(harness.session.outcome())
+      assertTrue(harness.events.none { it is CursorAcpEvent.Unsupported })
+      assertContains(harness.frames.last { it[CursorAcpKeys.RESULT] != null }.toString(), outcome)
+      harness.session.close()
     }
   }
 
   @Test
   fun `a permission without an operator channel selects allow once and keeps running`() {
-    for (provider in listOf(AcpProvider.Cursor, AcpProvider.Junie)) {
-      val harness = Harness(bindOwner = false, provider = provider)
-      if (provider == AcpProvider.Cursor) {
-        harness.open()
-      } else {
-        harness.session.start()
-        harness.respond("""{"protocolVersion":1,"agentCapabilities":{}}""")
-        harness.respond("""{"sessionId":"s"}""")
-        harness.respond("""{"configOptions":[{"id":"brave_mode","currentValue":true}]}""")
-      }
-      harness.permission("9", "shell", "git status")
-      assertNull(harness.session.outcome())
-      assertTrue(harness.owner.requests.isEmpty())
-      val result = harness.frames.last { it[CursorAcpKeys.RESULT] != null }.toString()
-      assertContains(result, "selected")
-      assertContains(result, "once-shell")
-      harness.session.close()
-    }
+    val harness = Harness(bindOwner = false, provider = AcpProvider.Cursor)
+    harness.open()
+    harness.permission("9", "shell", "git status")
+    assertNull(harness.session.outcome())
+    assertTrue(harness.owner.requests.isEmpty())
+    val result = harness.frames.last { it[CursorAcpKeys.RESULT] != null }.toString()
+    assertContains(result, "selected")
+    assertContains(result, "once-shell")
+    harness.session.close()
   }
 
   @Test

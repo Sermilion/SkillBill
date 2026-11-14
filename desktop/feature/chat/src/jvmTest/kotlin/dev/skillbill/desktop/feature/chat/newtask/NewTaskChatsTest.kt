@@ -203,6 +203,42 @@ class NewTaskChatsTest {
     assertEquals(emptyList(), chat.ended)
   }
 
+  @Test
+  fun `restoring an unsupported draft retains its lines and blocks sends until an agent switch`() = runTest {
+    val chat = FakeExecutionChatRepository()
+    chat.events = { flowOf(ChatEvent.Completed) }
+    val chats = testNewTaskChats(chat)
+    val draft = chats.selected.value
+    val saved = entry("unsupported-draft").copy(
+      agent = ChatAgent("retired-agent", "kept-model", null),
+      lines = listOf(ChatHistoryLine(ChatHistoryRole.Operator, "keep this"), ChatHistoryLine(ChatHistoryRole.Agent, "earlier reply")),
+    )
+
+    assertTrue(chats.resume(saved))
+    runCurrent()
+
+    val unsupported = checkNotNull(draft.chat.value)
+    assertFalse(unsupported.thread.agentSupported.value)
+    assertEquals(listOf("keep this", "earlier reply"), unsupported.thread.transcript.value.mapNotNull {
+      (it as? ChatMessage.Operator)?.text ?: (it as? ChatMessage.Agent)?.text
+    })
+    assertEquals(1, unsupported.thread.transcript.value.filterIsInstance<ChatMessage.Notice>().count { it.text == dev.skillbill.desktop.feature.chat.UNAVAILABLE_AGENT_NOTICE })
+    draft.text = "continue"
+    assertFalse(draft.canSend())
+    unsupported.sendNow()
+    assertTrue(chat.requests.isEmpty())
+
+    draft.agentId = "claude"
+    draft.selectedAgent = ChatAgent("claude", null, null)
+    draft.rebindChat()
+    runCurrent()
+    assertTrue(checkNotNull(draft.chat.value).thread.transcript.value.any { it is ChatMessage.Agent && it.text == "earlier reply" })
+    draft.send()
+    runCurrent()
+    assertEquals("claude", chat.requests.last().agent.agentId)
+    assertTrue(chat.requests.last().prompt.contains("keep this"))
+  }
+
   // Leaving an idle chat without a summary request leaves its row on the fallback title; a missed update keeps it stale on screen.
   @Test
   fun `leaving an idle chat requests its summary and a written summary reloads Recent chats`() = runTest {

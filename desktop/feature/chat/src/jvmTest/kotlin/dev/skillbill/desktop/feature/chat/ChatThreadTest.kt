@@ -89,6 +89,30 @@ class ChatThreadTest {
   }
 
   @Test
+  fun `unsupported agent failure labels ids and preserves provider explanations`() {
+    val thread = ChatThread(Clock.System)
+    val agent = ChatAgent("retired-agent", null, null)
+
+    thread.show(agent, ChatEvent.Failed(ChatFailure.AgentUnsupported, agent.agentId))
+    assertEquals("Chat is not available for agent Unavailable agent yet.", thread.transcript.value.last().let { (it as ChatMessage.Notice).text })
+    thread.show(agent, ChatEvent.Failed(ChatFailure.AgentUnsupported, null))
+    assertEquals("Chat is not available for agent Unavailable agent yet.", thread.transcript.value.last().let { (it as ChatMessage.Notice).text })
+    thread.show(agent, ChatEvent.Failed(ChatFailure.AgentUnsupported, "Provider requires a signed-in account."))
+    assertEquals("Chat is not available for agent Provider requires a signed-in account. yet.", thread.transcript.value.last().let { (it as ChatMessage.Notice).text })
+  }
+
+  @Test
+  fun `unavailable agent notice is added once after a restored trailing copy`() {
+    val thread = ChatThread(Clock.System)
+    thread.agentSupportedState.value = false
+    thread.replaceTranscript(listOf(ChatMessage.Notice(UNAVAILABLE_AGENT_NOTICE)))
+
+    thread.showUnavailableAgentNotice()
+
+    assertEquals(1, thread.transcript.value.filterIsInstance<ChatMessage.Notice>().count { it.text == UNAVAILABLE_AGENT_NOTICE })
+  }
+
+  @Test
   fun `tool-only messages share one tool group until a message with text closes the entry`() {
     val thread = ChatThread(Clock.System)
     val calls = (1..3).map { ChatToolCall("t$it", "Bash", "{}", null) }
@@ -104,13 +128,13 @@ class ChatThreadTest {
   }
 
   @Test
-  fun `unsupported Junie reason and historical prose restore without a runnable approval`() {
+  fun `unsupported agent reason and historical prose restore without a runnable approval`() {
     val thread = ChatThread(Clock.System)
-    thread.append(ChatMessage.Agent("Earlier Junie prose", false, emptyList()))
-    val reason = "Junie ACP permission-request coverage remains unverified. " + "Full explanation. ".repeat(1000)
-    thread.show(ChatAgent("junie", null, null), ChatEvent.Failed(ChatFailure.ApprovalUnsupported, reason))
+    thread.append(ChatMessage.Agent("Earlier agent prose", false, emptyList()))
+    val reason = "ACP permission-request coverage remains unverified. " + "Full explanation. ".repeat(1000)
+    thread.show(ChatAgent("retired-agent", null, null), ChatEvent.Failed(ChatFailure.ApprovalUnsupported, reason))
     val lines = thread.historyLines()
-    assertEquals("Earlier Junie prose", lines[0].text)
+    assertEquals("Earlier agent prose", lines[0].text)
     assertEquals(ChatHistoryRole.Error, lines[1].role)
     assertEquals(reason, lines[1].text)
     assertEquals(ChatMessage.Error(ChatFailure.ApprovalUnsupported, reason), restored(lines[1]))

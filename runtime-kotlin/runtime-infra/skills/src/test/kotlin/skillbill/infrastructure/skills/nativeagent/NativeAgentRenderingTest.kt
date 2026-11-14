@@ -60,7 +60,7 @@ class NativeAgentRenderingTest {
   }
 
   @Test
-  fun `renderers emit claude codex junie and cursor shapes from one source`() {
+  fun `renderers emit claude codex and cursor shapes from one source`() {
     val source =
       NativeAgentSource(
         name = "bill-test-worker",
@@ -71,7 +71,6 @@ class NativeAgentRenderingTest {
 
     val claude = NativeAgentProvider.Claude.render(source)
     val codex = NativeAgentProvider.Codex.render(source)
-    val junie = NativeAgentProvider.Junie.render(source)
     val cursor = NativeAgentProvider.Cursor.render(source)
 
     assertContains(claude, "name: bill-test-worker")
@@ -81,11 +80,6 @@ class NativeAgentRenderingTest {
     assertFalse("mode: subagent" in claude)
     assertContains(codex, "developer_instructions = \"\"\"")
     assertContains(codex, "# Worker\n\nDo the work.")
-    assertContains(junie, "name: bill-test-worker")
-    assertContains(junie, "description: Test worker.")
-    assertContains(junie, "tools: Read, Grep, Glob, Bash")
-    assertContains(junie, "# Worker\n\nDo the work.")
-    assertFalse("mode: subagent" in junie)
     assertContains(cursor, "# Worker\n\nDo the work.")
     val cursorFrontmatter = cursor.substringAfter("---\n").substringBefore("\n---")
     assertEquals(
@@ -93,7 +87,6 @@ class NativeAgentRenderingTest {
       cursorFrontmatter.lines(),
       "Cursor frontmatter is name, description, then the readonly projection of the declared toolset",
     )
-    assertEquals(claude, junie, "Claude and Junie share the same markdown shape; drift must be intentional")
     assertNotEquals(claude, codex)
   }
 
@@ -108,7 +101,6 @@ class NativeAgentRenderingTest {
 
     val claude = NativeAgentProvider.Claude.render(source)
     val codex = NativeAgentProvider.Codex.render(source)
-    val junie = NativeAgentProvider.Junie.render(source)
 
     assertFalse(
       claude.lines().any { line -> line.startsWith("description: Edge: case") },
@@ -125,7 +117,7 @@ class NativeAgentRenderingTest {
     assertContains(codex, "back\\\\slash")
     assertContains(codex, "Edge: case - quoted \\\"value\\\"")
 
-    listOf(junie).forEach { rendered ->
+    listOf(claude).forEach { rendered ->
       val renderedDescriptionLine = rendered.lines().first { it.startsWith("description: ") }
       assertTrue(
         renderedDescriptionLine.removePrefix("description: ").startsWith("\""),

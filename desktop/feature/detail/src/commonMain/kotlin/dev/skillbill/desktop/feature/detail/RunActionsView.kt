@@ -1,6 +1,7 @@
 package dev.skillbill.desktop.feature.detail
 
 import dev.skillbill.desktop.core.designsystem.component.ChecklistItem
+import dev.skillbill.desktop.core.designsystem.component.agentDisplayName
 import dev.skillbill.desktop.core.domain.model.Incident
 import dev.skillbill.desktop.core.domain.model.IncidentPrerequisite
 import dev.skillbill.desktop.core.domain.model.IncidentProgress
@@ -17,8 +18,9 @@ internal data class ControlButton(val label: String, val enabled: Boolean, val t
 
 /**
  * What the run actions, the prerequisite checklist and the decision block show, derived from one detail state. A null button is
- * absent. [agentId] is the chosen agent, else the run options' default. [checklist] is null when the prerequisites render as
- * plain rows. [decision] is null when no decision is awaited.
+ * absent. [resumeAgentId] is a supported explicit choice or recorded launch agent. [implementationAgentId] may also use the
+ * configured default for a new goal. [agentId] is the value shown by the picker for its current action. [checklist] is null when
+ * the prerequisites render as plain rows. [decision] is null when no decision is awaited.
  */
 internal data class RunActionsView(
   val usable: Boolean,
@@ -27,6 +29,8 @@ internal data class RunActionsView(
   val pauseNow: ControlButton?,
   val launch: ControlButton?,
   val agent: ControlButton?,
+  val resumeAgentId: String?,
+  val implementationAgentId: String?,
   val agentId: String?,
   val cancel: ControlButton?,
   val recover: ControlButton?,
@@ -62,25 +66,31 @@ internal fun runActionsView(state: DetailUiState): RunActionsView {
   ).takeIf { goal }
   val pauseNow = ControlButton(label(InFlightControl.PauseNow, "Pause"), ready && item.controlEligible, "Stops the goal runner now").takeIf { goal }
 
-  val controlEnabled = ready && (item.issueKey ?: item.id) !in controls.reservations
-  val agentId = controls.chosenAgent ?: options?.agentId ?: state.defaultAgentId?.takeIf { options != null && it in options.agentChoices }
-  val showLaunch = item.lifecycle != Lifecycle.Active &&
+  val resumable = item.lifecycle != Lifecycle.Active &&
     (options?.canLaunch == true || (options == null && item.lifecycle != Lifecycle.Terminal))
+  val controlEnabled = ready && (item.issueKey ?: item.id) !in controls.reservations
+  val launchable = controlEnabled && options?.canLaunch == true
   val launch = ControlButton(
     label(InFlightControl.Launch, options?.launchLabel?.ifBlank { null } ?: "Resume"),
-    controlEnabled && options?.canLaunch == true,
-  ).takeIf { showLaunch }
+    launchable,
+  ).takeIf { resumable }
   val finalize = ControlButton(label(InFlightControl.Finalize, "Finalize"), controlEnabled).takeIf { options?.canFinalize == true }
-
   val goalStarted = controls.implementationStarted || options?.goalStarted == true
   val implement = ControlButton(
     label(InFlightControl.Launch, "Implement"),
     ready && !goalStarted && loaded != null && planImplementationEnabled(item, loaded.detail) && item.issueKey !in controls.reservations,
     tooltip = GOAL_STARTED.takeIf { goalStarted },
   ).takeIf { item.offersPlanImplementation() }
-  val agentLabel = agentId?.let { "Agent: $it" } ?: "Choose agent"
+  val chosenAgent = controls.chosenAgent?.takeIf { it in options?.agentChoices.orEmpty() }
+  val recordedAgent = options?.agentId?.takeIf { it in options.agentChoices }
+  val resumeAgentId = chosenAgent ?: recordedAgent
+  val implementationAgentId = resumeAgentId
+    ?: state.defaultAgentId?.takeIf { implement != null && it in options?.agentChoices.orEmpty() }
+  val agentId = if (resumable) resumeAgentId else implementationAgentId
+
+  val agentLabel = agentId?.let { "Agent: ${agentDisplayName(it)}" } ?: "Choose agent"
   val agent = when {
-    launch != null -> ControlButton(agentLabel, launch.enabled)
+    resumable -> ControlButton(agentLabel, launch?.enabled == true)
     implement != null -> ControlButton(agentLabel, implement.enabled)
     else -> null
   }
@@ -112,6 +122,8 @@ internal fun runActionsView(state: DetailUiState): RunActionsView {
     pauseNow = pauseNow,
     launch = launch,
     agent = agent,
+    resumeAgentId = resumeAgentId,
+    implementationAgentId = implementationAgentId,
     agentId = agentId,
     cancel = ControlButton(label(InFlightControl.Cancel, "Cancel"), ready && options?.canCancel == true).takeIf { item.lifecycle != Lifecycle.Terminal && item.lifecycle != Lifecycle.Canceled },
     recover = recover,

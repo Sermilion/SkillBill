@@ -182,7 +182,6 @@ class CliRuntimeShellCommandsTest {
   fun `install commands expose agent path lookup and link-skill`() {
     val tempDir = Files.createTempDirectory("skillbill-cli-install")
     Files.createDirectories(tempDir.resolve(".claude"))
-    Files.createDirectories(tempDir.resolve(".junie"))
     val context = CliRuntimeContext(userHome = tempDir, environment = isolatedCliEnvironment(tempDir))
 
     val agentPathResult = CliRuntime.run(listOf("install", "agent-path", "codex"), context)
@@ -213,7 +212,6 @@ class CliRuntimeShellCommandsTest {
     assertEquals(
       """
       claude	${tempDir.resolve(".claude/skills")}
-      junie	${tempDir.resolve(".junie/skills")}
       """.trimIndent(),
       detectAgentsResult.stdout.trim(),
     )
@@ -227,7 +225,6 @@ class CliRuntimeShellCommandsTest {
     val tempDir = Files.createTempDirectory("skillbill-cli-install-detect-all")
     Files.createDirectories(tempDir.resolve(".claude"))
     Files.createDirectories(tempDir.resolve(".codex"))
-    Files.createDirectories(tempDir.resolve(".junie"))
     Files.createDirectories(tempDir.resolve(".cursor"))
 
     val result =
@@ -242,7 +239,6 @@ class CliRuntimeShellCommandsTest {
       claude	${tempDir.resolve(".claude/skills")}
       codex	${tempDir.resolve(".codex/skills")}
       codex	${tempDir.resolve(".agents/skills")}
-      junie	${tempDir.resolve(".junie/skills")}
       cursor	${tempDir.resolve(".cursor/skills")}
       """.trimIndent(),
       result.stdout.trim(),

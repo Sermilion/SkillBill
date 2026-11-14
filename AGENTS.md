@@ -66,7 +66,7 @@ Naming (pack skills and sidecars): `bill-<capability>`; overrides `bill-<platfor
 
 Read `docs/skill-source-generation.md` before skill/scaffold/render/install-staging/native-agent/support-pointer changes.
 
-Source forbids governed `SKILL.md` wrappers, generated support pointers (`shell-ceremony.md`, `telemetry-contract.md`, `stack-routing.md`, review/delegation/add-on pointers), and provider outputs (`claude-agents/`, `codex-agents/`, `junie-agents/`, `cursor-agents/`).
+Source forbids governed `SKILL.md` wrappers, generated support pointers (`shell-ceremony.md`, `telemetry-contract.md`, `stack-routing.md`, review/delegation/add-on pointers), and provider outputs (`claude-agents/`, `codex-agents/`, `cursor-agents/`).
 
 Provider-neutral native-agent source lives at `native-agents/agents.yaml` or `native-agents/<name>.md`. New/rendered sources require `contract_version`; parse older sources for fixture migration. Put extra guidance in `content.md` H2 sections; prohibit siblings such as `skills/<skill>/patterns.md`.
 

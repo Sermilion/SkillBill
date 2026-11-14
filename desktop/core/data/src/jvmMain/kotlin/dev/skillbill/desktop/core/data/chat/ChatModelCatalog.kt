@@ -30,7 +30,6 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import me.tatarka.inject.annotations.Inject
-import skillbill.infrastructure.launcher.process.cursor.AcpProvider
 
 @Inject
 class ChatModelCatalog(
@@ -223,20 +222,17 @@ class ChatModelCatalog(
       "claude" -> profiles.claude(agent.profile ?: settings.settings.first().claudeConfigDir).environment
       "codex" -> codexEnvironment(host.variables, agent.profile)
       "cursor" -> cursorEnvironment(host.variables, agent.profile)
-      "junie", "devin" -> host.variables
-      else -> return ChatModelsRead.Failed("This agent does not expose a model list.")
+      else -> return ChatModelsRead.Loaded(emptyList())
     }
     val arguments = when (agent.agentId) {
       "claude" -> listOf("-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--no-session-persistence")
       "codex" -> listOf("app-server")
       "cursor" -> listOf("--list-models")
-      "devin" -> listOf("models", "list", "--format", "json")
-      else -> listOf("--acp")
+      else -> return ChatModelsRead.Loaded(emptyList())
     }
     val binaries = if (agent.agentId == "cursor") listOf("cursor-agent", "agent") else listOf(agent.agentId)
     val command = ChatCommand(agentCommand(binaries, arguments, host.variables["SHELL"]), root, environment, "")
     if (agent.agentId == "cursor") return cursor(command)
-    if (agent.agentId == "devin") return devin(command.copy(stdoutLimitBytes = DEVIN_MODELS_LIMIT_BYTES))
     val started = launcher.start(command)
     if (started !is BoundedProcessStart.Started) return unavailable()
     val connection = started.connection
@@ -244,7 +240,7 @@ class ChatModelCatalog(
       when (agent.agentId) {
         "claude" -> claude(connection)
         "codex" -> codex(connection)
-        else -> junie(connection, root)
+        else -> ChatModelsRead.Loaded(emptyList())
       }
     } finally {
       withContext(NonCancellable) { connection.close() }
@@ -265,27 +261,6 @@ class ChatModelCatalog(
     if (exit != 0 || output.length >= 1_000_000) return unavailable()
     val models = cursorChatModels(output.toString())
     return if (models.isEmpty()) unavailable() else ChatModelsRead.Loaded(models)
-  }
-
-  private suspend fun devin(command: ChatCommand): ChatModelsRead {
-    val output = StringBuilder()
-    var exit: Int? = null
-    var failure: String? = null
-    // Stopping early cancels the flow, which ends the owned process before it reports an exit.
-    processes.run(command).takeWhile { event ->
-      when (event) {
-        is ChatProcessOutput.Line -> output.appendLine(event.text)
-        is ChatProcessOutput.Exited -> exit = event.code
-        is ChatProcessOutput.StartFailed -> failure = "Devin could not start"
-        is ChatProcessOutput.StdoutEnded -> if (event.readFailure != null) failure = DEVIN_UNREADABLE
-      }
-      if (failure == null && output.length > DEVIN_MODELS_LIMIT_BYTES) failure = DEVIN_UNREADABLE
-      failure == null
-    }.collect()
-    val models = if (failure == null && exit == 0) devinChatModels(output.toString()) else null
-    if (models != null) return ChatModelsRead.Loaded(models)
-    val reason = failure ?: exit?.takeIf { it != 0 }?.let { "Devin exited with code $it" } ?: "Devin returned no selectable models"
-    return ChatModelsRead.Failed("$reason. Check the Devin installation and run `${AcpProvider.Devin.loginCommand}`, then retry.")
   }
 
   private suspend fun claude(connection: BoundedProtocolConnection): ChatModelsRead {
@@ -333,19 +308,6 @@ class ChatModelCatalog(
     return ChatModelsRead.Loaded(models.distinctBy { it.id })
   }
 
-  private suspend fun junie(connection: BoundedProtocolConnection, root: String): ChatModelsRead {
-    val params = buildJsonObject {
-      put(ChatModelKeys.PROTOCOL_VERSION, 1)
-      put(ChatModelKeys.CLIENT_CAPABILITIES, JsonObject(emptyMap()))
-    }
-    if (call(connection, 1, "initialize", params) == null) return unavailable()
-    val session = call(connection, 2, "session/new", buildJsonObject {
-      put(ChatModelKeys.CWD, root)
-      put(ChatModelKeys.MCP_SERVERS, JsonArray(emptyList()))
-    }) ?: return unavailable()
-    return acpChatModels(session)?.let(ChatModelsRead::Loaded) ?: unavailable()
-  }
-
   private suspend fun call(connection: BoundedProtocolConnection, id: Int, method: String, params: JsonObject): JsonObject? {
     if (!connection.sendLine(modelRpc(id, method, params).toString())) return null
     val response = receive(connection) { it[ChatModelKeys.ID] == JsonPrimitive(id) } ?: return null
@@ -363,11 +325,6 @@ class ChatModelCatalog(
         else -> return null
       }
     }
-  }
-
-  private companion object {
-    const val DEVIN_MODELS_LIMIT_BYTES = 1_000_000L
-    const val DEVIN_UNREADABLE = "Devin model output was unreadable or too large"
   }
 
   private fun unavailable() = ChatModelsRead.Failed("Model list unavailable. Check this agent's installation and sign-in, then retry.")

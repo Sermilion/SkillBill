@@ -36,16 +36,6 @@ enum class SupportedAgent(
     honorsAdditionalWritableDirectories = true,
     loadsRuntimeMcpHeadless = true,
   ),
-  JUNIE(
-    "junie",
-    "junie-agents",
-    "md",
-    ".junie",
-    ".junie/mcp/mcp.json",
-    false,
-    honorsAdditionalWritableDirectories = false,
-    loadsRuntimeMcpHeadless = false,
-  ),
   CURSOR(
     "cursor",
     "cursor-agents",

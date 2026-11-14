@@ -10,7 +10,6 @@ data class InstallCleanupResult(
 enum class NativeAgentLinkProvider {
   CLAUDE,
   CODEX,
-  JUNIE,
   CURSOR,
   OPENCODE,
   DEVIN,

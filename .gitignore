@@ -49,15 +49,12 @@ platform-packs/*/quality-check/*/shell-content-contract.md
 # Provider-specific generated native-agent output.
 skills/*/claude-agents/
 skills/*/codex-agents/
-skills/*/junie-agents/
 skills/*/cursor-agents/
 platform-packs/*/code-review/*/claude-agents/
 platform-packs/*/code-review/*/codex-agents/
-platform-packs/*/code-review/*/junie-agents/
 platform-packs/*/code-review/*/cursor-agents/
 platform-packs/*/quality-check/*/claude-agents/
 platform-packs/*/quality-check/*/codex-agents/
-platform-packs/*/quality-check/*/junie-agents/
 platform-packs/*/quality-check/*/cursor-agents/
 
 local.properties

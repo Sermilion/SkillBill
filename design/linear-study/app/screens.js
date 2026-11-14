@@ -160,7 +160,7 @@
     const provider = override || fromContext || (contextual ? st.usage.last || st.usage.provider : st.usage.provider);
     if (fromContext && !override) st.usage.last = fromContext;
     const scenario = st.usage.scenario;
-    const data = (provider === 'Cursor' || provider === 'Junie') && !['signedout', 'loading'].includes(scenario) ? D.USAGE[provider.toLowerCase()]
+    const data = provider === 'Cursor' && !['signedout', 'loading'].includes(scenario) ? D.USAGE.cursor
       : provider === 'Claude' && D.USAGE.claude[scenario] ? D.USAGE.claude[scenario]
       : D.USAGE.scenarios[scenario];
     const colors = Object.fromEntries(D.USAGE.providers.map((p) => [p, D.AGENTS[p.toLowerCase()].color]));
@@ -2580,7 +2580,7 @@
   }
   function setModels(st) {
     const head = S.SettingsHeader({ title: 'Models', body: 'Each phase runs on its tier’s model unless the agent has an override for that phase. Saved as <span class="mono">execution_matrix</span> in <span class="mono">~/.config/skill-bill/config.json</span>.' });
-    const tabs = `<div class="l-row g-3 l-wrap">${S.Segmented({ act: 'cfg-agent', value: st.agent, items: D.AGENT_CHOICES.map((a) => ({ id: a, label: a, disabled: !D.AGENTS[a].modelCapable, tip: D.AGENTS[a].modelCapable ? null : 'junie cannot honor a model or effort directive' })) })}</div>`;
+    const tabs = `<div class="l-row g-3 l-wrap">${S.Segmented({ act: 'cfg-agent', value: st.agent, items: D.AGENT_CHOICES.map((a) => ({ id: a, label: a })) })}</div>`;
     const m = st.matrix[st.agent];
     const open = (k) => st.cfgOpen === k;
     const tierRow = (t) => S.ConfigRow({ phase: t === 'reasoning' ? 'Reasoning tier' : 'Implementation tier', tier: t, value: dirText(m[t]), override: true, open: open('tier:' + t), act: 'cfg-open', arg: 'tier:' + t, tags: [], editor: open('tier:' + t) ? modelEditor(st) : '' });
@@ -2641,14 +2641,14 @@
     }), foot: 'Byte limits must be positive.' });
   }
   function setTelemetry(st) {
-    const agent = (n, installed) => S.SettingRow({ labelHtml: `<span class="l-row g-2">${S.Avatar({ name: n, initials: agentOf(n).initials, color: agentOf(n).color })}<span>${n}</span></span>`, label: n, desc: agentOf(n).modelCapable ? null : 'Cannot take a model or effort setting', control: S.Label({ text: installed ? 'detected' : 'not detected', color: installed ? 'var(--st-done)' : 'var(--fg-faint)' }) });
+    const agent = (n) => S.SettingRow({ labelHtml: `<span class="l-row g-2">${S.Avatar({ name: n, initials: agentOf(n).initials, color: agentOf(n).color })}<span>${n}</span></span>`, label: n, desc: agentOf(n).modelCapable ? null : 'Cannot take a model or effort setting', control: S.Label({ text: 'detected', color: 'var(--st-done)' }) });
     return S.SettingsHeader({ title: 'Telemetry and agents', body: 'Machine-wide settings in <span class="mono">~/.config/skill-bill/config.json</span>.' }) +
       S.SettingsGroup({ title: 'Telemetry', rows: [
         S.SettingRow({ label: 'Level', desc: 'telemetry.level · default anonymous', control: S.Segmented({ act: 'pref-telemetry', value: st.prefs.telemetry, items: [{ id: 'off', label: 'Off' }, { id: 'anonymous', label: 'Anonymous' }, { id: 'full', label: 'Full' }] }) }),
         S.SettingRow({ label: 'Proxy URL', desc: 'telemetry.proxy_url · blank uses the default endpoint', control: S.Input({ id: 'tel-proxy', value: '', mono: true, placeholder: 'default', width: '220px' }) }),
         S.SettingRow({ label: 'Batch size', desc: 'telemetry.batch_size · default 50', control: S.Input({ id: 'tel-batch', value: '50', mono: true, width: '80px' }) }),
       ] }) +
-      S.SettingsGroup({ title: 'Agents', end: [S.Label({ text: 'read-only', dot: false })], rows: [agent('claude', true), agent('codex', true), agent('cursor', true), agent('junie', false)] }) +
+      S.SettingsGroup({ title: 'Agents', end: [S.Label({ text: 'read-only', dot: false })], rows: D.AGENT_CHOICES.map(agent) }) +
       S.SettingsGroup({ title: 'Files', rows: ['~/.config/skill-bill/config.json', '~/.skill-bill/install-selection.json'].map((f) => S.SettingRow({ labelHtml: `<span class="mono t-sm">${f}</span>`, label: f, control: S.Button({ label: 'Open', icon: 'external', size: 'sm', act: 'open-file', arg: f }) })) });
   }
 

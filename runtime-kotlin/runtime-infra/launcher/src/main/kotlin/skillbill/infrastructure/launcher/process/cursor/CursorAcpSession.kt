@@ -105,8 +105,6 @@ class CursorAcpSession(
   private var pendingConfigId: String? = null
   private var pendingConfigValue: String? = null
   private var pendingConfigIsMode = false
-  private var selectingBypass = false
-  private var bypassEnabled = false
   private var setup = JsonObject(emptyMap())
   private var closed = false
   private var closing = false
@@ -191,7 +189,6 @@ class CursorAcpSession(
   }
 
   private fun acceptConfiguration(body: JsonObject) {
-    if (selectingBypass) return acceptBypass(body)
     val acknowledged =
       (body[K.CONFIG_OPTIONS] as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }.any {
         it.text(K.ID) == pendingConfigId && it.text(K.CURRENT_VALUE) == pendingConfigValue
@@ -323,7 +320,7 @@ class CursorAcpSession(
 
   private fun selectingModel(): Boolean =
     expectedMethod == K.SESSION_SET_MODEL ||
-      (expectedMethod == K.SESSION_SET_CONFIG && !pendingConfigIsMode && !selectingBypass)
+      (expectedMethod == K.SESSION_SET_CONFIG && !pendingConfigIsMode)
 
   private fun configureModel(
     config: JsonObject,
@@ -432,31 +429,7 @@ class CursorAcpSession(
     )
   }
 
-  private fun acceptBypass(body: JsonObject) {
-    val enabled =
-      (body[K.CONFIG_OPTIONS] as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }
-        .firstOrNull { it.text(K.ID) == K.BRAVE_MODE }?.get(K.CURRENT_VALUE)
-    if (enabled != JsonPrimitive(true) && enabled != JsonPrimitive(K.BRAVE_ON)) {
-      return stop("$providerName did not acknowledge Brave mode; no prompt was sent.")
-    }
-    selectingBypass = false
-    bypassEnabled = true
-    prompt()
-  }
-
   private fun prompt() {
-    if (launch.provider == AcpProvider.Junie && !bypassEnabled) {
-      selectingBypass = true
-      send(
-        K.SESSION_SET_CONFIG,
-        buildJsonObject {
-          put(K.SESSION_ID, sessionId)
-          put(K.CONFIG_ID, K.BRAVE_MODE)
-          put(K.VALUE, true)
-        },
-      )
-      return
-    }
     ready = true
     send(
       K.SESSION_PROMPT,

@@ -49,6 +49,7 @@ import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.SbControlSize
 import dev.skillbill.desktop.core.designsystem.component.SbIconButton
 import dev.skillbill.desktop.core.designsystem.component.SbTooltip
+import dev.skillbill.desktop.core.designsystem.component.agentDisplayName
 import dev.skillbill.desktop.core.designsystem.component.sbFocusRing
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.designsystem.icon.SbIcon
@@ -75,7 +76,7 @@ internal fun rememberOpenChatItems(chats: NewTaskChats): List<OpenChatItem> {
       val chat by draft.chat.collectAsState()
       val transcript = chat?.thread?.transcript?.collectAsState()?.value.orEmpty()
       val status by remember(draft) { chats.status(draft) }.collectAsState(NewTaskChatStatus.Idle)
-      OpenChatItem(draft, newTaskChatTitle(transcript), draft.repository?.name, draft.selectedAgent?.let(::chipText) ?: draft.agentId.orEmpty(), status, chat != null)
+      OpenChatItem(draft, newTaskChatTitle(transcript), draft.repository?.name, draft.selectedAgent?.let(::chipText) ?: draft.agentId?.let(::agentDisplayName).orEmpty(), status, chat != null)
     }
   }
 }

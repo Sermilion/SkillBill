@@ -23,6 +23,7 @@ import skillbill.engine.goalrunner.manifest.reconcileGoalManifest
 import skillbill.engine.goalrunner.manifest.toAcceptedSubtasks
 import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
 import skillbill.engine.goalrunner.monitoring.GOAL_FINALIZATION_OPERATION_KIND
+import skillbill.engine.goalrunner.monitoring.GoalProgressStallSignals
 import skillbill.engine.goalrunner.persist.GoalRunnerAttemptLedgerStore
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.status.worker.executionLivenessFromWorkerInspection

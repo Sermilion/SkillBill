@@ -863,7 +863,6 @@ remove_from_codex_skill_roots() {
 }
 remove_from_codex_skill_roots
 remove_from_agent_dir "codex" "$HOME/.agents/skills"
-remove_from_agent_dir "junie" "$HOME/.junie/skills"
 remove_from_agent_dir "cursor" "$HOME/.cursor/skills"
 # OpenCode and Devin resolve their skill dirs under XDG_CONFIG_HOME; ask the runtime.
 remove_from_agent_dir "opencode" "$(run_runtime_cli install agent-path opencode 2>/dev/null || true)"
@@ -920,31 +919,6 @@ remove_claude_agent_mds
 info "Removing Codex subagent TOML installs."
 remove_codex_agents_tomls
 
-remove_junie_agent_mds() {
-  # Uninstall Junie native subagent markdown symlinks from ~/.junie/agents.
-  # The source discovery walks governed platform-pack and skill junie-agents/*.md
-  # definitions and is independent from other agent setup choices.
-  local output=""
-  if ! output="$(run_runtime_cli install unlink-junie-agents \
-    --platform-packs "$PLATFORM_PACKS_DIR" \
-    --skills "$SKILLS_DIR")"; then
-    warn "  Junie subagent cleanup failed; continuing uninstall so reinstall can recover."
-    return 0
-  fi
-  if [[ -z "$output" ]]; then
-    info "  nothing to remove"
-    return 0
-  fi
-  while IFS= read -r link_path; do
-    [[ -n "$link_path" ]] || continue
-    REMOVED_TARGETS+=("$link_path")
-    ok "  removed $(basename "$link_path")"
-  done <<< "$output"
-}
-
-info "Removing Junie subagent markdown installs."
-remove_junie_agent_mds
-
 remove_native_agent_mds() {
   # Uninstall one provider's native subagent markdown symlinks. The source discovery
   # walks governed platform-pack and skill agent definitions and is independent from
@@ -977,7 +951,7 @@ info "Removing Devin subagent markdown installs."
 remove_native_agent_mds "Devin" unlink-devin-agents
 
 info "Removing MCP server registrations."
-for agent in claude codex junie cursor opencode devin; do
+for agent in claude codex cursor opencode devin; do
   if mcp_output="$(run_runtime_cli install unregister-mcp "$agent" 2>/dev/null)"; then
     ok "  removed Sona MCP server ($agent)"
     while IFS= read -r profile_path; do

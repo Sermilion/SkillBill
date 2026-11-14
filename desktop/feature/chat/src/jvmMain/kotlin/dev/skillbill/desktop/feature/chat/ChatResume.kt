@@ -22,6 +22,7 @@ import dev.skillbill.desktop.core.designsystem.SkillBillColors
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.SbLabel
 import dev.skillbill.desktop.core.designsystem.component.SbLabelStyle
+import dev.skillbill.desktop.core.designsystem.component.agentDisplayName
 import dev.skillbill.desktop.core.domain.model.ChatAgent
 import java.io.File
 import kotlin.time.Duration
@@ -71,8 +72,11 @@ internal fun savedAgo(savedAt: Instant, now: Instant): String {
   }
 }
 
-/** The profile directory's name without its dot, such as `codex-api`, or the agent id when it runs as the app is configured. */
-internal fun agentName(agent: ChatAgent): String = agent.profile?.let { File(it).name.removePrefix(".") } ?: agent.agentId
+/** The supported agent's profile name without its leading dot, or its display name when no profile applies. */
+internal fun agentName(agent: ChatAgent): String = when (val name = agentDisplayName(agent.agentId)) {
+  "Unavailable agent" -> name
+  else -> agent.profile?.let { File(it).name.removePrefix(".") } ?: name
+}
 
 /** Shown while the draft is a prefix of [command]; clicking it runs the command. */
 @Composable

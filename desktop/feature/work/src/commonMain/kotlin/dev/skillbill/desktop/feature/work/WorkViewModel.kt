@@ -171,8 +171,14 @@ class WorkViewModel(
   }
 
   private fun launch(item: WorkItem) {
-    if (!state.value.canLaunch(item)) return
-    val agentId = state.value.runOptions[item.id]?.agentId
+    val current = state.value
+    if (!current.canLaunch(item)) return
+    val options = current.runOptions[item.id] ?: return
+    val agentId = options.agentId?.takeIf { it in options.agentChoices }
+    if (agentId == null) {
+      effectChannel.trySend(WorkEffect.OpenDetail(item))
+      return
+    }
     control(item, ControlAction.Launch) { controls.launch(item, agentId) }
   }
 

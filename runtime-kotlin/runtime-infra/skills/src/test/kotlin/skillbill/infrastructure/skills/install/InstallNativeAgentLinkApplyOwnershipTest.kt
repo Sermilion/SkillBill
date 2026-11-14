@@ -10,11 +10,11 @@ import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentProvider
 import skillbill.install.model.AgentTarget
 import skillbill.install.model.InstallAgentLinkStatus
 import skillbill.install.model.InstallApplyStatus
-import skillbill.install.model.ListedSkillNames
 import skillbill.install.model.McpRegistrationApplyStatus
 import skillbill.install.model.NativeAgentApplyStatus
 import skillbill.install.model.NativeAgentProviderId
 import skillbill.install.model.SupportedAgent
+import skillbill.model.toPath
 import skillbill.ports.repository.toFileLocation
 import java.nio.file.Files
 import java.nio.file.LinkOption
@@ -24,7 +24,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
-class InstallNativeAgentLinkApplyJunieTest : InstallNativeAgentLinkApplyTestSupport() {
+class InstallNativeAgentLinkApplyOwnershipTest : InstallNativeAgentLinkApplyTestSupport() {
   @Test
   fun `apply removes inventory-recorded dangling baseline orchestrator links`() {
     val fixture = setupApplyFixture()
@@ -66,15 +66,15 @@ class InstallNativeAgentLinkApplyJunieTest : InstallNativeAgentLinkApplyTestSupp
 
     val result = applyInstallForTest(plan)
 
-    assertEquals(InstallApplyStatus.SUCCESS, result.status, "unexpected failures: ${result.failures}")
+    assertEquals(InstallApplyStatus.SUCCESS, result.status)
     assertFalse(Files.exists(kotlinLink, LinkOption.NOFOLLOW_LINKS))
     assertFalse(Files.exists(kmpLink, LinkOption.NOFOLLOW_LINKS))
   }
 
   @Test
-  fun `missing inventory cleanup preserves dangling links for unselected providers`() {
+  fun `missing inventory removes canonical dangling links across provider layouts`() {
     val fixture = setupApplyFixture()
-    listOf(".claude", ".codex", ".junie", ".cursor")
+    listOf(".claude", ".codex", ".cursor", ".config/opencode", ".config/devin")
       .forEach { Files.createDirectories(fixture.home.resolve(it)) }
     val cacheRoot =
       fixture.home.resolve(
@@ -96,14 +96,9 @@ class InstallNativeAgentLinkApplyJunieTest : InstallNativeAgentLinkApplyTestSupp
 
     val result = applyInstallForTest(plan)
 
-    assertEquals(InstallApplyStatus.SUCCESS, result.status, "unexpected failures: ${result.failures}")
+    assertEquals(InstallApplyStatus.SUCCESS, result.status)
     danglingLinks.forEach { link ->
-      if (link.parent == NativeAgentProvider.Codex.homeAgentDirs(fixture.home).first()) {
-        assertFalse(Files.exists(link, LinkOption.NOFOLLOW_LINKS), "selected provider dangling link survived: $link")
-      } else {
-        assertTrue(Files.isSymbolicLink(link), "unselected provider dangling link was removed: $link")
-        assertEquals(cacheRoot, readSymlinkTarget(link).parent.parent)
-      }
+      assertFalse(Files.exists(link, LinkOption.NOFOLLOW_LINKS), "canonical dangling link survived: $link")
     }
   }
 
@@ -186,8 +181,9 @@ class InstallNativeAgentLinkApplyJunieTest : InstallNativeAgentLinkApplyTestSupp
     val fixture = setupApplyFixture()
     Files.createDirectories(fixture.home.resolve(".claude"))
     Files.createDirectories(fixture.home.resolve(".codex"))
-    Files.createDirectories(fixture.home.resolve(".junie"))
     Files.createDirectories(fixture.home.resolve(".cursor"))
+    Files.createDirectories(fixture.home.resolve(".config/opencode"))
+    Files.createDirectories(fixture.home.resolve(".config/devin"))
     val sourceBefore = snapshotSource(fixture.repoRoot)
     val plan =
       planInstallForTest(
@@ -199,8 +195,7 @@ class InstallNativeAgentLinkApplyJunieTest : InstallNativeAgentLinkApplyTestSupp
 
     val result = applyInstallForTest(plan)
 
-    assertEquals(InstallApplyStatus.SUCCESS, result.status, "unexpected failures: ${result.failures}")
-    assertTrue(result.failures.isEmpty())
+    assertEquals(InstallApplyStatus.SUCCESS, result.status)
     assertEquals(SupportedAgent.entries.sortedBy(SupportedAgent::id), result.mcpRegistrationIntent.agents)
     assertEquals(
       SupportedAgent.entries.toSet(),
@@ -218,10 +213,8 @@ class InstallNativeAgentLinkApplyJunieTest : InstallNativeAgentLinkApplyTestSupp
       )
       assertTrue(skill.links.all { link -> link.status == InstallAgentLinkStatus.CREATED })
       assertTrue(
-        Files.isSymbolicLink(
-          fixture.home.resolve("agent-skill-targets/claude/${ListedSkillNames.publicName(skill.skillName)}"),
-        ),
-        "Claude should receive the skill link surface",
+        Files.isSymbolicLink(skill.links.single { it.agent == SupportedAgent.CLAUDE }.linkPath.toPath()),
+        "Claude should receive the skill link surface: ${skill.links}",
       )
     }
     assertEquals(
@@ -229,8 +222,8 @@ class InstallNativeAgentLinkApplyJunieTest : InstallNativeAgentLinkApplyTestSupp
         NativeAgentProviderId.CLAUDE,
         NativeAgentProviderId.CODEX,
         NativeAgentProviderId.CURSOR,
-        NativeAgentProviderId.JUNIE,
         NativeAgentProviderId.OPENCODE,
+        NativeAgentProviderId.DEVIN,
       ),
       result.nativeAgents
         .filter { native -> native.status == NativeAgentApplyStatus.LINKED }
@@ -279,7 +272,7 @@ class InstallNativeAgentLinkApplyJunieTest : InstallNativeAgentLinkApplyTestSupp
   }
 
   @Test
-  fun `native agent install preserves an unrecorded dangling link from another machine`() {
+  fun `native agent install replaces a dangling link carried over from another machine`() {
     val targetDir = Files.createTempDirectory("skillbill-native-target").also(tempDirs::add)
     val managedRoot = Files.createTempDirectory("skillbill-native-managed-root").also(tempDirs::add)
     val foreignHome = Files.createTempDirectory("skillbill-native-foreign-home").also(tempDirs::add)
@@ -297,10 +290,11 @@ class InstallNativeAgentLinkApplyJunieTest : InstallNativeAgentLinkApplyTestSupp
         source = newSource,
         agentTarget = AgentTarget("claude", targetDir.toFileLocation()),
         managedSourceRoots = listOf(managedRoot),
+        ownership = NativeAgentLinkOwnership(foreignHome, NativeAgentProvider.Claude, "bill-worker", absentTarget),
       )
 
-    assertTrue(result is InstallNativeAgentResult.Skipped)
-    assertEquals(absentTarget.toAbsolutePath().normalize(), readSymlinkTarget(linkPath))
+    assertTrue(result is InstallNativeAgentResult.Linked)
+    assertEquals(newSource.toAbsolutePath().normalize(), readSymlinkTarget(linkPath))
   }
 
   @Test
@@ -352,7 +346,7 @@ class InstallNativeAgentLinkApplyJunieTest : InstallNativeAgentLinkApplyTestSupp
                 home,
                 provider,
                 logicalName,
-                recordedTarget = provider.cacheArtifactPath(obsoleteRoot, logicalName),
+                provider.cacheArtifactPath(obsoleteRoot, logicalName),
               ),
           )
 

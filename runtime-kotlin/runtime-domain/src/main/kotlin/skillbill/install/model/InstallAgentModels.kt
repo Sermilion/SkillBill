@@ -28,11 +28,6 @@ val AGENT_LAUNCHER_CLIS: Map<SupportedAgent, AgentLauncherCli> =
         executables = listOf(SupportedAgent.CODEX.wireValue),
         installHint = "install the Codex CLI (npm install -g @openai/codex)",
       ),
-    SupportedAgent.JUNIE to
-      AgentLauncherCli(
-        executables = listOf(SupportedAgent.JUNIE.wireValue),
-        installHint = "install the Junie CLI from JetBrains",
-      ),
     SupportedAgent.CURSOR to
       AgentLauncherCli(
         executables = listOf("agent", "${SupportedAgent.CURSOR.wireValue}-agent"),

@@ -4,6 +4,7 @@ import dev.skillbill.desktop.core.common.Diagnostics
 import dev.skillbill.desktop.core.common.HostEnvironment
 import dev.skillbill.desktop.core.common.di.AppScope
 import dev.skillbill.desktop.core.domain.model.ChatAgent
+import dev.skillbill.desktop.core.domain.model.UNAVAILABLE_AGENT_ID
 import dev.skillbill.desktop.core.domain.model.ChatChangesBaseline
 import dev.skillbill.desktop.core.domain.model.ChatFailure
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
@@ -50,6 +51,7 @@ import kotlin.time.Duration.Companion.days
 import kotlin.time.Instant
 import dev.skillbill.desktop.core.domain.model.VerifyReviewModeChoice
 import dev.skillbill.desktop.core.domain.model.VerifyStartChoices
+import skillbill.install.model.SupportedAgent
 
 /** Relative to the user's home, beside the settings file. */
 internal const val CHAT_STORE_PATH = ".skill-bill/desktop/chats"
@@ -58,9 +60,6 @@ private const val CHATS_PER_EXECUTION = 20
 private val ORPHAN_AGE = 7.days
 private val safeSessionId = Regex("[A-Za-z0-9._-]+")
 private val chatStoreLogger = Logger.getLogger("dev.skillbill.desktop.chat.store")
-
-/** One Junie exchange; Junie cannot resume a session, so each turn replays these. */
-internal data class ChatExchange(val operator: String, val agent: String)
 
 internal data class OpenCodeSessionBinding(
   val profileIdentity: String,
@@ -94,8 +93,6 @@ private object ChatStoreKeys {
   const val OPENCODE_DATA_ROOT = "opencode_data_root"
   const val OPENCODE_WORKING_DIRECTORY = "opencode_working_directory"
   const val EXCHANGES = "exchanges"
-  const val OPERATOR = "operator"
-  const val AGENT = "agent"
   const val NEW_TASK_ROOT = "new_task_repository_root"
   const val NEW_TASK_CONTEXT_VERSION = "new_task_context_version"
   const val NEW_TASK_WORKING_DIRECTORY = "new_task_working_directory"
@@ -149,7 +146,6 @@ private data class StoredChat(
   val cursorWorkingDirectory: String? = null,
   val openCodeBinding: OpenCodeSessionBinding? = null,
   val invalidOpenCodeBinding: Boolean = false,
-  val exchanges: List<ChatExchange> = emptyList(),
   val newTask: ChatNewTaskContext? = null,
   val summary: String? = null,
   val summarySourceUpdatedAt: Instant? = null,
@@ -239,21 +235,14 @@ class ChatStore(host: HostEnvironment, private val diagnostics: Diagnostics, pri
     }
   }
 
-  internal fun exchanges(sessionId: String): List<ChatExchange> = (exchangesRead(sessionId) as? ChatStoreRead.Value)?.value.orEmpty()
-
-  internal fun exchangesRead(sessionId: String): ChatStoreRead<List<ChatExchange>> = read(sessionId).map { chat ->
-    if (chat.newTask != null) chat.lines.toExchanges() else chat.exchanges
+  internal fun replayHistoryRead(sessionId: String): ChatStoreRead<List<ChatHistoryLine>> = read(sessionId).map { chat ->
+    chat.lines
   }.orElse(emptyList())
 
-  internal fun newTaskHistory(sessionId: String): List<ChatExchange> = (newTaskHistoryRead(sessionId) as? ChatStoreRead.Value)?.value.orEmpty()
-
-  internal fun newTaskHistoryRead(sessionId: String): ChatStoreRead<List<ChatExchange>> = read(sessionId).map { chat ->
+  internal fun newTaskHistoryRead(sessionId: String): ChatStoreRead<List<ChatHistoryLine>> = read(sessionId).map { chat ->
     val context = chat.newTask
-    if (context == null) emptyList() else chat.lines.take(context.pendingTurnLineIndex ?: chat.lines.size).toExchanges()
+    if (context == null) emptyList() else chat.lines.take(context.pendingTurnLineIndex ?: chat.lines.size)
   }.orElse(emptyList())
-
-  internal fun saveExchanges(sessionId: String, exchanges: List<ChatExchange>) =
-    update(sessionId) { stored, _ -> stored.copy(exchanges = exchanges) }
 
   internal fun saveChat(entry: ChatHistoryEntry): Boolean {
     val saved = update(entry.sessionId) { stored, exists ->
@@ -597,33 +586,8 @@ private fun StoredChat.needsSummary(): Boolean =
 private fun StoredChat.needsRecovery(): Boolean = invalidOpenCodeBinding ||
   (agent?.agentId == "opencode" && ((agentSession != null && openCodeBinding == null) || (agentSession.isNullOrBlank() && openCodeBinding != null)))
 
-private fun StoredChat.isResumeOnly(): Boolean = executionId == null && newTask == null && lines.isEmpty() && exchanges.isEmpty() &&
+private fun StoredChat.isResumeOnly(): Boolean = executionId == null && newTask == null && lines.isEmpty() &&
   !agentSession.isNullOrBlank() && summary == null && !needsRecovery()
-
-private fun List<ChatHistoryLine>.toExchanges(): List<ChatExchange> = buildList {
-  var index = 0
-  while (index < this@toExchanges.size) {
-    val line = this@toExchanges[index]
-    if (line.role != ChatHistoryRole.Operator && line.role != ChatHistoryRole.Agent) {
-      index++
-      continue
-    }
-    if (line.role == ChatHistoryRole.Operator && this@toExchanges.getOrNull(index + 1)?.role == ChatHistoryRole.Agent) {
-      add(ChatExchange(line.text, this@toExchanges[index + 1].text))
-      index += 2
-    } else {
-      add(
-        when (line.role) {
-          ChatHistoryRole.Operator -> ChatExchange(line.text, "")
-          ChatHistoryRole.Agent -> ChatExchange("", line.text)
-          ChatHistoryRole.Notice, ChatHistoryRole.Error, ChatHistoryRole.Approval, ChatHistoryRole.OperationCard ->
-            error("Non-conversation line reached exchange conversion")
-        },
-      )
-      index++
-    }
-  }
-}
 
 private val REWRITTEN_CHAT_KEYS = setOf(
     ChatStoreKeys.EXECUTION_ID,
@@ -639,6 +603,7 @@ private val REWRITTEN_CHAT_KEYS = setOf(
     ChatStoreKeys.OPENCODE_CONFIG_IDENTITY,
     ChatStoreKeys.OPENCODE_DATA_ROOT,
     ChatStoreKeys.OPENCODE_WORKING_DIRECTORY,
+    ChatStoreKeys.EXCHANGES,
     ChatStoreKeys.SUMMARY,
     ChatStoreKeys.SUMMARY_SOURCE_UPDATED_AT,
     ChatStoreKeys.EXECUTION_CHECKOUT_ROOT,
@@ -713,21 +678,15 @@ private fun encode(chat: StoredChat): JsonObject = buildJsonObject {
   chat.summary?.let { put(ChatStoreKeys.SUMMARY, it) }
   chat.summarySourceUpdatedAt?.let { put(ChatStoreKeys.SUMMARY_SOURCE_UPDATED_AT, it.toEpochMilliseconds()) }
   chat.executionCheckoutRoot?.let { put(ChatStoreKeys.EXECUTION_CHECKOUT_ROOT, it) }
-  put(
-    ChatStoreKeys.EXCHANGES,
-    buildJsonArray {
-      chat.exchanges.forEach { exchange ->
-        add(buildJsonObject {
-          put(ChatStoreKeys.OPERATOR, exchange.operator)
-          put(ChatStoreKeys.AGENT, exchange.agent)
-        })
-      }
-    },
-  )
 }
 
 private fun decode(root: JsonObject, fallbackSessionId: String, diagnostics: Diagnostics): StoredChat {
-  val agentId = root.string(ChatStoreKeys.AGENT_ID)
+  val agentId = root.string(ChatStoreKeys.AGENT_ID)?.let { id ->
+    if (id in SupportedAgent.supportedIds || id == UNAVAILABLE_AGENT_ID) id else {
+      diagnostics.record("chat.store_unsupported_agent_normalized")
+      UNAVAILABLE_AGENT_ID
+    }
+  }
   val openCodeFields = listOf(
     ChatStoreKeys.OPENCODE_PROFILE_IDENTITY,
     ChatStoreKeys.OPENCODE_CONFIG_IDENTITY,
@@ -763,10 +722,6 @@ private fun decode(root: JsonObject, fallbackSessionId: String, diagnostics: Dia
       OpenCodeSessionBinding(requireNotNull(openCodeValues[0]), requireNotNull(openCodeValues[1]), requireNotNull(openCodeValues[2]), requireNotNull(openCodeValues[3]))
     } else null,
     invalidOpenCodeBinding = hasOpenCodeBinding && openCodeValues.any { it == null },
-    exchanges = root.objects(ChatStoreKeys.EXCHANGES).mapNotNull { exchange ->
-      val operator = exchange.string(ChatStoreKeys.OPERATOR) ?: return@mapNotNull null
-      exchange.string(ChatStoreKeys.AGENT)?.let { ChatExchange(operator, it) }
-    },
     newTask = root.string(ChatStoreKeys.NEW_TASK_WORKING_DIRECTORY)?.let { workingDirectory ->
       val selectedRoot = when (root[ChatStoreKeys.NEW_TASK_SELECTED_REPOSITORY_ROOT]) {
         JsonNull -> null

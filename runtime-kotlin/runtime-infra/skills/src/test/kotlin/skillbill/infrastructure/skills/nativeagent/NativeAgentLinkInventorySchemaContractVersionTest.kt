@@ -26,5 +26,9 @@ class NativeAgentLinkInventorySchemaContractVersionTest {
       schema.path("properties").path("entries").path("items").path("properties")
         .path("provider").path("enum").any { provider -> provider.asText() == "opencode" },
     )
+    assertTrue(
+      schema.path("properties").path("entries").path("items").path("properties")
+        .path("provider").path("enum").any { provider -> provider.asText() == "devin" },
+    )
   }
 }

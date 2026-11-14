@@ -486,8 +486,7 @@ internal object InstallerShellFixtures {
     |    exit 0
     |    ;;
     |  "install cleanup-agent-target"|"install unlink-codex-agents"|"install unlink-claude-agents"|\
-    "install unlink-junie-agents"|"install unlink-cursor-agents"|"install unlink-opencode-agents"|\
-    "install unlink-devin-agents"|"install unregister-mcp")
+    "install unlink-cursor-agents"|"install unregister-mcp")
     |    exit 0
     |    ;;
     |esac

@@ -72,19 +72,6 @@ internal fun parseChatModels(entries: JsonArray, idKey: String, labelKey: String
   return models.distinctBy { it.id }
 }
 
-internal fun acpChatModels(body: JsonObject): List<ChatModel>? {
-  val entries = body.obj(ChatModelKeys.MODELS)?.get(ChatModelKeys.AVAILABLE_MODELS) as? JsonArray
-  if (entries != null) return parseChatModels(entries, ChatModelKeys.MODEL_ID, ChatModelKeys.NAME)
-  val options = (body[ChatModelKeys.CONFIG_OPTIONS] as? JsonArray)?.filterIsInstance<JsonObject>()
-    ?.firstOrNull { it.string(ChatModelKeys.CATEGORY) == ChatModelKeys.MODEL }
-    ?.get(ChatModelKeys.OPTIONS) as? JsonArray ?: return null
-  fun flatten(rows: JsonArray): JsonArray = JsonArray(rows.flatMap { row ->
-    val nested = (row as? JsonObject)?.get(ChatModelKeys.OPTIONS) as? JsonArray
-    if (nested == null) listOf(row) else flatten(nested).toList()
-  })
-  return parseChatModels(flatten(options), ChatModelKeys.VALUE, ChatModelKeys.NAME)
-}
-
 internal fun cursorChatModels(output: String): List<ChatModel> = output.lineSequence().mapNotNull { line ->
   val clean = line.replace(Regex("\u001B\\[[0-9;]*[A-Za-z]"), "").trim()
   val parts = clean.split(" - ", limit = 2)

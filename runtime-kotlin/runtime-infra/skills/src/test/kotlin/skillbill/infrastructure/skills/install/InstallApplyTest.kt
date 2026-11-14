@@ -111,7 +111,6 @@ class InstallApplyTest : InstallApplyTestSupport() {
         assertFalse(target.startsWith(fixture.home.toAbsolutePath().normalize().resolve(".skill-bill/native-agents")))
       }
     assertFalse(Files.exists(fixture.home.resolve(".skill-bill/native-agents"), LinkOption.NOFOLLOW_LINKS))
-    assertFalse(result.nativeAgents.any { native -> native.provider == NativeAgentProviderId.JUNIE })
   }
 
   private fun assertSuccessfulMcpOutcomes(

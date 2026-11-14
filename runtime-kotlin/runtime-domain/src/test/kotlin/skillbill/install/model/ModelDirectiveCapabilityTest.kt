@@ -7,7 +7,7 @@ import kotlin.test.assertTrue
 
 class ModelDirectiveCapabilityTest {
   @Test
-  fun `opencode joins the model-directive capable agents`() {
+  fun `cursor joins claude and codex as model-directive capable agents`() {
     assertEquals(
       setOf(
         SupportedAgent.CLAUDE,
@@ -21,14 +21,12 @@ class ModelDirectiveCapabilityTest {
   }
 
   @Test
-  fun `supportsModelDirective accepts cursor and rejects junie`() {
+  fun `supportsModelDirective accepts cursor and rejects an unsupported id`() {
     assertTrue(supportsModelDirective("cursor"))
     assertTrue(supportsModelDirective("CURSOR"))
     assertTrue(supportsModelDirective("claude"))
     assertTrue(supportsModelDirective("codex"))
-    assertTrue(supportsModelDirective("opencode"))
-    assertTrue(supportsModelDirective("OPENCODE"))
-    assertFalse(supportsModelDirective("junie"))
+    assertFalse(supportsModelDirective("retired-agent"))
     assertFalse(supportsModelDirective("copilot"))
     assertFalse(supportsModelDirective(null))
     assertFalse(supportsModelDirective(" "))

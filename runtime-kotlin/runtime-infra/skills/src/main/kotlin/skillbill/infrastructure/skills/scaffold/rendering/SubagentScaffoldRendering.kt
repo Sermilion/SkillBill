@@ -67,7 +67,6 @@ internal fun renderSubagentSpawnRuntimeNotes(
       "limit is Codex-specific and constrains no other runtime's launch rules."
   }
   paragraphs += cursorSpawnParagraph(orchestratorName, specialists)
-  paragraphs += junieSpawnParagraph()
   return paragraphs.joinToString("\n\n")
 }
 
@@ -138,12 +137,6 @@ private fun cursorSpawnParagraph(
     "re-run path (the Cursor IDE agent chat) or `mode:inline`. Do not silently downgrade to inline, " +
     "substitute a built-in worker, or claim delegated coverage from the parent context."
 }
-
-private fun junieSpawnParagraph(): String =
-  "**On Junie.** Junie delegated review is intentionally unsupported: there is no Junie mechanism for " +
-    "launching the named specialists these lanes require. Do not emulate a lane by answering its rubric in " +
-    "the parent context, and do not claim delegated coverage. Use `mode:inline` here, or re-run the " +
-    "delegated review on a runtime with a spawn paragraph above."
 
 private fun nativeAgentStubBody(
   name: String,

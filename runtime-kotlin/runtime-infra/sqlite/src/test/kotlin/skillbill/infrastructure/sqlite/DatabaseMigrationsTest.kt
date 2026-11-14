@@ -2451,6 +2451,8 @@ private val expectedMigrationDefinitions =
     131 to "record-verify-criterion-resolutions",
     132 to "add-project-check-config",
     133 to "record-monitor-repair-validation-snapshots",
+    134 to "retire-unsupported-agent-ids",
+    135 to "normalize-launch-agents-after-vocabulary-change",
   )
 
 private object NoopMigrationDiagnostics : RuntimeDiagnostics {

@@ -72,11 +72,6 @@ object InstallOperations {
     hostPlatform: HostPlatformPort = JdkHostPlatformPort,
   ): Path = InstallOperationsPaths.claudeAgentsPath(home, environment, hostPlatform)
 
-  fun junieAgentsPath(
-    home: Path?,
-    hostPlatform: HostPlatformPort = JdkHostPlatformPort,
-  ): Path = InstallOperationsPaths.junieAgentsPath(home, hostPlatform)
-
   fun cursorAgentsPath(
     home: Path?,
     hostPlatform: HostPlatformPort = JdkHostPlatformPort,

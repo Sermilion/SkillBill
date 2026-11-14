@@ -1,16 +1,16 @@
-## [2026-11-13] Separate public Sona names from canonical identities
-Context: SONA-5 changes public commands while existing source contracts and persisted records retain skill-bill identities.
-Decision: Use sona and /sona in live guidance and public links. ListedSkillNames maps canonical skill-bill to that public name. Retain canonical sources, internal-for tokens, raw operations, telemetry values, state paths and historical evidence.
-Reason: The spec requires the new entry points without relabeling durable data or breaking manifest-driven discovery. Renaming the source tree or parent tokens would change those identities and could lose class-selected ceremony. This change introduces no persisted-data migration.
+## [2026-11-13] Preserve historical entries during retired-agent cleanup
+Context: SONA-19 requires every tracked record to omit the retired fourth agent's name, and the operator authorized historical cleanup.
+Decision: Reword references in place while preserving entries, dates, issue keys and order. Change heading text only through the four substitutions authorized by the cleanup subtask.
+Reason: Historical facts and surviving provider decisions must remain available while tracked records obey the removal requirement. Search exclusions would leave that requirement unmet.
 
-## [2026-11-13] Keep the retired CLI notice independent of the runtime
-Context: SONA-5 retires skill-bill after earlier subtasks convert executable callers and remaining guidance.
-Decision: Keep the managed-launcher marker and generate a constant notice with exit status 0 for every argument list. Do not inspect the runtime or forward arguments. Remove the obsolete MCP link only for the exact owned target.
-Reason: The spec requires old invocations to perform no action even when the runtime is missing, while preserving uninstall recognition and unrelated user files.
+## [2026-11-13] Leave retired-agent installations untouched
+Context: SONA-19 removes the retired fourth agent's installer and uninstaller integration.
+Decision: Drop its cleanup steps and leave existing skill links, subagent links and MCP registrations on older installations.
+Reason: The operator explicitly accepted leftover files on old installs. Removing support does not require a destructive cleanup pass.
 
 ## [2026-11-07] Default all provider launches to native permission bypass
 Context: The operator explicitly restored the previous global bypass behavior after testing SKILL-453, and requested it as the default for every agent and launch surface.
-Decision: Claude skips permission checks; Codex requests never approvals and full access on thread start, resume and turns; Cursor uses force, trust, MCP approval and a disabled sandbox; Junie ACP enables Brave mode before prompting. Existing headless Junie review execution remains autonomous.
+Decision: Claude skips permission checks; Codex requests never approvals and full access on thread start, resume and turns; Cursor uses force, trust, MCP approval and a disabled sandbox; the retired fourth agent's ACP transport enables Brave mode before prompting. Its existing headless review execution remains autonomous.
 Reason: Operators want agents to act by default without adding sandbox approval steps. Keep the broker and cards for genuine residual harness permission requests, and keep operation proposal confirmation separate from tool permissions.
 Revisit when: The operator requests a selectable restrictive launch policy.
 
@@ -31,7 +31,7 @@ Revisit when: Terminal and desktop allocation can share one runtime-owned implem
 Context: Each Claude chat turn ran as its own `claude -p` process. When the reply ended, the process exited and Claude Code killed the background commands it had started, so a promise like "I'll push once the checks pass" could never be kept, and the operator blamed hiding the chat pane.
 Decision: ClaudeChatTransport keeps one `claude -p --input-format stream-json --replay-user-messages` process per chat session and writes each turn to its stdin. Output after the replay of a turn's uuid, up to its `result`, belongs to that turn; output with no turn pending is a reply the agent started on its own and reaches the chat through `ExecutionChatRepository.unprompted`. Hiding the pane leaves the process alone. Closing the tab, `/clear`, `/resume`, an agent switch, closing the window, or cancelling a turn before its reply stops it with its descendants. The read-only mode note moved from the system prompt into each message because the process outlives a mode change.
 Reason: Background commands only survive while the process that started them lives, and Claude reports their completion by starting a turn on its own, which needs a reader that outlives the turn.
-Alternatives considered: Telling the agent to run every command in the foreground was rejected as the only fix because it holds the composer for a whole build. Codex, Cursor and Junie still run one process per turn until their CLIs offer an equivalent input stream.
+Alternatives considered: Telling the agent to run every command in the foreground was rejected as the only fix because it holds the composer for a whole build. Codex, Cursor and the retired fourth agent still run one process per turn until their CLIs offer an equivalent input stream.
 
 ## [2026-10-30] Bind config edits to locked document identities
 Context: A config file can move between legacy and current paths with identical bytes, or change while a desktop draft is open.

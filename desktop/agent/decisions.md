@@ -1,37 +1,19 @@
-## [2026-11-13] Separate the working directory from repository selection
-Context: New task used one root for provider execution and repository authority. Home can contain Git metadata, and a restored explicit null must remain unselected.
-Decision: Carry workingDirectory and selectedRepositoryRoot independently, using window-supplied home without selection. Keep repositoryRoot as the non-null directory compatibility accessor; Git behavior requires actual selection.
-Reason: Tools and approval ownership need a directory. A directory alone does not identify the operator's intended repository or change the meaning of saved absence.
+## [2026-11-13] Preserve saved chats when their agent becomes unavailable
+Context: A saved chat can outlive its agent's support. Dropping its ChatAgent would hide it from history, while automatically selecting another agent would change who handles the conversation.
+Decision: Normalize unsupported non-null stored agent ids to unavailable during decode, retain other chat data, and persist the sentinel on the next ordinary save. Restore the transcript with one pick-an-agent notice and gate sending until the operator chooses a supported agent.
+Reason: The operator must retain the conversation and its metadata and choose the replacement agent. Read-time normalization avoids a startup bulk rewrite and follows the runtime's supported vocabulary.
 
-## [2026-11-13] Version saved draft context before projection
-Context: The legacy repository-root field also marked saved records as New task drafts. Removing it could misclassify a conversation without repository selection.
-Decision: Persist context version 1 with explicit directory and selection facts; null-selected writes omit the legacy root marker. Migrate legacy bound drafts atomically before projection, preserve source fields, and return typed failures with recovery guidance while retaining invalid originals.
-Reason: Versioning distinguishes intentional absence from legacy selection and execution records. Failed reads must not become defaults, destructive rewrites or orphan deletion.
+## [2026-11-13] Ignore legacy replay arrays during compatible chat reads
+Context: Earlier chat files contain exchanges arrays alongside transcripts and session metadata, but the removed transports no longer consume those arrays.
+Decision: Stop decoding and encoding exchanges. Let the next ordinary atomic save omit the array while preserving all remaining chat fields.
+Reason: Named-field decoding already accepts these files. A separate migration or deletion pass adds no required conversion and risks changing unrelated saved data.
 
-## [2026-11-13] Keep repository switching available through durable replacement
-Context: SONA-21 requires manual selection after chat starts. Directory and agent changes can require a fresh provider session while the saved conversation is the only durable copy.
-Decision: Keep the picker available and stage a replacement after accepted saves and provider shutdown. Persist before publishing the chat, selection and picker; retire the prior save only when ownership allows. Failed transitions recover the old context; changed-home resume retains its source.
-Reason: A provider binding cannot silently move directories. A failed save must leave a recoverable conversation, so changing visible selection before durable replacement is unsafe.
-
-## [2026-11-13] Validate exact roots for selection and every New task dispatch
-Context: Git discovery can resolve a candidate or deleted selected child to an enclosing repository. Standalone and operation routes previously dispatched before goal/plan repository admission.
-Decision: Manual and chat picks use branch authority plus canonical exact-root equality; project metadata is display-only. Validate before every NewTaskKind dispatch, reservation or proposal and pass the canonical root downstream. Recheck database identity after suspension; apply new-work branch policy only to GoalRun and PlanOnly.
-Reason: A successful Git read does not prove the requested directory is the intended root. Every run kind needs a valid selected repository, while standalone and operation branch policy must remain unchanged and database changes must retain refusal precedence.
-
-## [2026-11-13] Settle repository candidates before draining queued messages
-Context: A candidate can arrive before its producing reply and saves finish, while later messages wait in the queue.
-Decision: Settle the successful turn and accepted saves before validating and replacing from the window-owned draft. Hold queue draining and carry ordinary text and images through replacement or recovery; unresolved delivery claims retain their owner.
-Reason: Rebinding inside the producing collector can cancel its accepted reply. Draining earlier can send queued messages into the wrong directory, and dropping them would lose operator input.
-
-## [2026-11-13] Retain conversation text without old launch authority
-Context: A repository switch keeps the conversation, including start suggestions and parked operation cards created for the old repository.
-Decision: Persist replacement history with inactive controls, then revoke the old thread's requests, observations and callbacks after the save succeeds. Clear accepted keys and repository-dependent launch state; bind start and key callbacks to their originating context.
-Reason: Hiding a button does not revoke retained callbacks or saved card references. Preserved conversation text must not authorize work in the replacement repository.
-
-## [2026-11-13] Require current selection and originating authority for New task runs
-Context: SONA-21 permits ordinary home chat without repository selection. Callbacks and parked requests can outlive their repository context or database session.
-Decision: Require actual selection and originating draft, chat, root, context revision and database session for starts and operation decisions, including checks after saves. Selection never retries work; a database-change refusal retains the original session fence and asks the operator to reopen the chat.
-Reason: Home Git metadata, issue keys and readiness advice do not identify the intended repository or authorize a run. An earlier action must not acquire authority in a replacement context. Ordinary tools and execution-chat scope retain their existing rules.
+## [2026-11-13] Keep the Linux packaged launcher classpath in a manifest jar
+Context: Validation observed a native launcher crash before JVM startup. The environment-pointer failure matched the JDK partial pipe-read defect on a host with an 8192-byte pipe capacity.
+Decision: After Linux createDistributable, replace launcher classpath entries with one manifest jar that retains dependency order. Preserve the main class, JVM options and bundled jars.
+Reason: The manifest shortens the native launcher classpath while Java resolves dependencies in their original order. Clearing inherited LD_LIBRARY_PATH did not resolve the crash.
+Revisit when: The bundled JDK launcher handles long classpaths without the partial pipe-read defect.
+Superseded by: Compact the Linux packaged launcher classpath (2026-11-13).
 
 ## [2026-11-13] Keep Finalize eligibility and release in the runtime
 Context: Terminal-row UI checks hid launch actions even when completed unfinalized work still needed operator attention.
@@ -79,11 +61,11 @@ Decision: The card holds the header plus one row per window up to two, one row f
 Reason: Blank rows read as missing data, and a generic "no data" hides whether to wait, retry or send a message.
 Supersedes: The fixed two-row height from "Keep the usage card fixed and on the last valid agent". The card still keeps the last valid agent and reading.
 
-## [2026-11-08] Show Cursor and Junie on the usage card by name only
-Context: Cursor and Junie have no readable usage source. The Cursor CLI has no usage command, its plan numbers sit behind undocumented cursor.com endpoints that need the session token from Cursor's own storage, and Junie exposes no quota at all. The card showed "No usage data" for both.
-Decision: UsageProvider covers only Codex and Claude. When the open chat or run uses Cursor or Junie, the card shows the agent's name and nothing else, asks for no usage, and its popup keeps the Codex and Claude tabs and the default agent picker without Refresh or Dashboard. A tab picked there holds until the context changes agent. The last Codex or Claude agent and reading stay for when a usage agent returns.
+## [2026-11-08] Show Cursor and a fourth agent on the usage card by name only
+Context: Cursor and the retired fourth agent have no readable usage source. The Cursor CLI has no usage command, its plan numbers sit behind undocumented cursor.com endpoints that need the session token from Cursor's own storage, and the retired fourth agent exposes no quota at all. The card showed "No usage data" for both.
+Decision: UsageProvider covers only Codex and Claude. When the open chat or run uses Cursor or the retired fourth agent, the card shows the agent's name and nothing else, asks for no usage, and its popup keeps the Codex and Claude tabs and the default agent picker without Refresh or Dashboard. A tab picked there holds until the context changes agent. The last Codex or Claude agent and reading stay for when a usage agent returns.
 Reason: An empty or "no data" state for an agent that can never report reads as a fault. The card is still the place to switch the shown provider and set the default agent.
-Supersedes: The Cursor and Junie tabs and "No usage data" states from "Keep the usage card fixed and on the last valid agent".
+Supersedes: The Cursor and retired-fourth-agent tabs and their "No usage data" states from "Keep the usage card fixed and on the last valid agent".
 
 ## [2026-11-08] Admit Codex limits for the account the app-server reports
 Context: The Codex usage card never showed numbers. The collector treated the `account/updated` notice that Codex sends on every startup as an account change, and it dropped valid `account/rateLimits/read` responses because numeric admission was closed.
@@ -182,9 +164,9 @@ Revisit when: Quit can wait for background work, or the newest-20 cap leaves nee
 ## [2026-11-07] Restrict summary calls and use an explicit cheap-model map
 Context: Saved transcripts are untrusted input, and summary calls bill the chat's own agent account.
 Decision: Run separate one-shot commands outside repositories with Claude haiku, Codex gpt-6-luna or Cursor gpt-5.4-nano-none. Use tool-less, read-only or ask-mode arguments, omit session-resume and permission-bypass flags, and skip unmapped agents with chat.summary_unsupported_agent.
-Reason: Transcript instructions must not gain tool or write authority or disturb the chat's resume state. Junie has no confirmed cheap model, so guessing could select an expensive model or fail.
+Reason: Transcript instructions must not gain tool or write authority or disturb the chat's resume state. The retired fourth agent has no confirmed cheap model, so guessing could select an expensive model or fail.
 Alternatives considered: Reusing ChatTransport.run would carry the chat's full permissions and save agent session state.
-Revisit when: Agent models or CLI flags change, or a cheap Junie model is confirmed.
+Revisit when: Agent models or CLI flags change, or a cheap model for the retired fourth agent is confirmed.
 
 ## [2026-11-07] Use a stationary ellipsis for summaries under reduced motion
 Context: Summary rows must scroll sideways when text overflows, while the app also supports LocalReducedMotion.
@@ -274,7 +256,7 @@ Revisit when: The runtime reports worktree liveness itself or the desktop gets a
 Context: After removal, saved Claude and Codex sessions still live under the worktree path, so opening the chat at the main checkout started a fresh session and lost the conversation.
 Decision: End the agent process, then move or rewrite saved sessions to the main checkout path once per chat session under a lock. Keep the session id only for Claude or Codex when the move reported no failures; otherwise start fresh and say so. Claude files move without overwriting a destination; Codex files get only the first-line cwd rewritten through a same-directory temporary file and atomic replace.
 Reason: Moving the files is the only way to keep the agent's own history, the no-failure condition prevents resuming a half-moved session, and not overwriting protects sessions already at the main checkout.
-Revisit when: Cursor or Junie expose a relocatable session store, or Claude and Codex resume by id regardless of directory.
+Revisit when: Cursor or the retired fourth agent expose a relocatable session store, or Claude and Codex resume by id regardless of directory.
 
 ## [2026-11-06] Refresh observed standalone plans on a bounded pulse
 Context: Plan output snapshots have no change revision, so database signals alone do not guarantee a full detail refresh when output changes.
@@ -326,7 +308,6 @@ Reason: The runtime owns liveness and restore rules. The fingerprint prevents co
 Context: SKILL-467 allowed repository and agent changes after the first message. SKILL-482 requires a static repository pill once a chat starts.
 Decision: The repository pill has no click or chevron and its popup does not compose after chat starts. The agent chip retains its rebind behavior.
 Reason: The new requirement applies only to the repository chip. With its popup unavailable, repository and base-branch changes have no remaining trigger in the chat.
-Superseded by: Keep repository switching available through durable replacement (2026-11-13)
 
 ## [2026-11-05] Read New Task branches through a runtime port
 Context: The picker needs local and remote refs and the default branch for the selected repository.
@@ -384,10 +365,11 @@ Context: ClaudeChatTransport.stop cancelled the session job and registered opene
 Decision: stop records the job in stopping before cancel. run joins that job for STOP_WAIT_MS (5s) before registered. On timeout it records chat.stop_wait_expired and continues. Different session ids do not wait on each other.
 Reason: 5s is longer than SIGTERM plus force-kill. A stuck job must not block chat forever. Registering stopping before remove keeps a concurrent run from seeing the session gone with no entry.
 
-## [2026-11-03] Keep a stopped Junie execution exchange
-Context: JunieChatTransport saved exchanges only on Completed, so a cancelled turn vanished from the next prompt.
+## [2026-11-03] Keep a stopped execution exchange for the retired fourth agent
+Context: The retired fourth agent's chat transport saved exchanges only on Completed, so a cancelled turn vanished from the next prompt.
 Decision: onCompletion saves history plus the prompt and trimmed reply when the cause is CancellationException, the reply is not blank, and scope is not NewTask.
-Reason: The next execution turn reads store.exchanges. New-task Junie builds history from saved draft lines, which subtask 3 keeps current, so this path must not write them.
+Reason: The next execution turn reads store.exchanges. New-task chats for the retired fourth agent build history from saved draft lines, which subtask 3 keeps current, so this path must not write them.
+Superseded by: Ignore legacy replay arrays during compatible chat reads (2026-11-13)
 
 ## [2026-11-03] Scope and resolve favorites by database file identity
 Context: Run IDs can occur in different databases, files can be replaced at the same path, and saved runs can fall outside the Day board window.
@@ -400,10 +382,10 @@ Decision: Render membership from confirmed settings, serialize toggles, and canc
 Reason: A failed write must not appear successful, and an old session's completion must not change the new session's control.
 
 ## [2026-11-03] Give non-Claude agents pasted images as file paths, Claude as content blocks
-Context: Chat turns can carry pasted images. Claude's stream-json input accepts base64 image content blocks. Codex, Cursor and Junie take only text on stdin or argv.
+Context: Chat turns can carry pasted images. Claude's stream-json input accepts base64 image content blocks. Codex, Cursor and the retired fourth agent take only text on stdin or argv.
 Decision: Claude receives image blocks in the user message. The other three save each image to a per-session temp directory and append a footer listing absolute file paths. Each deletes the directory in end(sessionId), and saved history keeps only the typed prompt.
 Reason: Inline bytes need a per-agent protocol the other CLIs lack, while a file path works for any agent that can read files. Keeping paths out of saved history stops later resends from pointing at deleted files.
-Revisit when: Codex, Cursor or Junie accept inline image input, or an agent cannot read files outside its checkout.
+Revisit when: Codex, Cursor or the retired fourth agent accept inline image input, or an agent cannot read files outside its checkout.
 
 ## [2026-11-03] Read removed goal changes from committed refs
 Context: A removed goal worktree cannot supply working-tree changes, but its branch commits remain accessible from the primary checkout.
@@ -415,7 +397,6 @@ Superseded by: Desktop treats a missing worktree directory as Removed, whatever 
 Context: Execution chat queues Send while a reply streams. New task disabled Send because canAdmitTurn required the thread not to be busy, so follow-up messages were dropped until the turn ended.
 Decision: NewTaskChat enqueues on ChatThread.queuedState and drains like ChatWorkspace. The composer labels the button Queue, keeps the input focused, and shows the queued count. Discard, close and rebind drop the queue. Start goal run still waits until the chat is idle.
 Reason: The thread already had a queue. Disabling Send was a fork of ChatComposer, not a New task requirement.
-Superseded by: Settle repository candidates before draining queued messages (2026-11-13), for candidate-driven replacement queue handling only. Ordinary turn queueing remains applicable.
 
 ## [2026-11-02] Keep New task repository and agent chips usable after the first message
 Context: After Send, the repository and agent chips still showed a hand cursor but ignored clicks, so the operator could not swap project or change the displayed model without Discard or New chat.
@@ -459,17 +440,17 @@ Revisit when: The app needs change lists for several executions at once.
 Superseded by: Share one git lock and an immutable committed-change cache across change scopes (2026-10-31)
 
 ## [2026-10-31] Resume agent CLI sessions of the worktree with /resume
-Context: The operator needs to pick up an earlier conversation in the chat, as `claude --resume` does in a terminal, on every chat agent and every agent profile (`~/.claude-*`, `~/.codex-*`, `~/.cursor-*`). Chats lived in memory, and codex, cursor and junie kept their resume handles in in-memory maps.
-Decision: Typing `/resume` in the composer highlights the command and lists, newest first, every claude, codex and cursor session whose working directory is the chat's worktree, read from each profile's own store: Claude `projects/<path>/*.jsonl`, Codex `sessions/**/rollout-*.jsonl` with `session_index.jsonl` names, and Cursor `chats/*/*/meta.json`. Profiles are the default directory, `~/.<agent>-*` siblings holding that store, and directories named by CLAUDE_CONFIG_DIR, CODEX_HOME, CURSOR_CONFIG_DIR, XDG_CONFIG_HOME or the app's Claude setting. Picking one ends any running turn, shows the session's last 10 operator and agent messages, and continues it on its agent and profile: the transport sets CLAUDE_CONFIG_DIR, CODEX_HOME or CURSOR_CONFIG_DIR from ChatAgent.profile, and the next turn sends the full snapshot. ChatStore writes one JSON file per chat below `HostEnvironment.userHome`, using `CHAT_STORE_PATH`, after each finished turn with its clean lines, agent and profile, and the codex thread id, cursor chat id and junie exchanges. A session the app started shows those clean lines instead of prompts carrying the snapshot. Junie has no session store, so it lists only chats the app saved for the execution. The store keeps the newest 20 chats per execution and drops handle-only files older than 7 days.
+Context: The operator needs to pick up an earlier conversation in the chat, as `claude --resume` does in a terminal, on every chat agent and every agent profile (`~/.claude-*`, `~/.codex-*`, `~/.cursor-*`). Chats lived in memory, and codex, cursor and the retired fourth agent kept their resume handles in in-memory maps.
+Decision: Typing `/resume` in the composer highlights the command and lists, newest first, every claude, codex and cursor session whose working directory is the chat's worktree, read from each profile's own store: Claude `projects/<path>/*.jsonl`, Codex `sessions/**/rollout-*.jsonl` with `session_index.jsonl` names, and Cursor `chats/*/*/meta.json`. Profiles are the default directory, `~/.<agent>-*` siblings holding that store, and directories named by CLAUDE_CONFIG_DIR, CODEX_HOME, CURSOR_CONFIG_DIR, XDG_CONFIG_HOME or the app's Claude setting. Picking one ends any running turn, shows the session's last 10 operator and agent messages, and continues it on its agent and profile: the transport sets CLAUDE_CONFIG_DIR, CODEX_HOME or CURSOR_CONFIG_DIR from ChatAgent.profile, and the next turn sends the full snapshot. ChatStore writes one JSON file per chat below `HostEnvironment.userHome`, using `CHAT_STORE_PATH`, after each finished turn with its clean lines, agent and profile, and the codex thread id, cursor chat id and the retired fourth agent's exchanges. A session the app started shows those clean lines instead of prompts carrying the snapshot. The retired fourth agent has no session store, so it lists only chats the app saved for the execution. The store keeps the newest 20 chats per execution and drops handle-only files older than 7 days.
 Reason: Each agent's own session carries the full context, so the app reads only what the picker shows and resumes the session in the profile that owns it.
 Revisit when: Cursor messages are needed in the transcript; they sit in a SQLite store the app does not read, so a resumed Cursor session shows only a notice. A session also cannot resume after its worktree moved.
 
 ## [2026-10-31] Run chat turns with the execution's own permissions on every agent
-Context: The operator asked for the chat to do anything the execution agent can, with no limits added by the app, and for chat on codex, cursor and junie. Read-only turns were denying `gh pr view` and similar commands.
-Decision: Claude turns pass --dangerously-skip-permissions and drop --restricted, --tools, --allowedTools, --permission-mode and --permission-prompts. Codex turns pass --dangerously-bypass-approvals-and-sandbox with shell_environment_policy.inherit=all, Cursor turns pass --force, --trust and --approve-mcps, and Junie runs headless as the launcher runs it. ReadOnly and Act still pick the scope prompt and drive pause-and-act, but limit no tools. Codex and Cursor resume the thread or chat id their first turn reported, held in memory per chat session. Junie's text output carries no session id, so each Junie turn sends the earlier exchanges of the chat, newest first up to 120,000 characters. The operator can switch a chat's agent from the composer chip; the switch takes that agent's REASONING-tier model, or the CLI default, and starts a new agent session with the full snapshot.
+Context: The operator asked for the chat to do anything the execution agent can, with no limits added by the app, and for chat on codex, cursor and the retired fourth agent. Read-only turns were denying `gh pr view` and similar commands.
+Decision: Claude turns pass --dangerously-skip-permissions and drop --restricted, --tools, --allowedTools, --permission-mode and --permission-prompts. Codex turns pass --dangerously-bypass-approvals-and-sandbox with shell_environment_policy.inherit=all, Cursor turns pass --force, --trust and --approve-mcps, and the retired fourth agent runs headless as the launcher runs it. ReadOnly and Act still pick the scope prompt and drive pause-and-act, but limit no tools. Codex and Cursor resume the thread or chat id their first turn reported, held in memory per chat session. The retired fourth agent's text output carries no session id, so each turn for that agent sends the earlier exchanges of the chat, newest first up to 120,000 characters. The operator can switch a chat's agent from the composer chip; the switch takes that agent's REASONING-tier model, or the CLI default, and starts a new agent session with the full snapshot.
 Reason: Executions already run these agents with permission checks off, so a stricter chat only blocked the operator. A switched agent cannot resume another agent's session.
 Superseded by: SKILL-453 operator approvals are broker-owned and host-controlled (2026-11-07)
-Supersedes: "Allow shell commands in chat act mode", "Run chat turns restricted, prompt-free and without the prompt snapshot" (the snapshot flag stays off), the read-only profile in "Let the chat workspace own pause, act and resume", and "Show unsupported chat agents instead of switching to Claude" for codex, cursor and junie.
+Supersedes: "Allow shell commands in chat act mode", "Run chat turns restricted, prompt-free and without the prompt snapshot" (the snapshot flag stays off), the read-only profile in "Let the chat workspace own pause, act and resume", and "Show unsupported chat agents instead of switching to Claude" for codex, cursor and the retired fourth agent.
 
 ## [2026-10-31] Return executable chat suggestions as reply metadata
 Context: Operators want buttons for concrete actions proposed in an agent reply.
@@ -515,7 +496,7 @@ Decision: A session marks itself started and records the delivered snapshot only
 Reason: The next turn then goes out as a first turn with --session-id and the full snapshot. Without this, the agent would get a diff against context it never received, or a resume of a session that does not exist.
 
 ## [2026-10-31] Show unsupported chat agents instead of switching to Claude
-Context: Only Claude has a chat transport, while executions also run on codex, cursor and junie.
+Context: Only Claude has a chat transport, while executions also run on codex, cursor and the retired fourth agent.
 Decision: AgentExecutionChatRepository emits one failed AgentUnsupported event, records chat.agent_unsupported and starts no process. The tab shows `Chat is not available for agent <id> yet` and Send stays disabled.
 Reason: The chat must use the execution's agent. A silent switch to Claude would answer with a different agent and model than the one running the execution.
 Superseded by: Run chat turns with the execution's own permissions on every agent (2026-10-31)
@@ -649,7 +630,6 @@ Reason: The application toast stack has a fixed 5-second lifetime and appears ou
 Context: Chat prompt rules made ordinary requests wait for action buttons, issue-key acceptance or a pause even though the chat transports expose the execution agent's tools.
 Decision: New-task and execution chat prompts carry repository or execution context and optional action-button formatting. They permit direct shell, CLI, MCP, Git, gh and file-edit requests without adding chat-specific approval steps, key-confirmation gates, execution-only scope limits or mode-dependent instructions. ReadOnly and Act remain UI coordination metadata for optional pause-and-act actions; transports no longer inject them into prompts or operator messages. Provider launch permissions and runtime command contracts retain their own owners.
 Reason: Conversation context and button formatting must not reduce what the operator can ask the chat agent to do. This supersedes earlier decisions that used chat mode to select prompt guidance or required button-only launches.
-Superseded by: Require current selection and originating authority for New task runs (2026-11-13), for New task run-launch authority only. Ordinary-tool and execution-chat reasoning remains applicable.
 
 ## [2026-11-07] Route interactive Codex approvals to operator cards
 Context: Act chat explicitly selected `auto_review`, so commands could be approved without a card or denied for lacking specific authorization before the operator could review their payload.
@@ -657,8 +637,8 @@ Decision: Use `on-request` with `approvalsReviewer: user` for Act chat thread st
 Reason: Provider approval requests must reach the existing live card broker before execution. This uses the provider's human-review protocol rather than interpreting rejection text, replaying a denied action or bypassing managed restrictions.
 Superseded by: Default all provider launches to native permission bypass (2026-11-07)
 
-## [2026-11-07] Keep Cursor and Junie chat on interactive ACP permissions
-Context: Cursor Act chat added `--auto-review`, which let the provider decide tool requests before the operator-card broker saw them. Junie already used its standard `--acp` command.
+## [2026-11-07] Keep Cursor and a fourth agent chat on interactive ACP permissions
+Context: Cursor Act chat added `--auto-review`, which let the provider decide tool requests before the operator-card broker saw them. The retired fourth agent already used its standard `--acp` command.
 Decision: Both chat transports launch the provider's standard ACP arguments. Remove Cursor's automatic-review argument override. Verify that publishing requests from either provider produce full pending cards and send no permission response until an operator decision is delivered.
 Reason: Interactive permission decisions belong to the operator. Retain provider-issued options, session identity checks, read-only mode and unsupported-interaction handling.
 Superseded by: Default all provider launches to native permission bypass (2026-11-07)

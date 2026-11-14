@@ -265,6 +265,7 @@ class NewTaskDraft internal constructor(
     val openSession = databaseSession.state.value as? DatabaseSessionState.Open
     val databaseMatches = openSession != null && (current == null || current.databaseSessionId == openSession.sessionId)
     return !closing && startClaim == null && contextTransitionOwner == null && resumeTransition == null && databaseMatches && (message.isNotBlank() || attachments.isNotEmpty()) && workingDirectory.isNotBlank() && selectedAgent != null && selectedAgent?.agentId == agentId &&
+      current?.thread?.agentSupported?.value != false && selectedAgent?.agentId?.let(chats::supports) == true &&
       current?.repositoryMissing != true && !offerState.value.starting && current?.transitionBlocked != true
   }
 
@@ -318,6 +319,7 @@ class NewTaskDraft internal constructor(
     val current = chatState.value
     return when {
       repository == null -> SELECT_REPOSITORY_START_TEXT
+      selectedAgent?.agentId?.let(chats::supports) != true -> "Choose a supported agent before starting work."
       closing || startClaim != null || contextTransitionOwner != null || resumeTransition != null || offerState.value.starting -> "Finish the current chat activity before starting work."
       current != null && (current.transitionBlocked || current.thread.busy.value) -> "Finish the current chat activity before starting work."
       current?.thread?.hasDeliveryClaim() == true -> "A chat message is still waiting for delivery. Resolve it before starting work."
@@ -935,6 +937,7 @@ class NewTaskDraft internal constructor(
       val notice = ChatMessage.Notice("This draft's repository no longer exists: ${selectedRepositoryRoot ?: context.repositoryRoot}. Select an available repository to continue.")
       if (retained == null) resumed.thread.replaceTranscript(if (missing) lines + notice else lines)
       resumed.thread.showCapability(entry.agent)
+      resumed.thread.showUnavailableAgentNotice()
       synchronized(cardOwners) { cardOwners[resumed.thread] = resumed }
       if (!missing) cards.revalidate(resumed.thread, resumed.thread.transcript.value.mapNotNull { (it as? ChatMessage.Notice)?.operationCard?.token })
       true

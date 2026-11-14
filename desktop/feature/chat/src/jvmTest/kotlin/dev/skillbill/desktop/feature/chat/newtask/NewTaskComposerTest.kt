@@ -675,7 +675,7 @@ class NewTaskComposerTest {
     runOnIdle { focusManager.clearFocus(force = true) }
     onNode(hasSetTextAction()).assertIsNotFocused()
     state = state.copy(resumePickerOpen = true)
-    fun row(id: String) = hasText("$id chat") and hasText("main · claude")
+    fun row(id: String) = hasText("$id chat") and hasText("main · Claude")
     val list = onNode(hasScrollToIndexAction())
     onNodeWithText("30 of 42 chats").assertExists()
     onNodeWithText("Today").assertExists()

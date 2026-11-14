@@ -746,7 +746,9 @@ class SpecsPaneModel(
           chosenAgent = when {
             accepted == null -> toolbar.chosenAgent
             keepAgent -> toolbar.chosenAgent
-            else -> accepted.control.agentId ?: defaultAgentId?.takeIf { it in accepted.control.agentChoices }
+            accepted.control.runState == SpecRunState.NotStarted -> accepted.control.agentId
+              ?: defaultAgentId?.takeIf { it in accepted.control.agentChoices }
+            else -> accepted.control.agentId
           },
           agentMenuOpen = toolbar.agentMenuOpen && keepAgentMenu,
           confirmingCancel = toolbar.confirmingCancel && keepCancel,

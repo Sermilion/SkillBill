@@ -27,7 +27,8 @@ class ChatResumePaletteTest {
     assertEquals(ResumeTitle("a.png", listOf("a.png")), resumeTitle(entry("2", "/x/a.png")))
     assertEquals(ResumeTitle("two lines", listOf("a.png", "b.JPG")), resumeTitle(entry("3", "/x/a.png  /y/b.JPG two\nlines")))
     assertEquals(ResumeTitle("see /x/a.png", emptyList()), resumeTitle(entry("4", "see /x/a.png")))
-    assertEquals(ResumeTitle("codex session", emptyList()), resumeTitle(entry("5", "  ")))
+    assertEquals(ResumeTitle("Codex session", emptyList()), resumeTitle(entry("5", "  ")))
+    assertEquals(ResumeTitle("Unavailable agent session", emptyList()), resumeTitle(entry("6", "  ").copy(agent = ChatAgent("retired-agent", null, null))))
   }
 
   // Groups follow the operator's calendar, not 24-hour spans or UTC.

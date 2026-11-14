@@ -98,17 +98,6 @@ class InstallClaudeAgentsPathCommand(
 }
 
 @Inject
-class InstallJunieAgentsPathCommand(
-  private val state: CliRunState,
-  private val inputs: CliRunInputs,
-  private val installAgentService: InstallAgentService,
-) : DocumentedCliCommand("junie-agents-path", "Print the Junie native subagent markdown directory.") {
-  override fun run() {
-    state.completeText(installAgentService.junieAgentsPath(inputs.userHome).toString(), emptyMap())
-  }
-}
-
-@Inject
 class InstallCursorAgentsPathCommand(
   private val state: CliRunState,
   private val inputs: CliRunInputs,

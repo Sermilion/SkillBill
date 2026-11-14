@@ -473,7 +473,6 @@ internal class ProcessAgentRunAdapter(
       }
       AgentRunApprovalProtocol.CODEX_APP_SERVER,
       AgentRunApprovalProtocol.CURSOR_ACP,
-      AgentRunApprovalProtocol.JUNIE_ACP,
       AgentRunApprovalProtocol.DEVIN_ACP,
       AgentRunApprovalProtocol.OPENCODE_ACP,
       -> null
@@ -615,7 +614,6 @@ internal class ProcessAgentRunAdapter(
       }
       is ReportedLaunchIdentity.Reported -> {
         if (command.approvalProtocol != AgentRunApprovalProtocol.CURSOR_ACP &&
-          command.approvalProtocol != AgentRunApprovalProtocol.JUNIE_ACP &&
           command.approvalProtocol != AgentRunApprovalProtocol.DEVIN_ACP
         ) {
           reportedIdentity.identities.singleOrNull()?.let { request.modelObserver?.reported(it) }
@@ -686,13 +684,6 @@ interface AgentRunOutputDecoder {
 
   companion object {
     val PLAIN = decoder { DecodedAgentRunOutput(it) }
-    val JUNIE_TEXT =
-      decoder { stdout ->
-        DecodedAgentRunOutput(
-          text = stdout,
-          reportedIdentity = ReportedLaunchIdentity.Unavailable(ReportedLaunchIdentityReason.UNSUPPORTED_AGENT),
-        )
-      }
     val CLAUDE_JSON = decoder { stdout -> decodeClaudeJson(stdout) }
     val CLAUDE_STREAM_JSON = decoder { stdout -> decodeClaudeStreamJson(stdout) }
     val CODEX_JSONL = decoder { stdout -> decodeCodexJsonl(stdout) }
@@ -835,12 +826,11 @@ internal fun headlessAgentRunAdapters(
       databasePath = workerBinding.databasePath,
       runtimeMcpBin = workerBinding.runtimeMcpBin,
     ),
-    JunieAgentRunCommandBuilder(databasePath = workerBinding.databasePath),
-    OpenCodeAgentRunCommandBuilder(
+    DevinAgentRunCommandBuilder(
       databasePath = workerBinding.databasePath,
       runtimeMcpBin = workerBinding.runtimeMcpBin,
     ),
-    DevinAgentRunCommandBuilder(
+    OpenCodeAgentRunCommandBuilder(
       databasePath = workerBinding.databasePath,
       runtimeMcpBin = workerBinding.runtimeMcpBin,
     ),
@@ -876,7 +866,6 @@ private fun approvalEnclosingDeadline(
 private fun AgentRunApprovalProtocol.acpProvider(): AcpProvider? =
   when (this) {
     AgentRunApprovalProtocol.CURSOR_ACP -> AcpProvider.Cursor
-    AgentRunApprovalProtocol.JUNIE_ACP -> AcpProvider.Junie
     AgentRunApprovalProtocol.DEVIN_ACP -> AcpProvider.Devin
     AgentRunApprovalProtocol.OPENCODE_ACP -> AcpProvider.OpenCode
     AgentRunApprovalProtocol.CLAUDE_HOST, AgentRunApprovalProtocol.CODEX_APP_SERVER -> null

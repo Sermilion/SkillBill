@@ -84,7 +84,7 @@ internal fun testNewTaskDraft() = NewTaskDraft(
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class NewTaskDraftTest {
-  private val chat = FakeExecutionChatRepository()
+  private val chat = FakeExecutionChatRepository(supported = setOf("claude", "codex", "cursor"))
   private val root = createTempDirectory("new-task-repo").toString()
 
   private fun TestScope.draft(chats: ExecutionChatRepository = chat, controls: FakeWorkControlRepository = FakeWorkControlRepository(), changes: ChatChangesRepository = UnavailableChatChanges, userHome: String = root) = NewTaskDraft(chats, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), Clock.System, changesRepository = changes, diagnostics = RecordingDiagnostics(), userHome = userHome).apply {
@@ -956,8 +956,8 @@ class NewTaskDraftTest {
     draft.selectedAgent = chat.agentFor("codex")
     draft.rebindChat()
     runCurrent()
-    draft.agentId = "gemini"
-    draft.selectedAgent = chat.agentFor("gemini")
+    draft.agentId = "cursor"
+    draft.selectedAgent = chat.agentFor("cursor")
     draft.repository = NewTaskRepository(otherRoot, "other")
     draft.rebindChat()
     runCurrent()
@@ -967,7 +967,7 @@ class NewTaskDraftTest {
     runCurrent()
 
     val request = chat.requests.last()
-    assertEquals("gemini", request.agent.agentId)
+    assertEquals("cursor", request.agent.agentId)
     assertEquals(1, request.prompt.split("Earlier in this chat").size - 1)
     assertTrue(request.prompt.startsWith("Earlier in this chat you were talking with claude."))
     assertTrue("The effective working directory changed from $root to $otherRoot." in request.prompt)

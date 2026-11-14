@@ -5,8 +5,6 @@ import dev.skillbill.desktop.core.data.usage.UsageProfileResolver
 import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatModel
 import dev.skillbill.desktop.core.domain.model.ChatModelsRead
-import dev.skillbill.desktop.core.domain.model.AdvertisedAgentChoices
-import dev.skillbill.desktop.core.domain.model.AdvertisedEffortSupport
 import dev.skillbill.desktop.core.testing.FakeAppSettingsRepository
 import dev.skillbill.desktop.core.testing.RecordingDiagnostics
 import kotlinx.coroutines.CancellationException
@@ -78,132 +76,31 @@ class ChatModelCatalogTest {
   }
 
   @Test
-  fun `junie discovery reads grouped ACP model options`() = runTest {
-    val connection = ModelConnection(listOf(
-      """{"id":1,"result":{"protocolVersion":1}}""",
-      """{"id":2,"result":{"sessionId":"discovery-only","configOptions":[{"category":"model","options":[{"group":"Provider","options":[{"value":"new-model","name":"New model"}]}]}]}}""",
-    ))
-    val read = catalog(connection).read(ChatAgent("junie", null, null), "/repo")
-    assertEquals(listOf(ChatModel("new-model", "New model")), assertIs<ChatModelsRead.Loaded>(read).models)
-    assertEquals(listOf("initialize", "session/new"), connection.sent.map { it.string("method") })
-    assertTrue(connection.closed)
-  }
+  fun `unsupported agent model lookup returns empty without launching either process path`() = runTest {
+    val connection = ModelConnection(emptyList())
+    val diagnostics = RecordingDiagnostics()
+    var processStarted = false
+    val read = catalog(connection, diagnostics, onStart = { processStarted = true }, processes = {
+      processStarted = true
+      flowOf(ChatProcessOutput.Exited(0, ""))
+    }).read(ChatAgent("retired-agent", null, null), "/repo")
 
-  @Test
-  fun `OpenCode selection waits for refreshed model effort choices without prompting`() = runTest {
-    val connection = ModelConnection(listOf(
-      """{"id":1,"result":{"protocolVersion":1}}""",
-      """{"id":2,"result":{"sessionId":"temporary","configOptions":[{"id":"model","currentValue":"model-a","options":[{"value":"model-a","name":"Model A"},{"value":"model-b","name":"Model B"}]}]}}""",
-      """{"id":3,"result":{"configOptions":[{"id":"model","currentValue":"model-b","options":[{"value":"model-a","name":"Model A"},{"value":"model-b","name":"Model B"}]},{"id":"effort","options":[{"value":"high","name":"High"},{"value":"low","name":"Low"}]}]}}""",
-    ))
-    val host = HostEnvironment(mapOf("OPENCODE_CONFIG_DIR" to "/profiles/open-code"), "/home/test", "/repo")
-    val catalog = ChatModelCatalog(host, { BoundedProcessStart.Started(connection) },
-      { flowOf(ChatProcessOutput.Exited(1, "")) }, UsageProfileResolver(host), FakeAppSettingsRepository(), RecordingDiagnostics())
-
-    val result = assertIs<AdvertisedAgentChoices.Choices>(catalog.openCodeChoices("/repo", "model-b"))
-
-    assertEquals("/profiles/open-code", result.binding.profile)
-    assertEquals("model-b", result.selectedModel.id)
-    assertEquals(listOf("high", "low"), assertIs<AdvertisedEffortSupport.Offered>(result.effort).values.map { it.id })
-    assertEquals(listOf("initialize", "session/new", "session/set_config_option"), connection.sent.map { it.string("method") })
-    assertEquals("model", connection.sent.last().obj("params")?.string("configId"))
-    assertEquals("model-b", connection.sent.last().obj("params")?.string("value"))
-    assertTrue(connection.closed)
-  }
-
-  @Test
-  fun `OpenCode does not invent a selected model from malformed setup or acknowledgement`() = runTest {
-    val models = """[{"value":"model-a","name":"Model A"}]"""
-    val setups = listOf(
-      """{"sessionId":"temporary","configOptions":[{"id":"model","options":$models}]}""",
-      """{"sessionId":"temporary","configOptions":[{"id":"model","currentValue":"missing","options":$models}]}""",
-      """{"configOptions":[{"id":"model","currentValue":"model-a","options":$models}]}""",
-    )
-    for (setup in setups) {
-      val connection = ModelConnection(listOf("""{"id":1,"result":{"protocolVersion":1}}""", """{"id":2,"result":$setup}"""))
-      assertEquals(
-        AdvertisedAgentChoices.Failed(AdvertisedAgentChoices.Failed.Reason.PROTOCOL),
-        catalog(connection).openCodeChoices("/repo", null),
-      )
-      assertTrue(connection.closed)
-    }
-    val connection = ModelConnection(listOf(
-      """{"id":1,"result":{"protocolVersion":1}}""",
-      """{"id":2,"result":{"sessionId":"temporary","configOptions":[{"id":"model","currentValue":"model-a","options":$models}]}}""",
-      """{"id":3,"result":{"configOptions":[{"id":"model","currentValue":"model-a","options":[]}]}}""",
-    ))
-    assertEquals(
-      AdvertisedAgentChoices.Failed(AdvertisedAgentChoices.Failed.Reason.PROTOCOL),
-      catalog(connection).openCodeChoices("/repo", "model-a"),
-    )
-    assertTrue(connection.closed)
-  }
-
-  @Test
-  fun `OpenCode acknowledges an unchanged explicit model and returns refreshed no-effort support`() = runTest {
-    val options = """[{"id":"model","currentValue":"model-a","options":[{"value":"model-a","name":"Model A"}]}]"""
-    val connection = ModelConnection(listOf(
-      """{"id":1,"result":{"protocolVersion":1}}""",
-      """{"id":2,"result":{"sessionId":"temporary","configOptions":$options}}""",
-      """{"id":3,"result":{"configOptions":$options}}""",
-    ))
-
-    val result = assertIs<AdvertisedAgentChoices.Choices>(catalog(connection).openCodeChoices("/repo", "model-a"))
-
-    assertEquals(AdvertisedEffortSupport.Unsupported, result.effort)
-    assertEquals(listOf("initialize", "session/new", "session/set_config_option"), connection.sent.map { it.string("method") })
-    assertTrue(connection.closed)
-  }
-
-  @Test
-  fun `devin lists exact variant uids from its finite model command without a prompt`() = runTest {
-    val json = """{"families":[{"slug":"swe-2","family_uid":"fam-swe","variants":[{"model_uid":"swe-2-high","label":"SWE-2 High"}]}]}"""
-    var command: ChatCommand? = null
-    val read = catalog(ModelConnection(emptyList()), devin = { command = it; flowOf(ChatProcessOutput.Line(json), ChatProcessOutput.Exited(0, "")) })
-      .read(ChatAgent("devin", null, null), "/repo")
-    assertEquals(listOf(ChatModel("swe-2-high", "SWE-2 High")), assertIs<ChatModelsRead.Loaded>(read).models)
-    val launched = checkNotNull(command)
-    assertEquals(listOf("devin", "models", "list", "--format", "json"), launched.argv)
-    assertEquals("", launched.stdin)
-    assertEquals("/repo", launched.workingDirectory)
-    assertTrue(launched.stdoutLimitBytes != null)
-  }
-
-  @Test
-  fun `devin discovery failures stay visible instead of inventing models`() = runTest {
-    val valid = """{"families":[{"variants":[{"model_uid":"swe-2-high","label":"SWE-2 High"}]}]}"""
-    val cases = listOf(
-      listOf(ChatProcessOutput.Line("not json"), ChatProcessOutput.Exited(0, "")),
-      listOf(ChatProcessOutput.Line("""{"families":[]}"""), ChatProcessOutput.Exited(0, "")),
-      listOf(ChatProcessOutput.Line("""{"families":[{"variants":[{"label":"No uid"}]}]}"""), ChatProcessOutput.Exited(0, "")),
-      listOf(ChatProcessOutput.Line(valid), ChatProcessOutput.Exited(1, "not authenticated")),
-      listOf(ChatProcessOutput.StdoutEnded("stdout exceeded limit", ""), ChatProcessOutput.Exited(0, "")),
-      listOf(ChatProcessOutput.StartFailed("missing")),
-    )
-    for (events in cases) {
-      val diagnostics = RecordingDiagnostics()
-      val read = catalog(ModelConnection(emptyList()), diagnostics, devin = { flowOf(*events.toTypedArray()) })
-        .read(ChatAgent("devin", null, null), "/repo")
-      assertIs<ChatModelsRead.Failed>(read, events.toString())
-      assertEquals(listOf("chat.model_discovery_failed"), diagnostics.categories)
-    }
-  }
-
-  @Test
-  fun `cancelling devin discovery propagates cancellation`() = runTest {
-    val models = catalog(ModelConnection(emptyList()), devin = { flow { throw CancellationException("picker dismissed") } })
-    assertFailsWith<CancellationException> { models.read(ChatAgent("devin", null, null), "/repo") }
+    assertEquals(ChatModelsRead.Loaded(emptyList()), read)
+    assertEquals(false, processStarted)
+    assertEquals(emptyList(), diagnostics.categories)
+    assertEquals(emptyList(), connection.sent)
+    assertEquals(false, connection.closed)
   }
 
   private fun catalog(
     connection: ModelConnection,
     diagnostics: RecordingDiagnostics = RecordingDiagnostics(),
     onStart: (ChatCommand) -> Unit = {},
-    devin: (ChatCommand) -> kotlinx.coroutines.flow.Flow<ChatProcessOutput> = { flowOf(ChatProcessOutput.Exited(1, "")) },
+    processes: (ChatCommand) -> kotlinx.coroutines.flow.Flow<ChatProcessOutput> = { flowOf(ChatProcessOutput.Exited(1, "")) },
   ): ChatModelCatalog {
     val host = HostEnvironment(emptyMap(), "/home/test", "")
     return ChatModelCatalog(host, { command -> onStart(command); BoundedProcessStart.Started(connection) },
-      { devin(it) }, UsageProfileResolver(host), FakeAppSettingsRepository(), diagnostics)
+      { processes(it) }, UsageProfileResolver(host), FakeAppSettingsRepository(), diagnostics)
   }
 
   private class ModelConnection(lines: List<String>, private val cancel: Boolean = false) : BoundedProtocolConnection {

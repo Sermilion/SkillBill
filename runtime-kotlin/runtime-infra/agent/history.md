@@ -3,7 +3,7 @@
 ## [2026-11-12] SONA-12 subtask 2: Devin runtime phase workers
 Areas: runtime-infra/launcher (agentrun, process/cursor, process/launch, mcp); runtime-domain install model
 - DevinAgentRunCommandBuilder launches `devin acp [--model <UID>]` through the shared CursorAcpSession transport, using AcpProvider.Devin (no authMethod, exact models, login hint `devin auth login`) and AgentRunApprovalProtocol.DEVIN_ACP. It is registered in headlessAgentRunAdapters. SupportedAgent.DEVIN honours additional writable directories and loads runtime MCP headless.
-- reusable: CursorAcpLaunch gains optional mcpServers (AcpStdioMcpServer with list-shaped AcpEnvVariable env) and additionalDirectories, sent on session/new and session/load. Before any session request, sessionContextRefusal (AcpSessionContext) refuses a non-absolute command or root, and roots the agent has not advertised in sessionCapabilities.additionalDirectories. Cursor and Junie still send empty context.
+- reusable: CursorAcpLaunch gains optional mcpServers (AcpStdioMcpServer with list-shaped AcpEnvVariable env) and additionalDirectories, sent on session/new and session/load. Before any session request, sessionContextRefusal (AcpSessionContext) refuses a non-absolute command or root, and roots the agent has not advertised in sessionCapabilities.additionalDirectories. Cursor and the retired fourth agent still send empty context.
 - reusable: acpRuntimeMcpServer (mcp/RuntimeMcpServer) builds the skill-bill stdio server from the binding's database, runtime MCP executable and validation invocation.
 - reusable: AgentRunCommandBuilder.launchRefusal runs after approvalRefusal and before build or spawn, returning UnsupportedAgentRunLaunch with outcome launch_assignment_unsupported. Every builder implements it. Devin refuses a separate effort or a missing runtime MCP executable or database.
 - Exact-model ACP providers skip resolveAcpModel, accept only an exactly advertised ID, and never copy the reported model from the set_model acknowledgement. Absent model metadata keeps the CLI assignment and records a model_metadata_absent diagnostic.
@@ -325,9 +325,9 @@ Acceptance criteria: 12/12 implemented
 ## [2026-08-11] Cursor capability projection and spawn-note ordering (review repairs)
 Areas: runtime-kotlin/runtime-infra-fs/nativeagent/{composition,rendering}, runtime-kotlin/runtime-infra-fs/scaffold/rendering, runtime-kotlin/runtime-infra-fs tests
 - A declared read-only toolset now reaches Cursor as `readonly: true`. Cursor has no `tools` key, so rendering name+description only had silently left every review worker on the host default of every tool the parent can reach — write and recursive-delegation capability the read-only review contract forbids. `declaresReadOnlyToolset` is the projection rule; a toolset holding `Edit`/`Write`/`NotebookEdit`/`Agent` earns no `readonly` claim. reusable: a provider whose capability vocabulary is narrower than the source needs an explicit projection, never a dropped field.
-- Claude, Junie, and Cursor share one `renderFrontmatterAgent` envelope and differ only in the capability fields they pass in, so an envelope change cannot reach one provider and skip another. The dead `mode` parameter is gone.
+- Claude, the retired fourth agent, and Cursor share one `renderFrontmatterAgent` envelope and differ only in the capability fields they pass in, so an envelope change cannot reach one provider and skip another. The dead `mode` parameter is gone.
 - `yamlNeedsQuoting` now quotes a value ending in `:` and plain-resolvable tokens (`no`, `off`, `~`, numerics); the name pattern permits them, so an unquoted `no` installed as a boolean and stopped matching its file.
-- The Codex wave limit renders inside the Codex block instead of after another runtime's paragraph, and Junie gets an explicit "delegated unsupported, use `mode:inline`" paragraph so no installed runtime falls through the runtime-neutral rule and invents a spawn mechanism.
+- The Codex wave limit renders inside the Codex block instead of after another runtime's paragraph, and the retired fourth agent gets an explicit "delegated unsupported, use `mode:inline`" paragraph so no installed runtime falls through the runtime-neutral rule and invents a spawn mechanism.
 - The rendered Cursor paragraph now splits lane-level from run-level failure: a lane that launches and returns nothing attributable fails that lane; no matching installed agent, or a session that cannot launch by name, stops the run. Its governed phrasing is pinned to `review-delegation/PLAYBOOK.md` by `SubagentSpawnRuntimeNotesTest`, which the renderer cannot read at runtime.
 Feature flag: N/A
 
@@ -340,9 +340,9 @@ Feature flag: N/A
 ## [2026-08-11] SKILL-182 subtask 2 Cursor native-agent frontmatter vocabulary
 Areas: runtime-kotlin/runtime-infra-fs/nativeagent/rendering, runtime-kotlin/runtime-infra-fs/nativeagent tests
 - `NativeAgentProvider.Cursor.render` now uses a dedicated `renderCursorAgent` path that emits only `name` and `description` (shared `yamlScalar` quoting), dropping Claude's `tools` key and omitting `model` / `readonly` / `is_background`.
-- Claude and Junie still share `renderFrontmatterAgent` and stay byte-identical; Cursor drift is intentional so installed `~/.cursor/agents/` files match Cursor's frontmatter set.
+- Claude and the retired fourth agent still share `renderFrontmatterAgent` and stay byte-identical; Cursor drift is intentional so installed `~/.cursor/agents/` files match Cursor's frontmatter set.
 - Pattern: per-provider frontmatter projection over a shared source model — `NativeAgentSource.tools` remains authoritative for consumers that use it; only the Cursor projection changes. reusable
-- Tests pin Cursor shape (no `tools:`, no extra keys) and keep Claude/Junie snapshots; Claude/Cursor equality assertion replaced with per-provider assertions.
+- Tests pin Cursor shape (no `tools:`, no extra keys) and keep snapshots for Claude and the retired fourth agent; Claude/Cursor equality assertion replaced with per-provider assertions.
 - Limitation: mapping Skill Bill tools onto Cursor `readonly` / `is_background` is deferred; default model inherit is left implicit (no explicit `model` emit).
 Feature flag: N/A
 Acceptance criteria: 8/8 implemented
@@ -532,22 +532,22 @@ Acceptance criteria: subtask-1 10/10 implemented
 
 ## [2026-07-03] SKILL-100 zcode agent support (subtask 2: native-agent-mcp-runtime)
 Areas: runtime-infra-fs/install/apply, runtime-infra-fs/launcher/agentrun, runtime-infra-fs/launcher/mcp
-- Closed the six exhaustive-`when` sites subtask 1 flagged as won't-compile: `linkZcodeAgents`/`unlinkZcodeAgents` (modeled on Junie) wired into `FileSystemInstallAdapters` link/unlink + a `nativeAgentInstallers` registry entry.
+- Closed the six exhaustive-`when` sites subtask 1 flagged as won't-compile: `linkZcodeAgents`/`unlinkZcodeAgents` (modeled on the retired fourth agent) wired into `FileSystemInstallAdapters` link/unlink + a `nativeAgentInstallers` registry entry.
 - New `McpZcodeConfig` reads/writes `~/.zcode/cli/config.json` under a nested `mcp.servers.skill-bill` key — a different on-disk shape than the flat `mcpServers` key every other agent uses; reuses `McpJsonConfig`'s shared read/write/mutable-map helpers. reusable
 - `McpRegistrationOperations.register/unregister/configPathFor` add a ZCODE case; `unregister` drops `servers` then `mcp` only when both go empty, preserving sibling JSON keys at both nesting levels.
 - New `ZcodeAgentRunCommandBuilder` builds `zcode --prompt <p> --json --cwd <dir> --mode yolo --no-color`, inheriting `usePtyStdio=false`/`idlePolicy=DB_PROGRESS_ONLY` defaults (no override needed, unlike opencode's PTY path); registered in `headlessAgentRunAdapters()` and survives `RUNTIME_REFUSED_AGENTS` (only OPENCODE is refused).
 - Known non-blocking gap flagged in-code: the `--json` envelope parser shape is UNCONFIRMED against a live ZCode session — follow-up verification needed before relying on structured output.
-- Tests extended in lockstep: `AgentRunLauncherTest` (adapter-presence + command-shape for ZCODE alongside CLAUDE/CODEX/JUNIE) and `McpRegistrationOperationsTest` ("non-claude agents stay single-target" expected-paths map).
+- Tests extended in lockstep: `AgentRunLauncherTest` (adapter-presence + command-shape for ZCODE alongside Claude, Codex, and the retired fourth agent) and `McpRegistrationOperationsTest` ("non-claude agents stay single-target" expected-paths map).
 Feature flag: N/A
 Acceptance criteria: subtask-2 10/10 implemented
 
 ## [2026-07-03] SKILL-100 zcode agent support
 Areas: runtime-infra-fs/install, runtime-infra-fs/nativeagent, runtime-domain/install/model, runtime-desktop/core/domain, orchestration/contracts
-- Adding a new supported agent = fan out across SIX enums, modeled on the adjacent Junie entry (reusable checklist): InstallAgent, NativeAgentProviderId, NativeAgentProvider, NativeAgentLinkProvider, FirstRunSetupAgent (+ its `supportedIds` companion), AgentSymlinkProvider & DesktopAgentSymlinkProvider.
-- `NativeAgentProvider.Zcode("zcode-agents","md")` uses `render = renderFrontmatterAgent(mode = null)` and `homeAgentDirs = listOf(home.resolve(".zcode/agents"))` — mode=null (like Junie, unlike Claude).
+- Adding a new supported agent = fan out across SIX enums, modeled on the adjacent retired fourth agent entry (reusable checklist): InstallAgent, NativeAgentProviderId, NativeAgentProvider, NativeAgentLinkProvider, FirstRunSetupAgent (+ its `supportedIds` companion), AgentSymlinkProvider & DesktopAgentSymlinkProvider.
+- `NativeAgentProvider.Zcode("zcode-agents","md")` uses `render = renderFrontmatterAgent(mode = null)` and `homeAgentDirs = listOf(home.resolve(".zcode/agents"))` — mode=null (like the retired fourth agent, unlike Claude).
 - Install-path layer: `SUPPORTED_AGENTS += "zcode"`; `agentPaths` "zcode"→`.zcode/skills`; `agentIsPresent` "zcode"→`listOf(.zcode)`; `agentDirectory` "zcode"→`InstallOperations.zcodeAgentsPath(home)`, backed by new `zcodeAgentsPath(home)=home.resolve(".zcode/agents")`.
 - Deliberate non-changes: `RUNTIME_REFUSED_AGENTS` untouched (only OPENCODE refused); `INVOKING_AGENT_CONTEXT_SIGNALS` left CLAUDE/CODEX/OPENCODE only — zcode has no distinct invoking-context signal yet (Decision C, AC14).
-- Exhaustive-`when` sites that WON'T compile until a ZCODE branch is added: McpRegistrationOperations (register/unregister/configPathFor), SkillRemoveJvmFileSystem.nativeProvider, JvmRuntimeSkillRemoveGateway, ConfirmDeletionDialog.displayLabelFor, FileSystemInstallAdapters NativeAgentLinkProvider link/unlink (+ new Junie-modeled `InstallNativeAgentOperations.link/unlinkZcodeAgents`).
+- Exhaustive-`when` sites that WON'T compile until a ZCODE branch is added: McpRegistrationOperations (register/unregister/configPathFor), SkillRemoveJvmFileSystem.nativeProvider, JvmRuntimeSkillRemoveGateway, ConfirmDeletionDialog.displayLabelFor, FileSystemInstallAdapters NativeAgentLinkProvider link/unlink, and new `InstallNativeAgentOperations.link/unlinkZcodeAgents` methods modeled on the retired fourth agent's implementation.
 - detekt `TooManyFunctions` trips on `InstallOperations` and `InstallNativeAgentOperations` once the zcode path resolver + link/unlink pair land — a `@Suppress("TooManyFunctions")` with one-line rationale was applied for the threshold breach; that records what landed and does not rule out refactoring or prescribe suppression as the preferred fix.
 - Tests extended in lockstep: FirstRunSetupModelsTest (supportedIds contains "zcode"), InstallPlanContractCoverageTest + InstallPlanSchemaValidatesExistingFixturesTest (add `.zcode` fixture-dir literal), and hardcoded provider-COUNT asserts bumped 5→6 (SkillRemoveTest, InstallPlanModelTest).
 - Pre-existing unrelated red: `InstallerShellDelegationTest "install plan summary is printed before any mutation"` fails on the base commit too — not caused by this change.
@@ -568,7 +568,7 @@ Areas: runtime-infra-fs/launcher/process, runtime-infra-fs/launcher/agentrun, ru
 - PTY-backed stdio spawn path for opencode: `startPtyProcess()` in `JvmAgentRunProcessRunner` allocates a POSIX master fd via JNA (`PosixCLibrary` / `PosixLib`), builds the child process with `redirectInput/Output/Error(File(slavePath))`, and reads output through `PtyMasterInputStream` → `CappedUtf8Drain`. Fixes Bun-compiled opencode aborting status 1 when its stdout is a JVM pipe
 - `ProcessStart.PtyStarted` seals alongside `Started`/`Failed`; `runStartedProcess()` receives `stdoutStream`, `stderrStream`, `ptyMasterCloseable` params; for PTY: stdoutStream=ptyMasterStream, stderrStream=nullInputStream (PTY master fd merges stdout+stderr)
 - Fd lifecycle: `masterCloseable.close()` called BEFORE stdout/stderr drain joins to send EIO and unblock the drain — ordering is critical
-- `usePtyStdio: Boolean = false` threaded through `AgentRunCommand` → `AgentRunProcessRequest` → `JvmAgentRunProcessRunner`; `OpencodeAgentRunCommandBuilder` sets it true; claude/codex/junie unchanged
+- `usePtyStdio: Boolean = false` threaded through `AgentRunCommand` → `AgentRunProcessRequest` → `JvmAgentRunProcessRunner`; `OpencodeAgentRunCommandBuilder` sets it true; claude, codex, and the retired fourth agent remain unchanged
 - JNA 5.13.0 added to `runtime-infra-fs/build.gradle.kts` (version in `libs.versions.toml`) — provides `Native.load("c", PosixCLibrary::class.java)` without pty4j (unavailable offline)
 - Linux-only guard: `check(os.name.startsWith("linux"))` is the first call in `startPtyProcess()` — macOS lacks `ptsname_r` and has a different `O_NOCTTY` constant
 - `openMasterFd()` wraps `grantpt`/`unlockpt` in try/catch that closes the fd before rethrowing ISE (prevents fd leak on partial PTY init)

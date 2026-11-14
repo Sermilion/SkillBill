@@ -45,7 +45,7 @@ class AgentRunGoalContinuationCommandTest {
     val request = runner.requests.single()
     assertEquals(
       listOf(
-        "sona",
+        "skill-bill",
         "--db",
         "/tmp/skillbill-agent-run/metrics.db",
         "feature-task",
@@ -92,7 +92,7 @@ class AgentRunGoalContinuationCommandTest {
     val request = runner.requests.single()
     assertEquals(
       listOf(
-        "sona",
+        "skill-bill",
         "--db",
         "/tmp/skillbill-agent-run/metrics.db",
         "feature-task",
@@ -137,23 +137,18 @@ class AgentRunGoalContinuationCommandTest {
   }
 
   @Test
-  fun `every agent goal-continuation child spawns sona feature-task and never the skill`() {
+  fun `every agent goal-continuation child spawns skill-bill feature-task and never the skill`() {
     val runner = RecordingAgentRunProcessRunner()
 
-    listOf(
-      SupportedAgent.CLAUDE,
-      SupportedAgent.CODEX,
-      SupportedAgent.JUNIE,
-      SupportedAgent.CURSOR,
-      SupportedAgent.OPENCODE,
-    ).forEach { agent ->
+    val perAgent = SupportedAgent.entries
+    perAgent.forEach { agent ->
       requireNotNull(adapters(runner)[agent]).launch(skillRunRequest())
     }
 
-    assertEquals(5, runner.requests.size)
+    assertEquals(perAgent.size, runner.requests.size)
     runner.requests.forEach { request ->
       assertEquals(
-        listOf("sona", "--db", "/tmp/skillbill-agent-run/metrics.db", "feature-task"),
+        listOf("skill-bill", "--db", "/tmp/skillbill-agent-run/metrics.db", "feature-task"),
         request.launch.command.take(4),
       )
       assertContains(request.launch.command, "resume")
@@ -168,9 +163,8 @@ class AgentRunGoalContinuationCommandTest {
         },
       )
     }
-    val perAgent = listOf("claude", "codex", "junie", "cursor", "opencode")
     runner.requests.forEachIndexed { index, request ->
-      assertEquals(perAgent[index], request.launch.command.last())
+      assertEquals(perAgent[index].wireValue, request.launch.command.last())
       assertEquals("--agent", request.launch.command[request.launch.command.size - 2])
     }
   }
@@ -245,7 +239,7 @@ class AgentRunGoalContinuationCommandTest {
     val request = runner.requests.single()
     assertEquals(
       listOf(
-        "sona",
+        "skill-bill",
         "--db",
         "/tmp/skillbill-agent-run/metrics.db",
         "feature-task",
@@ -290,7 +284,7 @@ class AgentRunGoalContinuationCommandTest {
     val request = runner.requests.single()
     assertEquals(
       listOf(
-        "sona",
+        "skill-bill",
         "--db",
         "/tmp/skillbill-agent-run/metrics.db",
         "feature-task",
