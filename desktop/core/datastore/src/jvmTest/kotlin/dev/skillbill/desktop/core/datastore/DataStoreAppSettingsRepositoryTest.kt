@@ -111,7 +111,7 @@ class DataStoreAppSettingsRepositoryTest {
 
     val clamped = mutablePreferencesOf(AppPreferenceKeys.CHAT_WIDTH_DP to 120).toAppSettings { reported += it }
 
-    assertEquals(360, clamped.chatWidthDp)
+    assertEquals(300, clamped.chatWidthDp)
     assertEquals(listOf("chat_width_dp=120"), reported)
     assertEquals(560, emptyPreferences().toAppSettings {}.chatWidthDp)
   }

@@ -33,7 +33,7 @@ class ChatFeatureEntry(
   override val panes: List<PaneContribution> = listOf(PaneContribution(PaneSlot.Chat) {
     val open by workspace.paneOpen.collectAsState()
     val width by chatPaneWidth.widthDp.collectAsState()
-    if (open) DockedPane("Chat", width, onResize = chatPaneWidth::resizeTo, onDismiss = workspace::hide) {
+    if (open) DockedPane("Chat", width, onResize = chatPaneWidth::resizeTo, onReset = chatPaneWidth::reset, onDismiss = workspace::hide) {
       ChatPane(workspace, changesRepository) { source, path -> changesWindows.openChat(source, ChangeScope.All, path) }
     }
   })

@@ -10,9 +10,11 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.performMouseInput
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.unit.dp
@@ -41,7 +43,7 @@ class DockedPaneTest {
         CompositionLocalProvider(LocalShellInput provides input) {
           Row {
             Box(Modifier.size(40.dp).focusRequester(outside).focusable())
-            DockedPane("Chat", 560, onResize = {}, onDismiss = { dismissed++ }) {
+            DockedPane("Chat", 560, onResize = {}, onReset = {}, onDismiss = { dismissed++ }) {
               Box(Modifier.size(40.dp).focusRequester(inside).focusable())
             }
           }
@@ -65,26 +67,49 @@ class DockedPaneTest {
   }
 
   @Test
-  fun `docked width stays between the 360dp floor and the main column floor and a key step starts from the rendered width`() =
+  fun `docked width stays between the 300dp floor and the 300dp main column floor and a key step starts from the rendered width`() =
     runComposeUiTest {
-      assertEquals(580.dp, dockedPaneWidth(2000.dp, 1000.dp))
-      assertEquals(360.dp, dockedPaneWidth(200.dp, 1000.dp))
-      assertEquals(360.dp, dockedPaneWidth(500.dp, 600.dp))
+      assertEquals(700.dp, dockedPaneWidth(2000.dp, 1000.dp))
+      assertEquals(300.dp, dockedPaneWidth(200.dp, 1000.dp))
+      assertEquals(300.dp, dockedPaneWidth(500.dp, 600.dp))
       val resized = mutableListOf<Int>()
       setContent {
         SkillBillTheme(reducedMotion = true) {
           CompositionLocalProvider(
             LocalShellInput provides ShellInput(),
-            LocalRightPaneBounds provides RightPaneBounds(cover = false, workAreaWidth = 1000.dp),
+            LocalRightPaneBounds provides RightPaneBounds(workAreaWidth = 1000.dp),
           ) {
-            DockedPane("Chat", 2000, onResize = { resized += it }, onDismiss = {}) {}
+            DockedPane("Chat", 200, onResize = { resized += it }, onReset = {}, onDismiss = {}) {}
           }
         }
       }
-      val grip = onNodeWithContentDescription("Resize chat panel")
+      val grip = onNodeWithContentDescription("Chat panel resize separator")
       grip.performSemanticsAction(SemanticsActions.RequestFocus)
       waitForIdle()
       grip.performKeyInput { keyDown(Key.DirectionLeft); keyUp(Key.DirectionLeft) }
-      runOnIdle { assertEquals(listOf(580), resized) }
+      runOnIdle { assertEquals(listOf(324), resized) }
     }
+
+  @Test
+  fun `Home and a double-click on the grip reset the width and the grip reports the docked range`() = runComposeUiTest {
+    var resets = 0
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        CompositionLocalProvider(
+          LocalShellInput provides ShellInput(),
+          LocalRightPaneBounds provides RightPaneBounds(workAreaWidth = 1000.dp),
+        ) {
+          DockedPane("Chat", 560, onResize = {}, onReset = { resets++ }, onDismiss = {}) {}
+        }
+      }
+    }
+    val grip = onNodeWithContentDescription("Chat panel resize separator")
+    grip.performSemanticsAction(SemanticsActions.RequestFocus)
+    waitForIdle()
+    grip.performKeyInput { keyDown(Key.MoveHome); keyUp(Key.MoveHome) }
+    runOnIdle { assertEquals(1, resets) }
+    grip.performMouseInput { doubleClick() }
+    runOnIdle { assertEquals(2, resets) }
+    assertEquals(300f..700f, grip.fetchSemanticsNode().config[SemanticsProperties.ProgressBarRangeInfo].range)
+  }
 }

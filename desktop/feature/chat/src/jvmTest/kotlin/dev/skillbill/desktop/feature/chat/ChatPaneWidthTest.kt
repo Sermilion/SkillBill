@@ -34,4 +34,23 @@ class ChatPaneWidthTest {
     width.close()
     assertEquals(800, settings.settings.value.chatWidthDp)
   }
+
+  @Test
+  fun `reset shows the default at once and replaces a pending drag write with the default after the drag delay`() = runTest {
+    val settings = FakeAppSettingsRepository(AppSettings.DEFAULT.copy(chatWidthDp = 640))
+    val width = ChatPaneWidth(settings, WindowCoroutineScope(backgroundScope))
+    runCurrent()
+
+    width.resizeTo(700)
+    advanceTimeBy(200)
+    width.reset()
+    assertEquals(560, width.widthDp.value)
+    // The drag's write would have fired at 300 ms had the reset not replaced it.
+    advanceTimeBy(299)
+    runCurrent()
+    assertEquals(640, settings.settings.value.chatWidthDp)
+    advanceTimeBy(2)
+    runCurrent()
+    assertEquals(560, settings.settings.value.chatWidthDp)
+  }
 }

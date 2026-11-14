@@ -126,7 +126,7 @@ class ChatComposerTest {
         SkillBillTheme(reducedMotion = true) {
           CompositionLocalProvider(LocalShellInput provides input) {
             focusManager = LocalFocusManager.current
-            if (open.value) DockedPane("Chat", 560, onResize = {}, onDismiss = { open.value = false }) {
+            if (open.value) DockedPane("Chat", 560, onResize = {}, onReset = {}, onDismiss = { open.value = false }) {
               ChatComposer(session, workspace)
             }
           }

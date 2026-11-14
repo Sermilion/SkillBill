@@ -44,7 +44,7 @@ Before command or workflow work, read [Runtime command guidance](docs/runtime-co
 
 ## Linear work tracking
 
-Track repository work in Linear under `SONA`, except direct tasks explicitly requested on `main`; do not create issues for those. Let Linear assign complete keys. Never mint or reserve local keys.
+Track repository work in Linear under `SONA`, except direct tasks explicitly requested on `main`. Let Linear assign complete keys. Never mint or reserve local keys.
 
 Use `.codex/config.toml`'s `linear-sona` connection. Verify its workspace and team. Switch connections only on operator instruction.
 

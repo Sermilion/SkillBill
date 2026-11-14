@@ -42,8 +42,8 @@ private val KeyStep = 32.dp
 /**
  * The start-edge grip of a side pane. It reports deltas and does not own the width: [onDrag] gets the pointer movement, so the
  * caller subtracts it and dragging toward the start grows the pane; [onDragStopped] follows the last drag delta or a cancelled
- * drag; [onStep] gets [keyStep] for Left and its negative for Right. Disabled, it draws only the hairline, takes no drag or key input, and
- * tells assistive technology it is disabled.
+ * drag; [onStep] gets [keyStep] for Left and its negative for Right; [onDoubleClick] runs on a double-click and on Home. Disabled,
+ * it draws only the hairline, takes no drag or key input, and tells assistive technology it is disabled.
  */
 @Composable
 fun PaneResizeGrip(
@@ -63,6 +63,7 @@ fun PaneResizeGrip(
   val grip = remember { MutableInteractionSource() }
   val currentDrag by rememberUpdatedState(onDrag)
   val currentStep by rememberUpdatedState(onStep)
+  val currentDoubleClick by rememberUpdatedState(onDoubleClick)
   val active = grip.collectIsHoveredAsState().value || grip.collectIsDraggedAsState().value || grip.collectIsFocusedAsState().value
   Box(
     modifier.width(gripWidth).fillMaxHeight()
@@ -73,8 +74,8 @@ fun PaneResizeGrip(
       }
       .then(if (enabled) Modifier.pointerHoverIcon(horizontalResizePointerIcon) else Modifier)
       .hoverable(grip, enabled = enabled)
-      .pointerInput(enabled, onDoubleClick) {
-        if (enabled && onDoubleClick != null) detectTapGestures(onDoubleTap = { onDoubleClick() })
+      .pointerInput(enabled, onDoubleClick != null) {
+        if (enabled && onDoubleClick != null) detectTapGestures(onDoubleTap = { currentDoubleClick?.invoke() })
       }
       .draggable(
         orientation = Orientation.Horizontal,
@@ -87,6 +88,7 @@ fun PaneResizeGrip(
         if (!enabled || event.type != KeyEventType.KeyDown) false else when (event.key) {
           Key.DirectionLeft -> { currentStep(keyStep); true }
           Key.DirectionRight -> { currentStep(-keyStep); true }
+          Key.MoveHome -> onDoubleClick?.let { it(); true } ?: false
           else -> false
         }
       }.focusable(enabled = enabled, interactionSource = grip),

@@ -924,7 +924,7 @@ private fun projectCheckDiscoveryArgv(category: String): List<String> =
   }
 
 private const val PROJECT_CHECK_DISCOVERY_PROMPT_PREFIX =
-  "Discover minimal project check commands for Sona project checks."
+  "Discover minimal project check commands for sona project checks."
 private val PROJECT_CHECK_DISCOVERY_PROJECT_ID = Regex("""Project id: (\S+)""")
 private val PROJECT_CHECK_DISCOVERY_CATEGORIES = Regex("""Requested categories: (.+)""")
 

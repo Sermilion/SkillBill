@@ -26,7 +26,8 @@ private val WIDTH_FLUSH_TIMEOUT = 1.seconds
 
 /**
  * The window's docked chat pane width in dp. It starts from the stored width, follows the user's drags at once, and persists the
- * last drag after it settles; [close] flushes a write still waiting. A rejected write is not retried and keeps the in-memory width.
+ * last drag after it settles; [reset] returns to the default width through the same delayed write. [close] flushes a write still
+ * waiting. A rejected write is not retried and keeps the in-memory width.
  */
 @Inject
 @SingleIn(WindowScope::class)
@@ -59,6 +60,8 @@ class ChatPaneWidth(private val settings: AppSettingsRepository, windowScope: Wi
       if (pendingWidth == value) pendingWidth = null
     }
   }
+
+  fun reset() = resizeTo(AppSettings.CHAT_WIDTH_DEFAULT_DP)
 
   fun close() {
     widthWrite?.cancel()

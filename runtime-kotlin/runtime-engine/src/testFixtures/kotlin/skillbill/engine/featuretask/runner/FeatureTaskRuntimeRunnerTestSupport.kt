@@ -19,6 +19,7 @@ import skillbill.application.testHarnessClock
 import skillbill.config.model.RepoLocalConfig
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.config.projectchecks.ProjectCheckCommandSnapshot
+import skillbill.contracts.config.projectchecks.ProjectCheckConfig
 import skillbill.contracts.time.JvmSystemClock
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CHECKPOINT_IDENTITY_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
@@ -824,6 +825,7 @@ private fun testRunLoopEntry(deps: RuntimePhaseGatesDeps): TestFeatureTaskRuntim
           validationGateRunner,
           deps.gateRepoLocalConfig,
           NoopRuntimeDiagnostics,
+          gitOperations = deps.gitOperations,
         ),
         deps.buildReceiptValidator,
         FeatureTaskRuntimeValidationGateCoordinator(),
@@ -1530,7 +1532,7 @@ private fun runnerExecutionEntry(
               config.goalContinuation.qualityGateSelection,
             )
           )?.let {
-            skillbill.contracts.config.projectchecks.ProjectCheckConfig(
+            ProjectCheckConfig(
               it.projectId,
               it.buildCommands,
               null,
