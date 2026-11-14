@@ -110,6 +110,44 @@ class CursorAcpSessionTest {
   }
 
   @Test
+  fun `exact provider confirms a full model id from the session family thinking and speed options`() {
+    val harness = Harness(model = "swe-2-high-lightning", provider = exactProvider, modelOnCommandLine = true)
+    harness.session.start()
+    harness.respond("""{"protocolVersion":1,"agentCapabilities":{}}""")
+    harness.respond(devinSession(level = "high", speed = "fast"))
+
+    assertTrue(harness.session.ready)
+    assertTrue(harness.frames.none { it.text(CursorAcpKeys.METHOD) == "session/set_config_option" })
+    harness.respond("""{"stopReason":"end_turn"}""")
+    assertEquals("swe-2-high-lightning", harness.session.outcome()?.model)
+    assertEquals(listOf("swe-2-high-lightning"), harness.reportedModels)
+  }
+
+  @Test
+  fun `exact provider refuses a full model id the session configuration does not match`() {
+    val harness = Harness(model = "swe-2-high-lightning", provider = exactProvider, modelOnCommandLine = true)
+    harness.session.start()
+    harness.respond("""{"protocolVersion":1,"agentCapabilities":{}}""")
+    harness.respond(devinSession(level = "high", speed = "standard"))
+
+    assertContains(requireNotNull(harness.session.outcome()?.failure), "swe-2-high-lightning")
+    assertTrue(harness.frames.none { it.text(CursorAcpKeys.METHOD) == "session/prompt" })
+    assertTrue(harness.reportedModels.isEmpty())
+  }
+
+  private fun devinSession(
+    level: String,
+    speed: String,
+  ): String =
+    """{"sessionId":"s","configOptions":[""" +
+      """{"id":"model","category":"model","type":"select","currentValue":"swe-2-high","options":[""" +
+      """{"value":"swe-2-high","name":"SWE-2"},{"value":"swe-2-flash-medium","name":"SWE-2 Flash"}]},""" +
+      """{"id":"thought_level","category":"thought_level","type":"select","currentValue":"$level","options":[""" +
+      """{"value":"medium"},{"value":"high"},{"value":"max"}]},""" +
+      """{"id":"speed","category":"model_config","type":"select","currentValue":"$speed","options":[""" +
+      """{"value":"standard"},{"value":"fast"}]}]}"""
+
+  @Test
   fun `exact provider legacy set model acknowledgement without an echoed model reports no identity`() {
     val harness = legacyExactProvider()
     val selection = harness.frames.last()

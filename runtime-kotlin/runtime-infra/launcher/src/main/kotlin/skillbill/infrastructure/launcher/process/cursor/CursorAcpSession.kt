@@ -102,6 +102,7 @@ class CursorAcpSession(
   private var capabilities = JsonObject(emptyMap())
   private var model: String? = null
   private var selectedModel: String? = null
+  private var composedFamily: String? = null
   private var pendingConfigId: String? = null
   private var pendingConfigValue: String? = null
   private var pendingConfigIsMode = false
@@ -217,12 +218,18 @@ class CursorAcpSession(
   }
 
   private fun configUpdate(update: JsonObject) {
+    val options = (update[K.CONFIG_OPTIONS] as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }
     val value =
-      (update[K.CONFIG_OPTIONS] as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }
-        .firstOrNull { it.text(K.CATEGORY) == "model" }
+      options.firstOrNull { it.text(K.CATEGORY) == "model" }
         ?.let { it.text(K.CURRENT_VALUE) ?: "" }
         ?: return record("seam=$seam outcome=informational_update")
-    model = value.ifEmpty { null }
+    val family = composedFamily
+    model =
+      if (family == null) {
+        value.ifEmpty { null }
+      } else {
+        composedAcpModel(options) ?: selectedModel.takeIf { value == family } ?: value.ifEmpty { null }
+      }
     if (model == null) {
       record("seam=$seam outcome=model_update_malformed reported_identity=unavailable")
     } else if (model != selectedModel) {
@@ -328,10 +335,7 @@ class CursorAcpSession(
   ) {
     val selected =
       resolveModel(requested, configValues(config[K.OPTIONS]).toList())
-        ?: return stop(
-          "$providerName does not advertise the selected model/effort '$requested'; no " +
-            "prompt was sent.",
-        )
+        ?: return confirmComposedModel(config, requested)
     if (config.text(K.CURRENT_VALUE) == selected) {
       model = selected
       onModel(selected)
@@ -348,6 +352,22 @@ class CursorAcpSession(
         put(K.VALUE, selected)
       },
     )
+  }
+
+  private fun confirmComposedModel(
+    config: JsonObject,
+    requested: String,
+  ) {
+    val options = (setup[K.CONFIG_OPTIONS] as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }
+    if (!launch.provider.exactModels || !launch.modelOnCommandLine || composedAcpModel(options) != requested) {
+      return stop("$providerName does not advertise the selected model/effort '$requested'; no prompt was sent.")
+    }
+    record("seam=$seam outcome=model_composed_confirmed requested=$requested")
+    selectedModel = requested
+    composedFamily = config.text(K.CURRENT_VALUE)
+    model = requested
+    onModel(requested)
+    selectMode()
   }
 
   private fun selectLegacyModel(requested: String) {
@@ -698,7 +718,7 @@ internal fun JsonObject.obj(key: String): JsonObject? = this[key] as? JsonObject
 
 private fun JsonObject.flag(key: String): Boolean = (this[key] as? JsonPrimitive)?.booleanOrNull == true
 
-private fun configValues(value: JsonElement?): Set<String> =
+internal fun configValues(value: JsonElement?): Set<String> =
   (value as? JsonArray).orEmpty().flatMap { entry ->
     val option = entry as? JsonObject ?: return@flatMap emptyList()
     option.text(K.VALUE)?.let(::listOf) ?: configValues(option[K.OPTIONS]).toList()

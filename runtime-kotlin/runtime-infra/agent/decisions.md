@@ -14,6 +14,12 @@ Context: Devin must refuse a separate effort, or missing runtime MCP context, be
 Decision: AgentRunCommandBuilder.launchRefusal has no default body. Every builder implements it, and the Claude, Codex, Cursor and the retired fourth agent builders return null explicitly.
 Reason: PortNullObjectAbsenceArchitectureTest rejects an interface member whose default body returns null. Explicit overrides also keep each builder's pre-spawn refusal policy visible.
 
+## [2026-11-14] Confirm Devin full model IDs from the session's split options
+Context: Devin CLI 3000.12.57 does not list full model IDs in ACP session/new. Its model option has one value per family, such as swe-2-high for SWE-2 and swe-2-flash-medium for SWE-2 Flash, plus full fusion-* IDs. Thinking level (thought_level: medium, high, max) and speed (id speed, category model_config: standard, fast) are separate options. `devin acp --model swe-2-high-lightning` applies the full ID and the session reports swe-2-high, high, fast. An unknown --model is silently ignored and the session starts on the default. The exact-match check therefore refused valid IDs from `devin models`, such as swe-2-medium and every -lightning variant.
+Decision: When an exactModels provider received the model on the command line and the full ID is not a model option, rebuild the ID from the current values. Strip the thinking level from the family value, append the current level, and append -lightning when speed is fast. Accept the request only when the rebuilt ID equals it, report the requested ID, and send no set_config_option. Otherwise refuse with the existing model rejection before any prompt. Later config_option_update frames are rebuilt the same way.
+Reason: The session's own values confirm that Devin applied the requested model, so an ignored or mistyped --model still fails visibly instead of running on the default.
+Revisit when: Devin advertises full model IDs over ACP, or changes how it names the speed variant.
+
 ## [2026-11-12] Exact-model ACP providers never resolve or backfill the reported model
 Context: A Devin model UID such as swe-2-high already includes the effort. Fuzzy resolution, or backfilling from the set_model acknowledgement, could silently change or misreport the model.
 Decision: A provider flagged exactModels accepts only an exactly advertised ID and refuses a separate effort before launch. Reported identity stays null unless the provider reports a model. Absent metadata keeps the CLI assignment with a model_metadata_absent diagnostic.
