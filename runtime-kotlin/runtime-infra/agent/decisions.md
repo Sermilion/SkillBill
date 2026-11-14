@@ -153,3 +153,8 @@ Reason: One goal has a handful of monitor cycles, so loading them all is cheap. 
 Context: Devin sessions inherited accept-edits mode. OpenCode chat rebuilt permissions as ask or deny, while runtime workers inherited provider defaults.
 Decision: Select Devin's advertised bypass mode in shared ACP session setup before prompting. Apply OpenCode's process-local wildcard allow permission environment to chat, continuation, worker and governed review launches. Auto-approve residual OpenCode ACP requests, since agent-specific ask rules can override its environment. Remove the OpenCode chat policy probes and overlays that forced approvals. Keep provider denials and parked operation confirmation cards authoritative.
 Reason: Every Sona use of these providers must follow the existing native permission bypass default. Neither change writes operator configuration or changes persisted session identity.
+
+## [2026-11-14] Steer live ACP turns through a second session/prompt
+Context: Devin accepts a second session/prompt while a turn is running and answers it with the turn's own response.
+Decision: CursorAcpSession.steer sends the follow-up under its own request id only while a session/prompt is outstanding on a steering-capable provider. CursorAcpSteerOutcome reports never sent (Inactive), failed on the wire (WriteFailed), or awaiting the provider's answer (Pending). dropSteer drops a delivery's reservation so a late provider answer resolves nothing, and finish resolves every outstanding delivery once with the turn.
+Reason: Steering must not disturb single-request providers or leak reservations; routing steering responses by request id keeps them separate from the turn's tracked response.

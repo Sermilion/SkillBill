@@ -82,10 +82,6 @@ data class CursorAcpOutcome(
   val failure: String?,
 )
 
-/**
- * What [CursorAcpSession.steer] did with a follow-up: never sent, failed on the wire, or awaiting
- * the provider's answer.
- */
 enum class CursorAcpSteerOutcome { Inactive, WriteFailed, Pending }
 
 class CursorAcpSession(
@@ -103,10 +99,14 @@ class CursorAcpSession(
   private val providerName = launch.provider.name
   private val seam = launch.provider.seam
   private val startedAt = clock.instant()
+
   @Volatile private var expectedId = 1
+
   @Volatile private var requestSeq = 1
+
   @Volatile private var expectedMethod = K.INITIALIZE
   private val steeringIds = HashMap<Int, String>()
+
   @Volatile private var sessionId: String? = launch.savedSession
   private var capabilities = JsonObject(emptyMap())
   private var model: String? = null
@@ -163,9 +163,10 @@ class CursorAcpSession(
     if (message.text(K.JSONRPC) != "2.0") return stop("$providerName sent an incompatible JSON-RPC envelope.")
     val method = message.text(K.METHOD)
     if (method == null) {
-      val deliveryId = synchronized(lock) {
-        steeringIds.remove((message[K.ID] as? JsonPrimitive)?.intOrNull)
-      }
+      val deliveryId =
+        synchronized(lock) {
+          steeringIds.remove((message[K.ID] as? JsonPrimitive)?.intOrNull)
+        }
       if (deliveryId != null) return steeringResponse(deliveryId, message)
     }
     if (outcome() != null) return
@@ -473,20 +474,21 @@ class CursorAcpSession(
     )
   }
 
-  /**
-   * Sends [deliveryId]'s text as a second prompt inside the running turn. [CursorAcpSteerOutcome.Pending] stays
-   * unresolved until the provider answers that request, which happens with the turn's own end.
-   */
-  fun steer(deliveryId: String, text: String, images: List<CursorAcpImage>): CursorAcpSteerOutcome {
-    val frame = synchronized(lock) {
-      val live = ready && expectedMethod == K.SESSION_PROMPT && launch.provider.supportsSteering
-      if (closed || closing || !live) {
-        return CursorAcpSteerOutcome.Inactive
+  fun steer(
+    deliveryId: String,
+    text: String,
+    images: List<CursorAcpImage>,
+  ): CursorAcpSteerOutcome {
+    val frame =
+      synchronized(lock) {
+        val live = ready && expectedMethod == K.SESSION_PROMPT && launch.provider.supportsSteering
+        if (closed || closing || !live) {
+          return CursorAcpSteerOutcome.Inactive
+        }
+        val requestId = ++requestSeq
+        steeringIds[requestId] = deliveryId
+        steerFrame(sessionId, requestId, text, images)
       }
-      val requestId = ++requestSeq
-      steeringIds[requestId] = deliveryId
-      steerFrame(sessionId, requestId, text, images)
-    }
     val written = catchingNonCancellation { writeLine(frame.toString()) }.getOrDefault(false)
     if (!written) {
       dropSteer(deliveryId)
@@ -495,12 +497,14 @@ class CursorAcpSession(
     return CursorAcpSteerOutcome.Pending
   }
 
-  /** Drops [deliveryId]'s reservation so a late provider answer resolves nothing. */
   fun dropSteer(deliveryId: String) {
     synchronized(lock) { steeringIds.values.removeAll { it == deliveryId } }
   }
 
-  private fun steeringResponse(deliveryId: String, message: JsonObject) {
+  private fun steeringResponse(
+    deliveryId: String,
+    message: JsonObject,
+  ) {
     val error = message.obj(K.ERROR)
     when {
       error != null ->
@@ -719,7 +723,10 @@ private fun steerFrame(
     )
   }
 
-private fun promptBlocks(text: String, images: List<CursorAcpImage>): JsonArray =
+private fun promptBlocks(
+  text: String,
+  images: List<CursorAcpImage>,
+): JsonArray =
   JsonArray(
     listOf(
       buildJsonObject {
