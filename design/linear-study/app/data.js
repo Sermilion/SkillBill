@@ -16,13 +16,20 @@
     'zero-account': { name: 'zero-account', path: '~/StudioProjects/ZeroAccount-pr-168', color: 'var(--data-3)', web: 'github.com/0account/zero-account', appRun: ['android'] },
   };
 
-  /* SupportedAgent: claude, codex, cursor. MODEL_DIRECTIVE_CAPABLE_AGENTS: claude, codex, cursor. */
+  /* Agents available in the desktop selectors. */
   const AGENTS = {
     claude: { name: 'claude', initials: 'Cl', color: 'var(--data-4)', modelCapable: true },
     codex: { name: 'codex', initials: 'Cx', color: 'var(--data-2)', modelCapable: true },
     cursor: { name: 'cursor', initials: 'Cu', color: 'var(--data-6)', modelCapable: true },
+    devin: { name: 'devin', initials: 'De', color: 'var(--data-6)', modelCapable: true },
   };
-  const AGENT_CHOICES = ['claude', 'codex', 'cursor'];
+  const AGENT_CHOICES = ['claude', 'codex', 'cursor', 'devin'];
+  /* What each agent's CLI reports for the agent and model picker ([label, id]), shaped like ChatModelsRead.Loaded. */
+  const AGENT_MODELS = {
+    claude: [['Claude Opus 5.5', 'claude-opus-5-5'], ['Claude Sonnet 5.5', 'claude-sonnet-5-5'], ['Claude Haiku 5.5', 'claude-haiku-5-5'], ['Claude Fable 5.2', 'claude-fable-5-2']],
+    codex: [['GPT-6.1-Sol', 'gpt-6.1-sol'], ['GPT-6-Astra', 'gpt-6-astra'], ['GPT-6.1 Terra', 'gpt-6.1-terra'], ['GPT-6-Sol', 'gpt-6-sol'], ['GPT-6-Luna', 'gpt-6-luna'], ['GPT-5.6-Sol', 'gpt-5.6-sol'], ['GPT-5.6-Terra', 'gpt-5.6-terra']],
+    cursor: [['Auto', 'auto'], ['Composer 2.5', 'composer-2.5'], ['Grok 4.6 High', 'cursor-grok-4.6-high'], ['Claude Opus 5.5', 'claude-opus-5-5'], ['GPT-6.1-Sol', 'gpt-6.1-sol']],
+  };
 
   const PHASE_ORDER = ['preplan', 'plan', 'implement', 'simplify', 'audit', 'review', 'build', 'validate', 'write_history', 'commit_push'];
   /* Goal finish phases in run order, as the app lists them (FeatureTaskRuntimePhaseIds). */
@@ -174,7 +181,7 @@ Stopped the desktop app and private display processes. Stopped the Gradle and Ko
 
   /* ---------- Validation runs (validation run design) ----------
    * A standalone validation phase's run, shaped like the desktop's Detail for phase_id 'validation': the current
-   * execution's liveChecks ('available' when the skill-bill MCP server started for the launch, so the agent can report
+   * execution's liveChecks ('available' when the sona MCP server started for the launch, so the agent can report
    * checks through validation_check), validationOutcome (passed | blocked | failed, derived by the runtime once the checks
    * settle), validationChecks ({ id, name, dir, cmd, attempts: { outcome, at, ms, exit, note } }), the report
    * (terminal_result), currentActivity, the last agent signal (agent_activity_stamps) and validationBranchRuns (every
@@ -247,7 +254,7 @@ Stopped the desktop app and private display processes. Stopped the Gradle and Ko
     /* Live checks available, none reported yet: the Checks section holds its place. */
     waiting: { runSeq: 413, liveChecks: true, outcome: null, checks: [], result: null, activity: ACTIVE_LINE, signal: { label: 'tool stream', ago: '1s ago' },
       branchRuns: [R406, R411, Object.assign({}, R413, { lifecycle: 'active', ms: 24000, line: 'Reading AGENTS.md and the CI workflows', item: null })] },
-    /* The skill-bill MCP server never started for this launch, so no checks: the report-only running layout. */
+    /* The sona MCP server never started for this launch, so no checks: the report-only running layout. */
     noChecks: { runSeq: 412, liveChecks: false, outcome: null, checks: [], result: null, activity: ACTIVE_LINE, signal: { label: 'stdout', ago: '3s ago' }, branchRuns: [] },
     /* Live checks reported: four of eight settled, the fifth running. */
     running: { runSeq: 413, liveChecks: true, outcome: null, checks: VAL_CHECKS_RUNNING, result: null, activity: 'Running Tray check and distributable', signal: { label: 'tool stream', ago: '2s ago' },
@@ -1249,7 +1256,8 @@ Stopped the desktop app and private display processes. Stopped the Gradle and Ko
    * Cursor has no readable usage source, so it shows "No usage data". Only a provider that reports a sign-in failure says
    * "Not signed in". */
   const USAGE = {
-    providers: ['Codex', 'Claude', 'Cursor'],
+    providers: ['Codex', 'Claude', 'Devin'],
+    devin: { windows: [{ label: 'Weekly', used: 2, resetIn: '18h', resetAt: 'Sun 09:00' }, { label: 'Extra balance', valueText: '10 USD' }] },
     scenarios: {
       normal: { windows: [{ label: '5 hour', used: 12, resetIn: '2h 14m', resetAt: '16:30' }, { label: 'Weekly', used: 43, resetIn: '4d 6h', resetAt: 'Thu 09:00' }] },
       low: { windows: [{ label: '5 hour', used: 91, resetIn: '2h 14m', resetAt: '16:30' }, { label: 'Weekly', used: 58, resetIn: '4d 6h', resetAt: 'Thu 09:00' }] },
@@ -1554,7 +1562,7 @@ Stopped the desktop app and private display processes. Stopped the Gradle and Ko
     it.subtasks[0].phases = { cards: PEEK.sub1, note: '58m total' };
     it.subtasks[1].phases = { cards: PEEK.sub2 };
   })();
-  window.DATA = { T0, REPOS, AGENTS, AGENT_CHOICES, PHASE_ORDER, GOAL_FINISH, items, history, valRoutes, projects, specs, NOTIFICATIONS, CLAUDE_DIRS, PHASE_GROUPS, MATRIX, BUDGET,
+  window.DATA = { T0, REPOS, AGENTS, AGENT_CHOICES, AGENT_MODELS, PHASE_ORDER, GOAL_FINISH, items, history, valRoutes, projects, specs, NOTIFICATIONS, CLAUDE_DIRS, PHASE_GROUPS, MATRIX, BUDGET,
     REPO_BRANCHES, LONG_BRANCH, CHAT_HISTORY, CHAT_CHANGES, NEW_TASK_CHATS, NEW_TASK_SELECTED, CHAT_REPLIES, NEW_TASK_STEPS, QUICK_STARTS,
     QA, QA_DEVICES, APP_RUN, QA_STAGES, QA_LIVE, VAL, VERIFY, USAGE, BUILD, PEEK, MON };
 })();

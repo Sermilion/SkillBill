@@ -7,6 +7,8 @@ import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -101,7 +103,7 @@ fun UsageSidebar(model: UsageSidebarModel, modifier: Modifier = Modifier) {
   SbPopover(
     expanded = expanded,
     onDismissRequest = { expanded = false },
-    width = 316.dp,
+    width = 420.dp,
     maxWidth = 420.dp,
     placement = SbPopoverPlacement.Above,
     returnFocusTo = focusRequester.takeIf { openedForToken == state.popupDismissalToken },
@@ -147,7 +149,7 @@ private fun DefaultAgentSelector(agents: List<String>, selected: String?, onTogg
   val shape = RoundedCornerShape(SkillBillRadius.sm)
   Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
     BasicText("Default agent", style = SkillBillTheme.type.tXs.copy(color = colors.fgMuted, fontWeight = FontWeight.Normal))
-    Row(
+    FlowRow(
       Modifier.fillMaxWidth().background(colors.bgInset, shape).border(1.dp, colors.border, shape).padding(3.dp)
         .selectableGroup().semantics { contentDescription = "Default agent for new chats, goals and phases" },
       horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -157,7 +159,7 @@ private fun DefaultAgentSelector(agents: List<String>, selected: String?, onTogg
         val interaction = remember(agent) { MutableInteractionSource() }
         val hovered by interaction.collectIsHoveredAsState()
         val foreground = if (active || hovered) usageAgentColor(agent) else colors.fgMuted
-        Box(Modifier.weight(1f)) {
+        Box(Modifier.weight(1f).widthIn(min = 80.dp)) {
           SbTooltip(if (active) "Default for new work. Click to clear" else "Use ${agent.agentLabel()} for new chats, goals and phases") {
             Row(
               Modifier.fillMaxWidth().height(26.dp).background(if (active) colors.bgOverlay else Color.Transparent, RoundedCornerShape(SkillBillRadius.xs))
@@ -223,4 +225,5 @@ private fun UsageProviderSelector(selected: UsageProvider?, onSelect: (UsageProv
 private fun UsageProvider.usageUrl(): String = when (this) {
   UsageProvider.Codex -> "https://chatgpt.com/codex/settings/usage"
   UsageProvider.Claude -> "https://claude.ai/settings/usage"
+  UsageProvider.Devin -> "https://app.devin.ai/settings/usage"
 }

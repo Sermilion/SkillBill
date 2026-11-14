@@ -15,6 +15,7 @@ internal enum class ControlKind { PAUSE_AFTER_SUBTASK, PAUSE_NOW, CANCEL, LAUNCH
  */
 internal fun WorkControlResult.toControlOutcome(kind: ControlKind, diagnostics: Diagnostics): ControlOutcome = when (this) {
   WorkControlResult.Accepted -> if (kind == ControlKind.PAUSE_NOW) ControlOutcome.NoProcessNeeded else ControlOutcome.RequestAccepted
+  is WorkControlResult.Running -> ControlOutcome.RequestAccepted
   WorkControlResult.IntentRecorded -> ControlOutcome.IntentRecorded
   WorkControlResult.ExitConfirmed -> ControlOutcome.ExitConfirmed
   WorkControlResult.TerminationAttempted -> ControlOutcome.TerminationAttempted

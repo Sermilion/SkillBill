@@ -14,7 +14,7 @@ This example lets Skill Bill clients send telemetry to a small Cloudflare Worker
 8. Queries PostHog through its Query API and returns aggregate workflow metrics.
 
 The Worker forwards the privacy-scoped payload already produced by the
-`skill-bill` CLI and MCP server. With the default `anonymous` level, review
+`sona` CLI and MCP server. With the default `anonymous` level, review
 telemetry is limited to:
 
 - completed review run snapshots with aggregate finding counts, accepted/rejected finding metadata (finding id, severity, confidence, and outcome type only), and nested learning metadata

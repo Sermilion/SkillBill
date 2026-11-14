@@ -96,8 +96,7 @@ See [runtime command guidance](docs/runtime-command-guidance.md) for command syn
 The public runtime executable is `sona`; its stdio MCP server is `sona-mcp` and
 registers as `sona`. The desktop launcher is `sona-app`, and the app's visible
 name is Sona. The listed skill's source remains `skills/skill-bill/`, and
-internal sidecars still declare `internal-for: skill-bill`. The final SONA-5
-subtask leaves `skill-bill` as a notice-only compatibility command.
+internal sidecars still declare `internal-for: skill-bill`. Installation removes the retired CLI command.
 
 ## Watching and controlling runs
 

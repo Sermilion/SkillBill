@@ -133,7 +133,7 @@ class DoctorCliCommand(
   private val service: SystemService,
   private val state: CliRunState,
   private val inputs: CliRunInputs,
-) : DocumentedCliCommand("doctor", "Check skill-bill installation health.") {
+) : DocumentedCliCommand("doctor", "Check Sona installation health.") {
   private val subject by argument(help = "Optional diagnostic subject. Use `skill` for one governed skill.")
     .optional()
   private val skillName by argument(help = "Governed skill name when diagnosing one skill.").optional()

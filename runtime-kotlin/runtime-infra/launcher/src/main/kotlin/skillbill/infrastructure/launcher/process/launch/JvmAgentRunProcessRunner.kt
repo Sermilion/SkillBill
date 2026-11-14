@@ -153,7 +153,7 @@ class JvmAgentRunProcessRunner(
     reason: String,
     request: AgentRunProcessRequest,
   ): AgentRunProcessResult {
-    catchingNonCancellation { request.launch.outputSink.write(AgentRunOutputStream.STDERR, "skill-bill: $reason\n") }
+    catchingNonCancellation { request.launch.outputSink.write(AgentRunOutputStream.STDERR, "sona: $reason\n") }
     return AgentRunProcessResult(
       exitStatus = null,
       stdout = "",

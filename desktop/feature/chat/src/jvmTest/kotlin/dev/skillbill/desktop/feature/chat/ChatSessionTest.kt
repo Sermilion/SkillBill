@@ -6,6 +6,7 @@ import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatToolCall
 import dev.skillbill.desktop.core.testing.workItem
 import kotlinx.coroutines.Job
+import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -26,6 +27,20 @@ class ChatSessionTest {
     assertFalse(session.canContinue(entry("cursor"), "/repo"))
     assertFalse(session.canContinue(entry("unavailable"), "/repo"))
     assertFalse(session.canContinue(entry("retired-agent"), "/repo"))
+  }
+
+  @Test
+  fun `Devin continuation requires its original checkout to exist and match`() {
+    val session = ChatSession(workItem("SKILL-1"), "session-1", Job())
+    val root = createTempDirectory("devin-checkout").toRealPath().toString()
+    val entry = ChatHistoryEntry(
+      "saved", "wf-1", ChatAgent("devin", "devin/swe-1", null), Instant.fromEpochMilliseconds(1), "saved chat", emptyList(),
+      executionCheckoutRoot = root,
+    )
+
+    assertTrue(session.canContinue(entry, root))
+    assertFalse(session.canContinue(entry, root + "/moved"))
+    assertFalse(session.canContinue(entry.copy(executionCheckoutRoot = null), root))
   }
 
   @Test

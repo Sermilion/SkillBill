@@ -84,7 +84,7 @@ class DevinAgentRunCommandBuilderTest {
 
     assertNull(DevinAgentRunCommandBuilder(databasePath = database).launchRefusal(wrapperRequest))
     val wrapper = builder.build(wrapperRequest)
-    assertEquals("skill-bill", wrapper.command.first())
+    assertEquals("sona", wrapper.command.first())
     assertTrue(wrapper.command.containsAll(listOf("feature-task", "resume", "wfl-assigned")))
     assertEquals(listOf("--agent", "devin"), wrapper.command.takeLast(2))
     assertNull(wrapper.stdinText)

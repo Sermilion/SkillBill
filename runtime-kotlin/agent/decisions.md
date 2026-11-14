@@ -1,3 +1,8 @@
+## [2026-11-14] Preserve saved install selections during retired-agent compatibility reads
+Context: Saved v1 install selections can include the retired Junie agent. Strict supported-agent decoding rejected the whole selection before an upgrade could replace it.
+Decision: Remove only that known retired token from the read projection before strict decoding. Validate every remaining field and reject selections without a supported agent. Preserve the source JSON and an atomic content-addressed backup before returning the projection. A successful install writes the current selection through the existing publication path.
+Reason: This keeps the v1 wire shape and other choices intact, preserves recovery data across failed or repeated installation, and rejects unknown agent names. A migration diagnostic reports the omitted agent and backup. Source installs build the replay CLI before reading selections so stale binaries cannot bypass compatibility handling.
+
 ## [2026-11-13] Retain quality fingerprint inputs separately from executable agents
 Context: Saved quality fingerprints cover canonical matrices whose agent ids may outlive runtime support.
 Decision: Retain original textual matrix keys for persistence and fingerprint checks, derive a supported-only execution projection, and reject disagreement between the projection and retained inputs.

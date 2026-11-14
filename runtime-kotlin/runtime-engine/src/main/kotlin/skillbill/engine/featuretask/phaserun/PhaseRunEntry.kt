@@ -155,18 +155,16 @@ public class PhaseRunEntry(
     ) {
       plans.invalidQualityPlan("Phase-run evidence rejected at 178.")
     }
-    retained.let {
-      plans.validateNestedProgressKeys(it)
-      plans.validateRetainedRunningPhases(it, plan, "$parentWorkflowId:$invocationId")
-    }
+    plans.validateNestedProgressKeys(retained)
+    val recovered = settleInterruptedAttempts(retained, plan, "$parentWorkflowId:$invocationId")
     val boundRequest =
       if (request.definitionId == goalBuildDefinitionId) {
-        request.copy(invokedAgentId = acceptedAgentId)
+        request.copy(invokedAgentId = acceptedAgentId, goalQualityPhaseProgress = recovered)
       } else {
-        request
+        request.copy(goalQualityPhaseProgress = recovered)
       }
-    reconcileGoalRepairOutputs(boundRequest, invocationId, retained)
-    retainedValidationResult(boundRequest, parentWorkflowId, invocationId, plan, retained)?.let { return it }
+    reconcileGoalRepairOutputs(boundRequest, invocationId, recovered)
+    retainedValidationResult(boundRequest, parentWorkflowId, invocationId, plan, recovered)?.let { return it }
     val result =
       runInternal(
         boundRequest.copy(acceptedGoalQualityPlanText = acceptedExecutionPlan),
@@ -177,6 +175,22 @@ public class PhaseRunEntry(
     reconcileGoalRepairOutputs(boundRequest, invocationId, boundRequest.goalQualityPhaseProgress)
     persistQualityTerminal(boundRequest, invocationId, result)
     return result
+  }
+
+  private fun settleInterruptedAttempts(
+    retained: GoalQualityPhaseProgress,
+    plan: ResolvedPhaseExecutionPlan,
+    outcomeNamespace: String,
+  ): GoalQualityPhaseProgress {
+    val interrupted = plans.validateRetainedRunningPhases(retained, plan, outcomeNamespace)
+    interrupted.forEach { attempt ->
+      diagnostics.info(
+        "seam=goal_quality_recovery record_kind=interrupted_rerun namespace=$outcomeNamespace " +
+          "step=${attempt.record.phaseId} attempt=${attempt.record.attemptCount} " +
+          "next_attempt=${attempt.record.attemptCount + 1} cause=${attempt.cause}",
+      )
+    }
+    return retained.settleInterruptedAttempts(interrupted, clock.instant())
   }
 
   private fun retainedValidationResult(

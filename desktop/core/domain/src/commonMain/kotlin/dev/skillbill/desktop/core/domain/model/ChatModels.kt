@@ -283,3 +283,11 @@ data class SavedChatProjection(
   val entries: List<ChatHistoryEntry> = emptyList(),
   val recoveries: List<ChatRecoveryEntry> = emptyList(),
 )
+
+/** Durable provider acquisition state for a chat; a missing file and an unsafe saved record remain distinct. */
+sealed interface ChatSessionAcquisition {
+  data object Missing : ChatSessionAcquisition
+  data class Draft(val entry: ChatHistoryEntry) : ChatSessionAcquisition
+  data class Acquired(val entry: ChatHistoryEntry) : ChatSessionAcquisition
+  data class Recovery(val entry: ChatHistoryEntry?, val guidance: String) : ChatSessionAcquisition
+}

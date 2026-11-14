@@ -34,13 +34,13 @@ class ClaudeUsageRefreshTest {
   fun `idle visible Claude cards share a five minute pull and cancel it after the last card closes`() = runTest {
     val profiles = UsageProfileResolver(HostEnvironment(emptyMap(), "/operator", ""))
     val request = UsageRequest(profiles.claude(null).lookup)
-    val reads = Channel<CompletableDeferred<ClaudeUsageRead>>(Channel.UNLIMITED)
+    val reads = Channel<CompletableDeferred<UsageSnapshotRead>>(Channel.UNLIMITED)
     var cancelled = false
     val clock = object : Clock { override fun now() = Instant.fromEpochMilliseconds(testScheduler.currentTime) }
     val repository = ProviderUsageRepository(
       profiles, FakeAppSettingsRepository(), unusedCodex, ApplicationCoroutineScope(backgroundScope), clock,
       claudeUsageReader = ClaudeUsageReader {
-        val pending = CompletableDeferred<ClaudeUsageRead>()
+        val pending = CompletableDeferred<UsageSnapshotRead>()
         reads.send(pending)
         try { pending.await() } finally { if (!pending.isCompleted) cancelled = true }
       },
@@ -76,14 +76,14 @@ class ClaudeUsageRefreshTest {
   fun `manual failure and sign in expiry preserve Claude meters and recheck can recover without a goal`() = runTest {
     val profiles = UsageProfileResolver(HostEnvironment(emptyMap(), "/operator", ""))
     val request = UsageRequest(profiles.claude(null).lookup)
-    val reads = Channel<CompletableDeferred<ClaudeUsageRead>>(Channel.UNLIMITED)
+    val reads = Channel<CompletableDeferred<UsageSnapshotRead>>(Channel.UNLIMITED)
     val publications = mutableListOf<UsageResult>()
     val store = FakeLastUsageStore()
     val clock = object : Clock { override fun now() = Instant.fromEpochMilliseconds(testScheduler.currentTime) }
     val repository = ProviderUsageRepository(
       profiles, FakeAppSettingsRepository(), unusedCodex, ApplicationCoroutineScope(backgroundScope), clock,
       jitter = UsageJitter { 1.0 }, lastUsage = store,
-      claudeUsageReader = ClaudeUsageReader { CompletableDeferred<ClaudeUsageRead>().also { reads.send(it) }.await() },
+      claudeUsageReader = ClaudeUsageReader { CompletableDeferred<UsageSnapshotRead>().also { reads.send(it) }.await() },
     )
     try {
       repository.acquireDemand(UsageDemand("card", request, visible = true, active = false))
@@ -95,12 +95,12 @@ class ClaudeUsageRefreshTest {
       advanceTimeBy(10_000)
       assertIs<UsageRefreshResult.Started>(repository.refresh(request))
       runCurrent()
-      reads.tryReceive().getOrThrow().complete(ClaudeUsageRead.Failed)
+      reads.tryReceive().getOrThrow().complete(UsageSnapshotRead.Failed)
       runCurrent()
       assertEquals(original, assertIs<UsageResult.Snapshot>(publications.last()).value.meters)
       advanceTimeBy(30_000)
       runCurrent()
-      reads.tryReceive().getOrThrow().complete(ClaudeUsageRead.SignInRequired)
+      reads.tryReceive().getOrThrow().complete(UsageSnapshotRead.SignInRequired)
       runCurrent()
       assertEquals(original, assertIs<UsageResult.Snapshot>(publications.last()).value.meters)
       advanceTimeBy(5.minutes)
@@ -121,18 +121,18 @@ class ClaudeUsageRefreshTest {
   @Test
   fun `OAuth windows preserve zero readings and model scope but reject malformed quotas`() {
     val at = Instant.fromEpochMilliseconds(0)
-    val parsed = assertIs<ClaudeUsageRead.Success>(parseClaudeUsage(
+    val parsed = assertIs<UsageSnapshotRead.Success>(parseClaudeUsage(
       """{"five_hour":{"utilization":0,"resets_at":null},"seven_day":null,"seven_day_sonnet":{"utilization":86,"resets_at":"2026-11-10T12:00:00Z"},"extra_usage":{"utilization":15}}""", at,
     ))
     assertEquals(listOf("claude:five_hour", "claude:seven_day_sonnet"), parsed.reading.meters.map { it.bucketIdentity })
     assertEquals(0.0, assertIs<UsageValue.PercentageUsed>(parsed.reading.meters.first().value).percent)
     assertEquals(RequestPermission.Unknown, parsed.reading.permission)
-    assertEquals(ClaudeUsageRead.Failed, parseClaudeUsage("""{"five_hour":{"utilization":101}}""", at))
-    assertEquals(ClaudeUsageRead.Failed, parseClaudeUsage("{}", at))
-    assertEquals(ClaudeUsageRead.Failed, parseClaudeUsage("not json", at))
+    assertEquals(UsageSnapshotRead.Failed, parseClaudeUsage("""{"five_hour":{"utilization":101}}""", at))
+    assertEquals(UsageSnapshotRead.Failed, parseClaudeUsage("{}", at))
+    assertEquals(UsageSnapshotRead.Failed, parseClaudeUsage("not json", at))
   }
 
-  private fun reading(at: Instant) = assertIs<ClaudeUsageRead.Success>(parseClaudeUsage(
+  private fun reading(at: Instant) = assertIs<UsageSnapshotRead.Success>(parseClaudeUsage(
     """{"five_hour":{"utilization":12,"resets_at":null},"seven_day":{"utilization":86,"resets_at":null}}""", at,
   ))
 

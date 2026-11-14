@@ -126,7 +126,7 @@ class GoalQualityQaSourceResumeTest {
         "codex",
       )
     val unresolved = assertNotNull(store.goalQualityExecution(parent)?.execution?.progress).qa
-    assertFailsWith<SkillBillRuntimeException> { resolver.validateRetainedRunningPhases(unresolved, qaPlan, namespace) }
+    assertEquals("build", resolver.validateRetainedRunningPhases(unresolved, qaPlan, namespace).single().record.phaseId)
     val verified = completeRepair(records, pending)
 
     val reopened = testWorkflowGoalRunnerOutcomeStore(phaseRunDatabase(home, clock))

@@ -147,7 +147,7 @@ class InstallerShellDelegationTest {
     val run = runUninstaller(fixtures, preserveSource = true, goalContinuation = true)
 
     assertEquals(64, run.exitCode, run.output)
-    assertContains(run.output, "Refusing to run uninstall.sh during skill-bill goal-continuation")
+    assertContains(run.output, "Refusing to run uninstall.sh during sona goal-continuation")
     assertTrue(
       Files.isRegularFile(fixtures.stateDb),
       "active goal *.db must survive untouched when the exit-64 guard fires",

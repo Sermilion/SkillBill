@@ -15,6 +15,7 @@ import dev.skillbill.desktop.core.domain.model.Detail
 import dev.skillbill.desktop.core.domain.model.RunOptions
 import dev.skillbill.desktop.core.domain.model.SessionMoveResult
 import dev.skillbill.desktop.core.domain.model.SavedChatProjection
+import dev.skillbill.desktop.core.domain.model.ChatSessionAcquisition
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
@@ -80,6 +81,9 @@ interface ExecutionChatRepository {
 
   /** The latest lines of [entry] to show again; it also records what the agent needs so the next turn continues that session. */
   suspend fun openSavedChat(entry: ChatHistoryEntry): List<ChatHistoryLine>
+
+  /** Reads the durable app/provider acquisition state without projecting or mutating the saved source. */
+  suspend fun acquisition(sessionId: String): ChatSessionAcquisition
 
   /**
    * Moves the Claude session files of [fromRoot] to [toRoot] and rewrites the cwd of its Codex sessions to [toRoot], in every

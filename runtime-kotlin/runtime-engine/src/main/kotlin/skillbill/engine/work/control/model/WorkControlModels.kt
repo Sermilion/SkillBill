@@ -6,6 +6,7 @@ import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryA
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryFailure
 import java.nio.file.Path
 import java.time.Instant
+import java.util.concurrent.CompletionStage
 
 public data class WorkControlTarget(
   val workflowId: String,
@@ -60,6 +61,9 @@ public sealed interface WorkControlResult {
    * its process identity changed after the signal. The runner may still be running.
    */
   public data object TerminationAttempted : WorkControlResult
+
+  /** The admitted runner reports its eventual failure through [failure]. */
+  public data class Running(val failure: CompletionStage<String?>) : WorkControlResult
 
   public data class LaunchFailed(val reason: String) : WorkControlResult
 

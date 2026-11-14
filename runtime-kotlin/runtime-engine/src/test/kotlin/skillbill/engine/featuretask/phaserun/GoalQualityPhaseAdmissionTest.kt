@@ -29,6 +29,7 @@ import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
+import kotlin.test.assertNull
 
 class GoalQualityPhaseAdmissionTest {
   @TempDir lateinit var home: Path
@@ -76,7 +77,7 @@ class GoalQualityPhaseAdmissionTest {
   }
 
   @Test
-  fun `QA pending external repair remains unknown before continuation dispatch`() {
+  fun `QA nested build with an interrupted repair reruns as a new attempt`() {
     val paused = pausedBuild()
     val retained =
       paused.copy(
@@ -88,18 +89,17 @@ class GoalQualityPhaseAdmissionTest {
             terminalReason = null,
           ),
       )
-    val fixture = fixture()
+    val fixture =
+      fixture { context ->
+        assertNull(context.recorder.loadBuildGateProgress(nestedKey))
+        assertEquals(2, context.state.phase("build").nextIteration)
+      }
     val request = request(SkeletonDefinition.GOAL_QA, retained)
     val encoded = fixture.plans().resolveGoalQualityExecutionPlan(request, parent)
 
-    val failure =
-      assertFailsWith<SkillBillRuntimeException> {
-        fixture.entry().runForGoalQuality(request, parent, invocation, branch, encoded)
-      }
+    fixture.entry().runForGoalQuality(request, parent, invocation, branch, encoded)
 
-    assertContains(failure.message.orEmpty(), "outcome of goal-quality step 'build#1' is unknown")
-    assertEquals(0, dispatches)
-    assertEquals(retained, request.latestGoalQualityPhaseProgress?.invoke())
+    assertEquals(1, dispatches)
   }
 
   private fun request(
@@ -121,7 +121,11 @@ class GoalQualityPhaseAdmissionTest {
     )
   }
 
-  private fun fixture(): PhaseRunEntryFixture {
+  private fun fixture(
+    observeDispatch: (FeatureTaskRuntimeRunLoopContext) -> Unit = { context ->
+      assertEquals(1, context.recorder.loadBuildGateProgress(nestedKey)?.repairsUsed)
+    },
+  ): PhaseRunEntryFixture {
     val git = RecordingWorkflowGitOperations()
     val strategies = testPhaseStrategies(GoalRunnerSubtaskLauncher { error("Unexpected agent launch") }, git)
     val continuation =
@@ -131,7 +135,7 @@ class GoalQualityPhaseAdmissionTest {
           beforeDrive: (FeatureTaskRuntimeRunLoop) -> Unit,
         ): FeatureTaskRuntimeRunReport {
           dispatches++
-          assertEquals(1, context.recorder.loadBuildGateProgress(nestedKey)?.repairsUsed)
+          observeDispatch(context)
           return FeatureTaskRuntimeRunReport.Paused(
             "SKILL-514",
             invocation,

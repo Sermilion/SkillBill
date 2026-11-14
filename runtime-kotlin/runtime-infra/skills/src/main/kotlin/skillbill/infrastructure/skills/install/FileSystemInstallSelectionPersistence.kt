@@ -7,6 +7,7 @@ import skillbill.error.shellcontent.missingInstallSelectionRecordError
 import skillbill.error.shellcontent.unreadableInstallSelectionRecordError
 import skillbill.infrastructure.host.jvm.atomicWriteString
 import skillbill.install.model.SharedInstallSelection
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.install.selection.InstallSelectionPersistencePort
 import skillbill.ports.install.selection.model.ReadLatestSuccessfulInstallSelectionRequest
 import skillbill.ports.install.selection.model.ReadLatestSuccessfulInstallSelectionResult
@@ -18,11 +19,15 @@ import java.nio.file.Files
 import java.nio.file.Path
 
 @Inject
-class FileSystemInstallSelectionPersistence : InstallSelectionPersistencePort {
+class FileSystemInstallSelectionPersistence(
+  private val diagnostics: RuntimeDiagnostics,
+) : InstallSelectionPersistencePort {
   override fun readLatestSuccessfulSelection(
     request: ReadLatestSuccessfulInstallSelectionRequest,
   ): ReadLatestSuccessfulInstallSelectionResult =
-    ReadLatestSuccessfulInstallSelectionResult(readInstallSelectionRecord(selectionPath(request.installHome)))
+    ReadLatestSuccessfulInstallSelectionResult(
+      readInstallSelectionRecord(selectionPath(request.installHome), diagnostics),
+    )
 
   override fun writeLatestSuccessfulSelection(
     request: WriteLatestSuccessfulInstallSelectionRequest,
@@ -46,7 +51,10 @@ class FileSystemInstallSelectionPersistence : InstallSelectionPersistencePort {
   }
 }
 
-internal fun readInstallSelectionRecord(path: Path): SharedInstallSelection {
+private fun readInstallSelectionRecord(
+  path: Path,
+  diagnostics: RuntimeDiagnostics,
+): SharedInstallSelection {
   if (!Files.exists(path)) {
     throw missingInstallSelectionRecordError(path.toString())
   }
@@ -54,7 +62,10 @@ internal fun readInstallSelectionRecord(path: Path): SharedInstallSelection {
   if (size > MAX_INSTALL_SELECTION_RECORD_BYTES) {
     throw unreadableInstallSelectionRecordError(path.toString())
   }
-  return parseInstallSelectionPayload(path, readInstallSelectionPayload(path))
+  return parseInstallSelectionPayload(
+    path,
+    migrateRetiredInstallSelection(path, readInstallSelectionPayload(path), diagnostics),
+  )
 }
 
 private fun writeInstallSelectionRecord(

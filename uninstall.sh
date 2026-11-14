@@ -49,7 +49,7 @@ warn()  { printf "${YELLOW}⚠${NC} %s\n" "$1"; }
 err()   { printf "${RED}✗${NC} %s\n" "$1"; }
 
 if [[ "${SKILL_BILL_GOAL_CONTINUATION:-}" == "1" ]]; then
-  err "Refusing to run uninstall.sh during skill-bill goal-continuation."
+  err "Refusing to run uninstall.sh during sona goal-continuation."
   err "Goal workers must preserve the active workflow store; run install sync after the goal completes."
   exit 64
 fi

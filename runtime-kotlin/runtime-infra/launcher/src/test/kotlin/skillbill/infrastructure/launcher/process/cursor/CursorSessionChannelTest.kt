@@ -59,6 +59,43 @@ class CursorSessionChannelTest {
   }
 
   @Test
+  fun `tool output beyond the former capture limit keeps the session alive`() {
+    val channel =
+      CursorSessionChannel(
+        launch = CursorAcpLaunch("/checkout", "prompt", null, null, provider = AcpProvider.OpenCode),
+        clock = Clock.fixed(Instant.EPOCH, ZoneOffset.UTC),
+        output = AgentRunOutputSink { _, _ -> },
+        diagnostics = NoopRuntimeDiagnostics,
+      )
+    try {
+      assertTrue(channel.attach(SessionProcess()))
+      channel.observe("""{"jsonrpc":"2.0","id":2,"result":{"protocolVersion":1,"agentCapabilities":{}}}""" + "\n")
+      channel.observe(
+        """{"jsonrpc":"2.0","id":3,"result":{"sessionId":"s","configOptions":[{"id":"mode",""" +
+          """"category":"mode","currentValue":"primary","options":[{"value":"primary"}]}]}}""" + "\n",
+      )
+      val payload = "x".repeat(5_000_000)
+      channel.observe(
+        """{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s",""" +
+          """"update":{"sessionUpdate":"tool_call","toolCallId":"t","title":"Read",""" +
+          """"status":"completed","rawOutput":"$payload"}}}""" + "\n",
+      )
+      channel.observe(
+        """{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s",""" +
+          """"update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text",""" +
+          """"text":"answer"}}}}""" + "\n",
+      )
+      channel.observe("""{"jsonrpc":"2.0","id":4,"result":{"stopReason":"end_turn"}}""" + "\n")
+
+      val outcome = assertNotNull(channel.outcome())
+      assertTrue(outcome.completed, outcome.failure)
+      assertEquals("answer", outcome.text)
+    } finally {
+      channel.finish()
+    }
+  }
+
+  @Test
   fun `partial ACP frame at process end marks session capture incomplete`() {
     val channel =
       CursorSessionChannel(

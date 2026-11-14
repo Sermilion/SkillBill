@@ -47,7 +47,7 @@ private fun newTaskSystemPrompt(scope: ChatScope.NewTask): String = buildString 
     appendLine("Ordinary questions, provider tools, requested file creation and edits, saving and resuming chats are allowed in the effective working directory.")
     appendLine("Do not inspect repository branches, default branches or issue-key inventories for a New task without a selected repository.")
     appendLine("Before any goal, standalone phase or operation, ask the operator to name or select a repository. The manual repository picker remains available after chat starts.")
-    appendLine("Do not emit an executable start card or invoke a skill-bill CLI or MCP run command without selection. Readiness advice, an accepted issue key, Git metadata in home, or a request to proceed does not waive selection or the app-owned explicit start action.")
+    appendLine("Do not emit an executable start card or invoke a sona CLI or MCP run command without selection. Readiness advice, an accepted issue key, Git metadata in home, or a request to proceed does not waive selection or the app-owned explicit start action.")
   } else {
     scope.baseBranch?.let { appendLine("Base branch: $it") }
     appendLine(NEW_TASK_BRANCH_GUIDANCE.trim())
@@ -72,7 +72,7 @@ Do not combine this block with a skillbill-actions block. Escape JSON string cha
 """.trimIndent()
 
 private const val CHAT_ACCESS_GUIDANCE =
-  "Carry out the operator's requests with the available tools, including shell commands, the skill-bill CLI, MCP tools, git, gh and file edits. " +
+  "Carry out the operator's requests with the available tools, including shell commands, the sona CLI, MCP tools, git, gh and file edits. " +
     "The provider's own permission requests appear as approval cards. " +
     "Chats start in Act mode for every agent with native permission bypass by default, independently of execution lifecycle. " +
     "Approval cards represent structured permission requests from the Claude, Codex or Cursor harness only. " +

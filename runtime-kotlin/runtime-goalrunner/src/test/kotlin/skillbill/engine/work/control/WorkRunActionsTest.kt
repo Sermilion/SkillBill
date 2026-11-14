@@ -52,6 +52,7 @@ import skillbill.ports.operation.EmptyOperationCardRepository
 import skillbill.ports.system.CheckedOutBranchSource
 import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.work.WorkRunLauncher
+import skillbill.ports.work.model.WorkRunExit
 import skillbill.ports.work.model.WorkRunLaunchKind
 import skillbill.ports.work.model.WorkRunLaunchRequest
 import skillbill.ports.work.model.WorkRunLaunchResult
@@ -70,6 +71,7 @@ import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStatus
 import java.nio.file.Path
 import java.sql.Connection
+import java.util.concurrent.CompletableFuture
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -113,17 +115,7 @@ class WorkRunActionsTest {
         }
       val cancellation =
         WorkCancellation(database, status, goals, NoopFeatureTaskRuntimeWorkerSupervisor, ideStatusClock, launcher)
-      val item = assertNotNull(status.detail(WorkDetailRequest("goal-1")).item)
-      val target =
-        WorkRunTarget(
-          "goal-1",
-          item.snapshot.repositoryIdentity,
-          Path.of(item.repositoryRoot),
-          item.snapshot.execution?.executionId,
-          item.snapshot.execution?.statusRevision,
-          item.snapshot.updatedAt,
-          assertNotNull(item.databaseFileObservation),
-        )
+      val target = goalTarget(status)
 
       assertEquals(WorkControlResult.Accepted, cancellation.cancel(target))
 
@@ -159,28 +151,9 @@ class WorkRunActionsTest {
       val status = ideStatusService(database, manifests)
       val goals = testGoalRunnerStatusService(manifests, EmptyOutcomeStore, database = database, clock = ideStatusClock)
       val launches = mutableListOf<WorkRunLaunchRequest>()
-      val launcher =
-        object : WorkRunLauncher {
-          override fun start(request: WorkRunLaunchRequest): WorkRunLaunchResult {
-            launches += request
-            return WorkRunLaunchResult.Started(root.resolve("goal.log"))
-          }
+      val exit = CompletableFuture<WorkRunExit>()
+      val launcher = recordingLauncher(root, launches, exit)
 
-          override fun stop(request: WorkRunStopRequest) = WorkRunStopResult.NotRunning
-        }
-
-      fun target(): WorkRunTarget {
-        val item = assertNotNull(status.detail(WorkDetailRequest("goal-1")).item)
-        return WorkRunTarget(
-          "goal-1",
-          item.snapshot.repositoryIdentity,
-          Path.of(item.repositoryRoot),
-          item.snapshot.execution?.executionId,
-          item.snapshot.execution?.statusRevision,
-          item.snapshot.updatedAt,
-          assertNotNull(item.databaseFileObservation),
-        )
-      }
       val cancel =
         WorkCancellation(
           database,
@@ -190,7 +163,7 @@ class WorkRunActionsTest {
           ideStatusClock,
           launcher,
         )
-      assertEquals(WorkControlResult.Accepted, cancel.cancel(target()))
+      assertEquals(WorkControlResult.Accepted, cancel.cancel(goalTarget(status)))
       val canceled =
         database.read { unit ->
           listOf("goal-1", "w-child").map { assertNotNull(unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, it)) }
@@ -202,10 +175,16 @@ class WorkRunActionsTest {
       )
       val actions = workRunActions(database, status, goals, launcher)
 
-      assertEquals(
-        WorkControlResult.Accepted,
-        actions.launchForTest(target(), "codex", QaNamedDevice(QaNamedDeviceKind.SERIAL, "R58M123")),
+      val running =
+        actions.launchForTest(goalTarget(status), "codex", QaNamedDevice(QaNamedDeviceKind.SERIAL, "R58M123"))
+          as WorkControlResult.Running
+      val failure = running.failure.toCompletableFuture()
+      assertFalse(failure.isDone)
+      exit.complete(
+        WorkRunExit(1, listOf("Durable execution plan refused: incompatible_descriptor.")),
       )
+      assertTrue(requireNotNull(failure.join()).contains("incompatible_descriptor"))
+      assertTrue(requireNotNull(failure.join()).contains("goal.log"))
       assertTrue(
         (launches.single().kind as WorkRunLaunchKind.RuntimeCommand).arguments.containsAll(
           listOf("--qa-device", "serial:R58M123"),
@@ -487,6 +466,19 @@ class WorkRunActionsTest {
     )
   }
 
+  private fun goalTarget(status: IdeStatusService): WorkRunTarget {
+    val item = assertNotNull(status.detail(WorkDetailRequest("goal-1")).item)
+    return WorkRunTarget(
+      "goal-1",
+      item.snapshot.repositoryIdentity,
+      Path.of(item.repositoryRoot),
+      item.snapshot.execution?.executionId,
+      item.snapshot.execution?.statusRevision,
+      item.snapshot.updatedAt,
+      assertNotNull(item.databaseFileObservation),
+    )
+  }
+
   private fun leftoverBlockedManifest(): DecompositionManifest =
     DecompositionManifest(
       issueKey = "SKILL-901",
@@ -518,10 +510,11 @@ class WorkRunActionsTest {
   private fun recordingLauncher(
     root: Path,
     launches: MutableList<WorkRunLaunchRequest>,
+    exit: CompletableFuture<WorkRunExit>? = null,
   ) = object : WorkRunLauncher {
     override fun start(request: WorkRunLaunchRequest): WorkRunLaunchResult {
       launches += request
-      return WorkRunLaunchResult.Started(root.resolve("goal.log"))
+      return WorkRunLaunchResult.Started(root.resolve("goal.log"), exit)
     }
 
     override fun stop(request: WorkRunStopRequest) = WorkRunStopResult.NotRunning

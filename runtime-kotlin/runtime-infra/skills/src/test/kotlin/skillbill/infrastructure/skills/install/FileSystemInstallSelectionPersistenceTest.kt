@@ -10,6 +10,7 @@ import skillbill.install.model.PlatformPackSelectionMode
 import skillbill.install.model.SharedInstallSelection
 import skillbill.install.model.SupportedAgent
 import skillbill.model.toPath
+import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.install.selection.model.ReadLatestSuccessfulInstallSelectionRequest
 import skillbill.ports.install.selection.model.WriteLatestSuccessfulInstallSelectionRequest
 import skillbill.ports.repository.toFileLocation
@@ -25,7 +26,7 @@ class FileSystemInstallSelectionPersistenceTest {
   @Test
   fun `writes and reads latest successful install selection`() {
     val home = Files.createTempDirectory("skillbill-install-selection-home")
-    val store = FileSystemInstallSelectionPersistence()
+    val store = FileSystemInstallSelectionPersistence(NoopRuntimeDiagnostics)
     val selection =
       SharedInstallSelection(
         selectedAgents = setOf(SupportedAgent.CODEX, SupportedAgent.CLAUDE),
@@ -75,7 +76,7 @@ class FileSystemInstallSelectionPersistenceTest {
       }
       """.trimIndent(),
     )
-    val store = FileSystemInstallSelectionPersistence()
+    val store = FileSystemInstallSelectionPersistence(NoopRuntimeDiagnostics)
 
     val selection = store.readLatestSuccessfulSelection(ReadLatestSuccessfulInstallSelectionRequest(home)).selection
 
@@ -117,7 +118,7 @@ class FileSystemInstallSelectionPersistenceTest {
   fun `requests select alternate install home per operation`() {
     val firstHome = Files.createTempDirectory("skillbill-install-selection-first")
     val alternateHome = Files.createTempDirectory("skillbill-install-selection-alternate")
-    val store = FileSystemInstallSelectionPersistence()
+    val store = FileSystemInstallSelectionPersistence(NoopRuntimeDiagnostics)
     val selection =
       selection(
         selectedAgents = setOf(SupportedAgent.CURSOR),
@@ -142,7 +143,7 @@ class FileSystemInstallSelectionPersistenceTest {
   @Test
   fun `latest successful selection write overwrites previous record and persists mcp opt out`() {
     val home = Files.createTempDirectory("skillbill-install-selection-overwrite")
-    val store = FileSystemInstallSelectionPersistence()
+    val store = FileSystemInstallSelectionPersistence(NoopRuntimeDiagnostics)
     val initialSelection =
       selection(
         selectedAgents = setOf(SupportedAgent.CLAUDE),
@@ -181,7 +182,7 @@ class FileSystemInstallSelectionPersistenceTest {
   @Test
   fun `write rejects platform selections that read parser would reject`() {
     val home = Files.createTempDirectory("skillbill-install-selection-write-invariants")
-    val store = FileSystemInstallSelectionPersistence()
+    val store = FileSystemInstallSelectionPersistence(NoopRuntimeDiagnostics)
     val validSelection = selection(selectedAgents = setOf(SupportedAgent.CLAUDE))
     store.writeLatestSuccessfulSelection(
       WriteLatestSuccessfulInstallSelectionRequest(installHome = home, selection = validSelection),
@@ -238,7 +239,7 @@ class FileSystemInstallSelectionPersistenceTest {
               ),
           ),
       )
-    val store = FileSystemInstallSelectionPersistence()
+    val store = FileSystemInstallSelectionPersistence(NoopRuntimeDiagnostics)
 
     cases.forEach { (caseName, expectedSelection) ->
       val home = Files.createTempDirectory("skillbill-install-selection-$caseName")
@@ -266,7 +267,7 @@ class FileSystemInstallSelectionPersistenceTest {
   @Test
   fun `manually selected cursor round trips without a detected cursor home`() {
     val home = Files.createTempDirectory("skillbill-install-selection-cursor")
-    val store = FileSystemInstallSelectionPersistence()
+    val store = FileSystemInstallSelectionPersistence(NoopRuntimeDiagnostics)
     val selection =
       selection(
         selectedAgents = setOf(SupportedAgent.CURSOR, SupportedAgent.CLAUDE, SupportedAgent.OPENCODE),
@@ -299,7 +300,7 @@ class FileSystemInstallSelectionPersistenceTest {
   @Test
   fun `missing install selection record fails loudly`() {
     val home = Files.createTempDirectory("skillbill-install-selection-missing")
-    val store = FileSystemInstallSelectionPersistence()
+    val store = FileSystemInstallSelectionPersistence(NoopRuntimeDiagnostics)
 
     val error =
       assertFailsWith<SkillBillRuntimeException> {
@@ -315,7 +316,7 @@ class FileSystemInstallSelectionPersistenceTest {
     val path = home.resolve(".skill-bill/install-selection.json")
     Files.createDirectories(path.parent)
     Files.writeString(path, "{\"recentRepoPath\":\"/repo\"}")
-    val store = FileSystemInstallSelectionPersistence()
+    val store = FileSystemInstallSelectionPersistence(NoopRuntimeDiagnostics)
 
     val error =
       assertFailsWith<SkillBillRuntimeException> {
@@ -332,7 +333,7 @@ class FileSystemInstallSelectionPersistenceTest {
     val path = home.resolve(".skill-bill/install-selection.json")
     Files.createDirectories(path.parent)
     Files.writeString(path, "x".repeat(64 * 1024 + 1))
-    val store = FileSystemInstallSelectionPersistence()
+    val store = FileSystemInstallSelectionPersistence(NoopRuntimeDiagnostics)
 
     assertFailsWith<SkillBillRuntimeException> {
       store.readLatestSuccessfulSelection(ReadLatestSuccessfulInstallSelectionRequest(home))
@@ -342,7 +343,7 @@ class FileSystemInstallSelectionPersistenceTest {
   @Test
   fun `oversized install selection write fails without replacing previous record`() {
     val home = Files.createTempDirectory("skillbill-install-selection-oversized-write")
-    val store = FileSystemInstallSelectionPersistence()
+    val store = FileSystemInstallSelectionPersistence(NoopRuntimeDiagnostics)
     val previousSelection = selection(selectedAgents = setOf(SupportedAgent.CLAUDE))
     store.writeLatestSuccessfulSelection(
       WriteLatestSuccessfulInstallSelectionRequest(installHome = home, selection = previousSelection),
@@ -405,7 +406,7 @@ class FileSystemInstallSelectionPersistenceTest {
           ),
         "invalid nested mcp field" to validPayload(runtimeMcpBin = "\"\""),
       )
-    val store = FileSystemInstallSelectionPersistence()
+    val store = FileSystemInstallSelectionPersistence(NoopRuntimeDiagnostics)
 
     cases.forEach { (caseName, payload) ->
       val home = Files.createTempDirectory("skillbill-install-selection-invalid")
@@ -424,7 +425,7 @@ class FileSystemInstallSelectionPersistenceTest {
     val home = Files.createTempDirectory("skillbill-install-selection-unreadable")
     val path = home.resolve(".skill-bill/install-selection.json")
     Files.createDirectories(path)
-    val store = FileSystemInstallSelectionPersistence()
+    val store = FileSystemInstallSelectionPersistence(NoopRuntimeDiagnostics)
 
     assertFailsWith<SkillBillRuntimeException> {
       store.readLatestSuccessfulSelection(ReadLatestSuccessfulInstallSelectionRequest(home))

@@ -4,7 +4,7 @@ import kotlin.time.Instant
 import kotlin.time.Duration
 
 /** Agents with a readable usage source. Cursor exposes none, so the usage card hides for it. */
-enum class UsageProvider { Codex, Claude }
+enum class UsageProvider { Codex, Claude, Devin }
 
 data class UsageProfileLookup(
   val provider: UsageProvider,
@@ -88,7 +88,7 @@ sealed interface UsageRefreshCapability {
   data object Unsupported : UsageRefreshCapability
   data class Pull(val family: UsageRefreshFamily, val minimumInterval: Duration = Duration.ZERO) : UsageRefreshCapability
 }
-enum class UsageRefreshFamily { CodexSnapshot, ClaudeSnapshot, TeamSpend, AggregatedActivity }
+enum class UsageRefreshFamily { CodexSnapshot, ClaudeSnapshot, DevinSnapshot, TeamSpend, AggregatedActivity }
 sealed interface UsageRefreshAvailability {
   data object Ready : UsageRefreshAvailability
   data object Checking : UsageRefreshAvailability

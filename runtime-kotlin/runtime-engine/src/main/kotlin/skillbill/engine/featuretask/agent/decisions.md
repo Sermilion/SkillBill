@@ -956,3 +956,12 @@ defect-class expansion rule to the authored subtask boundary.
 
 Reason: Related callers can belong to a later integration subtask. Their absence
 does not excuse a missing prerequisite or move their ownership into this repair.
+
+## 2026-11-14: Resolve validation commands on resume
+
+The operator requested current validation commands on resume rather than a refusal
+when the recorded gate differs. Admission now compares non-command execution
+policies and selects committed project checks or the current routed pack gate.
+It keeps the original descriptor and completed phase records. The admitted plan
+holds the selected command snapshot only for the current invocation. No stored
+schema or historical evidence changes, so this requires no data migration.

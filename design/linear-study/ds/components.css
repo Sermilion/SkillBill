@@ -342,7 +342,7 @@ input { font: inherit; color: inherit; }
 .sb-usage-track { height: 3px; overflow: hidden; border-radius: var(--r-full); background: var(--border); }
 .sb-usage-track > i { display: block; height: 100%; border-radius: inherit; background: var(--usage-color); }
 .sb-usage-reset { color: var(--fg-muted); font-size: var(--t-2xs); }
-.sb-usage-panel { width: min(316px, calc(100vw - 26px)); font-size: var(--t-sm); }
+.sb-usage-panel { width: min(420px, calc(100vw - 26px)); font-size: var(--t-sm); }
 .sb-usage-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 8px 8px 16px; }
 .sb-usage-panel-head > b { font-weight: 500; font-size: var(--t-md); }
 .sb-usage-tabs { display: flex; gap: 4px; margin: 0 12px; padding: 3px; border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--bg-inset); }
@@ -352,6 +352,8 @@ input { font: inherit; color: inherit; }
 .sb-usage-panel-body { display: flex; flex-direction: column; gap: 14px; min-height: 120px; box-sizing: border-box; padding: 16px; }
 .sb-usage-default { display: flex; flex-direction: column; gap: 6px; padding: 0 16px 12px; color: var(--fg-muted); font-size: var(--t-xs); }
 .sb-usage-default > .sb-usage-tabs { margin: 0; }
+.sb-usage-agents { flex-wrap: wrap; }
+.sb-usage-agents > button { min-width: 80px; }
 .sb-usage-agents > button.on { cursor: pointer; }
 .sb-usage-panel-foot { display: flex; justify-content: flex-end; align-items: center; gap: 4px; padding: 8px 8px 8px 16px; border-top: 1px solid var(--border-subtle); }
 .sb-main {
@@ -932,6 +934,10 @@ button.sb-cpill[disabled] { opacity: 0.55; cursor: default; pointer-events: none
 .sb-tpick-problem { flex: none; padding: var(--sp-2) var(--sp-3); border-top: 1px solid var(--border-subtle); }
 .sb-tpick-foot { flex: none; padding: var(--sp-1); border-top: 1px solid var(--border-subtle); }
 .sb-tpick-foot .sb-menu-item { color: var(--fg-muted); font-size: var(--t-sm); }
+.sb-tpick--agent { width: min(560px, calc(100vw - 48px)); grid-template-columns: minmax(150px, 1fr) minmax(0, 2.4fr); }
+.sb-tpick--agent .sb-tpick-col { height: 340px; }
+.sb-tpick--agent .sb-menu-tx > small { font-family: var(--font-mono); }
+.sb-tpick-note { grid-column: 1 / -1; padding: var(--sp-2) var(--sp-3); border-top: 1px solid var(--border-subtle); font-size: var(--t-xs); color: var(--accent-text); }
 
 /* Queue panel and queued row: the messages waiting for the current reply to end */
 .sb-queue { width: min(420px, calc(100vw - 32px)); display: flex; flex-direction: column; font-size: var(--t-sm); }
@@ -1857,6 +1863,8 @@ button.sb-pun:focus-visible { outline-offset: -2px; }
   .sb-tpick { grid-template-columns: minmax(0, 1fr); }
   .sb-tpick-col { height: 220px; }
   .sb-tpick-col + .sb-tpick-col { border-left: 0; border-top: 1px solid var(--border-subtle); }
+  .sb-tpick--agent .sb-tpick-col:first-child { height: auto; max-height: 140px; }
+  .sb-tpick--agent .sb-tpick-col + .sb-tpick-col { height: 260px; }
   .sb-resume-body { grid-template-columns: minmax(0, 1fr); }
   .sb-resume-list { border-right: 0; }
   .sb-resume-pv-hd, .sb-resume-pv-lines { display: none; }

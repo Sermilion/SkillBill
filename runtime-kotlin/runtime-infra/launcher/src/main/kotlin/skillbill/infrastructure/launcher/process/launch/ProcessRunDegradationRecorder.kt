@@ -32,7 +32,7 @@ internal class ProcessRunDegradationRecorder(
     if (records.isEmpty()) return existing
     val lines =
       records.joinToString("\n") { record ->
-        "skill-bill: run degradation [${record.kind.name.lowercase()}] ${record.seam}: ${record.detail}"
+        "sona: run degradation [${record.kind.name.lowercase()}] ${record.seam}: ${record.detail}"
       }
     return if (existing.isBlank()) lines else "$existing\n$lines"
   }

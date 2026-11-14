@@ -63,7 +63,6 @@ internal class CodexSessionChannel(
   private val deltas = mutableMapOf<String, StringBuilder>()
   private val prose = StringBuilder()
   private var finalText = ""
-  private var captureTruncated = false
   private var proseDeliveryFailed = false
   private var captureFrozen = false
   private var frozenCapture: AgentRunSessionCapture? = null
@@ -86,10 +85,6 @@ internal class CodexSessionChannel(
         buffer.setLength(0)
       }
       if (settled.get() != null) return
-      if (buffer.length + part.value.length > MAX_TEXT_CHARS) {
-        stop("Codex app-server sent an oversized protocol frame.")
-        return
-      }
       buffer.append(part.value)
     }
   }
@@ -273,12 +268,11 @@ internal class CodexSessionChannel(
 
   private fun recordProviderDiagnostic(detail: String) {
     if (detail.isBlank()) return
-    val retained = detail.take(MAX_TEXT_CHARS)
     synchronized(captureLock) {
       if (providerDiagnostics.isNotEmpty()) providerDiagnostics.append('\n')
-      providerDiagnostics.append(retained.take((MAX_TEXT_CHARS - providerDiagnostics.length).coerceAtLeast(0)))
+      providerDiagnostics.append(detail)
     }
-    catchingNonCancellation { launch.outputSink.write(AgentRunOutputStream.STDERR, "$retained\n") }
+    catchingNonCancellation { launch.outputSink.write(AgentRunOutputStream.STDERR, "$detail\n") }
       .onFailure {
         synchronized(captureLock) { proseDeliveryFailed = true }
         diagnostics.warning("seam=codex_session outcome=provider_diagnostic_delivery_failed")
@@ -288,22 +282,15 @@ internal class CodexSessionChannel(
   private fun delta(params: JsonObject) {
     val id = params.text(K.ITEM_ID) ?: return
     val text = params.text(K.DELTA) ?: return
-    val accepted =
+    val deliveryFailed =
       synchronized(captureLock) {
         if (captureFrozen) return@synchronized null
-        val accumulated = deltas.getOrPut(id) { StringBuilder() }
-        val remaining = MAX_TEXT_CHARS - prose.length
-        val acceptedText = text.take(remaining.coerceAtLeast(0))
-        accumulated.append(acceptedText)
-        prose.append(acceptedText)
-        val truncated = acceptedText.length != text.length
-        if (truncated) captureTruncated = true
-        val deliveryFailed = acceptedText.isNotEmpty() && !writeProseLocked(acceptedText)
-        Triple(acceptedText, truncated, deliveryFailed)
+        deltas.getOrPut(id) { StringBuilder() }.append(text)
+        prose.append(text)
+        text.isNotEmpty() && !writeProseLocked(text)
       }
-    if (accepted == null) return
-    if (accepted.third) stop("Codex assistant output could not be delivered to the phase output sink.")
-    if (accepted.second) stop("Codex assistant output exceeded the capture limit.")
+    if (deliveryFailed == null) return
+    if (deliveryFailed) stop("Codex assistant output could not be delivered to the phase output sink.")
   }
 
   private fun completedItem(item: JsonObject) {
@@ -316,8 +303,6 @@ internal class CodexSessionChannel(
     val completion = captureCompletedItem(id, text)
     if (completion == null) {
       stop("Codex returned inconsistent assistant completion text.")
-    } else if (completion.truncated) {
-      stop("Codex returned inconsistent or oversized assistant output.")
     } else if (completion.deliveryFailed) {
       stop("Codex assistant output could not be delivered to the phase output sink.")
     }
@@ -339,14 +324,10 @@ internal class CodexSessionChannel(
       val streamedText = deltas.remove(id)?.toString().orEmpty()
       if (!text.startsWith(streamedText)) return@synchronized null
       val unseen = text.drop(streamedText.length)
-      val remaining = (MAX_TEXT_CHARS - prose.length).coerceAtLeast(0)
-      val acceptedSuffix = unseen.take(remaining)
-      prose.append(acceptedSuffix)
-      val didTruncate = acceptedSuffix.length != unseen.length || text.length > MAX_TEXT_CHARS
-      if (didTruncate) captureTruncated = true
+      prose.append(unseen)
       finalText = text
-      val deliveryFailed = !writeProseLocked(acceptedSuffix + "\n")
-      CodexCompletedProse(streamedText, didTruncate, deliveryFailed)
+      val deliveryFailed = !writeProseLocked(unseen + "\n")
+      CodexCompletedProse(streamedText, deliveryFailed)
     }
 
   private fun writeProseLocked(text: String): Boolean =
@@ -442,8 +423,8 @@ internal class CodexSessionChannel(
   private fun captureSnapshot(): AgentRunSessionCapture =
     AgentRunSessionCapture(
       text = prose.toString(),
-      complete = !captureTruncated && !proseDeliveryFailed,
-      truncated = captureTruncated,
+      complete = !proseDeliveryFailed,
+      truncated = false,
       deliveryFailed = proseDeliveryFailed,
       providerDiagnostics = providerDiagnostics.toString().takeIf(String::isNotBlank),
       failureDiagnostics = providerDiagnostics.toString().takeIf(String::isNotBlank),
@@ -478,7 +459,6 @@ internal class CodexSessionChannel(
     const val THREAD_ID = 2
     const val TURN_ID = 3
     const val READY = 0
-    const val MAX_TEXT_CHARS = 4_000_000
     const val MAX_EARLY_MESSAGES = 256
     const val MAX_PENDING_REQUESTS = 128
     const val MAX_ITEM_FACTS = 512
@@ -489,6 +469,5 @@ internal class CodexSessionChannel(
 
 private data class CodexCompletedProse(
   val streamed: String,
-  val truncated: Boolean,
   val deliveryFailed: Boolean,
 )

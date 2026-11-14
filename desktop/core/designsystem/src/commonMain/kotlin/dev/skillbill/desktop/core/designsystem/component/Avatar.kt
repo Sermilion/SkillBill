@@ -20,12 +20,20 @@ import dev.skillbill.desktop.core.designsystem.SkillBillColors
 import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 
-private object AgentIds { const val Claude = "claude"; const val Codex = "codex"; const val Cursor = "cursor" }
+private object AgentIds {
+  const val Claude = "claude"
+  const val Codex = "codex"
+  const val Cursor = "cursor"
+  const val OpenCode = "opencode"
+  const val Devin = "devin"
+}
 
 fun agentDisplayName(agentId: String?): String = when (agentId) {
   AgentIds.Claude -> "Claude"
   AgentIds.Codex -> "Codex"
   AgentIds.Cursor -> "Cursor"
+  AgentIds.OpenCode -> "OpenCode"
+  AgentIds.Devin -> "Devin"
   else -> "Unavailable agent"
 }
 
@@ -33,6 +41,8 @@ internal fun agentInitials(agentId: String): String = when (agentId) {
   AgentIds.Claude -> "Cl"
   AgentIds.Codex -> "Cx"
   AgentIds.Cursor -> "Cu"
+  AgentIds.OpenCode -> "Oc"
+  AgentIds.Devin -> "De"
   else -> "?"
 }
 
@@ -40,6 +50,8 @@ fun agentDataSlot(agentId: String): Int = when (agentId) {
   AgentIds.Claude -> 4
   AgentIds.Codex -> 2
   AgentIds.Cursor -> 6
+  AgentIds.OpenCode -> 3
+  AgentIds.Devin -> 5
   else -> 1
 }
 

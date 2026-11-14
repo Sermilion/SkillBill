@@ -144,57 +144,6 @@ public class FeatureTaskRuntimeExecutionPlanResolver(
     plan: ResolvedPhaseExecutionPlan,
   ): EffectiveGatePolicyInputs {
     val settings = plan.effectivePolicySettings ?: incompatible("Recorded execution settings are missing.")
-    val family = commandFamilyFor(plan.qualityGateSelection)
-    if (executionPlanSupportsProjectCheckCommands(plan.sourceContractVersion)) {
-      plan.projectCheckCommands?.let { snapshot ->
-        return EffectiveGatePolicyInputs(
-          commandFamily = family,
-          packSlug = snapshot.parserMetadata?.packSlug,
-          declaration = null,
-          gradleWrapper = snapshot.gradleWrapper,
-          validationDepth = settings.validationDepth,
-          phaseTimeoutMillis = settings.phaseTimeoutMillis,
-          projectCheckSnapshot = snapshot,
-        ).frozen()
-      }
-      if (FeatureTaskRuntimeEffectivePolicies.runsGateCommands(plan)) {
-        incompatible("Current execution plan is missing frozen project check commands.")
-      }
-      return currentGateForGatelessPlan(repoRoot, plan) ?: incompatible(
-        "The recorded validation gate commands no longer match any declared platform-pack gate.",
-      )
-    }
-    val wrapper = config.readRepoLocalConfig(ReadRepoLocalConfigRequest(repoRoot)).config.validationGate.gradleWrapper
-    val recorded =
-      gateResolver.declaredCandidates().map { candidate ->
-        val slug =
-          when (candidate) {
-            is ValidationGateResolution.Declared -> candidate.packSlug
-            is ValidationGateResolution.Absent -> candidate.routedPackSlug
-            is ValidationGateResolution.Incompatible -> incompatible()
-          }
-        EffectiveGatePolicyInputs(
-          family,
-          slug,
-          (candidate as? ValidationGateResolution.Declared)?.declaration,
-          wrapper,
-          settings.validationDepth,
-          settings.phaseTimeoutMillis,
-        ).frozen()
-      }.singleOrNull { inputs ->
-        FeatureTaskRuntimeEffectivePolicies.resolve(plan, inputs).sortedBy { it.id } == plan.effectivePolicies
-      }
-    return recorded ?: currentGateForGatelessPlan(repoRoot, plan) ?: incompatible(
-      "The recorded validation gate commands no longer match any declared platform-pack gate.",
-    )
-  }
-
-  private fun currentGateForGatelessPlan(
-    repoRoot: Path,
-    plan: ResolvedPhaseExecutionPlan,
-  ): EffectiveGatePolicyInputs? {
-    if (FeatureTaskRuntimeEffectivePolicies.runsGateCommands(plan)) return null
-    val settings = plan.effectivePolicySettings ?: return null
     val current =
       resolveInputs(
         repoRoot,
@@ -202,13 +151,29 @@ public class FeatureTaskRuntimeExecutionPlanResolver(
         settings.validationDepth,
         settings.phaseTimeoutMillis?.milliseconds,
       ).frozen()
-    if (!FeatureTaskRuntimeEffectivePolicies.matchesRecorded(plan, current)) return null
-    diagnostics.warning(
-      "seam=execution_plan_gate_commands value_expected=recorded value_used=current " +
-        "definition=${plan.definitionId} pack=${current.packSlug ?: "none"} " +
-        "reason=definition_runs_no_quality_gate",
+    val categories = ProjectCheckCommandSnapshotAdmission.categoriesForQualityGate(plan.qualityGateSelection)
+    val committed = projectCheckCommands.loadCommitted(repoRoot)
+    val inputs =
+      if (categories.isNotEmpty() && categories.all { committed.config.category(it) != null }) {
+        current.copy(
+          projectCheckSnapshot =
+            ProjectCheckCommandSnapshotAdmission.freeze(
+              committed,
+              categories,
+              current.packSlug,
+              current.declaration,
+              current.gradleWrapper,
+            ),
+        ).frozen()
+      } else {
+        current
+      }
+    if (!FeatureTaskRuntimeEffectivePolicies.matchesRecorded(plan, inputs)) incompatible()
+    diagnostics.info(
+      "seam=execution_plan_gate_commands value_used=current " +
+        "definition=${plan.definitionId} pack=${current.packSlug ?: "none"} reason=resume_current_validation",
     )
-    return current
+    return inputs
   }
 
   private fun admitProjectCheckCommands(

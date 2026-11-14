@@ -5,7 +5,7 @@ repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 task_dir="$(mktemp -d)"
 trap 'rm -rf "$task_dir"' EXIT
 sed -n '/^build_source_desktop_app() {/,/^}/p; /^install_selected_desktop_app() {/,/^}/p; /^stage_selected_desktop_app() {/,/^}/p; /^activate_staged_desktop_app() {/,/^}/p; /^desktop_app_target_path() {/,/^}/p; /^desktop_app_executable_path() {/,/^}/p; /^desktop_quoted_exec_path() {/,/^}/p; /^check_desktop_app_target_ownership() {/,/^}/p; /^check_desktop_app_launcher_ownership() {/,/^}/p; /^prepare_desktop_app_launcher() {/,/^}/p; /^discard_desktop_app_launcher_stage() {/,/^}/p; /^install_desktop_app_launcher() {/,/^}/p; /^linux_legacy_desktop_is_owned() {/,/^}/p; /^migrate_kde_desktop_pin() {/,/^}/p; /^cleanup_linux_legacy_desktop() {/,/^}/p; /^desktop_app_running_pids() {/,/^}/p; /^stop_desktop_app() {/,/^}/p; /^desktop_app_hosts_installer() {/,/^}/p; /^run_detached() {/,/^}/p; /^schedule_desktop_app_restart() {/,/^}/p' "$repo_root/install.sh" > "$task_dir/install-functions.sh"
-sed -n '/^install_skill_bill_launcher() {/,/^install_runtime_launchers() {/p' "$repo_root/install.sh" | sed '$d' >> "$task_dir/install-functions.sh"
+sed -n '/^install_sona_launcher() {/,/^install_runtime_launchers() {/p' "$repo_root/install.sh" | sed '$d' >> "$task_dir/install-functions.sh"
 sed -n '/^is_owned_windows_desktop_launcher() {/,/^}/p' "$repo_root/install.sh" >> "$task_dir/install-functions.sh"
 source "$task_dir/install-functions.sh"
 

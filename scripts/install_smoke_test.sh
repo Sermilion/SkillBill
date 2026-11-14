@@ -128,7 +128,7 @@ case "$cmd" in
     fi
     ;;
   "version")
-    echo "skill-bill version 0.0.0-smoke"
+    echo "sona version 0.0.0-smoke"
     ;;
 
   "install"|"install --help")
@@ -674,6 +674,9 @@ echo "--- scenario 4: replay of a base-only install ---"
 FAKE_HOME="$(mktemp -d)"
 mkdir -p "$FAKE_HOME/.claude"
 seed_selection_json "$FAKE_HOME"
+mkdir -p "$FAKE_HOME/.local/bin"
+printf '#!/usr/bin/env bash\n# skill-bill managed launcher\nexit 0\n' > "$FAKE_HOME/.local/bin/skill-bill"
+chmod +x "$FAKE_HOME/.local/bin/skill-bill"
 
 REPLAY_OUTPUT="$(run_install "$FAKE_HOME")"
 pass "install.sh exited 0"
@@ -692,14 +695,15 @@ if [[ "$REPLAY_OUTPUT" == *"removed IntelliJ plugin"* ||
 fi
 pass "clean install reports no retired IDE plugin removal"
 
-LAUNCHER="$FAKE_HOME/.local/bin/skill-bill"
+LAUNCHER="$FAKE_HOME/.local/bin/sona"
 assert_file_exists "launcher exists" "$LAUNCHER"
+assert_file_absent "retired CLI launcher is absent" "$FAKE_HOME/.local/bin/skill-bill"
 
 LAUNCHER_VERSION="$(HOME="$FAKE_HOME" "$LAUNCHER" --home "$FAKE_HOME" version 2>/dev/null || true)"
-if [[ "$LAUNCHER_VERSION" == *"skill-bill"* ]]; then
-  pass "skill-bill version succeeds"
+if [[ "$LAUNCHER_VERSION" == *"sona version"* ]]; then
+  pass "sona version succeeds"
 else
-  fail "skill-bill version output unexpected: '$LAUNCHER_VERSION'"
+  fail "sona version output unexpected: '$LAUNCHER_VERSION'"
 fi
 
 SKILL_FIRST="$(find "$FAKE_HOME/.claude/skills" -mindepth 1 -maxdepth 1 2>/dev/null | head -n1 || true)"

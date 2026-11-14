@@ -14,6 +14,8 @@ import dev.skillbill.desktop.core.domain.usage.model.UsageFreshness
 import dev.skillbill.desktop.core.domain.usage.model.UsageMeter
 import dev.skillbill.desktop.core.domain.usage.model.UsageObservation
 import dev.skillbill.desktop.core.domain.usage.model.UsageObservationSubject
+import dev.skillbill.desktop.core.domain.usage.model.VerifiedUsageIdentity
+import dev.skillbill.desktop.core.domain.usage.model.UsageAuthMode
 import dev.skillbill.desktop.core.domain.usage.model.VerifiedUsageSubject
 import dev.skillbill.desktop.core.domain.usage.model.OmissionSemantics
 import dev.skillbill.desktop.core.domain.usage.model.UsageProvider
@@ -83,6 +85,7 @@ class ProviderUsageRepository(
   private val diagnostics: Diagnostics = NoopUsageDiagnostics,
   private val lastUsage: LastUsageStore = LastUsageStore.None,
   private val claudeUsageReader: ClaudeUsageReader? = null,
+  private val devinUsageReader: DevinUsageReader? = null,
 ) : UsageRepository, UsageObservationSink {
   private data class LiveBinding(val profile: UsageProfileLookup, val processGeneration: Long)
   private data class AcquisitionKey(val profile: UsageProfileLookup, val environment: Map<String, String>)
@@ -120,7 +123,9 @@ class ProviderUsageRepository(
   private val lastProfileStatuses = MutableStateFlow<Map<UsageProfileLookup, UsageSessionStatus.Observed>>(emptyMap())
 
   /** The newest reading per provider and configuration, including one an earlier app run stored. */
-  private val claudeRefreshResults = MutableStateFlow<Map<UsageProfileLookup, ClaudeUsageRead>>(emptyMap())
+  private val devinResults = MutableStateFlow<Map<UsageProfileLookup, UsageResult>>(emptyMap())
+  private val devinIdentities = mutableMapOf<UsageProfileLookup, String?>()
+  private val snapshotRefreshResults = MutableStateFlow<Map<UsageProfileLookup, UsageSnapshotRead>>(emptyMap())
   private val storedReadings = MutableStateFlow<Map<StoredReadingKey, StoredUsageReading>>(emptyMap())
   private val loadedReadings = mutableSetOf<StoredReadingKey>()
   private val demands = mutableMapOf<String, UsageDemand>()
@@ -167,7 +172,9 @@ class ProviderUsageRepository(
       bindingProfiles.value = emptyMap()
       statuses.value = emptyMap()
       lastProfileStatuses.value = emptyMap()
-      claudeRefreshResults.value = emptyMap()
+      snapshotRefreshResults.value = emptyMap()
+      devinIdentities.clear()
+      devinResults.value = emptyMap()
       storedReadings.value = emptyMap()
       loadedReadings.clear()
     }
@@ -255,19 +262,22 @@ class ProviderUsageRepository(
         }
         if (ownerId == null) refreshCoordinator.release(coordinatorOwner)
       }
+    } else if (request.profile.provider == UsageProvider.Devin) {
+      emitAll(devinResults.map { it[request.profile] ?: baseline(request) }.distinctUntilChanged())
     } else if (request.profile.provider == UsageProvider.Claude) {
       loadStoredReading(request.profile)
       emitAll(
-        combine(statuses, lastProfileStatuses, storedReadings, claudeRefreshResults) { current, last, stored, refreshes ->
+        combine(statuses, lastProfileStatuses, storedReadings, snapshotRefreshResults) { current, last, stored, refreshes ->
           val result = claudeResult(request, sessionId?.let(current::get), last[request.profile], stored[request.profile.storedKey()])
           val refresh = refreshes[request.profile]
           when {
-            result is UsageResult.Snapshot && refresh != null && refresh !is ClaudeUsageRead.Success -> result.copy(value = result.value.copy(
+            result is UsageResult.Snapshot && refresh != null && refresh !is UsageSnapshotRead.Success -> result.copy(value = result.value.copy(
+              freshness = UsageFreshness.Stale,
               refreshState = UsageRefreshState.Failed,
-              refreshFailure = UsageUnavailableReason(if (refresh == ClaudeUsageRead.SignInRequired) UsageUnavailableCode.ProfileUnverified else UsageUnavailableCode.TransientFailure),
+              refreshFailure = UsageUnavailableReason(if (refresh == UsageSnapshotRead.SignInRequired) UsageUnavailableCode.ProfileUnverified else UsageUnavailableCode.TransientFailure),
             ))
-            refresh == ClaudeUsageRead.SignInRequired -> UsageResult.SignInRequired(UsageUnavailableReason(UsageUnavailableCode.ProfileUnverified))
-            refresh != null && refresh !is ClaudeUsageRead.Success -> UsageResult.TransientFailure(UsageUnavailableReason(UsageUnavailableCode.TransientFailure))
+            refresh == UsageSnapshotRead.SignInRequired -> UsageResult.SignInRequired(UsageUnavailableReason(UsageUnavailableCode.ProfileUnverified))
+            refresh != null && refresh !is UsageSnapshotRead.Success -> UsageResult.TransientFailure(UsageUnavailableReason(UsageUnavailableCode.TransientFailure))
             else -> result
           }
         }.distinctUntilChanged(),
@@ -621,7 +631,7 @@ class ProviderUsageRepository(
   }
 
   override fun refresh(request: UsageRequest): UsageRefreshResult {
-    if (request.profile.provider == UsageProvider.Claude) return refreshClaude(request)
+    if (request.profile.provider != UsageProvider.Codex) return refreshSnapshot(request)
     val profile = request.profile
     synchronized(acquisitionLock) {
       capabilityResults[profile]?.let { return UsageRefreshResult.Disabled(unavailableReason(it)) }
@@ -662,9 +672,15 @@ class ProviderUsageRepository(
     return UsageRefreshResult.Started(request)
   }
 
-  private fun refreshClaude(request: UsageRequest, explicitRecheck: Boolean = false): UsageRefreshResult {
-    val reader = claudeUsageReader ?: return UsageRefreshResult.Disabled(refreshDisabledReason(UsageProvider.Claude))
+  private fun refreshSnapshot(request: UsageRequest, explicitRecheck: Boolean = false): UsageRefreshResult {
     val profile = request.profile
+    val read: suspend () -> UsageSnapshotRead = when (profile.provider) {
+      UsageProvider.Claude -> claudeUsageReader?.let { reader -> { reader.read(profile) } }
+      UsageProvider.Devin -> devinUsageReader?.let { reader ->
+        { reader.read(profile) { identity -> confirmDevinIdentity(profile, identity) } }
+      }
+      UsageProvider.Codex -> null
+    } ?: return UsageRefreshResult.Disabled(refreshDisabledReason(profile.provider))
     if (closed.get() || !hasReference(profile)) return UsageRefreshResult.Disabled(UsageUnavailableReason(UsageUnavailableCode.ProviderUnavailable))
     val capability = refreshCapability(profile)
     val operationId = UUID.randomUUID().toString()
@@ -676,35 +692,37 @@ class ProviderUsageRepository(
       }
       UsageRefreshCoordinator.Admission.Join -> return UsageRefreshResult.Coalesced(request)
       UsageRefreshCoordinator.Admission.Suspended -> return UsageRefreshResult.Disabled(UsageUnavailableReason(UsageUnavailableCode.ProfileUnverified))
-      UsageRefreshCoordinator.Admission.Unsupported -> return UsageRefreshResult.Disabled(refreshDisabledReason(UsageProvider.Claude))
+      UsageRefreshCoordinator.Admission.Unsupported -> return UsageRefreshResult.Disabled(refreshDisabledReason(profile.provider))
       is UsageRefreshCoordinator.Admission.Start -> Unit
     }
     updateAvailability(profile, UsageRefreshAvailability.Checking)
     val job = usageScope.launch(start = CoroutineStart.LAZY) {
       try {
         val result = try {
-          reader.read(profile)
+          read()
         } catch (cancelled: kotlinx.coroutines.CancellationException) {
           throw cancelled
         } catch (_: Exception) {
-          diagnostics.record("usage.claude_read_failed")
-          ClaudeUsageRead.Failed
+          diagnostics.record("usage.${profile.provider.name.lowercase()}_read_failed")
+          UsageSnapshotRead.Failed
         }
         if (closed.get() || !hasReference(profile)) return@launch
-        synchronized(sessionLock) { claudeRefreshResults.value = claudeRefreshResults.value + (profile to result) }
+        if (profile.provider == UsageProvider.Devin) synchronized(sessionLock) {
+          devinResults.value = devinResults.value + (profile to devinResult(profile, result))
+        } else synchronized(sessionLock) { snapshotRefreshResults.value = snapshotRefreshResults.value + (profile to result) }
         when (result) {
-          is ClaudeUsageRead.Success -> {
-            synchronized(sessionLock) { rememberReading(profile.storedKey(), result.reading) }
+          is UsageSnapshotRead.Success -> {
+            if (profile.provider != UsageProvider.Devin) synchronized(sessionLock) { rememberReading(profile.storedKey(), result.reading) }
             refreshCoordinator.sourceSucceeded(profile, operationId, clock.now())
             updateAvailability(profile, UsageRefreshAvailability.Ready)
-            lastUsage.setLastReading(profile.provider, profile.configurationReference, result.reading)
+            if (profile.provider != UsageProvider.Devin) lastUsage.setLastReading(profile.provider, profile.configurationReference, result.reading)
           }
-          ClaudeUsageRead.SignInRequired -> {
+          UsageSnapshotRead.SignInRequired -> {
             refreshCoordinator.authenticationFailed(profile, operationId, signInRequired = true)
             updateAvailability(profile, UsageRefreshAvailability.Disabled(UsageUnavailableReason(UsageUnavailableCode.ProfileUnverified)))
           }
-          is ClaudeUsageRead.Throttled, ClaudeUsageRead.Failed -> {
-            if (result is ClaudeUsageRead.Throttled) refreshCoordinator.providerThrottled(profile, operationId, result.retryAt)
+          is UsageSnapshotRead.Throttled, UsageSnapshotRead.Failed -> {
+            if (result is UsageSnapshotRead.Throttled) refreshCoordinator.providerThrottled(profile, operationId, result.retryAt)
             else refreshCoordinator.transientFailure(profile, operationId)
             val eligibleAt = refreshCoordinator.nextEligibilityAt(profile) ?: clock.now()
             updateAvailability(profile, UsageRefreshAvailability.Deferred(UsageRefreshDeferredReason.Retry, eligibleAt))
@@ -719,8 +737,38 @@ class ProviderUsageRepository(
     return UsageRefreshResult.Started(request)
   }
 
+  private fun confirmDevinIdentity(profile: UsageProfileLookup, identity: String?) = synchronized(sessionLock) {
+    if (!closed.get()) {
+      if (devinIdentities[profile] != identity || identity == null) devinResults.value = devinResults.value - profile
+      devinIdentities[profile] = identity
+    }
+  }
+
+  private fun devinResult(profile: UsageProfileLookup, result: UsageSnapshotRead): UsageResult {
+    if (result == UsageSnapshotRead.SignInRequired) return UsageResult.SignInRequired(UsageUnavailableReason(UsageUnavailableCode.ProfileUnverified))
+    if (result is UsageSnapshotRead.Success) {
+      val reading = result.reading
+      val ranked = UsageMeterRanking.rank(reading.meters, null)
+      val identity = devinIdentities[profile] ?: return UsageResult.Unavailable(UsageUnavailableReason(UsageUnavailableCode.ProfileUnverified))
+      return UsageResult.Snapshot(UsageObservation(
+        subject = UsageObservationSubject.Account(VerifiedUsageSubject(profile,
+          VerifiedUsageIdentity(identity),
+          UsageAuthMode.Account)),
+        collectionTime = reading.observedAt, sourceObservationTime = null,
+        source = UsageSource(UsageProvider.Devin, UsageCapability.NumericSnapshot),
+        freshness = UsageFreshness.Current, refreshState = UsageRefreshState.Complete,
+        meters = reading.meters, cardCandidates = ranked.cardCandidates, popupMeters = ranked.popupMeters,
+        requestPermission = RequestPermission.Unknown, coverage = UsageCoverage.Complete,
+      ), OmissionSemantics.OmittedFieldsAreRemoved)
+    }
+    val reason = UsageUnavailableReason(if (result is UsageSnapshotRead.Throttled) UsageUnavailableCode.Throttled else UsageUnavailableCode.TransientFailure)
+    return (devinResults.value[profile] as? UsageResult.Snapshot)?.let {
+      it.copy(value = it.value.copy(freshness = UsageFreshness.Stale, refreshState = UsageRefreshState.Failed, refreshFailure = reason))
+    } ?: UsageResult.TransientFailure(reason)
+  }
+
   override fun recheckSignIn(request: UsageRequest): UsageRefreshResult {
-    if (request.profile.provider == UsageProvider.Claude) return refreshClaude(request, explicitRecheck = true)
+    if (request.profile.provider != UsageProvider.Codex) return refreshSnapshot(request, explicitRecheck = true)
     val profile = request.profile
     val stored = synchronized(acquisitionLock) { capabilityResults[profile] }
     if (stored !is UsageResult.SignInRequired) {
@@ -901,6 +949,7 @@ class ProviderUsageRepository(
   private fun baseline(request: UsageRequest): UsageResult = when (request.profile.provider) {
     UsageProvider.Codex -> UsageResult.Unavailable(UsageUnavailableReason(UsageUnavailableCode.AwaitingCapabilityReader))
     UsageProvider.Claude -> UsageResult.Unavailable(UsageUnavailableReason(UsageUnavailableCode.SessionObservationUnavailable))
+    UsageProvider.Devin -> UsageResult.Unavailable(UsageUnavailableReason(UsageUnavailableCode.AwaitingCapabilityReader))
   }
 
   /**
@@ -926,7 +975,7 @@ class ProviderUsageRepository(
     }
     val active = listOfNotNull(live, recent, retained).filter { it.meters.isNotEmpty() }.maxByOrNull { it.observedAt }
       ?: recent ?: retained
-      ?: return@synchronized UsageResult.Unavailable(UsageUnavailableReason(UsageUnavailableCode.SessionObservationUnavailable))
+      ?: return@synchronized baseline(request)
     val ranked = UsageMeterRanking.rank(active.meters, null)
     UsageResult.Snapshot(
       UsageObservation(
@@ -935,7 +984,7 @@ class ProviderUsageRepository(
         sourceObservationTime = null,
         statusObservedAt = (recent ?: active).observedAt,
         source = UsageSource(active.profile.provider, UsageCapability.SessionStatusOnly),
-        freshness = if (active === retained && (claudeRefreshResults.value[request.profile] as? ClaudeUsageRead.Success)?.reading?.observedAt != active.observedAt) UsageFreshness.Stale else UsageFreshness.Current,
+        freshness = if (active === retained && (snapshotRefreshResults.value[request.profile] as? UsageSnapshotRead.Success)?.reading?.observedAt != active.observedAt) UsageFreshness.Stale else UsageFreshness.Current,
         refreshState = UsageRefreshState.Idle,
         meters = active.meters,
         cardCandidates = ranked.cardCandidates,
@@ -959,11 +1008,13 @@ class ProviderUsageRepository(
   private fun profileFor(provider: UsageProvider, selectedProfile: String?): EffectiveUsageProfile = when (provider) {
     UsageProvider.Codex -> profiles.codex(selectedProfile)
     UsageProvider.Claude -> profiles.claude(selectedProfile)
+    UsageProvider.Devin -> profiles.devin()
   }
 
   private fun refreshCapability(provider: UsageProvider): UsageRefreshCapability = when (provider) {
     UsageProvider.Codex -> codexUsageCollector.refreshCapability
     UsageProvider.Claude -> if (claudeUsageReader != null) UsageRefreshCapability.Pull(UsageRefreshFamily.ClaudeSnapshot) else UsageRefreshCapability.EventOnly
+    UsageProvider.Devin -> if (devinUsageReader != null) UsageRefreshCapability.Pull(UsageRefreshFamily.DevinSnapshot) else UsageRefreshCapability.Unsupported
   }
 
   private fun refreshCapability(profile: UsageProfileLookup): UsageRefreshCapability =
@@ -990,6 +1041,7 @@ class ProviderUsageRepository(
       },
     )
     UsageProvider.Claude -> UsageUnavailableReason(UsageUnavailableCode.SessionObservationUnavailable)
+    UsageProvider.Devin -> UsageUnavailableReason(UsageUnavailableCode.ProviderUnavailable)
   }
 
   private fun disabledAvailability(provider: UsageProvider) = UsageRefreshAvailability.Disabled(refreshDisabledReason(provider))

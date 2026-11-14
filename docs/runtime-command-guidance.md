@@ -7,8 +7,7 @@ These instructions apply to runtime commands, planning, execution, and goal comm
 `/sona` is the only public listed skill. Its canonical source remains
 `skills/skill-bill/`. The `sona` executable runs the foreground goal runtime
 with durable state, telemetry, packs, add-ons, and native subagents. The
-`sona-app` desktop launcher displays the name Sona. The final SONA-5 subtask
-leaves `skill-bill` as a notice-only compatibility command.
+`sona-app` desktop launcher displays the name Sona. Installation removes the retired CLI command.
 
 The generic dispatcher supports local key allocation for new requirements.
 This repository's `AGENTS.md` overrides that default: new work must use an
@@ -69,6 +68,19 @@ including verification after a repair. Their legacy `cache_bypassing_*` manifest
 keys select the verification commands but do not force cache bypass. The keys
 and persisted run format stay unchanged. Repository CI commands may still disable
 caching to avoid shared-cache contention.
+
+## Resume validation and launch failures
+
+On resume, select the current saved project check commands. If the requested category
+has no saved configuration, use the current routed platform-pack gate. Validation
+command changes do not block continuation. Freeze the selected commands for that
+invocation, and retain the original execution descriptor, completed work and historical
+validation evidence. Execution strategy, timeout and other policy checks still apply.
+This changes admission behavior without changing the persisted schema.
+
+Desktop resume controls observe the runner after launch admission. A failed runner
+reports its reason and full log path through an app-wide error notification, even
+when it exits after the initial launch request returned.
 
 ## New-task chat preparation and launch
 
@@ -265,16 +277,25 @@ A goal relaunched from a project-store manifest needs no operator choice when it
 plans before any subtask starts. Once a completed plan governs its parent spec,
 the runner clears the ambiguity itself.
 
-The same command handles a goal that blocks with "The outcome of goal-quality
-step '<step>#<attempt>' is unknown". That happens when the runner died during an
-agent-backed QA or QA fix step, before the step recorded its outcome. The
-command retires the unsettled quality execution, and the next goal run admits a
-fresh one.
+A runner that dies mid-step, for example on SIGKILL or a crash, can leave a
+goal-quality build, QA or QA fix step `running` with no usable outcome: a pending
+gate command, a gate that never recorded progress, or no accepted agent output.
+The next goal run settles that attempt as `paused` with a ledger reason that
+says the step "was interrupted without a usable outcome and runs again as a new
+attempt", drops the dead attempt's own nested gate progress, and runs the step
+again as the next attempt. Each step gets at most two automatic reruns per
+quality progress record. The third such interruption blocks with "Goal-quality
+step '<step>' was interrupted without a usable outcome 3 times (last: <cause>);
+automatic reruns exhausted."
 
-A goal run never needs this command for an interrupted validation step.
-Validate only has to make the build green on the current tree, so the next run
-starts it again on whatever the tree holds. Other interrupted mutating steps
-keep the block.
+A step whose retained start, ledger or gate evidence is inconsistent still
+blocks with "The outcome of goal-quality step '<step>#<attempt>' is unknown".
+`sona goal fresh-quality <issue-key> --reason <why>` retires that unsettled
+quality execution, and the next goal run admits a fresh one.
+
+Validate keeps its own rule. It only has to make the build green on the
+current tree, so the next run starts an interrupted validate again on whatever
+the tree holds.
 
 Validate blocks for one reason: three attempts in a row failed to make the
 build green. Any failed attempt, whether the agent settled blocked, its process
@@ -477,8 +498,13 @@ and `dangerFullAccess` on each turn; one-shot Codex launches use
 `--dangerously-bypass-approvals-and-sandbox`. Cursor uses `--force`, `--trust`,
 `--approve-mcps` and `--sandbox disabled`, including ACP launches. This policy supersedes
 the earlier default of routing every eligible permission prompt to the operator.
-Read-only phase instructions still constrain the requested work; they do not
-select a restrictive provider sandbox by default.
+Devin selects the native ACP `bypass` mode before each prompt. OpenCode launches
+with `OPENCODE_PERMISSION={"*":"allow"}`, including chats, goal workers, phases,
+operations and governed review workers. Agent-specific OpenCode ask rules can
+override the environment, so the ACP host also auto-approves residual OpenCode
+permission requests without creating approval cards. Read-only instructions
+still constrain the requested work; they do not select a restrictive provider
+sandbox by default.
 
 Runtime launches outside chat approvals use the native headless CLIs. Skill-bill
 does not host their tool requests and must not add a deny, cancel, skip or

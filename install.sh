@@ -80,7 +80,7 @@ warn()  { printf "${YELLOW}⚠${NC} %s\n" "$1"; }
 err()   { printf "${RED}✗${NC} %s\n" "$1"; }
 
 if [[ "${SKILL_BILL_GOAL_CONTINUATION:-}" == "1" ]]; then
-  err "Refusing to run install.sh during skill-bill goal-continuation."
+  err "Refusing to run install.sh during sona goal-continuation."
   err "Goal workers must preserve the active workflow store; run install sync after the goal completes."
   exit 64
 fi
@@ -1699,7 +1699,7 @@ install_runtime_launcher() {
   ok "  linked $name → $target"
 }
 
-install_skill_bill_launcher() {
+install_sona_launcher() {
   local name="$1"
   local launcher_path="$RUNTIME_LAUNCHER_BIN_DIR/$name"
   local launcher_temp="${2:-$launcher_path.stage.$$}"
@@ -1716,15 +1716,7 @@ install_skill_bill_launcher() {
     err "Refusing to replace an unclassified launcher link: $launcher_path"
     return 1
   fi
-  if [[ "$name" == "skill-bill" ]]; then
-    cat > "$launcher_temp" <<LAUNCHER
-#!/usr/bin/env bash
-$marker
-printf '%s\\n' 'skill-bill has been renamed to sona. Run sona instead.'
-exit 0
-LAUNCHER
-  else
-    cat > "$launcher_temp" <<LAUNCHER
+  cat > "$launcher_temp" <<LAUNCHER
 #!/usr/bin/env bash
 $marker
 set -euo pipefail
@@ -1800,23 +1792,29 @@ fi
 
 exec "\$runtime_cli" "\$@"
 LAUNCHER
-  fi
   chmod +x "$launcher_temp" || { rm -f "$launcher_temp"; return 1; }
   [[ -z "${2:-}" ]] || return 0
   mv -f "$launcher_temp" "$launcher_path" || { rm -f "$launcher_temp"; return 1; }
-  if [[ "$name" == "skill-bill" ]]; then
-    ok "  installed $name notice launcher"
-  else
-    ok "  installed $name launcher → $RUNTIME_CLI_BIN"
+  ok "  installed $name launcher → $RUNTIME_CLI_BIN"
+}
+
+remove_retired_cli_launcher() {
+  local retired="$RUNTIME_LAUNCHER_BIN_DIR/skill-bill"
+  if [[ -f "$retired" && ! -L "$retired" ]] && grep -qF '# skill-bill managed launcher' "$retired"; then
+    rm -f "$retired" || { err "Could not remove retired CLI launcher: $retired"; return 1; }
+  elif [[ -L "$retired" && "$(readlink "$retired")" == "$RUNTIME_CLI_BIN" ]]; then
+    rm -f "$retired" || { err "Could not remove retired CLI launcher: $retired"; return 1; }
+  elif [[ -e "$retired" || -L "$retired" ]]; then
+    warn "Preserving unrelated launcher at $retired"
   fi
 }
 
 install_runtime_launchers() {
   mkdir -p "$RUNTIME_LAUNCHER_BIN_DIR"
   info "Installing runtime launchers to: $RUNTIME_LAUNCHER_BIN_DIR"
-  install_skill_bill_launcher "sona" || return 1
-  install_skill_bill_launcher "skill-bill" || return 1
+  install_sona_launcher "sona" || return 1
   install_runtime_launcher "sona-mcp" "$RUNTIME_MCP_BIN" || return 1
+  remove_retired_cli_launcher || return 1
   local obsolete_mcp="$RUNTIME_LAUNCHER_BIN_DIR/skill-bill-mcp"
   if [[ -L "$obsolete_mcp" && "$(readlink "$obsolete_mcp")" == "$RUNTIME_MCP_BIN" ]]; then
     rm -f "$obsolete_mcp" || { err "Could not remove owned legacy MCP launcher: $obsolete_mcp"; return 1; }
@@ -2083,20 +2081,13 @@ check_desktop_app_target_ownership() {
 }
 
 check_desktop_app_launcher_ownership() {
-  local os="$1" app_target="$2" executable="$3" cli_path gui_path windows_executable candidate name
+  local os="$1" app_target="$2" executable="$3" cli_path gui_path windows_executable candidate
   local cli_kind=managed gui_kind=link menu_file="${XDG_DATA_HOME:-$HOME/.local/share}/applications/sona.desktop"
   candidate="$RUNTIME_LAUNCHER_BIN_DIR/sona-mcp"
   if [[ -e "$candidate" || -L "$candidate" ]] && { [[ ! -L "$candidate" ]] || [[ "$(readlink "$candidate")" != "$RUNTIME_MCP_BIN" ]]; }; then
     err "Refusing to replace an unrelated launcher: $candidate"
     return 1
   fi
-  for name in skill-bill; do
-    candidate="$RUNTIME_LAUNCHER_BIN_DIR/$name"
-    if [[ -e "$candidate" || -L "$candidate" ]] && { [[ -L "$candidate" ]] || [[ ! -f "$candidate" ]] || ! grep -qF '# skill-bill managed launcher' "$candidate"; }; then
-      err "Refusing to replace an unrelated launcher: $candidate"
-      return 1
-    fi
-  done
   cli_path="$RUNTIME_LAUNCHER_BIN_DIR/sona"
   gui_path="$RUNTIME_LAUNCHER_BIN_DIR/sona-app"
   if [[ "$os" == "windows" ]]; then
@@ -2651,7 +2642,6 @@ activate_staged_desktop_app() {
     return 1
   fi
   local cli_stage="$RUNTIME_LAUNCHER_BIN_DIR/sona.stage.$transaction_id"
-  local compat_stage="$RUNTIME_LAUNCHER_BIN_DIR/skill-bill.stage.$transaction_id"
   local mcp_stage="$RUNTIME_LAUNCHER_BIN_DIR/sona-mcp.stage.$transaction_id"
   local cli_path="$RUNTIME_LAUNCHER_BIN_DIR/sona"
   local old_gui_path="$RUNTIME_LAUNCHER_BIN_DIR/sona"
@@ -2664,7 +2654,7 @@ activate_staged_desktop_app() {
     if command -v cygpath >/dev/null 2>&1; then expected_gui_executable="$(cygpath -w "$executable")"; else expected_gui_executable="${executable//\//\\}"; fi
   fi
   local -a tx_targets=() tx_stages=() tx_backups=() tx_kinds=() tx_expected=() tx_published=()
-  for tx_target in "$cli_stage" "$compat_stage" "$mcp_stage"; do
+  for tx_target in "$cli_stage" "$mcp_stage"; do
     if [[ -e "$tx_target" || -L "$tx_target" ]]; then
       err "A transaction stage path already exists. Preserving it for recovery: $tx_target"
       discard_desktop_app_launcher_stage "$os"
@@ -2672,10 +2662,10 @@ activate_staged_desktop_app() {
       return 1
     fi
   done
-  if ! install_skill_bill_launcher sona "$cli_stage" || ! install_skill_bill_launcher skill-bill "$compat_stage" ||
+  if ! install_sona_launcher sona "$cli_stage" ||
      ! ln -s "$RUNTIME_MCP_BIN" "$mcp_stage"; then
     err "Could not stage runtime launchers."
-    for tx_target in "$cli_stage" "$compat_stage" "$mcp_stage"; do
+    for tx_target in "$cli_stage" "$mcp_stage"; do
       if [[ -e "$tx_target" || -L "$tx_target" ]] && ! rm -f "$tx_target"; then err "Could not remove launcher stage: $tx_target"; fi
     done
     discard_desktop_app_launcher_stage "$os"
@@ -2698,10 +2688,10 @@ activate_staged_desktop_app() {
   tx_expected+=("$expected_gui_executable")
   if [[ "$os" == linux ]]; then tx_targets+=("$menu_file"); tx_stages+=("$menu_stage"); tx_kinds+=(menu); tx_expected+=("$gui_path"); fi
   if [[ "$os" == windows ]]; then tx_targets+=("$old_gui_path"); tx_stages+=(""); tx_kinds+=(windows-desktop); tx_expected+=(""); fi
-  tx_targets+=("$cli_path" "$RUNTIME_LAUNCHER_BIN_DIR/sona-mcp" "$RUNTIME_LAUNCHER_BIN_DIR/skill-bill")
-  tx_stages+=("$cli_stage" "$mcp_stage" "$compat_stage")
-  tx_kinds+=(managed link managed)
-  tx_expected+=("" "$RUNTIME_MCP_BIN" "")
+  tx_targets+=("$cli_path" "$RUNTIME_LAUNCHER_BIN_DIR/sona-mcp")
+  tx_stages+=("$cli_stage" "$mcp_stage")
+  tx_kinds+=(managed link)
+  tx_expected+=("" "$RUNTIME_MCP_BIN")
   local tx_count=${#tx_targets[@]} tx_index tx_rollback tx_target tx_stage tx_backup tx_owned
   for ((tx_index=0; tx_index<tx_count; tx_index++)); do tx_backups+=(""); tx_published+=(0); done
   local tx_failed=0
@@ -2754,7 +2744,7 @@ activate_staged_desktop_app() {
     if [[ "$previous_app_moved" -eq 1 && ( -e "$backup_app" || -L "$backup_app" ) ]]; then
       if [[ -e "$app_target" || -L "$app_target" ]] || ! mv "$backup_app" "$app_target"; then err "Could not restore the previous desktop app. Recovery copy: $backup_app"; fi
     fi
-    for tx_target in "$cli_stage" "$compat_stage" "$mcp_stage"; do
+    for tx_target in "$cli_stage" "$mcp_stage"; do
       if [[ -e "$tx_target" || -L "$tx_target" ]] && ! rm -f "$tx_target"; then err "Could not remove launcher stage: $tx_target"; fi
     done
     discard_desktop_app_launcher_stage "$os"
@@ -2768,6 +2758,7 @@ activate_staged_desktop_app() {
     if [[ -d "$tx_backup" && ! -L "$tx_backup" ]]; then rm -rf "$tx_backup" || warn "Retained publication backup for recovery: $tx_backup"
     else rm -f "$tx_backup" || warn "Retained publication backup for recovery: $tx_backup"; fi
   done
+  remove_retired_cli_launcher || return 1
   local obsolete_mcp="$RUNTIME_LAUNCHER_BIN_DIR/skill-bill-mcp"
   if [[ -L "$obsolete_mcp" && "$(readlink "$obsolete_mcp")" == "$RUNTIME_MCP_BIN" ]]; then
     rm -f "$obsolete_mcp" || { err "Could not remove owned legacy MCP launcher: $obsolete_mcp"; DESKTOP_APP_INSTALL_RESULT="launcher failed"; return 1; }
@@ -3090,6 +3081,13 @@ replay_last_install_selection() {
   local value
   local extra
 
+  if [[ "$INSTALL_SOURCE" == "source" && "${SKILL_BILL_SKIP_RUNTIME_DISTRIBUTION_BUILD:-}" != "1" ]]; then
+    if ! build_selection_replay_runtime_cli; then
+      err "Cannot prepare the source runtime CLI for saved selection replay."
+      exit 1
+    fi
+  fi
+
   stderr_file="$(mktemp)"
   if ! output="$(
     run_selection_runtime_cli install replay-last-selection \
@@ -3108,7 +3106,11 @@ replay_last_install_selection() {
     err "Run ./install.sh without --reuse-last-selection to choose install options again."
     exit 1
   fi
+  error_output="$(trim_string "$(cat "$stderr_file")")"
   rm -f "$stderr_file"
+  if [[ -n "$error_output" ]]; then
+    warn "$error_output"
+  fi
 
   AGENT_SELECTION_MODE="manual"
   AGENT_NAMES=()

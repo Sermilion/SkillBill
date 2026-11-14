@@ -149,6 +149,8 @@ class AgentExecutionChatRepository(
 
   override suspend fun openSavedChat(entry: ChatHistoryEntry): List<ChatHistoryLine> = withContext(Dispatchers.IO) { catalog.open(entry) }
 
+  override suspend fun acquisition(sessionId: String) = withContext(Dispatchers.IO) { store.acquisition(sessionId) }
+
   override suspend fun moveSessions(fromRoot: String, toRoot: String): SessionMoveResult =
     withContext(Dispatchers.IO) { catalog.move(fromRoot, toRoot) }
 

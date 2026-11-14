@@ -16,7 +16,7 @@ internal object ProjectCheckCommandDiscoveryPrompt {
     validationGate: ValidationGateDeclaration,
   ): String =
     buildString {
-      appendLine("Discover minimal project check commands for skill-bill project checks.")
+      appendLine("Discover minimal project check commands for Sona project checks.")
       appendLine("Inspect source only. Do not edit files, execute project checks, or start workflows.")
       appendLine("Read applicable ancestor, repository-root, and scoped AGENTS.md instructions before inferring.")
       appendLine("When a nested Gradle root applies, resolve its checkout-relative directory explicitly.")

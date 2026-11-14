@@ -12,12 +12,18 @@ import dev.skillbill.desktop.core.designsystem.component.EmptyState
 import dev.skillbill.desktop.core.designsystem.detail.TerminalPaneChrome
 import dev.skillbill.desktop.core.designsystem.detail.TerminalTabChrome
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
+import dev.skillbill.desktop.core.domain.repository.ChatChangesRepository
+import dev.skillbill.desktop.core.ui.changes.ChangesSource
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.ui.pane.CHAT_SHORTCUT
 
 /** One tab per chat, several per execution when the operator starts more, above the active chat's transcript and composer. */
 @Composable
-fun ChatPane(workspace: ChatWorkspace) {
+fun ChatPane(
+  workspace: ChatWorkspace,
+  changesRepository: ChatChangesRepository,
+  onOpenChanges: (ChangesSource.Chat, String?) -> Unit,
+) {
   val state by workspace.tabs.collectAsState()
   BoxWithConstraints(Modifier.fillMaxSize()) {
     TerminalPaneChrome(
@@ -93,7 +99,7 @@ fun ChatPane(workspace: ChatWorkspace) {
             ) { reply, action ->
               workspace.executeAction(session.id, reply, action)
             }
-            ChatComposer(session, workspace)
+            ChatComposer(session, workspace, changesRepository = changesRepository, onOpenChanges = onOpenChanges)
           }
         }
       }

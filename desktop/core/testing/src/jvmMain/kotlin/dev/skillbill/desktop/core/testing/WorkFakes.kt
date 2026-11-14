@@ -107,6 +107,7 @@ data class ControlCall(val control: String, val item: WorkItem, val agentId: Str
 
 /** Records each run control with its item and answers [outcome]; the goal writes are not faked and fail loudly. */
 class FakeWorkControlRepository(var outcome: ControlOutcome = ControlOutcome.IntentRecorded) : WorkControlRepository {
+  override val launchFailures = kotlinx.coroutines.flow.emptyFlow<String>()
   override val reservations = MutableStateFlow<Set<String>>(emptySet())
   val calls = mutableListOf<ControlCall>()
   val newTaskRequests = mutableListOf<NewTaskStart>()

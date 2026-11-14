@@ -82,6 +82,9 @@ import dev.skillbill.desktop.core.designsystem.component.SbTooltip
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.designsystem.icon.SbIcon
 import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
+import dev.skillbill.desktop.core.domain.repository.ChatChangesRepository
+import dev.skillbill.desktop.core.ui.changes.ChangesSource
+import dev.skillbill.desktop.feature.chat.newtask.UnavailableChatChanges
 import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatImage
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
@@ -107,6 +110,8 @@ import kotlinx.coroutines.launch
 internal fun ChatComposer(
   session: ChatSession, workspace: ChatWorkspace, clipboard: ClipboardImageReader = SystemClipboardImageReader,
   encodeContext: CoroutineContext = Dispatchers.Default,
+  changesRepository: ChatChangesRepository = UnavailableChatChanges,
+  onOpenChanges: (ChangesSource.Chat, String?) -> Unit = { _, _ -> },
 ) {
   val busy by session.busy.collectAsState()
   val stoppable by session.stoppable.collectAsState()
@@ -207,12 +212,13 @@ internal fun ChatComposer(
       }
     }
     if (queued.isNotEmpty()) QueuedMessagesPreview(queued)
+    RunChatChangesAnchor(session, changesRepository, focus, onOpenChanges)
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
       ModeBadge(ChatPermissionMode.Act)
       AgentPicker(
         agent, workspace.agents, session.item.repositoryRoot, enabled = delivery == null && !busy && !gone,
-        loadModels = workspace::models, onChooseModel = { workspace.switchModel(id, it) },
-      ) { workspace.switchAgent(id, it) }
+        resolveAgent = workspace::agentFor, loadModels = workspace::models,
+      ) { agentId, pick -> workspace.choose(id, agentId, pick) }
       if (agent?.agentId?.startsWith("cursor", ignoreCase = true) == true) {
         CursorMcpPicker(cursorMcpDependency, enabled = !gone) {
           workspace.cursorMcpDependencies[id] = it

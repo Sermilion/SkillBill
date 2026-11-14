@@ -85,7 +85,7 @@ internal fun goalContinuationArguments(
       context.childWorkflowId?.takeIf(String::isNotBlank) ?: context.assignedWorkflowId?.takeIf(String::isNotBlank),
     ) { "Goal-child launch requires a persisted child workflow id." }
   return buildList {
-    add("skill-bill")
+    add("sona")
     databasePath?.let { db ->
       add("--db")
       add(db.toString())

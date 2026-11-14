@@ -470,13 +470,13 @@ internal class GoalFixtureAgentRunLauncher(
     skillRequest.outputSink.write(AgentRunOutputStream.STDERR, "child-$subtaskId-stderr\n")
     skillRequest.outputSink.write(
       AgentRunOutputStream.STDERR,
-      "skill-bill: workflow progress: subtask $subtaskId " +
+      "sona: workflow progress: subtask $subtaskId " +
         "workflow wftr-$subtaskId step implement durable_progress step=implement\n",
     )
     repeat(childDiagnosticChatterCount) {
       skillRequest.outputSink.write(
         AgentRunOutputStream.STDERR,
-        "skill-bill: status heartbeat (90s): child run still active; workflow: " +
+        "sona: status heartbeat (90s): child run still active; workflow: " +
           "subtask $subtaskId workflow wftr-$subtaskId step implement durable_progress\n",
       )
     }
@@ -924,7 +924,7 @@ private fun projectCheckDiscoveryArgv(category: String): List<String> =
   }
 
 private const val PROJECT_CHECK_DISCOVERY_PROMPT_PREFIX =
-  "Discover minimal project check commands for skill-bill project checks."
+  "Discover minimal project check commands for Sona project checks."
 private val PROJECT_CHECK_DISCOVERY_PROJECT_ID = Regex("""Project id: (\S+)""")
 private val PROJECT_CHECK_DISCOVERY_CATEGORIES = Regex("""Requested categories: (.+)""")
 

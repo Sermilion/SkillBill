@@ -6,7 +6,6 @@ import dev.skillbill.desktop.core.common.Diagnostics
 import dev.skillbill.desktop.core.common.Outcome
 import dev.skillbill.desktop.core.domain.model.BoardState
 import dev.skillbill.desktop.core.domain.model.ChatAgent
-import dev.skillbill.desktop.core.domain.model.ChatModel
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.CursorMcpDependency
@@ -28,6 +27,7 @@ import dev.skillbill.desktop.core.domain.settings.NewTaskChatLayout
 import dev.skillbill.desktop.core.ui.board.ShellBoard
 import dev.skillbill.desktop.core.ui.feedback.readProblemText
 import dev.skillbill.desktop.feature.chat.ChatMessage
+import dev.skillbill.desktop.feature.chat.ModelPick
 import dev.skillbill.desktop.feature.chat.RESUME_COMMAND
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
@@ -83,8 +83,9 @@ sealed interface NewTaskAction {
   data object RetryBranches : NewTaskAction
   data class ChooseRepository(val repository: NewTaskRepository) : NewTaskAction
   data class SubmitRepositoryPath(val path: String) : NewTaskAction
-  data class ChooseAgent(val agentId: String) : NewTaskAction
-  data class ChooseModel(val model: ChatModel?) : NewTaskAction
+  /** Switches to [agentId] with [pick], or without one with that agent's configured model. */
+  data class ChooseAgent(val agentId: String, val pick: ModelPick? = null) : NewTaskAction
+  data class ChooseModel(val pick: ModelPick) : NewTaskAction
   data object AddRepository : NewTaskAction
   data object OpenRepositoryPicker : NewTaskAction
   data object CloseRepositoryPicker : NewTaskAction
@@ -188,14 +189,13 @@ class NewTaskViewModel(
         if (agentReadOwners[target]?.requestedAgentId?.let { it != agent.agentId } == true) return
         agentReads.remove(target)?.cancel()
         target.agentChosen = true
-        val selected = agent.copy(model = action.model?.id, effort = null)
-        target.rebindChat(requestedAgent = selected)
+        target.rebindChat(requestedAgent = action.pick.applyTo(agent))
       }
       is NewTaskAction.ChooseAgent -> {
         if (!canChangeContext(target)) return
         target.cursorMcpDependency = CursorMcpDependency.ProjectUserOnly
         target.agentChosen = true
-        readAgent(target, action.agentId) { owner -> resolveAgent(target, action.agentId, owner) }
+        readAgent(target, action.agentId) { owner -> resolveAgent(target, action.agentId, owner, action.pick) }
       }
       NewTaskAction.OpenRepositoryPicker -> {
         if (!canSelectRepository(target)) return
@@ -365,9 +365,9 @@ class NewTaskViewModel(
     }
   }
 
-  private suspend fun resolveAgent(target: NewTaskDraft, agentId: String?, owner: AgentReadOwner) {
+  private suspend fun resolveAgent(target: NewTaskDraft, agentId: String?, owner: AgentReadOwner, pick: ModelPick? = null) {
     if (agentId == null || target.resuming) return
-    val agent = chat.agentFor(agentId)
+    val agent = chat.agentFor(agentId).let { resolved -> pick?.applyTo(resolved) ?: resolved }
     if (target.resuming || agentReadOwners[target] !== owner) return
     target.rebindChat(requestedAgent = agent)
   }

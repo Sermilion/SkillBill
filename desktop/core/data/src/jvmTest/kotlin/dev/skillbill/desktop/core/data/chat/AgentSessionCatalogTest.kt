@@ -4,14 +4,18 @@ import dev.skillbill.desktop.core.common.HostEnvironment
 import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
 import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
+import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.SessionMoveResult
 import dev.skillbill.desktop.core.testing.FakeAppSettingsRepository
 import dev.skillbill.desktop.core.testing.RecordingDiagnostics
 import kotlinx.coroutines.test.runTest
 import java.io.File
 import kotlin.io.path.createTempDirectory
+import kotlin.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 import kotlin.time.Clock
 
 class AgentSessionCatalogTest {
@@ -20,6 +24,20 @@ class AgentSessionCatalogTest {
   private val host = HostEnvironment(emptyMap(), home.path, "")
   private val store = ChatStore(host, RecordingDiagnostics(), Clock.System)
   private val catalog = AgentSessionCatalog(host, FakeAppSettingsRepository(), store, RecordingDiagnostics())
+
+  @Test
+  fun `Devin saved app session opens only with its acquired handle and original directory`() {
+    val checkout = createTempDirectory("devin-session").toRealPath().toString()
+    val saved = ChatHistoryEntry(
+      "devin-app-id", "wf-1", ChatAgent("devin", "devin/swe-1", null), Instant.fromEpochMilliseconds(1), "question",
+      listOf(ChatHistoryLine(ChatHistoryRole.Operator, "question")),
+      executionCheckoutRoot = checkout,
+    )
+    assertTrue(store.saveDevinSession(saved.sessionId, "devin-native-id", saved))
+
+    assertEquals(saved.lines, catalog.open(saved))
+    assertFailsWith<java.io.IOException> { catalog.open(saved.copy(executionCheckoutRoot = root)) }
+  }
 
   private fun write(path: String, vararg lines: String, modified: Long) = File(home, path).apply {
     parentFile.mkdirs()

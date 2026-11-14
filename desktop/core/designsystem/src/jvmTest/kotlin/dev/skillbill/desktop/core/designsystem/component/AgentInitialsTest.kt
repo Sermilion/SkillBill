@@ -13,9 +13,13 @@ class AgentInitialsTest {
     assertEquals("Cl", agentInitials("claude"))
     assertEquals("Cx", agentInitials("codex"))
     assertEquals("Cu", agentInitials("cursor"))
+    assertEquals("Oc", agentInitials("opencode"))
+    assertEquals("De", agentInitials("devin"))
     assertEquals("Claude", agentDisplayName("claude"))
     assertEquals("Codex", agentDisplayName("codex"))
     assertEquals("Cursor", agentDisplayName("cursor"))
+    assertEquals("OpenCode", agentDisplayName("opencode"))
+    assertEquals("Devin", agentDisplayName("devin"))
     listOf("unavailable", "retired-agent", "").forEach { agentId ->
       assertEquals("?", agentInitials(agentId))
       assertEquals("Unavailable agent", agentDisplayName(agentId))
@@ -25,17 +29,23 @@ class AgentInitialsTest {
     assertEquals(4, agentDataSlot("claude"))
     assertEquals(2, agentDataSlot("codex"))
     assertEquals(6, agentDataSlot("cursor"))
+    assertEquals(3, agentDataSlot("opencode"))
+    assertEquals(5, agentDataSlot("devin"))
   }
 
   @OptIn(ExperimentalTestApi::class)
   @Test
-  fun `avatar exposes the neutral accessible name for unsupported ids`() = runComposeUiTest {
+  fun `avatars expose provider names and the neutral fallback for unknown ids`() = runComposeUiTest {
     setContent {
       SkillBillTheme(reducedMotion = true) {
         Avatar("retired-agent")
+        Avatar("opencode")
+        Avatar("devin")
       }
     }
 
     onNodeWithContentDescription("Unavailable agent").assertExists()
+    onNodeWithContentDescription("OpenCode").assertExists()
+    onNodeWithContentDescription("Devin").assertExists()
   }
 }

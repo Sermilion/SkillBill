@@ -50,6 +50,7 @@ fun UsagePanel(
           state.message?.let { BasicText(it, style = usageText().copy(color = colors.fgMuted)) }
         } else {
           state.meters.forEach { meter -> key(meter.id) { UsageMeterRow(meter, detailed = true) } }
+          state.message?.let { BasicText(it, style = usageText().copy(color = colors.fgMuted)) }
         }
       }
     }

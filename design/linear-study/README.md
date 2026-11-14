@@ -62,6 +62,14 @@ All data is part of this HTML prototype. Refreshing resets local interactions. N
 
 Activity is part of `app/screens.js`; the Changes window and Diff comments are `app/review.js`. Both use only components from `ds/components.js`, and their state lives in the prototype's `st` until the page reloads. All modules load from the same `index.html`, including with `file://`.
 
+## Agent and model picker
+
+The agent pill on the composer reads `agent · model · effort`, or `agent · default` when the agent CLI picks. Click it for one popup with agents on the left and the highlighted agent's models on the right. The model column starts with Configured, the execution matrix's model and effort, which is left out when the matrix has no entry for the agent. Agent default comes next, then the models the agent's CLI reports, with a search.
+
+Clicking an agent only shows its models. A line under both columns says picking a model will switch agents and start a new conversation. Picking a model sets the agent and model together and closes the popup. Esc or a click outside changes nothing. ↑ and ↓ move in the focused list, and in Agents they also highlight. → or Enter moves to the models, ← with an empty search goes back, and Enter picks.
+
+Open it with [#new-task/agent](index.html#new-task/agent). `#new-task/agent/other` highlights another agent; `/loading`, `/error` and `/noMatch` show those model states. The Components page has every state under AgentModelPicker.
+
 ## Usage limits card
 
 [USAGE-LIMITS.md](USAGE-LIMITS.md) records the original proposal, provider data sources and refresh policy.

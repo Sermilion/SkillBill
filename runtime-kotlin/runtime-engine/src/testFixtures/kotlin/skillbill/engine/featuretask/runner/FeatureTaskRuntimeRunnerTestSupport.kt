@@ -19,6 +19,7 @@ import skillbill.application.testHarnessClock
 import skillbill.config.model.RepoLocalConfig
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.config.projectchecks.ProjectCheckCommandSnapshot
+import skillbill.contracts.config.projectchecks.ProjectCheckConfig
 import skillbill.contracts.time.JvmSystemClock
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CHECKPOINT_IDENTITY_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
@@ -824,6 +825,7 @@ private fun testRunLoopEntry(deps: RuntimePhaseGatesDeps): TestFeatureTaskRuntim
           validationGateRunner,
           deps.gateRepoLocalConfig,
           NoopRuntimeDiagnostics,
+          gitOperations = deps.gitOperations,
         ),
         deps.buildReceiptValidator,
         FeatureTaskRuntimeValidationGateCoordinator(),
@@ -831,6 +833,31 @@ private fun testRunLoopEntry(deps: RuntimePhaseGatesDeps): TestFeatureTaskRuntim
       ),
     sharedEvidenceResolver = deps.sharedEvidenceResolver,
     diffResolver = deps.diffResolver,
+  )
+}
+
+fun packBuildGateRunLoopEntryForTests(
+  gitOperations: WorkflowGitOperations,
+  manifests: List<PlatformManifest>,
+  runner: ValidationGateRunner,
+  repoLocalConfig: RepoLocalConfigPort,
+): TestFeatureTaskRuntimeRunLoopEntry {
+  val resolver = ValidationGateResolver { manifests }
+  return TestFeatureTaskRuntimeRunLoopEntry(
+    gitOperations = gitOperations,
+    qualityGateCycles =
+      RuntimeQualityGateCycles(
+        buildFeatureTaskRuntimeBuildGateCoordinator(
+          resolver,
+          runner,
+          repoLocalConfig,
+          NoopRuntimeDiagnostics,
+          gitOperations = gitOperations,
+        ),
+        AcceptingFeatureTaskRuntimeWireArtifactValidator,
+        FeatureTaskRuntimeValidationGateCoordinator(),
+        resolver,
+      ),
   )
 }
 
@@ -1523,7 +1550,23 @@ private fun runnerExecutionEntry(
       config.gateRepoLocalConfig,
       database,
       fixture.compatibility,
-      projectCheckCommandResolverForTests(),
+      projectCheckCommandResolverForTests(
+        committed =
+          (
+            config.admittedProjectCheckSnapshot ?: testAdmittedProjectCheckSnapshot(
+              config.goalContinuation.qualityGateSelection,
+            )
+          )?.let {
+            ProjectCheckConfig(
+              it.projectId,
+              it.buildCommands,
+              null,
+              null,
+              null,
+              it.validationCommands,
+            )
+          },
+      ),
       diagnostics = NoopRuntimeDiagnostics,
     )
   if (!config.seedDurableWorkflow) {
@@ -1587,7 +1630,9 @@ private fun runnerSelectionFacts(config: RuntimeHarnessConfig): PhaseStrategySel
     ),
   )
 
-private fun defaultQualityGateCycles(): RuntimeQualityGateCycles {
+private fun defaultQualityGateCycles(
+  gitOperations: WorkflowGitOperations = NoopWorkflowGitOperations,
+): RuntimeQualityGateCycles {
   val resolver = ValidationGateResolver { listOf(kotlinPackWithValidationGate()) }
   return RuntimeQualityGateCycles(
     buildFeatureTaskRuntimeBuildGateCoordinator(
@@ -1595,6 +1640,7 @@ private fun defaultQualityGateCycles(): RuntimeQualityGateCycles {
       passingValidationGateRunner(),
       defaultRepoLocalConfigPort(),
       NoopRuntimeDiagnostics,
+      gitOperations = gitOperations,
     ),
     AcceptingFeatureTaskRuntimeWireArtifactValidator,
     FeatureTaskRuntimeValidationGateCoordinator(),
@@ -1667,7 +1713,7 @@ open class TestFeatureTaskRuntimeRunLoopEntry(
       ),
       NoopRuntimeDiagnostics,
     ),
-  qualityGateCycles: RuntimeQualityGateCycles = defaultQualityGateCycles(),
+  qualityGateCycles: RuntimeQualityGateCycles = defaultQualityGateCycles(gitOperations),
   sharedEvidenceResolver: FeatureTaskRuntimeSharedEvidenceResolverPort = DERIVING_SHARED_EVIDENCE_RESOLVER,
   diffResolver: DiffResolverPort = object : DiffResolverPortDefaults() {},
   implementationChecklistStore: FeatureTaskImplementationChecklistStore =

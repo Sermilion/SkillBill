@@ -1,6 +1,6 @@
 # runtime-kotlin
 
-Standalone Kotlin runtime for the local `skill-bill` CLI, MCP server, install
+Standalone Kotlin runtime for the local `sona` CLI, MCP server, install
 planner/apply path, telemetry, workflow state, scaffolding, and governed
 validation.
 
@@ -55,7 +55,7 @@ stable `image/` layout with a `bin/` launcher and the bundled `bin/java`:
 ```
 image/
   bin/
-    runtime-cli        # CLI launcher (subtask 4 symlinks this to `skill-bill`)
+    runtime-cli        # CLI launcher (installed as `sona`)
     java               # bundled trimmed JRE — no system JDK required
   lib/
   conf/
@@ -65,7 +65,7 @@ image/
 ```
 image/
   bin/
-    runtime-mcp        # MCP launcher (subtask 4 symlinks this to `skill-bill-mcp`)
+    runtime-mcp        # MCP launcher (installed as `sona-mcp`)
     java
   lib/                 # includes the generated telemetry-event schema resource
   ...

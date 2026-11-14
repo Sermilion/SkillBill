@@ -145,7 +145,7 @@ class FeatureTaskRuntimeCrashReconcilerTest {
       val result = reconciler.reconcile()
 
       assertEquals(3, result.reconciledCount)
-      assertEquals(emptyList<Path>(), resolvedRoots)
+      assertEquals(setOf(rootA, rootB, rootC), resolvedRoots.toSet())
       val afterA = database.read { requireNotNull(it.workflowStates.getFeatureTaskWorkflowAsMode(idA, RUNTIME)) }
       val afterB = database.read { requireNotNull(it.workflowStates.getFeatureTaskWorkflowAsMode(idB, RUNTIME)) }
       val afterC = database.read { requireNotNull(it.workflowStates.getFeatureTaskWorkflowAsMode(idC, RUNTIME)) }
@@ -338,15 +338,16 @@ class FeatureTaskRuntimeCrashReconcilerTest {
 
     val result = reconciler.reconcile()
 
-    assertEquals(1, result.reconciledCount)
+    assertEquals(2, result.reconciledCount)
     assertEquals("pending", repository.getFeatureTaskWorkflowAsMode(WORKFLOW_ID, RUNTIME)?.workflowStatus)
     assertEquals(null, repository.getFeatureTaskRuntimeWorkerOwnership(WORKFLOW_ID))
     assertEquals(incompatibleBefore, repository.getFeatureTaskWorkflow(incompatibleId))
     assertEquals(incompatibleLease, repository.getFeatureTaskRuntimeWorkerOwnership(incompatibleId))
     assertEquals(identitylessBefore, repository.getFeatureTaskWorkflow(identitylessId))
     assertEquals(identitylessLease, repository.getFeatureTaskRuntimeWorkerOwnership(identitylessId))
-    assertEquals(changedGateBefore, repository.getFeatureTaskWorkflow(changedGateId))
-    assertEquals(changedGateLease, repository.getFeatureTaskRuntimeWorkerOwnership(changedGateId))
+    assertEquals(changedGateBefore.artifactsJson, repository.getFeatureTaskWorkflow(changedGateId)?.artifactsJson)
+    assertEquals("pending", repository.getFeatureTaskWorkflow(changedGateId)?.workflowStatus)
+    assertEquals(null, repository.getFeatureTaskRuntimeWorkerOwnership(changedGateId))
   }
 
   @Test

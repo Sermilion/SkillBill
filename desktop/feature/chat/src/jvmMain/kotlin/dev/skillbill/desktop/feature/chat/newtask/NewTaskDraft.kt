@@ -7,6 +7,8 @@ import androidx.compose.runtime.setValue
 import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatChangesBaseline
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
+import dev.skillbill.desktop.core.domain.model.ChatNewTaskContext
+import dev.skillbill.desktop.core.domain.model.ChatSessionAcquisition
 import dev.skillbill.desktop.core.domain.model.SavedChatProjection
 import dev.skillbill.desktop.core.domain.model.ChatImage
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
@@ -695,6 +697,8 @@ class NewTaskDraft internal constructor(
 
   internal suspend fun models(agent: ChatAgent, root: String) = chats.models(agent, root)
 
+  internal suspend fun agentFor(agentId: String) = chats.agentFor(agentId)
+
   /** Requests one committed context change. Existing chats keep their old projection until its save finishes. */
   internal fun rebindChat(
     requestedRepository: NewTaskRepository? = repository,
@@ -887,7 +891,7 @@ class NewTaskDraft internal constructor(
   private fun recoverEndedContext(current: NewTaskChat) {
     val recovered = open(
       current.sessionId, current.repositoryRoot, current.selectedRepositoryRoot, current.baseBranch, current.agent,
-      started = current.started, pendingTurnLineIndex = null, replay = current.pendingReplay,
+      started = current.started, pendingTurnLineIndex = null, replay = current.pendingReplay, acquired = current.acquired,
       changesBaseline = current.changesBaseline, resumedChanges = current.changesResumed,
       changesCaptureAttempted = current.changesCaptureAttempted, changesAttributedPaths = current.changesAttributedPaths,
       publish = false, active = current.databaseSessionId?.let(::ownsDatabase) == true, databaseSessionId = current.databaseSessionId,
@@ -907,9 +911,20 @@ class NewTaskDraft internal constructor(
       ) return@synchronized false
 
       val selectedRepositoryRoot = context.selectedRepositoryRoot
-      val workingDirectory = selectedRepositoryRoot ?: userHome
+      val providerBound = entry.agent.agentId == "devin" || entry.agent.agentId == "opencode"
+      if (providerBound) return@synchronized stageProviderResume(entry, context)
+      val workingDirectory = if (providerBound) context.workingDirectory else selectedRepositoryRoot ?: userHome
       val homeChanged = selectedRepositoryRoot == null && context.workingDirectory != workingDirectory
       val missing = selectedRepositoryRoot != null && !File(selectedRepositoryRoot).isDirectory
+      if (providerBound) {
+        val expected = selectedRepositoryRoot ?: userHome
+        val original = canonicalDirectory(context.workingDirectory)
+        if (original == null || original != canonicalDirectory(expected)) {
+          toasts.show(ToastMessage(ToastTone.Problem,
+            "This ${entry.agent.agentId} draft belongs to a different or unavailable directory. Its saved conversation is unchanged. Restore the original directory or start a separate new chat."))
+          return@synchronized false
+        }
+      }
       if (homeChanged) return@synchronized stageChangedHomeResume(entry, context, workingDirectory)
       repository = selectedRepositoryRoot?.let { NewTaskRepository(it, File(it).name) }
       baseBranch = context.baseBranch.orEmpty()
@@ -1002,6 +1017,84 @@ class NewTaskDraft internal constructor(
     return true
   }
 
+  private fun stageProviderResume(entry: ChatHistoryEntry, context: ChatNewTaskContext): Boolean {
+    val owner = Any()
+    val databaseState = databaseSession.state.value
+    resumeTransitionOwner = owner
+    resumeSourceSessionsState.value = resumeSourceSessionsState.value + entry.sessionId
+    val transition = scope.launch(start = CoroutineStart.LAZY) {
+      var staged: NewTaskChat? = null
+      var published = false
+      try {
+        val acquisition = chats.acquisition(entry.sessionId)
+        val latest = when (acquisition) {
+          is ChatSessionAcquisition.Acquired -> acquisition.entry
+          is ChatSessionAcquisition.Draft -> acquisition.entry
+          is ChatSessionAcquisition.Recovery -> {
+            contextProblem(acquisition.guidance)
+            return@launch
+          }
+          ChatSessionAcquisition.Missing -> {
+            contextProblem("This saved provider chat is missing. Keep its source unchanged or start a separate new chat.")
+            return@launch
+          }
+        }
+        val acquired = acquisition is ChatSessionAcquisition.Acquired
+        val original = canonicalDirectory(context.workingDirectory)
+        val selected = context.selectedRepositoryRoot?.let(::canonicalDirectory)
+        val matches = latest.sessionId == entry.sessionId && latest.executionId == null &&
+          latest.agent == entry.agent && latest.newTask == context
+        if (original == null || (context.selectedRepositoryRoot != null && selected != original) || !matches ||
+          (acquisition is ChatSessionAcquisition.Draft && context.sessionEstablished) ||
+          (acquired && latest.agent.agentId != entry.agent.agentId)) {
+          contextProblem("This ${entry.agent.agentId} chat belongs to a different or unavailable directory, or its saved identity changed. Keep the source unchanged or start a separate new chat.")
+          return@launch
+        }
+        if (resumeTransitionOwner !== owner || chatState.value != null || databaseState != databaseSession.state.value || closing) return@launch
+        val retained = retainedThreads[entry.sessionId]
+        staged = open(
+          entry.sessionId, context.workingDirectory, context.selectedRepositoryRoot, context.baseBranch, entry.agent,
+          started = context.sessionEstablished, pendingTurnLineIndex = context.pendingTurnLineIndex,
+          replay = null, changesBaseline = context.changesBaseline,
+          resumedChanges = context.changesBaseline != null,
+          changesCaptureAttempted = context.changesCaptureAttempted || context.sessionEstablished || context.changesBaseline != null,
+          changesAttributedPaths = context.changesAttributedPaths, publish = false, active = false,
+          acquired = acquired,
+        )
+        staged!!.thread.replaceTranscript(if (retained == null) latest.lines.map(::restored) else retained.transcript.value)
+        staged!!.thread.showCapability(entry.agent)
+        staged!!.thread.showUnavailableAgentNotice()
+        if (resumeTransitionOwner !== owner || chatState.value != null || databaseState != databaseSession.state.value ||
+          closing || entry.sessionId in invalidDrafts) return@launch
+        repository = context.selectedRepositoryRoot?.let { NewTaskRepository(it, File(it).name) }
+        baseBranch = context.baseBranch.orEmpty()
+        agentId = entry.agent.agentId
+        selectedAgent = entry.agent
+        chatState.value = staged
+        synchronized(cardOwners) { cardOwners[staged!!.thread] = staged!! }
+        staged!!.activate()
+        published = true
+        refreshSaved()
+        cards.revalidate(staged!!.thread, staged!!.thread.transcript.value.mapNotNull { (it as? ChatMessage.Notice)?.operationCard?.token })
+        onResumePublished(this@NewTaskDraft)
+      } catch (cancelled: CancellationException) {
+        throw cancelled
+      } catch (_: Exception) {
+        contextProblem("This provider chat could not be restored. Its saved source remains unchanged. Restore the original directory or start a separate new chat.")
+      } finally {
+        if (chatState.value !== staged) staged?.end()
+        if (resumeTransitionOwner === owner) {
+          resumeTransitionOwner = null
+          resumeTransition = null
+          if (!published) onResumeFailed(this@NewTaskDraft)
+        }
+      }
+    }
+    resumeTransition = transition
+    transition.start()
+    return true
+  }
+
   internal fun clearResumeSources() {
     resumeSourceSessionsState.value = emptySet()
   }
@@ -1048,6 +1141,7 @@ class NewTaskDraft internal constructor(
     publish: Boolean = true,
     active: Boolean = publish,
     databaseSessionId: Long? = (databaseSession.state.value as? DatabaseSessionState.Open)?.sessionId,
+    acquired: Boolean = false,
   ): NewTaskChat {
     if (publish) initialRepositoryDefaultPending = false
     val openedDatabaseSessionId = databaseSessionId
@@ -1097,6 +1191,7 @@ class NewTaskDraft internal constructor(
       { contextRevision },
       { repositoryRequestGeneration },
       { current, path, session, revision, request -> onRepositoryCandidate(this, current, path, session, revision, request) },
+      initiallyAcquired = acquired,
     ).also {
       if (publish) {
         clearChatFeedback()
@@ -1201,6 +1296,12 @@ class NewTaskDraft internal constructor(
     lastOfferFieldValue = null
     offerState.value = offerState.value.copy(prefixKind = null, choices = emptyList(), action = null, started = null, selectedKey = null)
   }
+}
+
+private fun canonicalDirectory(path: String): String? = try {
+  java.nio.file.Path.of(path).toRealPath().toString()
+} catch (_: Exception) {
+  null
 }
 
 private val RUN_KINDS = setOf(NewTaskKind.GoalRun, NewTaskKind.PlanOnly)

@@ -12,6 +12,7 @@ import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
 import dev.skillbill.desktop.core.domain.model.ChatNewTaskContext
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatRecoveryReason
+import dev.skillbill.desktop.core.domain.model.ChatSessionAcquisition
 import dev.skillbill.desktop.core.domain.model.ChatStoreRead
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.NewTaskActionKind
@@ -147,6 +148,32 @@ class ChatStoreTest {
     assertEquals(binding, reopened.openCodeBinding("opencode-chat"))
     assertEquals(saved.lines, reopened.savedChats("wf-1").entries.single().lines)
     assertEquals("opencode", reopened.savedChats("wf-1").entries.single().agent.agentId)
+    assertEquals("/work/repo", reopened.savedChats("wf-1").entries.single().executionCheckoutRoot)
+  }
+
+  @Test
+  fun `Devin acquisition binds its handle to the saved identity and preserves unknown fields`() {
+    val checkout = File(host.userHome, "checkout").apply { mkdirs() }.canonicalPath
+    val store = ChatStore(host, RecordingDiagnostics(), Clock.System)
+    val saved = entry("devin-chat", 8).copy(
+      agent = ChatAgent("devin", "devin/swe-1", null, null),
+      executionCheckoutRoot = checkout,
+      lines = listOf(ChatHistoryLine(ChatHistoryRole.Operator, "continue")),
+    )
+    assertTrue(store.saveDevinSession("devin-chat", "native-42", saved))
+    val file = File(host.userHome, "$CHAT_STORE_PATH/devin-chat.json")
+    file.writeText(file.readText().dropLast(1) + ",\"custom_source\":\"keep\"}")
+
+    assertTrue(store.saveDevinSession("devin-chat", "native-42", saved))
+    assertTrue(store.saveDevinSession("devin-chat", "native-42", saved))
+    val acquired = file.readText()
+    assertFalse(store.saveDevinSession("devin-chat", "different-native", saved))
+
+    val reopened = ChatStore(host, RecordingDiagnostics(), Clock.System)
+    assertEquals("native-42", reopened.agentSession("devin-chat"))
+    assertEquals("keep", Json.parseToJsonElement(file.readText()).jsonObject.getValue("custom_source").jsonPrimitive.content)
+    assertEquals(checkout, reopened.savedChats("wf-1").entries.single().executionCheckoutRoot)
+    assertEquals(acquired, file.readText())
   }
 
   // A partial binding is recovery evidence; an incidental chat save must not normalize it away or replace the handle.
@@ -590,4 +617,58 @@ class ChatStoreTest {
     assertEquals("git status *", card.toJson().toApprovalCard(diagnostics)?.rulePattern)
     assertEquals("git status *", card.toJson().toApprovalCard(diagnostics)?.toJson()?.toApprovalCard(diagnostics)?.rulePattern)
   }
+
+  @Test
+  fun `a Devin handle acquired before the first message survives reopening and cannot change checkout`() {
+    val checkout = File(host.userHome, "checkout").apply { mkdirs() }.canonicalPath
+    val otherCheckout = File(host.userHome, "other").apply { mkdirs() }.canonicalPath
+    val store = ChatStore(host, RecordingDiagnostics(), fixedClock)
+    val saved = entry("acquired-before-message", 8).copy(
+      agent = ChatAgent("devin", "devin/swe-1", null, null),
+      executionCheckoutRoot = checkout,
+      lines = emptyList(),
+    )
+    assertTrue(store.saveDevinSession(saved.sessionId, "native-early", saved))
+    val file = File(host.userHome, "$CHAT_STORE_PATH/${saved.sessionId}.json")
+    val original = file.readText()
+
+    val reopened = ChatStore(host, RecordingDiagnostics(), fixedClock)
+    val acquired = reopened.acquisition(saved.sessionId) as ChatSessionAcquisition.Acquired
+    assertEquals(checkout, acquired.entry.executionCheckoutRoot)
+    assertEquals("native-early", reopened.agentSession(saved.sessionId))
+    assertFalse(reopened.saveChat(saved.copy(executionCheckoutRoot = otherCheckout)))
+    assertEquals(original, file.readText())
+  }
+
+  @Test
+  fun `a Devin conversation without a native handle stays recoverable and unchanged`() {
+    val store = ChatStore(host, RecordingDiagnostics(), fixedClock)
+    val file = File(host.userHome, "$CHAT_STORE_PATH/missing-native.json")
+    file.parentFile.mkdirs()
+    val original = """{"session_id":"missing-native","execution_id":"wf-1","agent_id":"devin","updated_at_ms":1,"execution_checkout_root":"/original","lines":[{"role":"Operator","text":"keep this"}]}"""
+    file.writeText(original)
+
+    assertTrue(store.acquisition("missing-native") is ChatSessionAcquisition.Recovery)
+    assertEquals("missing-native", store.savedChats("wf-1").recoveries.single().sessionId)
+    assertFalse(store.saveSummary("missing-native", "replacement", fixedClock.now()))
+    assertEquals(original, file.readText())
+  }
+
+
+  @Test
+  fun `the first Devin turn can acquire a handle after saving its pending draft`() {
+    val checkout = File(host.userHome, "draft-checkout").apply { mkdirs() }.canonicalPath
+    val store = ChatStore(host, RecordingDiagnostics(), fixedClock)
+    val draft = entry("pending-devin", 8).copy(
+      executionId = null,
+      agent = ChatAgent("devin", "devin/swe-1", null, null),
+      executionCheckoutRoot = null,
+      newTask = ChatNewTaskContext(checkout, checkout, "main", sessionEstablished = false, pendingTurnLineIndex = 0),
+    )
+    assertTrue(store.saveChat(draft))
+    assertTrue(store.acquisition(draft.sessionId) is ChatSessionAcquisition.Draft)
+    assertTrue(store.saveDevinSession(draft.sessionId, "native-first", draft))
+    assertTrue(ChatStore(host, RecordingDiagnostics(), fixedClock).acquisition(draft.sessionId) is ChatSessionAcquisition.Acquired)
+  }
+
 }

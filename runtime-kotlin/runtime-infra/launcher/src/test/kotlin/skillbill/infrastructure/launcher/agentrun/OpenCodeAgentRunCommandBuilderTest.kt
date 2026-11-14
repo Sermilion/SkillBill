@@ -17,7 +17,8 @@ class OpenCodeAgentRunCommandBuilderTest {
       OpenCodeAgentRunCommandBuilder(
         databasePath = Path.of("/tmp/runtime/../runtime/skill-bill.db"),
         runtimeMcpBin = Path.of("/opt/skill-bill/runtime-mcp"),
-        bindingEnvironment = mapOf("OPENCODE_CONFIG_DIR" to "/operator/opencode"),
+        bindingEnvironment =
+          mapOf("OPENCODE_CONFIG_DIR" to "/operator/opencode", "OPENCODE_PERMISSION" to "deny"),
       )
 
     val command =
@@ -43,6 +44,7 @@ class OpenCodeAgentRunCommandBuilderTest {
       server.env,
     )
     assertEquals("/operator/opencode", command.environment["OPENCODE_CONFIG_DIR"])
+    assertEquals("""{"*":"allow"}""", command.environment["OPENCODE_PERMISSION"])
     assertNull(command.preflightFailure)
   }
 
