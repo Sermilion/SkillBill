@@ -15,6 +15,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -34,6 +35,9 @@ import kotlin.time.Duration.Companion.seconds
 /** Relative to the user's home; summary calls run here so no agent ever starts in a repository. */
 internal const val CHAT_SUMMARY_PATH = ".skill-bill/desktop/chat-summaries"
 
+/** An empty config home inside [CHAT_SUMMARY_PATH]: cursor label calls get no MCP servers or workspace state. */
+internal const val CURSOR_LABEL_HOME = "cursor-label-config"
+
 /** OpenCode's configured default model does not answer one-shot prompts, so its labels pin the Anthropic small model. */
 internal const val OPENCODE_LABEL_MODEL = "anthropic/claude-haiku-4-5"
 
@@ -47,9 +51,10 @@ private data class ChatLabelRequest(val sessionId: String, val kind: ChatLabelKi
 
 /**
  * Writes a short descriptive summary into stale saved chats and a 2-3 word title into chats that lack one, one call at a
- * time app-wide, from a one-shot call to the chat's own agent on its default model, billed to the chat's account. The queue
- * runs in the application scope, so a label outlives the window that asked for it. [updates] emits the session id of each
- * summary written; [titleUpdates] emits each chat title written.
+ * time per kind, from a one-shot call to the chat's own agent on its default model, billed to the chat's account. Titles
+ * drain on their own worker so a stale-summary backlog or a hung summary call cannot starve them. The queues run in the
+ * application scope, so a label outlives the window that asked for it. [updates] emits the session id of each summary
+ * written; [titleUpdates] emits each chat title written.
  */
 @Inject
 @SingleIn(AppScope::class)
@@ -66,11 +71,13 @@ class ChatSummarizer(
   internal var dispatcher: CoroutineDispatcher = Dispatchers.IO
 
   private val queue = Channel<ChatLabelRequest>(Channel.UNLIMITED)
+  private val titleQueue = Channel<ChatLabelRequest>(Channel.UNLIMITED)
   private val pending: MutableSet<ChatLabelRequest> = ConcurrentHashMap.newKeySet()
   private val started = AtomicBoolean(false)
   private val updatesState = MutableSharedFlow<String>(extraBufferCapacity = UPDATES_BUFFER)
   private val titleUpdatesState = MutableSharedFlow<ChatTitleUpdate>(extraBufferCapacity = UPDATES_BUFFER)
-  private val worker: Job by lazy { appScope.scope.launch(dispatcher) { work() } }
+  private val worker: Job by lazy { appScope.scope.launch(dispatcher) { work(queue) } }
+  private val titleWorker: Job by lazy { appScope.scope.launch(dispatcher) { work(titleQueue) } }
 
   val updates: SharedFlow<String> = updatesState.asSharedFlow()
 
@@ -84,9 +91,18 @@ class ChatSummarizer(
   fun requestTitle(sessionId: String) = enqueue(sessionId, ChatLabelKind.Title)
 
   private fun enqueue(sessionId: String, kind: ChatLabelKind) {
-    worker.start()
     val request = ChatLabelRequest(sessionId, kind)
-    if (pending.add(request)) queue.trySend(request)
+    if (!pending.add(request)) return
+    when (kind) {
+      ChatLabelKind.Title -> {
+        titleWorker.start()
+        titleQueue.trySend(request)
+      }
+      ChatLabelKind.Summary -> {
+        worker.start()
+        queue.trySend(request)
+      }
+    }
   }
 
   /** The first call queues the chats a quit or crash left stale, newest first; later calls do nothing. */
@@ -99,7 +115,7 @@ class ChatSummarizer(
     }
   }
 
-  private suspend fun work() {
+  private suspend fun work(queue: ReceiveChannel<ChatLabelRequest>) {
     for (request in queue) {
       try {
         val read = when (request.kind) {
@@ -187,6 +203,11 @@ class ChatSummarizer(
       SelectedAgentHomes(profile ?: settings.settings.first().claudeConfigDir, host.userHome).current(),
     )
     "codex" -> host.variables + profile?.let { mapOf(AgentHomeEnvironmentKeys.CODEX_HOME to it) }.orEmpty()
+    // A label call never needs MCP: an empty config home keeps the profile's MCP servers and workspace state out.
+    "cursor" -> host.variables + mapOf(
+      AgentHomeEnvironmentKeys.CURSOR_CONFIG_DIR to
+        File(File(host.userHome, CHAT_SUMMARY_PATH), CURSOR_LABEL_HOME).also(File::mkdirs).path,
+    )
     else -> host.variables + profile?.let { mapOf(AgentHomeEnvironmentKeys.CURSOR_CONFIG_DIR to it) }.orEmpty()
   }
 }

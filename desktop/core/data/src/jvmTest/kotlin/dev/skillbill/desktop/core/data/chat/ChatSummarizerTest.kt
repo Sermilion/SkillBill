@@ -18,6 +18,7 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import skillbill.contracts.system.AgentHomeEnvironmentKeys
 import java.io.File
 import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
@@ -85,7 +86,7 @@ class ChatSummarizerTest {
     runCurrent()
 
     val forbidden = listOf(
-      "--session-id", "--resume", "--append-system-prompt", "--system-prompt", "--model",
+      "--session-id", "--resume", "--append-system-prompt", "--system-prompt", "--model", "--approve-mcps",
     )
     assertEquals(4, commands.size)
     commands.forEach { command ->
@@ -93,7 +94,12 @@ class ChatSummarizerTest {
       assertEquals(File(host.userHome, CHAT_SUMMARY_PATH).path, command.workingDirectory)
     }
     assertTrue(listOf("--dangerously-bypass-approvals-and-sandbox", "--ephemeral").all { it in commands.first { "codex" in it.argv }.argv })
-    assertTrue(listOf("--force", "--trust", "--approve-mcps", "--sandbox", "disabled").all { it in commands.first { "agent" in it.argv }.argv })
+    assertTrue(listOf("--force", "--trust", "--sandbox", "disabled").all { it in commands.first { "agent" in it.argv }.argv })
+    // A label call gets an empty cursor config home: no MCP servers or workspace state load and stall it.
+    assertEquals(
+      File(File(host.userHome, CHAT_SUMMARY_PATH), CURSOR_LABEL_HOME).path,
+      commands.first { "agent" in it.argv }.environment[AgentHomeEnvironmentKeys.CURSOR_CONFIG_DIR],
+    )
     assertTrue(listOf("--dangerously-skip-permissions", "--tools", "", "--no-session-persistence").all { it in commands.first { "claude" in it.argv }.argv })
     assertTrue(listOf("-p", "--respect-workspace-trust", "false").all { it in commands.first { "devin" in it.argv }.argv })
     listOf("claude", "cursor").forEach { agent ->
@@ -180,6 +186,37 @@ class ChatSummarizerTest {
 
     assertEquals(1, commands.size)
     assertEquals(1, updates.size)
+  }
+
+  // A tab label that arrives lowercase stays lowercase in the UI.
+  @Test
+  fun `a generated title starts with a capital letter`() = runTest {
+    val summarizer = summarizer()
+    store.saveChat(entry("t2", "claude", 1))
+    reply = { claudeReply("fix flaky test") }
+
+    summarizer.requestTitle("t2")
+    runCurrent()
+
+    assertEquals("Fix flaky test", store.savedFor("t2")?.generatedTitle)
+  }
+
+  // A title queued behind a hung or stale summary call otherwise never runs in the chat's own window.
+  @Test
+  fun `a title request does not wait behind an in-flight summary call`() = runTest {
+    val summarizer = summarizer()
+    store.saveChat(entry("slow", "claude", 1))
+    store.saveChat(entry("t1", "claude", 2))
+    during = { if (commands.size == 1) awaitCancellation() }
+    val updates = mutableListOf<ChatTitleUpdate>()
+    backgroundScope.launch(start = CoroutineStart.UNDISPATCHED) { summarizer.titleUpdates.collect { updates += it } }
+
+    summarizer.request("slow")
+    summarizer.requestTitle("t1")
+    runCurrent()
+
+    assertEquals("About CI.", store.savedFor("t1")?.generatedTitle)
+    assertEquals(listOf(ChatTitleUpdate("t1", "About CI.")), updates)
   }
 
   // A title is not a summary: each request kind writes only its own field.

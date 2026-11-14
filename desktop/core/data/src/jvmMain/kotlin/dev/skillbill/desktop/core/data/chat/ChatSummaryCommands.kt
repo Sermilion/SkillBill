@@ -20,7 +20,7 @@ internal fun summaryArguments(agentId: String, directory: String, prompt: String
     "exec", "--json", "--dangerously-bypass-approvals-and-sandbox", "--ephemeral", "--skip-git-repo-check", "--cd", directory, "-",
   )
   "cursor" -> listOf(
-    "--print", "--output-format", "stream-json", "--force", "--trust", "--approve-mcps", "--sandbox", "disabled", "--workspace", directory, prompt,
+    "--print", "--output-format", "stream-json", "--force", "--trust", "--sandbox", "disabled", "--workspace", directory, prompt,
   )
   // `-p` binds its own prompt value; a trailing positional would parse as a path.
   "devin" -> listOf("--respect-workspace-trust", "false", "-p", prompt)
@@ -93,10 +93,11 @@ internal fun summaryTranscript(lines: List<ChatHistoryLine>): String {
   return kept.joinToString("\n") { rendered[it].second }
 }
 
-/** The reply's first non-blank line without list markers or quotes, at most 80 characters cut at a word; null when blank. */
+/** The reply's first non-blank line without list markers or quotes, capitalized, at most 80 characters cut at a word; null when blank. */
 internal fun summaryTitle(reply: String): String? {
   val line = reply.lineSequence().map(String::trim).firstOrNull { it.isNotEmpty() } ?: return null
-  val title = line.replace(listMarker, "").trim().trim { it in QUOTES }.trim().replace(whitespace, " ")
+  val title = line.replace(listMarker, "").trim().trim { it in QUOTES }.trim()
+    .replace(whitespace, " ").replaceFirstChar { it.uppercaseChar() }
   if (title.length <= TITLE_LIMIT) return title.ifEmpty { null }
   val cut = title.lastIndexOf(' ', TITLE_LIMIT).takeIf { it > 0 } ?: TITLE_LIMIT
   return title.take(cut).trim().ifEmpty { null }
