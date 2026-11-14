@@ -41,6 +41,7 @@ internal object VerifyRunDetailsProjection {
       currentStepId = snapshot.currentStepId,
       startedAt = snapshot.startedAt,
       finishedAt = snapshot.finishedAt,
+      operatorFinalizedAt = snapshot.operatorFinalizedAt,
       intake = intake(inputContext),
       target = input(VerifyWorkflow.TARGET),
       repoRoot = input(VerifyWorkflow.REPO_ROOT),

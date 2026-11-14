@@ -235,6 +235,56 @@ class WorkRunControlsTest {
   }
 
   @Test
+  fun `finalizing a completed standalone run retires its relaunch`() {
+    establishTemporarySchemaReadiness("finalized-phase").use { fixture ->
+      val component = component(fixture.tempDir, fixture.dbPath)
+      component.databaseSession.transaction { unit ->
+        val registered =
+          unit.standalonePhaseStatuses.register(
+            registration(fixture.tempDir).copy(
+              phaseId = "validation",
+              lifecycleState = "active",
+              leaseExpiresAt = Instant.now().plusSeconds(3600),
+              launchAgentId = "codex",
+              launchArguments = listOf("phase", "validation", "--agent", "codex"),
+            ),
+          )
+        unit.standalonePhaseStatuses.update(
+          StandalonePhaseStatusUpdate(
+            executionId = registered.executionId,
+            expectedRevision = registered.statusRevision,
+            leaseOwner = registered.leaseOwner,
+            leaseGeneration = registered.leaseGeneration,
+            lifecycleState = "terminal",
+            currentStep = "validation",
+            currentActivity = null,
+            updatedAt = Instant.now(),
+            finishedAt = Instant.now(),
+            terminalResult = "passed",
+          ),
+        )
+      }
+      val target = target(component)
+      val offered = assertNotNull(component.workControlService.options(target))
+      assertTrue(offered.canLaunch)
+      assertTrue(offered.canFinalize)
+
+      assertEquals(
+        WorkControlResult.Accepted,
+        component.workControlService.request(target, WorkControlAction.FINALIZE),
+      )
+
+      val settled = assertNotNull(component.workControlService.options(target))
+      assertFalse(settled.canLaunch)
+      assertFalse(settled.canFinalize)
+      assertEquals(
+        WorkControlResult.Rejected(WorkControlRejection.INELIGIBLE_TARGET),
+        component.launchRun(target, "codex"),
+      )
+    }
+  }
+
+  @Test
   fun `canceling an older historical attempt does not stop the harness for a newer invocation`() {
     establishTemporarySchemaReadiness("cancel-old-phase").use { fixture ->
       val stopped = mutableListOf<WorkRunStopRequest>()

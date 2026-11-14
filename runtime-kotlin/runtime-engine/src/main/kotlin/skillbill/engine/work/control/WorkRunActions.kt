@@ -233,8 +233,9 @@ public class WorkRunActions(
         item.goalStatus?.executionLiveness?.let { executionLivenessBlocksIdleSafeRefresh(it) } == true
     val finalizeEligible = finalizer.canFinalize(item, phase, unit)
     val launchable =
-      canLaunch(completed, terminalValidation, live) ||
-        (item.snapshot.workflowFamily != IdeStatusWorkflowFamily.FEATURE_VERIFY && finalizeEligible)
+      (canLaunch(completed, terminalValidation, live) ||
+        (item.snapshot.workflowFamily != IdeStatusWorkflowFamily.FEATURE_VERIFY && finalizeEligible)) &&
+        finalizer.operatorFinalizedAt(item, phase, unit) == null
     return WorkRunOptions(
       !completed && !canceled,
       launchable && supported,

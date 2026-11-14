@@ -51,6 +51,7 @@ class VerifyAgainLauncherTest {
     assertTrue(canVerifyAgain(run, listOf("codex")))
     assertFalse(canVerifyAgain(run, emptyList()))
     assertFalse(canVerifyAgain(run.copy(intake = null), listOf("codex")))
+    assertFalse(canVerifyAgain(run.copy(operatorFinalizedAt = epoch), listOf("codex")))
     assertTrue(launcher.start())
     advanceUntilIdle()
 

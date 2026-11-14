@@ -40,11 +40,12 @@ internal fun RunActions(
 ) {
   Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+      view.finalize?.let { ActionButton(it, LucideIcons.checkCircle, variant = SbButtonVariant.Primary) { onAction(ControlsAction.Finalize) } }
       view.pauseAfter?.let { ActionButton(it, LucideIcons.pause, "P") { onAction(ControlsAction.PauseAfterSubtask) } }
       view.pauseNow?.let { ActionButton(it, LucideIcons.stop, "⇧ P", SbButtonVariant.Danger) { onAction(ControlsAction.PauseNow) } }
       view.launch?.let { button ->
-        // screens.js `runActions()`: primary whenever the run options allow a launch, as the harness note shows.
-        val variant = if (view.launchNote) SbButtonVariant.Primary else SbButtonVariant.Secondary
+        // screens.js `runActions()`: primary when the run options allow a launch, until Finalize takes the lead.
+        val variant = if (view.launchNote && view.finalize == null) SbButtonVariant.Primary else SbButtonVariant.Secondary
         ActionButton(button, LucideIcons.play, "R", variant) { onAction(ControlsAction.Launch) }
       }
       // The agent picker sits after the button it launches: Resume before it, Implement after it.
@@ -53,7 +54,6 @@ internal fun RunActions(
         ActionButton(button, LucideIcons.play, variant = if (button.enabled) SbButtonVariant.Primary else SbButtonVariant.Secondary) { onAction(ControlsAction.ImplementPlan) }
         AgentPicker(view, agentChoices, menuOpen, onAction)
       }
-      view.finalize?.let { ActionButton(it, LucideIcons.checkCircle) { onAction(ControlsAction.Finalize) } }
       view.cancel?.let { ActionButton(it, LucideIcons.x, variant = SbButtonVariant.Danger) { onAction(ControlsAction.Cancel) } }
       view.recover?.let { ActionButton(it, LucideIcons.refresh, modifier = Modifier.focusRequester(recoverFocus)) { onAction(ControlsAction.Recover) } }
       // Sibling items of this column center on its full height, so header extras belong to the button row itself.

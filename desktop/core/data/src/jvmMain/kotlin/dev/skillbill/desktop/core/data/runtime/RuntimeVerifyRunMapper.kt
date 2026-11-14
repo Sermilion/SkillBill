@@ -32,5 +32,5 @@ internal fun RuntimeVerifyRunDetails.toDomain() = VerifyRunDetails(
   unitTestValue?.let { tests -> VerifyUnitTestValue(tests.verdict, tests.findings, tests.skipReason, tests.overall, tests.summary,
     tests.rows.map { VerifyTestValueRow(it.area, it.verdict, it.confidence, it.files, it.why, it.action, it.locations) }, tests.keep, tests.rewrite, tests.delete, tests.missingCases) },
   changedFiles, verdict?.let { VerifyRunVerdict(it.verdict, it.findings, it.summary) }, qa?.toDomain(), qaVerdict, qaOutcome,
-  qaFindingLocations, supersededBy, staleReason, qaReportText,
+  qaFindingLocations, supersededBy, staleReason, qaReportText, operatorFinalizedAt?.toKotlinInstant(),
 )

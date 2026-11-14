@@ -38,6 +38,7 @@ data class VerifyRunDetails(
   val supersededBy: String?,
   val staleReason: String?,
   val qaReportText: String? = null,
+  val operatorFinalizedAt: Instant? = null,
 )
 
 data class VerifyRunStep(val stepId: String, val status: String, val attemptCount: Int)

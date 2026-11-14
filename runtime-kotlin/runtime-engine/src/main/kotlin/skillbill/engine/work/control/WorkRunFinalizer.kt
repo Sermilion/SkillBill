@@ -119,7 +119,7 @@ public class WorkRunFinalizer(
     )
   }
 
-  private fun operatorFinalizedAt(
+  internal fun operatorFinalizedAt(
     item: WorkDetailItem,
     phase: StandalonePhaseStatusRecord?,
     unit: UnitOfWork,

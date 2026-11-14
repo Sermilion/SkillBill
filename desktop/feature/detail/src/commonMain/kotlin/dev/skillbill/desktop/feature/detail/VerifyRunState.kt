@@ -63,6 +63,7 @@ internal fun isFreeTextIntake(intake: String?) = intake == null || !(intake.star
 
 internal fun canVerifyAgain(run: VerifyRunDetails, agentChoices: List<String>) =
   verifyRunState(run) in setOf(VerifyRunState.Finished, VerifyRunState.Stopped, VerifyRunState.Superseded) &&
+    run.operatorFinalizedAt == null &&
     !run.intake.isNullOrBlank() && !run.repoRoot.isNullOrBlank() && !run.target.isNullOrBlank() && agentChoices.isNotEmpty()
 
 @androidx.compose.runtime.Composable
