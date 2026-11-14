@@ -227,7 +227,11 @@ public class GoalIntakeAdmissionService(
     if (state == null) return request
     return when (val routing = workflowAgentAssignmentStore.inspect(state.parentWorkflowId)) {
       is WorkflowAgentAssignmentInspection.Present -> {
-        request.copy(workflowAgentAssignments = routing.assignments, routingContextPrepared = true)
+        request.copy(
+          workflowAgentAssignments = routing.assignments,
+          workflowAgentAssignmentsFingerprint = routing.fingerprint,
+          routingContextPrepared = true,
+        )
       }
 
       WorkflowAgentAssignmentInspection.Legacy -> {

@@ -98,7 +98,10 @@ internal fun goalQaInput(qa: GoalQaResult, running: Boolean, fixing: Boolean = f
     fixLoop = true,
     fixing = fixing,
     fixAttempts = qa.fixAttempts,
-    reason = qa.reason,
+    reason = qa.recoveryClassification?.let { classification ->
+      val version = qa.recoverySourceVersion?.let { " (contract $it)" }.orEmpty()
+      "$classification$version: ${qa.recoveryGuidance ?: qa.reason.orEmpty()}"
+    } ?: qa.reason,
     failureKind = qa.failureKind,
     reportText = qa.reportText,
     findings = qa.findings.map { finding ->

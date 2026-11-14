@@ -12,8 +12,10 @@ import skillbill.engine.featuretask.runloop.state.coupledRunTransitions
 import skillbill.engine.featuretask.runloop.state.coupledSession
 import skillbill.engine.featuretask.slot.PhaseFailureContinuationOutput
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.catchingNonCancellation
 import skillbill.error.core.failureCodeLabel
+import skillbill.error.featuretask.isQualityRoutingRefusal
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 
@@ -25,6 +27,7 @@ internal object FeatureTaskRuntimeRunLoopContainment {
     route: (String, FeatureTaskRuntimeVerdict) -> String?,
   ): String? =
     with(context) {
+      if ((error as? SkillBillRuntimeException)?.isQualityRoutingRefusal == true) throw error
       val claim = catchingNonCancellation { FeatureTaskRuntimeRunLoopPlanningBranch.claimsFailure(this, phaseId) }
       claim.exceptionOrNull()?.let { claimFailure -> error.addSuppressed(claimFailure.containableOrThrow()) }
       if (claim.getOrNull() != true) throw error

@@ -23,6 +23,7 @@ public data class GoalRunnerRunRequest(
   public val configuredAgentOverrideId: String? = null,
   public val agentAssignment: FeatureTaskRuntimeAgentAssignment = FeatureTaskRuntimeAgentAssignment(),
   public val workflowAgentAssignments: ResolvedWorkflowAgentAssignments? = null,
+  public val workflowAgentAssignmentsFingerprint: String? = null,
   public val timeout: Duration? = null,
   public val progressIdleTimeout: Duration? = null,
   public val outputSink: AgentRunOutputSink = AgentRunOutputSink.NONE,

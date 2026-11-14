@@ -64,7 +64,7 @@ public class GoalQualityBuildBoundary public constructor(
   ): GoalQualityExecutionRecord {
     var current = quality
     var execution = requireNotNull(current.execution)
-    validateRetainedQualityWork(execution)
+    validateRetainedQualityWork(execution, state, request)
     if (needsCurrentSourceBuild(execution)) {
       reenterInitialBuild(state, request, execution)?.let { current = it }
       execution = requireNotNull(current.execution)
@@ -163,15 +163,25 @@ public class GoalQualityBuildBoundary public constructor(
       execution.hasAcceptedQaSource(currentSource, it)
     } == true
 
-  private fun validateRetainedQualityWork(execution: GoalQualityExecution) {
+  private fun validateRetainedQualityWork(
+    execution: GoalQualityExecution,
+    state: GoalRunnerManifestState,
+    request: GoalRunnerRunRequest,
+  ) {
     val plans = requireNotNull(execution.executionPlans)
     val progress = requireNotNull(execution.progress)
-    val agentId = requireNotNull(execution.governingInputs).effectiveAgentId
+    val inputs = requireNotNull(execution.governingInputs)
+    val assignments = qualityWorkflowAgentAssignments(inputs, request, state.parentWorkflowId)
     listOf(
       SkeletonDefinition.GOAL_QA.id to (plans.qa to progress.qa),
       SkeletonDefinition.VALIDATION.id to (plans.validation to progress.validation),
     ).forEach { (definitionId, retained) ->
-      val plan = phasePlans.validateGoalQualityExecutionPlan(retained.first, definitionId, agentId)
+      val plan = phasePlans.validateGoalQualityExecutionPlan(
+        retained.first,
+        definitionId,
+        inputs.effectiveAgentId,
+        assignments,
+      )
       phasePlans.validateNestedProgressKeys(retained.second)
       phasePlans.validateRetainedRunningPhases(
         retained.second,
@@ -187,6 +197,8 @@ public class GoalQualityBuildBoundary public constructor(
     val execution = settlement.execution
     val latest = requireLatestQuality(outcomeStore, state, settlement.current)
     val latestExecution = requireNotNull(latest.execution)
+    val latestInputs = requireNotNull(latestExecution.governingInputs)
+    val assignments = qualityWorkflowAgentAssignments(latestInputs, request, state.parentWorkflowId)
     val progress = requireNotNull(latestExecution.progress).build
     val observation =
       requireBuildObservation(
@@ -197,7 +209,8 @@ public class GoalQualityBuildBoundary public constructor(
       phasePlans.validateGoalQualityExecutionPlan(
         settlement.plan,
         SkeletonDefinition.GOAL_BUILD.id,
-        requireNotNull(latestExecution.governingInputs).effectiveAgentId,
+        latestInputs.effectiveAgentId,
+        assignments,
       )
     val sourceCurrent =
       phasePlans.acceptedValidationSourceIsCurrent(

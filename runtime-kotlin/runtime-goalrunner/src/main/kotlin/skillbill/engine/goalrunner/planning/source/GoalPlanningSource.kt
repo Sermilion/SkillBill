@@ -87,9 +87,10 @@ public class PlanWorkflowGoalPlanningSource(
     state: GoalRunnerManifestState,
     request: GoalRunnerRunRequest,
   ): GoalPlanningSweepOutcome {
+    val routingInspection = workflowAgentAssignmentStore.inspect(state.parentWorkflowId)
     val admittedRouting =
       request.workflowAgentAssignments
-        ?: when (val routing = workflowAgentAssignmentStore.inspect(state.parentWorkflowId)) {
+        ?: when (val routing = routingInspection) {
           WorkflowAgentAssignmentInspection.Legacy -> {
             null
           }
@@ -102,7 +103,13 @@ public class PlanWorkflowGoalPlanningSource(
             throw SkillBillRuntimeException(routing.failureCode, routing.recoveryMessage)
           }
         }
-    val admittedRequest = request.copy(workflowAgentAssignments = admittedRouting)
+    val admittedRequest =
+      request.copy(
+        workflowAgentAssignments = admittedRouting,
+        workflowAgentAssignmentsFingerprint =
+          request.workflowAgentAssignmentsFingerprint
+            ?: (routingInspection as? WorkflowAgentAssignmentInspection.Present)?.fingerprint,
+      )
     val scope = scopeOf(state, admittedRequest)
     return if (scope.planned.isEmpty()) {
       GoalPlanningSweepOutcome.PreparedAll()
@@ -289,6 +296,7 @@ public class PlanWorkflowGoalPlanningSource(
     invokedAgentId = request.invokedAgentId,
     agentAssignment = request.agentAssignment,
     workflowAgentAssignments = request.workflowAgentAssignments,
+    workflowAgentAssignmentsFingerprint = request.workflowAgentAssignmentsFingerprint,
     modelAssignment = request.modelAssignment,
     compactionSettings = request.compactionSettings,
     environment = emptyMap(),

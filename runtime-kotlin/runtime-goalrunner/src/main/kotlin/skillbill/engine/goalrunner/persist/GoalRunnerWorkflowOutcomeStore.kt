@@ -267,6 +267,9 @@ public interface GoalRunnerWorkflowLedgerWriteStore {
 public interface GoalRunnerQualityExecutionStore {
   public fun goalQualityExecution(parentWorkflowId: String): GoalQualityExecutionRecord?
 
+  public fun prepareGoalQualityExecution(parentWorkflowId: String): GoalQualityExecutionRead? =
+    retainedGoalQualityExecution(parentWorkflowId)
+
   public fun retainedGoalQualityExecution(parentWorkflowId: String): GoalQualityExecutionRead? =
     goalQualityExecution(parentWorkflowId)?.let { GoalQualityExecutionRead.Current(it) }
 

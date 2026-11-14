@@ -407,11 +407,16 @@ public class GoalRunnerFinalization(
         PhaseRunRequest(
           definitionId = SkeletonDefinition.GOAL_HISTORY.id,
           repoRoot = request.repoRoot,
-          invokedAgentId = request.configuredAgentOverrideId ?: request.invokedAgentId,
+          invokedAgentId = request.invokedAgentId,
+          workflowAgentAssignments = request.workflowAgentAssignments,
+          workflowAgentAssignmentsFingerprint = request.workflowAgentAssignmentsFingerprint,
+          agentAssignmentsWorkflowId = request.workflowAgentAssignments?.admissionWorkflowId,
+          agentAssignmentsFingerprint = request.workflowAgentAssignmentsFingerprint,
           intake = request.issueKey,
           timeout = request.timeout,
           agentAddonSelection = request.agentAddonSelection,
           modelAssignment = request.modelAssignment,
+          agentAssignment = request.agentAssignment,
           goalHistoryWriterInput = writerInput,
         ),
         state.parentWorkflowId,
@@ -854,12 +859,17 @@ public class GoalRunnerPullRequests(
     PhaseRunRequest(
       definitionId = SkeletonDefinition.GOAL_PR.id,
       repoRoot = request.repoRoot,
-      invokedAgentId = request.configuredAgentOverrideId ?: request.invokedAgentId,
+      invokedAgentId = request.invokedAgentId,
+      workflowAgentAssignments = request.workflowAgentAssignments,
+      workflowAgentAssignmentsFingerprint = request.workflowAgentAssignmentsFingerprint,
+      agentAssignmentsWorkflowId = request.workflowAgentAssignments?.admissionWorkflowId,
+      agentAssignmentsFingerprint = request.workflowAgentAssignmentsFingerprint,
       intake = request.issueKey,
       instructions = PhaseInstructions(instructions, setOf(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PR)),
       timeout = request.timeout,
       agentAddonSelection = request.agentAddonSelection,
       modelAssignment = request.modelAssignment,
+      agentAssignment = request.agentAssignment,
     )
 
   private fun warnPullRequestWriter(message: String) {
@@ -1029,5 +1039,10 @@ private fun currentQualityExecution(
   parentWorkflowId: String,
 ) = when (val retained = outcomeStore.retainedGoalQualityExecution(parentWorkflowId)) {
   is GoalQualityExecutionRead.Current -> retained.record.execution
+  is GoalQualityExecutionRead.Invalid ->
+    throw SkillBillRuntimeException(
+      retained.failureCode,
+      "Stored goal quality execution is invalid; inspect or restore its authoritative evidence.",
+    )
   is GoalQualityExecutionRead.Historical, is GoalQualityExecutionRead.Ambiguous, null -> null
 }

@@ -62,6 +62,7 @@ public data class FeatureTaskRuntimeRunRequest(
   public override val activityParentWorkflowId: String? = null,
   public override val openCodeIdentity: OpenCodeLaunchIdentity? = null,
 ) : FeatureTaskRuntimeRunFacts {
+  public override val workflowAgentAssignments get() = admittedExecution?.workflowAgentAssignments
   override val qaSelection: FeatureTaskRuntimeQaSelection? = null
   override val reviewInvocation: ReviewInvocation? = null
   override val phaseInstructions: PhaseInstructions? = null

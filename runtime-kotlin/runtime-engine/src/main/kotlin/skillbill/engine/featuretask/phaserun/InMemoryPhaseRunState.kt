@@ -147,6 +147,9 @@ public class InMemoryPhaseRunState(
           runLoopContext.sharedEvidenceResolver,
           runLoopContext.diffResolver,
           runLoopContext.qualityGateCycles,
+          directVerifySelectedLaunch = { diagnostics ->
+            runLoopContext.phaseRunFactory.verifySelectedLaunch(run, diagnostics, launchImminent = true)
+          },
         ),
       ),
       run,

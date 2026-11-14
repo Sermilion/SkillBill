@@ -161,6 +161,11 @@ data class GoalQualityAdoptionEvidence(
   val originalPayloadJson: String,
 )
 
+data class GoalQualityMigrationEvidence(
+  val sourceContractVersion: String,
+  val originalPayloadJson: String,
+)
+
 data class GoalQualityPhaseProgress(
   val phaseRecords: Map<String, FeatureTaskRuntimePhaseRecord> = emptyMap(),
   val phaseLedger: List<FeatureTaskRuntimePhaseLedgerEntry> = emptyList(),
@@ -250,6 +255,7 @@ data class GoalQualityExecutionRecord(
   val readiness: GoalQualityReadiness,
   val execution: GoalQualityExecution? = null,
   val adoptionEvidence: GoalQualityAdoptionEvidence? = null,
+  val migrationEvidence: GoalQualityMigrationEvidence? = null,
 ) {
   companion object
 

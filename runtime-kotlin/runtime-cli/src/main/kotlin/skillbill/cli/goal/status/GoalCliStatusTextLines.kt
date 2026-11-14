@@ -66,6 +66,11 @@ internal fun StringBuilder.appendQaOutcomeLines(projection: GoalRunnerStatusProj
     }
   val reason = qa.reason?.let { " reason=${it.replace(Regex("\\s+"), " ")}" }.orEmpty()
   appendLine("qa_outcome: ${qa.outcome}$kind$reason")
+  qa.recoveryClassification?.let { classification ->
+    val version = qa.recoverySourceVersion?.let { " source_version=$it" }.orEmpty()
+    val guidance = qa.recoveryGuidance?.let { " guidance=${it.replace(Regex("\\s+"), " ")}" }.orEmpty()
+    appendLine("qa_recovery: $classification$version$guidance")
+  }
 }
 
 internal fun StringBuilder.appendQaFindingsLines(projection: GoalRunnerStatusProjection) {

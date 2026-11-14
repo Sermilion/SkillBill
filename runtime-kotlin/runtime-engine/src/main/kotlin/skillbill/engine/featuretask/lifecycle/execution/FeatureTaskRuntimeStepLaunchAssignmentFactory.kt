@@ -14,6 +14,7 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeModelAssignment
 import skillbill.engine.featuretask.slot.PhaseQualityGateOperation
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
 import skillbill.install.model.SupportedAgent
 import skillbill.install.model.unavailableAgentLauncherReason
@@ -65,11 +66,43 @@ public class FeatureTaskRuntimeStepLaunchResolver(
   public fun resolve(
     facts: PhaseStrategySelectionFacts,
     inputs: StepLaunchAssignmentInputs,
+    diagnostics: RuntimeDiagnostics? = null,
   ): Map<String, StepLaunchAssignment> =
-    run {
-      verifyAddons(facts, inputs)
-      FeatureTaskRuntimeStepLaunchAssignmentFactory.resolve(launcher, lookup, facts, inputs)
-    }
+    FeatureTaskRuntimeStepLaunchAssignmentFactory.resolve(launcher, lookup, facts, inputs)
+      .also { assignments -> verifyAddonsForAssignments(assignments, inputs, diagnostics) }
+
+  internal fun verifyAddonsForAssignments(
+    assignments: Map<String, StepLaunchAssignment>,
+    inputs: StepLaunchAssignmentInputs,
+    diagnostics: RuntimeDiagnostics? = null,
+  ) {
+    verifyAddonProviders(
+      assignments.map { (phaseId, assignment) -> phaseId to assignment.agentId },
+      inputs.agentAddonSelection,
+      diagnostics,
+    )
+  }
+
+  internal fun verifySelectedLaunch(
+    assignment: StepLaunchAssignment,
+    environmentKind: LaunchEnvironmentKind,
+    inputs: StepLaunchAssignmentInputs,
+    diagnostics: RuntimeDiagnostics,
+  ) {
+    verifyAddonsForAssignments(mapOf(assignment.stepId to assignment), inputs, diagnostics)
+    verifyLaunchCapability(mapOf(assignment.stepId to assignment), environmentKind, diagnostics)
+  }
+
+  internal fun verifySelectedProvider(
+    phaseId: String,
+    providerId: String,
+    environmentKind: LaunchEnvironmentKind,
+    inputs: StepLaunchAssignmentInputs,
+    diagnostics: RuntimeDiagnostics,
+  ) {
+    verifyAddonProviders(listOf(phaseId to providerId), inputs.agentAddonSelection, diagnostics)
+    verifyProviderCapability(phaseId, providerId, environmentKind, diagnostics)
+  }
 
   internal fun verifyLaunchCapability(
     assignments: Map<String, StepLaunchAssignment>,
@@ -77,24 +110,59 @@ public class FeatureTaskRuntimeStepLaunchResolver(
     diagnostics: RuntimeDiagnostics,
   ) {
     assignments.forEach { (phaseId, assignment) ->
-      val providerId = assignment.agentId
-      val provider = supportedProvider(phaseId, providerId, diagnostics)
-      when (
-        val support =
-          launcher.queryLaunchCapability(AgentRunLaunchCapabilityRequest(provider.wireValue, environmentKind))
-      ) {
-        AgentRunLaunchCapability.Supported -> {}
+      verifyProviderCapability(phaseId, assignment.agentId, environmentKind, diagnostics)
+    }
+  }
 
-        is AgentRunLaunchCapability.Unsupported -> {
-          recordRoutingRefusal(diagnostics, phaseId, provider.wireValue, "unsupported_adapter")
-          throw IncompatibleFeatureTaskRuntimeExecutionPlanError(
-            "${support.reason} Selected for phase '$phaseId'.",
+  private fun verifyProviderCapability(
+    phaseId: String,
+    providerId: String,
+    environmentKind: LaunchEnvironmentKind,
+    diagnostics: RuntimeDiagnostics,
+  ) {
+    val provider = supportedProvider(phaseId, providerId, diagnostics)
+    when (
+      val support = launcher.queryLaunchCapability(AgentRunLaunchCapabilityRequest(provider.wireValue, environmentKind))
+    ) {
+      AgentRunLaunchCapability.Supported -> {}
+
+      is AgentRunLaunchCapability.Unsupported -> {
+        recordRoutingRefusal(diagnostics, phaseId, provider.wireValue, "unsupported_adapter")
+        throw IncompatibleFeatureTaskRuntimeExecutionPlanError(
+          "Provider '${provider.wireValue}' selected for phase '$phaseId' is unsupported: ${support.reason}",
+        )
+      }
+    }
+    unavailableAgentLauncherReason(provider.wireValue, executableLookup::onPath)?.let { reason ->
+      recordRoutingRefusal(diagnostics, phaseId, provider.wireValue, "executable_unavailable")
+      throw IncompatibleFeatureTaskRuntimeExecutionPlanError(
+        "Provider '${provider.wireValue}' selected for phase '$phaseId' is unavailable: $reason",
+      )
+    }
+  }
+
+  private fun verifyAddonProviders(
+    providers: List<Pair<String, String>>,
+    selection: AgentAddonSelection,
+    diagnostics: RuntimeDiagnostics?,
+  ) {
+    if (selection.entries.isEmpty()) return
+    providers.forEach { (phaseId, providerId) ->
+      try {
+        agentAddonSelectionPort.verifyPersisted(selection, AgentAddonConsumer.SKILL_BILL, listOf(providerId))
+      } catch (failure: SkillBillRuntimeException) {
+        diagnostics?.let {
+          RuntimeDiagnosticsBestEffortWarning.record(
+            it,
+            "seam=workflow_agent_assignment phase=${phaseId.take(MAX_DIAGNOSTIC_ID)} " +
+              "provider=${providerId.take(MAX_DIAGNOSTIC_ID)} reason=addon_incompatible outcome=refused",
           )
         }
-      }
-      unavailableAgentLauncherReason(provider.wireValue, executableLookup::onPath)?.let { reason ->
-        recordRoutingRefusal(diagnostics, phaseId, provider.wireValue, "executable_unavailable")
-        throw IncompatibleFeatureTaskRuntimeExecutionPlanError("$reason Selected for phase '$phaseId'.")
+        throw SkillBillRuntimeException(
+          failure.code,
+          "Selected provider '$providerId' for phase '$phaseId' is incompatible with retained add-ons.",
+          failure,
+        )
       }
     }
   }
@@ -136,26 +204,8 @@ public class FeatureTaskRuntimeStepLaunchResolver(
     val agents =
       FeatureTaskRuntimeStepLaunchAssignmentFactory
         .agentBackedStepIds(lookup, plan)
-        .mapNotNull { stepId ->
-          inputs.workflowAgentAssignments
-            ?.takeIf { it.policyMode == WorkflowAgentAssignmentPolicyMode.FROZEN }
-            ?.phaseAssignments
-            ?.get(stepId)
-            ?.agentId
-            ?.wireValue
-            ?: inputs.legacyPausedStepAssignments[stepId]
-            ?: FeatureTaskRuntimeAgentResolver
-              .resolve(
-                stepId,
-                inputs.agentAssignment.copy(
-                  matrix =
-                    inputs.agentAssignment.matrix.takeIf {
-                      inputs.workflowAgentAssignments?.policyMode != WorkflowAgentAssignmentPolicyMode.LEGACY
-                    },
-                ),
-                inputs.invokedAgentId,
-              ).resolvedAgentId
-        }.distinct()
+        .map { stepId -> FeatureTaskRuntimeStepLaunchAssignmentFactory.selectedProviderFor(stepId, inputs) }
+        .distinct()
     agentAddonSelectionPort.verifyPersisted(inputs.agentAddonSelection, AgentAddonConsumer.SKILL_BILL, agents)
   }
 }
@@ -171,24 +221,7 @@ public object FeatureTaskRuntimeStepLaunchAssignmentFactory {
     val canonical = lookup.executionPlan(facts.copy(stepAssignments = emptyMap()))
     val assignments = linkedMapOf<String, StepLaunchAssignment>()
     agentBackedStepIds(lookup, canonical).forEach { stepId ->
-      val agentId =
-        inputs.workflowAgentAssignments
-          ?.takeIf { it.policyMode == WorkflowAgentAssignmentPolicyMode.FROZEN }
-          ?.phaseAssignments
-          ?.get(stepId)
-          ?.agentId
-          ?.wireValue
-          ?: FeatureTaskRuntimeAgentResolver
-            .resolve(
-              stepId,
-              inputs.agentAssignment.copy(
-                matrix =
-                  inputs.agentAssignment.matrix.takeIf {
-                    inputs.workflowAgentAssignments?.policyMode != WorkflowAgentAssignmentPolicyMode.LEGACY
-                  },
-              ),
-              inputs.invokedAgentId,
-            ).resolvedAgentId
+      val agentId = selectedProviderFor(stepId, inputs)
       val requested = FeatureTaskRuntimeModelResolver.resolve(stepId, agentId, inputs.modelAssignment)
       val launch =
         launcher.resolveLaunchModel(
@@ -216,4 +249,26 @@ public object FeatureTaskRuntimeStepLaunchAssignmentFactory {
         else -> true
       }
     }
+
+  internal fun selectedProviderFor(stepId: String, inputs: StepLaunchAssignmentInputs): String {
+    val frozen = inputs.workflowAgentAssignments?.takeIf { it.policyMode == WorkflowAgentAssignmentPolicyMode.FROZEN }
+    if (frozen != null) {
+      return frozen.phaseAssignments[stepId]?.agentId?.wireValue
+        ?: throw IncompatibleFeatureTaskRuntimeExecutionPlanError(
+          "Frozen routing has no provider assignment for selected phase '$stepId'.",
+        )
+    }
+    return inputs.legacyPausedStepAssignments[stepId]
+      ?: FeatureTaskRuntimeAgentResolver
+        .resolve(
+          stepId,
+          inputs.agentAssignment.copy(
+            matrix =
+              inputs.agentAssignment.matrix.takeIf {
+                inputs.workflowAgentAssignments?.policyMode != WorkflowAgentAssignmentPolicyMode.LEGACY
+              },
+          ),
+          inputs.invokedAgentId,
+        ).resolvedAgentId
+  }
 }

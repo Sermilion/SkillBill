@@ -70,6 +70,7 @@ internal class PhaseAttemptRunHost(
   private val directSharedEvidenceResolver: FeatureTaskRuntimeSharedEvidenceResolverPort? = null,
   private val directDiffResolver: DiffResolverPort? = null,
   private val directQualityGateCycles: RuntimeQualityGateCycles? = null,
+  private val directVerifySelectedLaunch: ((RuntimeDiagnostics) -> Unit)? = null,
 ) : PhaseAttemptEnvironment,
   PhaseQualityGateReporting by backingRunState {
   override val request: FeatureTaskRuntimeRunFacts get() = acceptedRun.request
@@ -123,6 +124,11 @@ internal class PhaseAttemptRunHost(
 
   val qualityGateCycles: RuntimeQualityGateCycles
     get() = directQualityGateCycles ?: throw GoalPlanningPhaseGatesUnsupportedError()
+
+  fun verifySelectedLaunch(diagnostics: RuntimeDiagnostics) {
+    directVerifySelectedLaunch?.invoke(diagnostics) ?: throw GoalPlanningPhaseGatesUnsupportedError()
+  }
+
 
   val commitPushManifestCompletion: CommitPushManifestCompletion?
     get() = backingRunState.commitPushManifestCompletion

@@ -73,6 +73,7 @@ import skillbill.engine.goalrunner.plan.StandalonePlanRun
 import skillbill.engine.goalrunner.planning.GoalPlanningLogService
 import skillbill.engine.goalrunner.preflight.GoalPreflightService
 import skillbill.engine.goalrunner.status.GoalRunnerStatusService
+import skillbill.engine.goalrunner.persist.quality.GoalQualityExecutionReadiness
 import skillbill.engine.operation.core.OperationExecutor
 import skillbill.engine.operation.core.OperationRegistry
 import skillbill.engine.specbrowser.SpecBrowserService
@@ -364,6 +365,7 @@ abstract class RuntimeComponent(
   abstract val standalonePlanRun: StandalonePlanRun
   abstract val goalPreflightService: GoalPreflightService
   abstract val goalRunnerStatusService: GoalRunnerStatusService
+  abstract val goalQualityExecutionReadiness: GoalQualityExecutionReadiness
   abstract val goalPlanningLogService: GoalPlanningLogService
   abstract val goalOperatorDecisionService: GoalOperatorDecisionService
   abstract val approvalOperations: ApprovalOperatorService

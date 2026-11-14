@@ -211,6 +211,13 @@ class RuntimeSessionGraph internal constructor(val component: DatabaseSessionCom
       }
     }
     try {
+      val sourceObservation =
+        runtime.databaseSession.readIfPresent { it.databaseFileObservation }
+          ?: run {
+            component.purgeIdentity.initialize(null)
+            throw DatabaseFileMissingException(displayPath())
+          }
+      runtime.goalQualityExecutionReadiness.prepareExisting()
       val observation = runtime.databaseSession.readIfPresent {
         it.workList.observation()
         it.databaseFileObservation
@@ -219,9 +226,17 @@ class RuntimeSessionGraph internal constructor(val component: DatabaseSessionCom
         component.purgeIdentity.initialize(null)
         throw DatabaseFileMissingException(displayPath())
       }
-      when (runtime.databaseSession.transactionFenced(observation) { Unit }) {
-        FencedTransactionResult.ChangedTarget -> component.purgeIdentity.initialize(null)
-        is FencedTransactionResult.Committed -> component.purgeIdentity.initialize(observation)
+      if (observation != sourceObservation) {
+        component.purgeIdentity.initialize(null)
+        throw DatabaseFileMissingException(displayPath())
+      }
+      when (runtime.databaseSession.transactionFenced(sourceObservation) { Unit }) {
+        FencedTransactionResult.ChangedTarget -> {
+          component.purgeIdentity.initialize(null)
+        }
+        is FencedTransactionResult.Committed -> {
+          component.purgeIdentity.initialize(observation)
+        }
       }
     } finally {
       protection.close()
@@ -230,6 +245,7 @@ class RuntimeSessionGraph internal constructor(val component: DatabaseSessionCom
   }
 
   private fun startSignalsAfterExistingStore(runtime: RuntimeComponent): Job {
+    runtime.goalQualityExecutionReadiness.prepareExisting()
     runtime.databaseSession.readIfPresent { it.workList.observation() } ?: throw DatabaseFileMissingException(displayPath())
     return component.signals.start()
   }

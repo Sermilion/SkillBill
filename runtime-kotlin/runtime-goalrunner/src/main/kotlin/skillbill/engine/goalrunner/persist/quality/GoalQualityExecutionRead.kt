@@ -6,6 +6,7 @@ import skillbill.goalrunner.model.quality.GoalQualityExecutionProgress
 import skillbill.goalrunner.model.quality.GoalQualityExecutionRecord
 import skillbill.goalrunner.model.quality.GoalQualityExecutionStatus
 import skillbill.goalrunner.model.quality.GoalQualityValidationDisposition
+import skillbill.error.core.RuntimeFailureCode
 
 public data class GoalQualityAdmissionRequest(
   val baselineContentFingerprint: String,
@@ -17,6 +18,12 @@ public data class GoalQualityAdmissionRequest(
 
 public sealed interface GoalQualityExecutionRead {
   public data class Current(public val record: GoalQualityExecutionRecord) : GoalQualityExecutionRead
+
+  public data class Invalid(
+    public val sourceContractVersion: String?,
+    public val originalPayload: Any?,
+    public val failureCode: RuntimeFailureCode,
+  ) : GoalQualityExecutionRead
 
   public data class Historical(
     public val sourceContractVersion: String,

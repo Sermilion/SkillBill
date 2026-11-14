@@ -630,6 +630,9 @@ internal fun GoalRunnerQaResult.toDomain() = GoalQaResult(
   reportText,
   failureKind,
   details?.toDomain(),
+  recoveryClassification,
+  recoverySourceVersion,
+  recoveryGuidance,
 )
 
 internal fun RuntimeQaRunDetails.toDomain() = QaRunDetails(

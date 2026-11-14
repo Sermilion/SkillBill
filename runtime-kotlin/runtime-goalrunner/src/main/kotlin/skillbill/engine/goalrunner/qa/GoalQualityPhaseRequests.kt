@@ -4,6 +4,9 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.agentaddon.model.HydratedAgentAddonSelection
 import skillbill.agentaddon.model.HydratedAgentAddonSelectionEntry
 import skillbill.application.idestatus.AgentActivityStampWriter
+import skillbill.config.model.ResolvedWorkflowAgentAssignments
+import skillbill.config.model.WorkflowAgentAssignmentPolicyMode
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeAgentAssignment
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeModelAssignment
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEventSink
 import skillbill.engine.featuretask.phaserun.PhaseRunRequest
@@ -12,7 +15,10 @@ import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.persist.quality.GoalQualityBuildSourceProof
 import skillbill.engine.goalrunner.persist.quality.GoalQualityPhaseProgressWrite
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.goalrunner.model.quality.GoalQualityExecution
+import skillbill.goalrunner.model.quality.GoalQualityExecutionInputs
 import skillbill.goalrunner.model.quality.GoalQualityPhaseProgress
 import skillbill.goalrunner.model.quality.GoalQualityQaSourceWitness
 import skillbill.goalrunner.model.quality.acceptedQaSourceWitness
@@ -41,8 +47,12 @@ public class GoalQualityPhaseRequests(
       PhaseRunRequest(
         definitionId = definition.id,
         repoRoot = Path.of(inputs.repoRoot),
-        invokedAgentId = request.configuredAgentOverrideId ?: request.invokedAgentId,
+        invokedAgentId = inputs.invokedAgentId,
         acceptedGoalQualityAgentId = qualityExecution?.governingInputs?.effectiveAgentId,
+        workflowAgentAssignments = qualityWorkflowAgentAssignments(inputs, request, state.parentWorkflowId),
+        workflowAgentAssignmentsFingerprint = inputs.agentAssignmentsFingerprint,
+        agentAssignmentsWorkflowId = inputs.agentAssignmentsWorkflowId,
+        agentAssignmentsFingerprint = inputs.agentAssignmentsFingerprint,
         openCodeIdentity = inputs.openCodeIdentity,
         intake = inputs.issueKey,
         timeout = inputs.timeoutMillis?.milliseconds,
@@ -51,6 +61,7 @@ public class GoalQualityPhaseRequests(
             inputs.addons.map { HydratedAgentAddonSelectionEntry(it.persisted, it.description, it.content) },
           ),
         modelAssignment = FeatureTaskRuntimeModelAssignment(inputs.modelDirectives, inputs.modelMatrix),
+        agentAssignment = FeatureTaskRuntimeAgentAssignment(override = inputs.configuredAgentOverrideId),
         qaSelection = inputs.qaSelection,
         qaDevice = request.qaDevice.takeIf { definition == SkeletonDefinition.GOAL_QA },
         acceptanceCriteria = inputs.acceptanceCriteria,
@@ -224,4 +235,24 @@ public class GoalQualityPhaseRequests(
       next
     }
   }
+}
+
+internal fun qualityWorkflowAgentAssignments(
+  inputs: GoalQualityExecutionInputs,
+  request: GoalRunnerRunRequest,
+  parentWorkflowId: String,
+): ResolvedWorkflowAgentAssignments? {
+  if (inputs.agentAssignmentsWorkflowId == null && inputs.agentAssignmentsFingerprint == null) return null
+  val assignments = request.workflowAgentAssignments
+  if (inputs.agentAssignmentsWorkflowId != parentWorkflowId ||
+    assignments?.admissionWorkflowId != inputs.agentAssignmentsWorkflowId ||
+    assignments?.policyMode != WorkflowAgentAssignmentPolicyMode.FROZEN ||
+    request.workflowAgentAssignmentsFingerprint != inputs.agentAssignmentsFingerprint
+  ) {
+    throw SkillBillRuntimeException(
+      WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION,
+      "The accepted goal-quality routing reference no longer matches its parent artifact.",
+    )
+  }
+  return assignments
 }

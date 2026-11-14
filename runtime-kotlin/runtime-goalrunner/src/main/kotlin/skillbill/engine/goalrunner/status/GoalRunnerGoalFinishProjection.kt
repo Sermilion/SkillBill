@@ -1,5 +1,7 @@
 package skillbill.engine.goalrunner.status
 
+import skillbill.contracts.workflow.goal.GOAL_QUALITY_EXECUTION_CONTRACT_VERSION
+import skillbill.contracts.workflow.goal.GoalQualityExecutionPayloadKeys
 import skillbill.engine.goalrunner.model.GoalAssessmentRecordRead
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.persist.quality.GoalQualityExecutionRead
@@ -16,6 +18,7 @@ import skillbill.goalrunner.model.GoalRunnerCiCheck
 import skillbill.goalrunner.model.GoalRunnerCiCycle
 import skillbill.goalrunner.model.GoalRunnerPhaseCard
 import skillbill.goalrunner.model.GoalRunnerPhaseCardState
+import skillbill.goalrunner.model.quality.GoalQualityReadiness
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.idestatus.model.MonitorCiCheckBucket
 import skillbill.ports.idestatus.model.MonitorCiCycleCheck
@@ -140,10 +143,16 @@ internal fun readGoalFinishCards(
   durableRead: GoalRunnerStatusDurableReadTracker,
 ): List<GoalRunnerPhaseCard> {
   val quality =
-    catchingNonCancellation { outcomeStore.retainedGoalQualityExecution(request.parentWorkflowId) }.getOrElse { error ->
-      durableRead.recordDegradedRead("goal-status.goal_finish_quality", "goal_quality_execution", "omitted", error)
-      null
-    }
+    catchingNonCancellation { outcomeStore.retainedGoalQualityExecution(request.parentWorkflowId) }
+      .getOrElse { error ->
+        durableRead.recordDegradedRead(
+          "goal-status.goal_finish_quality",
+          "goal_quality_execution",
+          "recovery_card",
+          error,
+        )
+        null
+      }
   val cycles =
     catchingNonCancellation {
       database.read { it.monitorCiCycles.cycles(request.parentWorkflowId, CYCLE_LIMIT) }
@@ -209,7 +218,27 @@ private fun qualityCards(
   quality: GoalQualityExecutionRead?,
   durableRead: GoalRunnerStatusDurableReadTracker,
 ): List<GoalRunnerPhaseCard> {
-  val progress = (quality as? GoalQualityExecutionRead.Current)?.record?.execution?.progress ?: return emptyList()
+  val progress =
+    when (quality) {
+      null -> return emptyList()
+      is GoalQualityExecutionRead.Current ->
+        quality.record.execution?.progress
+          ?: if (quality.record.readiness == GoalQualityReadiness.HISTORICAL_AMBIGUITY) null else return emptyList()
+      is GoalQualityExecutionRead.Historical -> {
+        if (quality.isCleanUnstarted()) return emptyList()
+        if (quality.hasAuthoritativePlansAndProgress) quality.progress else null
+      }
+      is GoalQualityExecutionRead.Ambiguous -> null
+      is GoalQualityExecutionRead.Invalid -> null
+    }
+  if (progress == null) {
+    durableRead.recordDegradedRead(
+      "goal-status.goal_finish_quality",
+      "goal_quality_execution_progress",
+      "recovery_card",
+    )
+    return listOf(qualityRecoveryCard(quality))
+  }
   val accepted = progress.qa.acceptedEnvelopes + progress.validation.acceptedEnvelopes
   return listOf(progress.qa, progress.validation).flatMap { it.phaseRecords.values }
     .filter { it.phaseId in QUALITY_PHASE_IDS }
@@ -234,6 +263,32 @@ private fun qualityCards(
       }
     }
 }
+
+private fun qualityRecoveryCard(quality: GoalQualityExecutionRead): GoalRunnerPhaseCard {
+  val sourceVersion =
+    when (quality) {
+      is GoalQualityExecutionRead.Current -> quality.record.contractVersion
+      is GoalQualityExecutionRead.Historical -> quality.sourceContractVersion
+      is GoalQualityExecutionRead.Ambiguous -> quality.sourceContractVersion
+      is GoalQualityExecutionRead.Invalid -> quality.sourceContractVersion ?: "unknown"
+    }
+  val displayedVersion = sourceVersion.takeIf { it in SUPPORTED_QUALITY_VERSIONS } ?: "unsupported"
+  return GoalRunnerPhaseCard(
+    FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA,
+    GoalRunnerPhaseCardState.BLOCKED,
+    blockedReason =
+      "INVALID_GOAL_QUALITY_EXECUTION: retained quality evidence from contract $displayedVersion " +
+        "cannot establish accepted phase progress. Preserve the original and restore authoritative evidence.",
+  )
+}
+
+private fun GoalQualityExecutionRead.Historical.isCleanUnstarted(): Boolean =
+  !hasAuthoritativePlansAndProgress &&
+    progress == null &&
+    originalPayload[GoalQualityExecutionPayloadKeys.READINESS] == GoalQualityReadiness.CLEAN_UNSTARTED.wireValue
+
+private val SUPPORTED_QUALITY_VERSIONS =
+  setOf("0.1", "0.2", "0.3", "0.4", "0.5", "0.6", "0.7", GOAL_QUALITY_EXECUTION_CONTRACT_VERSION)
 
 private fun monitorCard(cycles: List<MonitorCiCycleRecord>): GoalRunnerPhaseCard {
   val latest = cycles.last()

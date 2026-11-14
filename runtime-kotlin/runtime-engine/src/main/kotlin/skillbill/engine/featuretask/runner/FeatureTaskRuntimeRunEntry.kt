@@ -691,6 +691,7 @@ public class FeatureTaskRuntimeRunEntry(
                   workflowAgentAssignments = assignments,
                   agentAddonSelection = input.agentAddonSelection.persisted,
                 ),
+              diagnostics = diagnostics,
             ).also { assignments ->
               stepLaunches.verifyLaunchCapability(assignments, LaunchEnvironmentKind.INHERITED, diagnostics)
             },
@@ -735,6 +736,7 @@ public class FeatureTaskRuntimeRunEntry(
                 FeatureTaskRouteScope.STANDALONE -> LaunchEnvironmentKind.INHERITED
               },
           ),
+        diagnostics = diagnostics,
       )
     val expected = boundedAssignmentIdentity(admittedExecution.plan.stepLaunchAssignments)
     val current = boundedAssignmentIdentity(resolved)

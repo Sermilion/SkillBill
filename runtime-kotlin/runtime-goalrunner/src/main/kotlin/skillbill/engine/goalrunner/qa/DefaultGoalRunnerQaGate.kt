@@ -3,6 +3,8 @@ package skillbill.engine.goalrunner.qa
 import me.tatarka.inject.annotations.Inject
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.diagnostics.containableFailure
+import skillbill.engine.featuretask.lifecycle.assignment.WorkflowAgentAssignmentInspection
+import skillbill.engine.featuretask.lifecycle.assignment.WorkflowAgentAssignmentStore
 import skillbill.engine.featuretask.phaserun.PhaseRunEntry
 import skillbill.engine.featuretask.phaserun.PhaseRunPlanResolver
 import skillbill.engine.featuretask.phaserun.PhaseRunResult
@@ -13,9 +15,11 @@ import skillbill.engine.goalrunner.execution.support.goalRunnerRepositoryContent
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.persist.quality.GoalQualityAdmissionRequest
+import skillbill.error.core.RuntimeFailureCode
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.catchingNonCancellation
 import skillbill.error.core.failureCodeLabel
+import skillbill.error.featuretask.isQualityRoutingRefusal
 import skillbill.error.featuretask.qa.isQaFailure
 import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.goalrunner.model.history.accumulateGoalFinalRepairWarnings
@@ -48,6 +52,7 @@ public class DefaultGoalRunnerQaGate(
   private val qaOutcomes: FeatureTaskQaOutcomeRecorder,
   private val capabilities: QaCapabilityResolver,
   private val diagnostics: RuntimeDiagnostics,
+  private val workflowAgentAssignments: WorkflowAgentAssignmentStore,
 ) : GoalRunnerQaGate {
   private val repairOutputs = GoalQualityRepairOutputs(outcomeStore)
   private val currentStage = ThreadLocal<String>()
@@ -58,12 +63,51 @@ public class DefaultGoalRunnerQaGate(
   ): GoalQaGateResult {
     enterStage(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD)
     return try {
-      runContained(state, request)
+      runContained(state, qualityRoutingRequest(state, request))
     } catch (failure: SkillBillRuntimeException) {
-      if (failure.code !in INTEGRITY_FAILURES) throw failure
-      blockedAtCurrentStage(failure)
+      val boundaryFailure = qualityRoutingRefusal(failure)
+        ?: if (failure.code in INTEGRITY_FAILURES) failure else throw failure
+      blockedAtCurrentStage(boundaryFailure)
     } finally {
       currentStage.remove()
+    }
+  }
+
+  private fun qualityRoutingRequest(
+    state: GoalRunnerManifestState,
+    request: GoalRunnerRunRequest,
+  ): GoalRunnerRunRequest {
+    val suppliedAssignments = request.workflowAgentAssignments
+    val suppliedFingerprint = request.workflowAgentAssignmentsFingerprint
+    return when (val inspection = workflowAgentAssignments.inspect(state.parentWorkflowId)) {
+      is WorkflowAgentAssignmentInspection.Present -> {
+        if ((suppliedAssignments != null || suppliedFingerprint != null) &&
+          (suppliedAssignments != inspection.assignments || suppliedFingerprint != inspection.fingerprint)
+        ) {
+          throw SkillBillRuntimeException(
+            WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION,
+            "The supplied goal-quality routing reference conflicts with the accepted parent artifact.",
+          )
+        }
+        request.copy(
+          workflowAgentAssignments = inspection.assignments,
+          workflowAgentAssignmentsFingerprint = inspection.fingerprint,
+        )
+      }
+      WorkflowAgentAssignmentInspection.Legacy -> {
+        if (suppliedAssignments != null || suppliedFingerprint != null) {
+          throw SkillBillRuntimeException(
+            WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION,
+            "The goal-quality request supplies routing that the accepted parent does not contain.",
+          )
+        }
+        request
+      }
+      is WorkflowAgentAssignmentInspection.Problem ->
+        throw SkillBillRuntimeException(
+          WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION,
+          inspection.recoveryMessage,
+        )
     }
   }
 
@@ -73,6 +117,7 @@ public class DefaultGoalRunnerQaGate(
   ): GoalQaGateResult {
     var invocationId: String? = null
     return catchingNonCancellation { runQa(state, request) { invocationId = it } }.getOrElse { failure ->
+      qualityRoutingRefusal(failure)?.let { throw it }
       if ((failure as? SkillBillRuntimeException)?.code in INTEGRITY_FAILURES) throw failure
       containFailure(state, request, containableFailure(failure), invocationId)
     }
@@ -279,7 +324,7 @@ public class DefaultGoalRunnerQaGate(
     val retainedContext = requiredFinalRepairContext(outcomeStore, state)
     val retainedWarning = accumulateGoalFinalRepairWarnings(retainedContext.warning, execution.warning)
     val acceptedWriterOwnsCurrentContents =
-      historyWriterOwnsCurrentContents(outcomeStore, phasePlans, state, execution, baseline)
+      historyWriterOwnsCurrentContents(outcomeStore, phasePlans, state, request, execution, baseline)
     val finalValidationIsCurrent = execution.finalValidationContentFingerprint == baseline
     if (!finalValidationIsCurrent && !acceptedWriterOwnsCurrentContents) {
       throw SkillBillRuntimeException(
@@ -581,6 +626,7 @@ public class DefaultGoalRunnerQaGate(
       repairOutputs.reconcile(state, SkeletonDefinition.VALIDATION, result)
       ValidationPhaseAttempt.Completed(result)
     }.getOrElse { failure ->
+      qualityRoutingRefusal(failure)?.let { throw it }
       if ((failure as? SkillBillRuntimeException)?.code in
         setOf(
           WorkflowFailureCode.INVALID_GOAL_FINALIZATION_HISTORY,
@@ -1075,12 +1121,12 @@ public class DefaultGoalRunnerQaGate(
     quality: GoalQualityExecutionRecord,
   ): GoalQaGateResult? {
     val execution = quality.execution ?: return null
-    val validationPlan = validationReentryPlan(execution) ?: return null
+    val validationPlan = validationReentryPlan(state, request, execution) ?: return null
     val inputs = requireNotNull(execution.governingInputs)
     val plans = requireNotNull(execution.executionPlans)
     val currentFingerprint = currentContentFingerprint(gitOperations, state, request)
     val writerOwnsContents =
-      historyWriterOwnsCurrentContents(outcomeStore, phasePlans, state, execution, currentFingerprint)
+      historyWriterOwnsCurrentContents(outcomeStore, phasePlans, state, request, execution, currentFingerprint)
     val sourceProof =
       acceptedValidationSourceProof(
         phasePlans,
@@ -1115,7 +1161,11 @@ public class DefaultGoalRunnerQaGate(
     return resumeValidation(state, request, reconciled, retainedParentInvariants(inputs))
   }
 
-  private fun validationReentryPlan(execution: GoalQualityExecution): ResolvedPhaseExecutionPlan? {
+  private fun validationReentryPlan(
+    state: GoalRunnerManifestState,
+    request: GoalRunnerRunRequest,
+    execution: GoalQualityExecution,
+  ): ResolvedPhaseExecutionPlan? {
     if (execution.progress == null || execution.governingInputs == null || execution.executionPlans == null) return null
     val validationProgress = requireNotNull(execution.progress).validation
     val inputs = requireNotNull(execution.governingInputs)
@@ -1125,6 +1175,7 @@ public class DefaultGoalRunnerQaGate(
         plans.validation,
         SkeletonDefinition.VALIDATION.id,
         inputs.effectiveAgentId,
+        qualityWorkflowAgentAssignments(inputs, request, state.parentWorkflowId),
       )
     val acceptedRunningBoundary = phasePlans.hasAcceptedValidationBoundary(validationProgress, validationPlan)
     val terminalProgress = validationProgress.terminalCompleted || validationProgress.terminalBlockedStep != null
@@ -1149,10 +1200,21 @@ public class DefaultGoalRunnerQaGate(
   }
 
   private companion object {
-    val INTEGRITY_FAILURES =
+    val INTEGRITY_FAILURES: Set<RuntimeFailureCode> =
       setOf(
         WorkflowFailureCode.INVALID_GOAL_FINALIZATION_HISTORY,
         WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION,
       )
+  }
+
+  private fun qualityRoutingRefusal(failure: Throwable): SkillBillRuntimeException? {
+    val runtimeFailure = failure as? SkillBillRuntimeException ?: return null
+    if (!runtimeFailure.isQualityRoutingRefusal) return null
+    if (runtimeFailure.code == WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION) return runtimeFailure
+    return SkillBillRuntimeException(
+      WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION,
+      "Selected quality provider could not launch; retained quality progress remains pending.",
+      runtimeFailure,
+    )
   }
 }

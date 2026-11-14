@@ -4,6 +4,8 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.application.telemetry.lifecycle.asWorkerOwnership
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.contracts.workflow.goal.GOAL_QUALITY_EXECUTION_CONTRACT_VERSION
+import skillbill.contracts.workflow.goal.GoalQualityExecutionPayloadKeys
 import skillbill.contracts.workflow.identity.status.WorkPaginationLimits
 import skillbill.contracts.workflow.payload.WorktreeEditJournalPayloadKeys
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
@@ -25,10 +27,14 @@ import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
 import skillbill.engine.goalrunner.monitoring.GOAL_FINALIZATION_OPERATION_KIND
 import skillbill.engine.goalrunner.persist.GoalRunnerAttemptLedgerStore
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
+import skillbill.engine.goalrunner.persist.quality.GoalQualityExecutionRead
+import skillbill.engine.goalrunner.persist.quality.GoalQualityReadiness
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.catchingNonCancellation
+import skillbill.error.core.failureCodeLabel
 import skillbill.error.core.rethrowUnless
 import skillbill.error.shellcontent.isShellContentContractFailure
+import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.goalrunner.model.ExecutionLiveness
 import skillbill.goalrunner.model.ExecutionProgressStall
 import skillbill.goalrunner.model.GoalNoChangeState
@@ -104,6 +110,7 @@ public class GoalRunnerStatusProjectionAssembler(
     loadedState: GoalRunnerManifestState,
     request: GoalRunnerStatusRequest,
   ): GoalRunnerStatusProjection {
+    outcomeStore.prepareGoalQualityExecution(loadedState.parentWorkflowId)
     return try {
       val acceptances = manifestStore.outOfBandAcceptances(loadedState.parentWorkflowId)
       val manifest =
@@ -144,6 +151,7 @@ public class GoalRunnerStatusProjectionAssembler(
     request: GoalRunnerStatusRequest,
   ): GoalRunnerStatusProjection? =
     try {
+      outcomeStore.prepareGoalQualityExecution(parentWorkflowId)
       database.read { unit ->
         require(request.completedSubtaskValidationIds.orEmpty().size <= WorkPaginationLimits.MAX_PAGE_SIZE)
         require(request.phaseResultSubtaskIds.orEmpty().size <= WorkPaginationLimits.MAX_PAGE_SIZE)
@@ -853,8 +861,19 @@ public class GoalRunnerStatusProjectionAssembler(
   private fun goalQaResult(
     parentWorkflowId: String,
     durableRead: GoalRunnerStatusDurableReadTracker,
-  ): GoalRunnerQaResult? =
-    catchingNonCancellation {
+  ): GoalRunnerQaResult? {
+    val retained = catchingNonCancellation {
+      outcomeStore.retainedGoalQualityExecution(parentWorkflowId)
+    }.getOrNull()
+    retained?.qualityRecoverySourceVersion()?.let { sourceVersion ->
+      durableRead.recordDegradedRead(
+        seam = "goal-status.goal_qa_result",
+        expected = "authoritative_goal_quality_outcome",
+        used = "typed_recovery",
+      )
+      return goalQaRecoveryResult(sourceVersion)
+    }
+    return catchingNonCancellation {
       outcomeStore.recordedGoalQaOutcome(parentWorkflowId)?.let {
         GoalRunnerQaResult(
           it.outcome.wireValue,
@@ -879,6 +898,28 @@ public class GoalRunnerStatusProjectionAssembler(
         )
       }
     }.getOrElse { error ->
+      val retained = catchingNonCancellation { outcomeStore.retainedGoalQualityExecution(parentWorkflowId) }.getOrNull()
+      if (
+        error is SkillBillRuntimeException &&
+          error.code == WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION &&
+          retained is GoalQualityExecutionRead.Invalid
+      ) {
+        durableRead.recordDegradedRead(
+          seam = "goal-status.goal_qa_result",
+          expected = "goal_qa_outcome",
+          used = "typed_recovery",
+          error = error,
+        )
+        return GoalRunnerQaResult(
+          outcome = "incomplete",
+          reason = "Preserve the original quality evidence and inspect or restore authoritative data.",
+          qaFixAttempts = 0,
+          recordedAt = clock.instant(),
+          recoveryClassification = error.failureCodeLabel(),
+          recoverySourceVersion = retained.sourceContractVersion,
+          recoveryGuidance = "Preserve the original and restore authoritative quality evidence.",
+        )
+      }
       durableRead.recordDegradedRead(
         seam = "goal-status.goal_qa_result",
         expected = "goal_qa_outcome",
@@ -886,6 +927,34 @@ public class GoalRunnerStatusProjectionAssembler(
         error = error,
       )
       null
+    }
+  }
+
+  private fun goalQaRecoveryResult(sourceVersion: String): GoalRunnerQaResult =
+    GoalRunnerQaResult(
+      outcome = "incomplete",
+      reason = "Preserve the original quality evidence and inspect or restore authoritative data.",
+      qaFixAttempts = 0,
+      recordedAt = clock.instant(),
+      recoveryClassification = "WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION",
+      recoverySourceVersion = sourceVersion,
+      recoveryGuidance = "Preserve the original and restore authoritative quality evidence.",
+    )
+
+  private fun GoalQualityExecutionRead.qualityRecoverySourceVersion(): String? =
+    when (this) {
+      is GoalQualityExecutionRead.Ambiguous -> sourceContractVersion
+      is GoalQualityExecutionRead.Current ->
+        GOAL_QUALITY_EXECUTION_CONTRACT_VERSION.takeIf {
+          record.readiness == GoalQualityReadiness.HISTORICAL_AMBIGUITY && record.execution == null
+        }
+      is GoalQualityExecutionRead.Historical ->
+        sourceContractVersion.takeIf {
+          !hasAuthoritativePlansAndProgress &&
+            originalPayload[GoalQualityExecutionPayloadKeys.READINESS] !=
+            GoalQualityReadiness.CLEAN_UNSTARTED.wireValue
+        }
+      is GoalQualityExecutionRead.Invalid -> null
     }
 
   private fun durablePlanningStatus(

@@ -403,6 +403,11 @@ public class WorkflowGoalRunnerOutcomeStore
         is GoalQualityExecutionRead.Current -> active.record.execution?.let { it.invocationId to it.status }
         is GoalQualityExecutionRead.Historical ->
           if (active.hasAuthoritativePlansAndProgress) active.invocationId?.let { it to active.status } else null
+        is GoalQualityExecutionRead.Invalid ->
+          throw SkillBillRuntimeException(
+            active.failureCode,
+            "Stored goal quality execution is invalid; inspect or restore its authoritative evidence.",
+          )
         is GoalQualityExecutionRead.Ambiguous, null -> null
       }
     }

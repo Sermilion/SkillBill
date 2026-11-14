@@ -93,13 +93,21 @@ internal fun admitPreparedQuality(
       if (retention.retainedExecution != null || retention.historical != null) {
         accepted
       } else {
+        val selectedProviders =
+          if (accepted.agentAssignmentsWorkflowId != null) {
+            request.workflowAgentAssignments?.phaseAssignments?.values?.map { it.agentId.wireValue }
+              ?: listOf(accepted.effectiveAgentId)
+          } else {
+            listOf(accepted.effectiveAgentId)
+          }
         accepted.copy(
-          openCodeIdentity = captureOpenCodeIdentity(Path.of(accepted.repoRoot), accepted.effectiveAgentId),
+          openCodeIdentity =
+            if ("opencode" in selectedProviders) captureOpenCodeIdentity(Path.of(accepted.repoRoot), "opencode") else null,
         )
       }
     }
   val plans = resolveAdmittedPlans(context, state, request, inputs, retention)
-  val validationSourceProof = validationSourceProof(context, state, baseline, retention, plans)
+  val validationSourceProof = validationSourceProof(context, state, request, baseline, retention, plans)
   val quality =
     context.outcomeStore.admitGoalQualityExecution(
       state.parentWorkflowId,
@@ -200,19 +208,35 @@ private fun resolveAdmittedPlans(
   retention: PreparedRetention,
 ): PreparedPlans {
   val acceptedAgentId = inputs.effectiveAgentId
+  val frozenAssignments = request.workflowAgentAssignments?.takeIf { inputs.agentAssignmentsWorkflowId != null }
+  if (inputs.agentAssignmentsWorkflowId != null &&
+    (inputs.agentAssignmentsWorkflowId != state.parentWorkflowId ||
+      frozenAssignments?.admissionWorkflowId != inputs.agentAssignmentsWorkflowId ||
+      frozenAssignments?.policyMode != skillbill.config.model.WorkflowAgentAssignmentPolicyMode.FROZEN ||
+      request.workflowAgentAssignmentsFingerprint != inputs.agentAssignmentsFingerprint)
+  ) {
+    context.phasePlans.invalidQualityPlan("The accepted parent routing reference no longer matches its artifact.")
+  }
   val retainedPlans = retention.retainedExecution?.executionPlans
   val retainedValidationPlan =
     retainedPlans?.let { plans ->
-      context.phasePlans.validateGoalQualityExecutionPlan(plans.qa, SkeletonDefinition.GOAL_QA.id, acceptedAgentId)
+      context.phasePlans.validateGoalQualityExecutionPlan(
+        plans.qa,
+        SkeletonDefinition.GOAL_QA.id,
+        acceptedAgentId,
+        frozenAssignments,
+      )
       context.phasePlans.validateGoalQualityExecutionPlan(
         plans.build,
         SkeletonDefinition.GOAL_BUILD.id,
         acceptedAgentId,
+        frozenAssignments,
       )
       context.phasePlans.validateGoalQualityExecutionPlan(
         plans.validation,
         SkeletonDefinition.VALIDATION.id,
         acceptedAgentId,
+        frozenAssignments,
       )
     }
   val historicalPlans = historicalPlansFor(context, state, request, inputs, retention.historical)
@@ -259,12 +283,13 @@ private fun historicalPlansFor(
 private fun validationSourceProof(
   context: PreparedQualityContext,
   state: GoalRunnerManifestState,
+  request: GoalRunnerRunRequest,
   baseline: String,
   retention: PreparedRetention,
   plans: PreparedPlans,
 ): GoalQualityValidationSourceProof? {
   val retainedRecord = retention.retainedRecord
-  if (retainedRecord != null) return retainedValidationProof(context, state, baseline, retainedRecord, plans)
+  if (retainedRecord != null) return retainedValidationProof(context, state, request, baseline, retainedRecord, plans)
   val historical = retention.historical ?: return null
   val plan = plans.historicalValidationPlan ?: return null
   return acceptedHistoricalValidationSourceProof(context.phasePlans, historical, plan, baseline)
@@ -273,6 +298,7 @@ private fun validationSourceProof(
 private fun retainedValidationProof(
   context: PreparedQualityContext,
   state: GoalRunnerManifestState,
+  request: GoalRunnerRunRequest,
   baseline: String,
   retainedRecord: GoalQualityExecutionRecord,
   plans: PreparedPlans,
@@ -285,7 +311,7 @@ private fun retainedValidationProof(
     retainedRecord,
     plan,
     baseline,
-    historyWriterOwnsCurrentContents(context.outcomeStore, context.phasePlans, state, execution, baseline),
+    historyWriterOwnsCurrentContents(context.outcomeStore, context.phasePlans, state, request, execution, baseline),
   )
 }
 
@@ -310,13 +336,15 @@ internal fun rejectAmbiguousRetainedQuality(
 ) {
   val ambiguous =
     retainedRecord?.readiness == GoalQualityReadiness.HISTORICAL_AMBIGUITY ||
-      retainedRead is GoalQualityExecutionRead.Ambiguous
+      retainedRead is GoalQualityExecutionRead.Ambiguous ||
+      retainedRead is GoalQualityExecutionRead.Invalid
   val historical = retainedRead is GoalQualityExecutionRead.Historical && historicalNeedsEvidence(retainedRead)
   if (ambiguous || historical) {
     val sourceVersion =
       when (retainedRead) {
         is GoalQualityExecutionRead.Ambiguous -> retainedRead.sourceContractVersion
         is GoalQualityExecutionRead.Historical -> retainedRead.sourceContractVersion
+        is GoalQualityExecutionRead.Invalid -> retainedRead.sourceContractVersion ?: "unknown"
         else -> "current"
       }
     RuntimeDiagnosticsBestEffortWarning.record(

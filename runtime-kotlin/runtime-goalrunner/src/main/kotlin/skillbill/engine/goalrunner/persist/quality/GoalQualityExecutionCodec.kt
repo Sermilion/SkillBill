@@ -17,6 +17,7 @@ import skillbill.goalrunner.model.quality.GoalQualityAcceptedEnvelope
 import skillbill.goalrunner.model.quality.GoalQualityAcceptedOutput
 import skillbill.goalrunner.model.quality.GoalQualityAcceptedSourceObservation
 import skillbill.goalrunner.model.quality.GoalQualityAdoptionEvidence
+import skillbill.goalrunner.model.quality.GoalQualityMigrationEvidence
 import skillbill.goalrunner.model.quality.GoalQualityExecution
 import skillbill.goalrunner.model.quality.GoalQualityExecutionInputs
 import skillbill.goalrunner.model.quality.GoalQualityExecutionPlans
@@ -58,6 +59,13 @@ internal fun GoalQualityExecutionRecord.toPersistenceWire(): Map<String, Any?> =
           GoalQualityExecutionPayloadKeys.ORIGINAL_PAYLOAD_JSON to it.originalPayloadJson,
         )
       },
+    GoalQualityExecutionPayloadKeys.MIGRATION_EVIDENCE to
+      migrationEvidence?.let {
+        mapOf(
+          GoalQualityExecutionPayloadKeys.SOURCE_CONTRACT_VERSION to it.sourceContractVersion,
+          GoalQualityExecutionPayloadKeys.ORIGINAL_PAYLOAD_JSON to it.originalPayloadJson,
+        )
+      },
   )
 
 internal fun GoalQualityExecutionInputs.toPersistenceWire(): Map<String, Any?> {
@@ -69,6 +77,8 @@ internal fun GoalQualityExecutionInputs.toPersistenceWire(): Map<String, Any?> {
       keys.REPO_ROOT to repoRoot,
       keys.INVOKED_AGENT_ID to invokedAgentId,
       keys.CONFIGURED_AGENT_OVERRIDE_ID to configuredAgentOverrideId,
+      keys.AGENT_ASSIGNMENTS_WORKFLOW_ID to agentAssignmentsWorkflowId,
+      keys.AGENT_ASSIGNMENTS_FINGERPRINT to agentAssignmentsFingerprint,
       keys.TIMEOUT_MILLIS to timeoutMillis,
       keys.QA_SELECTION to qaSelection.wireValue,
       keys.PARENT_SPEC_PATH to parentSpecPath,
@@ -168,6 +178,8 @@ internal fun decodeInputs(value: Any?): GoalQualityExecutionInputs? {
     repoRoot = raw[keys.REPO_ROOT] as String,
     invokedAgentId = raw[keys.INVOKED_AGENT_ID] as String,
     configuredAgentOverrideId = raw[keys.CONFIGURED_AGENT_OVERRIDE_ID] as String?,
+    agentAssignmentsWorkflowId = raw[keys.AGENT_ASSIGNMENTS_WORKFLOW_ID] as String?,
+    agentAssignmentsFingerprint = raw[keys.AGENT_ASSIGNMENTS_FINGERPRINT] as String?,
     timeoutMillis = (raw[keys.TIMEOUT_MILLIS] as Number?)?.toLong(),
     qaSelection = FeatureTaskRuntimeQaSelection.fromWire(raw[keys.QA_SELECTION] as String),
     parentSpecPath = raw[keys.PARENT_SPEC_PATH] as String,
@@ -332,10 +344,12 @@ internal fun GoalQualityExecutionRecord.Companion.fromPersistenceWire(
     Any?,
   >,
 ): GoalQualityExecutionRecord {
-  if (payload[GoalQualityExecutionPayloadKeys.CONTRACT_VERSION] != GOAL_QUALITY_EXECUTION_CONTRACT_VERSION) {
+  if (payload[GoalQualityExecutionPayloadKeys.CONTRACT_VERSION] !in
+    setOf(GOAL_QUALITY_EXECUTION_CONTRACT_VERSION, "0.7")
+  ) {
     throw SkillBillRuntimeException(
       WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION,
-      "Historical goal quality payloads must be read through the version-aware retained projection.",
+      "Stored goal quality payload cannot be decoded as a current record or a 0.7 migration source.",
     )
   }
   val executionMap = payload[GoalQualityExecutionPayloadKeys.EXECUTION] as? Map<*, *>
@@ -417,6 +431,13 @@ private fun persistedExecutionRecord(
     adoptionEvidence =
       (payload[GoalQualityExecutionPayloadKeys.ADOPTION_EVIDENCE] as? Map<*, *>)?.let { evidence ->
         GoalQualityAdoptionEvidence(
+          evidence[GoalQualityExecutionPayloadKeys.SOURCE_CONTRACT_VERSION] as String,
+          evidence[GoalQualityExecutionPayloadKeys.ORIGINAL_PAYLOAD_JSON] as String,
+        )
+      },
+    migrationEvidence =
+      (payload[GoalQualityExecutionPayloadKeys.MIGRATION_EVIDENCE] as? Map<*, *>)?.let { evidence ->
+        GoalQualityMigrationEvidence(
           evidence[GoalQualityExecutionPayloadKeys.SOURCE_CONTRACT_VERSION] as String,
           evidence[GoalQualityExecutionPayloadKeys.ORIGINAL_PAYLOAD_JSON] as String,
         )
@@ -766,7 +787,7 @@ private fun executedLegacyRead(
       if (hasProgress) decodeHistoricalProgress(requireNotNull(progressMap)) else null,
       (executionMap[keys.STATUS] as? String)?.let(GoalQualityExecutionStatus::fromWire),
     )
-  val authoritative = legacyAuthoritative(identity, executionMap)
+  val authoritative = legacyAuthoritative(identity, executionMap, sourceVersion)
   if (authoritative || identity.status == GoalQualityExecutionStatus.RETIRED) {
     return historicalLegacyRead(executionMap, sourceVersion, original, identity, authoritative)
   }
@@ -776,10 +797,13 @@ private fun executedLegacyRead(
 private fun legacyAuthoritative(
   identity: LegacyIdentity,
   executionMap: Map<*, *>,
+  sourceVersion: String,
 ): Boolean {
   val plansReady = !identity.qaPlan.isNullOrBlank() && !identity.validationPlan.isNullOrBlank() && identity.hasProgress
   val inputs = identity.inputs
-  val inputsMatch = inputs != null && identity.governingFingerprint == governingInputFingerprint(inputs)
+  val inputsMatch =
+    inputs != null &&
+      identity.governingFingerprint == historicalGoverningInputFingerprint(inputs, sourceVersion)
   val parent = executionMap[GoalQualityExecutionPayloadKeys.PARENT_WORKFLOW_ID] as? String
   val parentReady = !parent.isNullOrBlank() && !identity.invocationId.isNullOrBlank()
   val baseline = executionMap[GoalQualityExecutionPayloadKeys.BASELINE_CONTENT_FINGERPRINT] as? String
@@ -829,3 +853,64 @@ private fun legacyPlanFingerprint(
 
 private fun invalidLegacy(reason: String): Nothing =
   throw SkillBillRuntimeException(WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION, reason)
+
+internal fun migrateGoalQualityExecutionRouting07(
+  source: Map<String, Any?>,
+  parentWorkflowId: String,
+): GoalQualityExecutionRecord {
+  val sourceVersion = source[GoalQualityExecutionPayloadKeys.CONTRACT_VERSION] as String
+  if (sourceVersion != "0.7") invalidLegacy("Only 0.7 quality records can use this migration.")
+  val decoded = GoalQualityExecutionRecord.fromPersistenceWire(source)
+  if ((decoded.readiness == GoalQualityReadiness.ADMITTED) != (decoded.execution != null) ||
+    decoded.readiness == GoalQualityReadiness.HISTORICAL_AMBIGUITY && decoded.execution != null
+  ) {
+    invalidLegacy(
+      "Stored 0.7 quality readiness and admitted execution disagree; " +
+        "preserve and restore its original evidence.",
+    )
+  }
+  decoded.execution?.let { original ->
+    if (original.parentWorkflowId != parentWorkflowId) {
+      invalidLegacy(
+        "Stored goal quality execution belongs to '${original.parentWorkflowId}', not '$parentWorkflowId'.",
+      )
+    }
+    validateExecutionIdentity(original)
+    validateExecutionDisposition(original, currentContract = true)
+    if (original.status != GoalQualityExecutionStatus.RETIRED) {
+      val inputs = original.governingInputs
+        ?: invalidLegacy("Stored 0.7 quality execution has no retained governing inputs.")
+      if (original.governingInputFingerprint != historicalGoverningInputFingerprint(inputs, sourceVersion)) {
+        invalidLegacy(
+          "Stored 0.7 governing inputs do not match their source-version fingerprint; " +
+            "preserve and restore the original evidence.",
+        )
+      }
+    }
+  }
+  val execution = decoded.execution?.let { old ->
+    val inputs = old.governingInputs
+    if (inputs == null && old.status == GoalQualityExecutionStatus.RETIRED) {
+      old
+    } else {
+      val retainedInputs = inputs
+        ?: invalidLegacy("Stored 0.7 quality execution has no retained governing inputs.")
+      val legacyInputs = retainedInputs.copy(
+        agentAssignmentsWorkflowId = null,
+        agentAssignmentsFingerprint = null,
+      )
+      old.copy(
+        governingInputs = legacyInputs,
+        governingInputFingerprint = governingInputFingerprint(legacyInputs),
+      )
+    }
+  }
+  return decoded.copy(
+    contractVersion = GOAL_QUALITY_EXECUTION_CONTRACT_VERSION,
+    execution = execution,
+    migrationEvidence = GoalQualityMigrationEvidence(
+      sourceContractVersion = sourceVersion,
+      originalPayloadJson = JsonCodec.mapToJsonString(source),
+    ),
+  )
+}

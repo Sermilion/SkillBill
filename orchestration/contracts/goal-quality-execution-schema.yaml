@@ -6,7 +6,7 @@ additionalProperties: false
 required: [contract_version, readiness, execution]
 properties:
   contract_version:
-    enum: ["0.1", "0.2", "0.3", "0.4", "0.5", "0.6", "0.7"]
+    enum: ["0.1", "0.2", "0.3", "0.4", "0.5", "0.6", "0.7", "0.8"]
   adoption_evidence:
     oneOf:
       - type: "null"
@@ -15,6 +15,15 @@ properties:
         required: [source_contract_version, original_payload_json]
         properties:
           source_contract_version: {enum: ["0.1", "0.2", "0.3", "0.4", "0.5", "0.6"]}
+          original_payload_json: {type: string, minLength: 2}
+  migration_evidence:
+    oneOf:
+      - type: "null"
+      - type: object
+        additionalProperties: false
+        required: [source_contract_version, original_payload_json]
+        properties:
+          source_contract_version: {const: "0.7"}
           original_payload_json: {type: string, minLength: 2}
   readiness:
     enum: [clean_unstarted, admitted, historical_ambiguity]
@@ -50,6 +59,8 @@ properties:
                   repo_root: {type: string, minLength: 1}
                   invoked_agent_id: {type: string, minLength: 1}
                   configured_agent_override_id: {type: [string, "null"]}
+                  agent_assignments_workflow_id: {type: [string, "null"], minLength: 1}
+                  agent_assignments_fingerprint: {type: [string, "null"], pattern: "^[0-9a-f]{64}$"}
                   timeout_millis: {type: [integer, "null"], minimum: 1}
                   qa_selection: {enum: [auto, off]}
                   parent_spec_path: {type: string, minLength: 1}
@@ -251,6 +262,36 @@ allOf:
             - type: object
               required: [governing_input_fingerprint, governing_inputs, execution_plans, progress, final_validation_content_fingerprint, pre_qa_build, pre_qa_build_content_fingerprint]
               properties:
+                execution_plans:
+                  type: object
+                  required: [build_plan, qa_plan, validation_plan, plan_fingerprint]
+                progress:
+                  type: object
+                  required: [build_progress, qa_progress, validation_progress]
+  - if:
+      properties:
+        contract_version: {const: "0.8"}
+    then:
+      properties:
+        execution:
+          oneOf:
+            - type: "null"
+            - type: object
+              required: [governing_input_fingerprint, governing_inputs, execution_plans, progress, final_validation_content_fingerprint, pre_qa_build, pre_qa_build_content_fingerprint]
+              properties:
+                governing_inputs:
+                  type: object
+                  required: [agent_assignments_workflow_id, agent_assignments_fingerprint]
+                  allOf:
+                    - oneOf:
+                        - properties:
+                            agent_assignments_workflow_id: {type: "null"}
+                            agent_assignments_fingerprint: {type: "null"}
+                          required: [agent_assignments_workflow_id, agent_assignments_fingerprint]
+                        - properties:
+                            agent_assignments_workflow_id: {type: string, minLength: 1, pattern: ".*\\S.*"}
+                            agent_assignments_fingerprint: {type: string, pattern: "^[0-9a-f]{64}$"}
+                          required: [agent_assignments_workflow_id, agent_assignments_fingerprint]
                 execution_plans:
                   type: object
                   required: [build_plan, qa_plan, validation_plan, plan_fingerprint]

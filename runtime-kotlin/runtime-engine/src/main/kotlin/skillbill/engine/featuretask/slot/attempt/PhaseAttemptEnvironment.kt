@@ -265,6 +265,9 @@ internal interface PhaseAttemptLaunchPreparationContext :
   val implementationChecklistStore: FeatureTaskImplementationChecklistStore?
 
   val phaseInstructionSource: PhaseInstructionFileSource
+
+  fun verifyCurrentLaunchSelection()
+
 }
 
 /** Run-loop and attempt helpers that resolve strategies for arbitrary selected steps. */
@@ -411,6 +414,9 @@ public open class PhaseAttemptSettlementScope internal constructor(
     run: PhaseRun,
     call: PhaseStepCall,
   ) = boundHost.runnerForAcceptedAttempt(run, call)
+
+  internal fun verifySelectedLaunchForAcceptedAttempt(diagnostics: RuntimeDiagnostics) =
+    boundHost.verifySelectedLaunch(diagnostics)
 }
 
 public open class PhaseAttemptLaunchCollaborationScope internal constructor(
@@ -440,6 +446,8 @@ public open class PhaseAttemptLaunchCollaborationScope internal constructor(
 
   override fun phaseSettlementTarget(iteration: Int): FeatureTaskRuntimePhaseSettlementTarget? =
     resolvePhaseSettlementTarget(iteration)
+
+  override fun verifyCurrentLaunchSelection() = verifySelectedLaunchForAcceptedAttempt(diagnostics)
 
   internal fun writeRuntimeSubtaskCommit(
     branch: String,

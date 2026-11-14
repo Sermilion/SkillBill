@@ -86,6 +86,7 @@ internal object PhaseLaunchPreparation {
   ): LaunchPreparation {
     val context = this
     with(context) {
+      verifyCurrentLaunchSelection()
       val measurementContext =
         when (
           val resolution = PhaseLaunchPreparation.resolveLaunchMeasurementContext(context, run)

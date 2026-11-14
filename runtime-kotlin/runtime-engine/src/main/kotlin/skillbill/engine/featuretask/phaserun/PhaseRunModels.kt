@@ -4,6 +4,7 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.agentaddon.model.HydratedAgentAddonSelection
 import skillbill.application.review.model.ParallelCodeReviewResult
 import skillbill.config.model.CompactionSettings
+import skillbill.config.model.ResolvedWorkflowAgentAssignments
 import skillbill.contracts.system.OpenCodeLaunchIdentity
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeAgentAssignment
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeGoalContinuationContext
@@ -51,6 +52,7 @@ public data class PhaseRunRequest(
   public val timeout: Duration? = null,
   public val specSource: SpecSource = SpecSource.LOCAL,
   public val modelAssignment: FeatureTaskRuntimeModelAssignment = FeatureTaskRuntimeModelAssignment(),
+  public val agentAssignment: FeatureTaskRuntimeAgentAssignment = FeatureTaskRuntimeAgentAssignment(),
   public val eventSink: FeatureTaskRuntimeRunEventSink = FeatureTaskRuntimeRunEventSink.NONE,
   public val activityOutput: ((String, String) -> Unit)? = null,
   public val activityStampSink: AgentRunActivityStampSink = AgentRunActivityStampSink.NONE,
@@ -74,6 +76,10 @@ public data class PhaseRunRequest(
   internal val goalQualityInvocationId: String? = null,
   internal val acceptedGoalQualityPlanText: String? = null,
   public val acceptedGoalQualityAgentId: String? = null,
+  public val workflowAgentAssignments: ResolvedWorkflowAgentAssignments? = null,
+  public val workflowAgentAssignmentsFingerprint: String? = null,
+  public val agentAssignmentsWorkflowId: String? = null,
+  public val agentAssignmentsFingerprint: String? = null,
   public val modelObserver: AgentRunModelObserver? = null,
   public val openCodeIdentity: OpenCodeLaunchIdentity? = null,
 ) {
@@ -157,6 +163,7 @@ public data class InMemoryPhaseRunFacts(
   override val validationCheckInvocationId: String? = null,
 ) : FeatureTaskRuntimeRunFacts {
   override val admittedExecution: AdmittedFeatureTaskRuntimeExecution? = null
+  override val workflowAgentAssignments: ResolvedWorkflowAgentAssignments? = request.workflowAgentAssignments
   override val activityParentWorkflowId: String? = null
   override val protectedSpecSha256: String? = null
   override val planIntake: String? = null
@@ -169,7 +176,7 @@ public data class InMemoryPhaseRunFacts(
   override val runInvariants: FeatureTaskRuntimeRunInvariants =
     request.acceptanceCriteria?.let { intake.runInvariants.copy(acceptanceCriteria = it) } ?: intake.runInvariants
   override val invokedAgentId: String = request.invokedAgentId
-  override val agentAssignment: FeatureTaskRuntimeAgentAssignment = FeatureTaskRuntimeAgentAssignment()
+  override val agentAssignment: FeatureTaskRuntimeAgentAssignment = request.agentAssignment
   override val modelAssignment: FeatureTaskRuntimeModelAssignment = request.modelAssignment
   override val compactionSettings: CompactionSettings = CompactionSettings.DEFAULT
   override val environment: Map<String, String> = emptyMap()

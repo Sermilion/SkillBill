@@ -11,6 +11,7 @@ import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeLifecycleTe
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeModelResolver
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeResumeLaunchAssignment
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeStepLaunchResolver
+import skillbill.engine.featuretask.lifecycle.execution.StepLaunchAssignmentInputs
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeResolvedPhaseAgent
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
@@ -46,6 +47,7 @@ import skillbill.engine.featuretask.slot.state.PhaseRunState
 import skillbill.engine.recovery.recommendedDurableChildRecoveryCommand
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.workflow.WorkflowAgentAssignmentsFailureCode
+import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.diff.DiffResolverPort
@@ -146,6 +148,9 @@ public class FeatureTaskRuntimeRunLoopContext internal constructor(
         directSharedEvidenceResolver = sharedEvidenceResolver,
         directDiffResolver = diffResolver,
         directQualityGateCycles = qualityGateCycles,
+        directVerifySelectedLaunch = { diagnostics ->
+          phaseRunFactory.verifySelectedLaunch(run, diagnostics, launchImminent = true)
+        },
       ),
     )
 
@@ -314,6 +319,54 @@ public class FeatureTaskRuntimePhaseRunFactory(
   private val stepLaunchResolver: FeatureTaskRuntimeStepLaunchResolver,
   private val projectStore: ProjectStorePort,
 ) {
+  internal fun verifySelectedLaunch(
+    run: PhaseRun,
+    diagnostics: RuntimeDiagnostics,
+    launchImminent: Boolean = run.launchAssignment != null,
+  ) {
+    val inputs =
+      StepLaunchAssignmentInputs(
+        invokedAgentId = run.request.invokedAgentId,
+        agentAssignment = run.request.agentAssignment,
+        modelAssignment = run.request.modelAssignment,
+        workflowAgentAssignments = run.request.workflowAgentAssignments,
+        agentAddonSelection = run.request.agentAddonSelection.persisted,
+      )
+    val environmentKind =
+      if (run.request.goalContinuation == null) LaunchEnvironmentKind.INHERITED else LaunchEnvironmentKind.GOVERNED_CHILD
+    val assignments = run.request.workflowAgentAssignments
+    if (assignments?.policyMode == WorkflowAgentAssignmentPolicyMode.FROZEN) {
+      val expected = assignments.phaseAssignments[run.phaseId]?.agentId?.wireValue
+        ?: throw SkillBillRuntimeException(
+          WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION,
+          "Frozen routing has no provider assignment for phase '${run.phaseId}'.",
+        )
+      val accepted = run.launchAssignment
+      if (accepted != null && accepted.agentId != expected) {
+        throw SkillBillRuntimeException(
+          WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION,
+          "The accepted provider for phase '${run.phaseId}' no longer matches its parent assignment.",
+        )
+      }
+      if (launchImminent) {
+        stepLaunchResolver.verifySelectedProvider(run.phaseId, expected, environmentKind, inputs, diagnostics)
+      }
+      return
+    }
+    val assignment = run.launchAssignment
+    if (assignment != null) {
+      stepLaunchResolver.verifySelectedLaunch(assignment, environmentKind, inputs, diagnostics)
+    } else if (launchImminent) {
+      stepLaunchResolver.verifySelectedProvider(
+        run.phaseId,
+        run.resolvedAgent.resolvedAgentId,
+        environmentKind,
+        inputs,
+        diagnostics,
+      )
+    }
+  }
+
   internal fun build(
     context: FeatureTaskRuntimeRunLoopContext,
     phaseId: String,
@@ -352,7 +405,7 @@ public class FeatureTaskRuntimePhaseRunFactory(
           },
         )
       }
-    return PhaseRun(
+    val run = PhaseRun(
       phaseId = phaseId,
       declaration =
         phaseDeclaration(
@@ -380,6 +433,8 @@ public class FeatureTaskRuntimePhaseRunFactory(
         (context.runState.strategyFor(phaseId).stepHooks(phaseId) as? PhaseUpstreamFailureContinuationHooks)
           ?.failureContinuationOutput(context.state.outputs()),
     )
+    verifySelectedLaunch(run, context.diagnostics)
+    return run
   }
 
   private fun resolveAgent(
@@ -396,7 +451,7 @@ public class FeatureTaskRuntimePhaseRunFactory(
     request: FeatureTaskRuntimeRunFacts,
     recorded: StepLaunchAssignment?,
   ): FeatureTaskRuntimeResolvedPhaseAgent? =
-    request.admittedExecution?.workflowAgentAssignments
+    request.workflowAgentAssignments
       ?.takeIf { it.policyMode == WorkflowAgentAssignmentPolicyMode.FROZEN }
       ?.let { frozen ->
         val phase =
@@ -435,7 +490,7 @@ public class FeatureTaskRuntimePhaseRunFactory(
     recorded: StepLaunchAssignment?,
   ): FeatureTaskRuntimeResolvedPhaseAgent {
     val legacy =
-      request.admittedExecution?.workflowAgentAssignments
+      request.workflowAgentAssignments
         ?.takeIf { it.policyMode == WorkflowAgentAssignmentPolicyMode.LEGACY }
     val recordedPhase = legacy?.phaseAssignments?.get(phaseId)
     val compatibilitySelection =

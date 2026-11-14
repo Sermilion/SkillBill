@@ -375,6 +375,9 @@ data class GoalRunnerQaResult(
   val reportText: String? = null,
   val failureKind: String? = null,
   val details: QaRunDetails? = null,
+  val recoveryClassification: String? = null,
+  val recoverySourceVersion: String? = null,
+  val recoveryGuidance: String? = null,
 )
 
 data class GoalRunnerQaFinding(

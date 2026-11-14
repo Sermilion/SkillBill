@@ -28,6 +28,8 @@ data class GoalQualityExecutionInputs(
   val modelMatrix: ExecutionMatrix?,
   val addons: List<GoalQualityHydratedAddonInput>,
   val openCodeIdentity: OpenCodeLaunchIdentity? = null,
+  val agentAssignmentsWorkflowId: String? = null,
+  val agentAssignmentsFingerprint: String? = null,
 ) {
   val effectiveAgentId: String get() = configuredAgentOverrideId ?: invokedAgentId
 
@@ -41,5 +43,10 @@ data class GoalQualityExecutionInputs(
     require(acceptanceCriteriaReadFailure?.isNotBlank() != false)
     require(branch.isNotBlank())
     require(addons.map { it.persisted.slug }.distinct().size == addons.size)
+    require(
+      (agentAssignmentsWorkflowId == null && agentAssignmentsFingerprint == null) ||
+        (!agentAssignmentsWorkflowId.isNullOrBlank() &&
+          agentAssignmentsFingerprint?.matches(Regex("^[0-9a-f]{64}$")) == true),
+    )
   }
 }

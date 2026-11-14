@@ -3,6 +3,7 @@ package skillbill.engine.goalrunner.qa
 import org.junit.jupiter.api.io.TempDir
 import skillbill.application.testProjectStore
 import skillbill.engine.RecordingWorkflowGitOperations
+import skillbill.engine.featuretask.lifecycle.execution.workflowAgentAssignmentStoreForTests
 import skillbill.engine.featuretask.model.execution.QaExpectedIdentity
 import skillbill.engine.featuretask.model.execution.QaNamedDevice
 import skillbill.engine.featuretask.model.execution.QaNamedDeviceKind
@@ -531,6 +532,7 @@ class GoalQaRepairLoopTest {
           outcomes,
           QaCapabilityResolver(git) { listOf(pack) },
           NoopRuntimeDiagnostics,
+          workflowAgentAssignmentStoreForTests(database),
         )
     }
 

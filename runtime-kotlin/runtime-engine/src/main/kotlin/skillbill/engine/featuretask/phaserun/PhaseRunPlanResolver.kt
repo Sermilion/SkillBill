@@ -1,10 +1,13 @@
 package skillbill.engine.featuretask.phaserun
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.config.model.ResolvedWorkflowAgentAssignments
+import skillbill.config.model.WorkflowAgentAssignmentPolicyMode
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanCodec
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanCompatibility
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeStepLaunchAssignmentFactory
+import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeStepLaunchResolver
 import skillbill.engine.featuretask.lifecycle.execution.StepLaunchAssignmentInputs
 import skillbill.engine.featuretask.model.execution.ValidationGateCommandFamily
 import skillbill.engine.featuretask.runloop.core.strategySelectionFacts
@@ -19,7 +22,7 @@ import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanAdmissionError
 import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.goalrunner.model.quality.GoalQualityAcceptedSourceObservation
 import skillbill.goalrunner.model.quality.GoalQualityPhaseProgress
-import skillbill.ports.agentrun.AgentRunLauncher
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.model.ValidationDepth
@@ -28,6 +31,7 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranc
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
+import skillbill.workflow.taskruntime.model.skeleton.LaunchEnvironmentKind
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateProgress
@@ -41,11 +45,12 @@ import kotlin.coroutines.cancellation.CancellationException
 public class PhaseRunPlanResolver(
   private val strategies: PhaseStrategyLookup,
   private val gitOperations: WorkflowGitOperations,
-  private val agentRunLauncher: AgentRunLauncher,
   private val intakeResolver: PhaseRunIntakeResolver,
   private val executionPlanCodec: FeatureTaskRuntimeExecutionPlanCodec,
   private val executionPlanCompatibility: FeatureTaskRuntimeExecutionPlanCompatibility,
   private val executionPlanResolver: FeatureTaskRuntimeExecutionPlanResolver,
+  private val stepLaunchResolver: FeatureTaskRuntimeStepLaunchResolver,
+  private val diagnostics: RuntimeDiagnostics,
 ) {
   public fun resolveGoalQualityExecutionPlan(
     request: PhaseRunRequest,
@@ -75,6 +80,7 @@ public class PhaseRunPlanResolver(
     encoded: String,
     expectedDefinitionId: String,
     expectedAgentId: String,
+    workflowAgentAssignments: ResolvedWorkflowAgentAssignments? = null,
   ): ResolvedPhaseExecutionPlan {
     val definition = SkeletonDefinition.byId(expectedDefinitionId)
     try {
@@ -96,10 +102,21 @@ public class PhaseRunPlanResolver(
             strategies,
             plan,
           ).toSet()
+      if (workflowAgentAssignments != null &&
+        workflowAgentAssignments.policyMode != WorkflowAgentAssignmentPolicyMode.FROZEN
+      ) {
+        invalidQualityPlan()
+      }
+      val providerMismatch = plan.stepLaunchAssignments.any { (step, assignment) ->
+        val acceptedProvider = workflowAgentAssignments?.phaseAssignments?.get(step)?.agentId?.wireValue
+        assignment.stepId != step ||
+          if (workflowAgentAssignments == null) assignment.agentId != expectedAgentId
+          else acceptedProvider == null || assignment.agentId != acceptedProvider
+      }
       if (plan.stepLaunchAssignments.keys != requiredAssignments ||
-        plan.stepLaunchAssignments.any { (step, assignment) ->
-          assignment.stepId != step || assignment.agentId != expectedAgentId
-        }
+        providerMismatch ||
+        workflowAgentAssignments != null &&
+        !workflowAgentAssignments.phaseAssignments.keys.containsAll(requiredAssignments)
       ) {
         invalidQualityPlan()
       }
@@ -383,22 +400,43 @@ public class PhaseRunPlanResolver(
         null,
       )
     val selection = strategySelectionFacts(facts)
+    val launchAssignments =
+      stepLaunchResolver.resolve(
+        selection,
+        StepLaunchAssignmentInputs(
+          invokedAgentId = request.invokedAgentId,
+          agentAssignment = facts.agentAssignment,
+          modelAssignment = facts.modelAssignment,
+          workflowAgentAssignments = request.workflowAgentAssignments,
+          agentAddonSelection = request.agentAddonSelection.persisted,
+        ),
+        diagnostics,
+      )
+    stepLaunchResolver.verifyLaunchCapability(launchAssignments, LaunchEnvironmentKind.INHERITED, diagnostics)
     return strategies.executionPlan(
       selection.copy(
-        stepAssignments =
-          FeatureTaskRuntimeStepLaunchAssignmentFactory.resolve(
-            launcher = agentRunLauncher,
-            lookup = strategies,
-            facts = selection,
-            inputs =
-              StepLaunchAssignmentInputs(
-                invokedAgentId = request.invokedAgentId,
-                agentAssignment = facts.agentAssignment,
-                modelAssignment = facts.modelAssignment,
-              ),
-          ),
+        stepAssignments = launchAssignments,
       ),
     )
+  }
+
+  internal fun verifyQualityPlanLaunches(
+    request: PhaseRunRequest,
+    facts: InMemoryPhaseRunFacts,
+    plan: ResolvedPhaseExecutionPlan,
+    diagnostics: RuntimeDiagnostics,
+  ) {
+    val inputs =
+      StepLaunchAssignmentInputs(
+        invokedAgentId = request.invokedAgentId,
+        agentAssignment = facts.agentAssignment,
+        modelAssignment = facts.modelAssignment,
+        workflowAgentAssignments = request.workflowAgentAssignments,
+        agentAddonSelection = request.agentAddonSelection.persisted,
+      )
+    plan.stepLaunchAssignments.values.forEach { assignment ->
+      stepLaunchResolver.verifySelectedLaunch(assignment, LaunchEnvironmentKind.INHERITED, inputs, diagnostics)
+    }
   }
 
   internal fun currentBranch(request: PhaseRunRequest): FeatureTaskRuntimeResolvedBranch? =

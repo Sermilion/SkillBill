@@ -427,7 +427,9 @@ internal fun historicalAdmissionMatches(
     !retained.baselineContentFingerprint.isNullOrBlank() && !retained.selectionFingerprint.isNullOrBlank()
   val selection = retained.selectionFingerprint == selectionFingerprint
   val inputs =
-    retained.governingInputFingerprint == governingInputFingerprint(retainedInputs) && retainedInputs == governingInputs
+    retained.governingInputFingerprint ==
+      historicalGoverningInputFingerprint(retainedInputs, retained.sourceContractVersion) &&
+      retainedInputs == governingInputs
   val plans = retained.qaPlan == executionPlans.qa && retained.validationPlan == executionPlans.validation
   return identity && baseline && selection && inputs && plans
 }

@@ -11,6 +11,7 @@ import skillbill.engine.RecordingWorkflowGitOperations
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanCodec
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanCompatibility
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
+import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeStepLaunchResolver
 import skillbill.engine.featuretask.lifecycle.execution.routingConfigResolutionForTests
 import skillbill.engine.featuretask.lifecycle.execution.workflowAgentAssignmentStoreForTests
 import skillbill.engine.featuretask.phaserun.monitor.MonitorTargetResolver
@@ -34,12 +35,14 @@ import skillbill.infrastructure.workflow.featuretask.FileSystemFeatureTaskRuntim
 import skillbill.infrastructure.workflow.filesystem.FileSystemFeatureSpecPathResolver
 import skillbill.ports.agentrun.AgentRunChildDrain
 import skillbill.ports.agentrun.AgentRunLauncher
+import skillbill.ports.agentrun.ExecutableLookup
 import skillbill.ports.agentrun.model.AgentRunLaunchCapability
 import skillbill.ports.agentrun.model.AgentRunLaunchCapabilityRequest
 import skillbill.ports.agentrun.model.AgentRunLaunchModelRequest
 import skillbill.ports.agentrun.model.AgentRunLaunchRequest
 import skillbill.ports.agentrun.passThroughResolvedLaunchModel
 import skillbill.ports.config.RepoLocalConfigPort
+import skillbill.ports.agentaddon.RejectingAgentAddonSelectionPort
 import skillbill.ports.config.model.ReadRepoLocalConfigRequest
 import skillbill.ports.config.model.ReadRepoLocalConfigResult
 import skillbill.ports.db.DatabaseSessionFactory
@@ -272,20 +275,20 @@ fun PhaseRunEntryFixture.plans(): PhaseRunPlanResolver {
       override fun readRepoLocalConfig(request: ReadRepoLocalConfigRequest) =
         ReadRepoLocalConfigResult(RepoLocalConfig.defaults())
     }
+  val launcher =
+    object : AgentRunLauncher {
+      override fun queryLaunchCapability(request: AgentRunLaunchCapabilityRequest): AgentRunLaunchCapability =
+        AgentRunLaunchCapability.Supported
+
+      override fun resolveLaunchModel(request: AgentRunLaunchModelRequest) = launchModelResolver(request)
+
+      override fun launch(request: AgentRunLaunchRequest) =
+        error("A phase run fixture must not resolve launches through the test support launcher.")
+    }
   return PhaseRunPlanResolver(
     strategies = strategies,
     gitOperations = gitOperations,
     intakeResolver = testPhaseRunIntakeResolver(database),
-    agentRunLauncher =
-      object : AgentRunLauncher {
-        override fun queryLaunchCapability(request: AgentRunLaunchCapabilityRequest): AgentRunLaunchCapability =
-          AgentRunLaunchCapability.Supported
-
-        override fun resolveLaunchModel(request: AgentRunLaunchModelRequest) = launchModelResolver(request)
-
-        override fun launch(request: AgentRunLaunchRequest) =
-          error("A phase run fixture must not resolve launches through the test support launcher.")
-      },
     executionPlanCodec = codec,
     executionPlanCompatibility = compatibility,
     executionPlanResolver =
@@ -302,5 +305,13 @@ fun PhaseRunEntryFixture.plans(): PhaseRunPlanResolver {
         workflowAgentAssignments = workflowAgentAssignmentStoreForTests(database),
         configResolution = routingConfigResolutionForTests(),
       ),
+    stepLaunchResolver =
+      FeatureTaskRuntimeStepLaunchResolver(
+        launcher,
+        strategies,
+        RejectingAgentAddonSelectionPort,
+        ExecutableLookup { true },
+      ),
+    diagnostics = diagnostics,
   )
 }

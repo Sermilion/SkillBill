@@ -1,5 +1,6 @@
 package skillbill.engine.goalrunner.qa
 
+import skillbill.config.model.WorkflowAgentAssignmentPolicyMode
 import skillbill.engine.featuretask.qa.capability.QaCapabilityResolution
 import skillbill.engine.featuretask.qa.capability.QaCapabilityResolver
 import skillbill.engine.goal.GoalRunnerManifestState
@@ -76,6 +77,14 @@ internal fun governingInputs(
     branch = state.manifest.featureBranch.orEmpty().ifBlank { state.manifest.branchForFinalPullRequest() },
     modelDirectives = request.modelAssignment.perPhaseDirectives,
     modelMatrix = request.modelAssignment.matrix,
+    agentAssignmentsWorkflowId =
+      request.workflowAgentAssignments
+        ?.takeIf { it.policyMode == WorkflowAgentAssignmentPolicyMode.FROZEN }
+        ?.admissionWorkflowId,
+    agentAssignmentsFingerprint =
+      request.workflowAgentAssignments
+        ?.takeIf { it.policyMode == WorkflowAgentAssignmentPolicyMode.FROZEN }
+        ?.let { request.workflowAgentAssignmentsFingerprint },
     addons =
       request.agentAddonSelection.entries.map { entry ->
         GoalQualityHydratedAddonInput(entry.persisted, entry.description, entry.content)

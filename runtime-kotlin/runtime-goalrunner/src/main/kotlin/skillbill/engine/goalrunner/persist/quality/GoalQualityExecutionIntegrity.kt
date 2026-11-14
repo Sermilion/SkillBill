@@ -2,6 +2,7 @@ package skillbill.engine.goalrunner.persist.quality
 
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.goal.GOAL_QUALITY_EXECUTION_CONTRACT_VERSION
+import skillbill.contracts.workflow.goal.GoalQualityExecutionPayloadKeys
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.goalrunner.model.quality.GoalQualityAcceptedSourceObservation
@@ -510,7 +511,23 @@ internal fun validateRetainedAdmission(
 }
 
 internal fun governingInputFingerprint(inputs: GoalQualityExecutionInputs): String {
-  val json = JsonCodec.mapToJsonString(inputs.toPersistenceWire())
+  return fingerprintInputsWire(inputs.toPersistenceWire())
+}
+
+internal fun historicalGoverningInputFingerprint(
+  inputs: GoalQualityExecutionInputs,
+  sourceVersion: String,
+): String {
+  val wire = inputs.toPersistenceWire().toMutableMap()
+  if (sourceVersion != GOAL_QUALITY_EXECUTION_CONTRACT_VERSION) {
+    wire.remove(GoalQualityExecutionPayloadKeys.AGENT_ASSIGNMENTS_WORKFLOW_ID)
+    wire.remove(GoalQualityExecutionPayloadKeys.AGENT_ASSIGNMENTS_FINGERPRINT)
+  }
+  return fingerprintInputsWire(wire)
+}
+
+private fun fingerprintInputsWire(inputs: Map<String, Any?>): String {
+  val json = JsonCodec.mapToJsonString(inputs)
   return MessageDigest.getInstance("SHA-256")
     .digest(json.toByteArray(Charsets.UTF_8))
     .joinToString("") { "%02x".format(it) }

@@ -343,6 +343,9 @@ data class GoalQaResult(
   val reportText: String?,
   val failureKind: String?,
   val details: QaRunDetails?,
+  val recoveryClassification: String? = null,
+  val recoverySourceVersion: String? = null,
+  val recoveryGuidance: String? = null,
 )
 
 /** One finding goal QA reported; [fixed] is true when a later QA run no longer saw it. */

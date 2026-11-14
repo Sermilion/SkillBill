@@ -7,7 +7,6 @@ import skillbill.engine.featuretask.phaserun.monitor.MonitorAttemptTarget
 import skillbill.engine.featuretask.phaserun.monitor.MonitorPreparation
 import skillbill.engine.featuretask.phaserun.monitor.MonitorPreparationRequest
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
-import skillbill.engine.featuretask.runloop.qualitygate.goalBuildDefinitionId
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.catchingNonCancellation
 import skillbill.error.core.failureCodeLabel
@@ -151,6 +150,10 @@ public class PhaseRunEntry(
     expectedBranch: String,
     acceptedExecutionPlan: String,
   ): PhaseRunResult {
+    validateQualityRoutingReference(request, parentWorkflowId)
+    if (request.goalQualityInvocationId != invocationId) {
+      plans.invalidQualityPlan("The phase-run invocation does not match the accepted quality invocation.")
+    }
     val progressAvailable = request.goalQualityPhaseProgress != null && request.persistGoalQualityPhaseProgress != null
     val latestAvailable = request.latestGoalQualityPhaseProgress != null && acceptedExecutionPlan.isNotBlank()
     if (!progressAvailable || !latestAvailable) {
@@ -163,6 +166,7 @@ public class PhaseRunEntry(
         acceptedExecutionPlan,
         request.definitionId,
         acceptedAgentId,
+        request.workflowAgentAssignments?.takeIf { request.agentAssignmentsWorkflowId != null },
       )
     if (plans.requiresTerminalQualitySourceEvidence(plan) &&
       request.terminalGoalQualityContentFingerprint == null
@@ -173,23 +177,17 @@ public class PhaseRunEntry(
       plans.validateNestedProgressKeys(it)
       plans.validateRetainedRunningPhases(it, plan, "$parentWorkflowId:$invocationId")
     }
-    val boundRequest =
-      if (request.definitionId == goalBuildDefinitionId) {
-        request.copy(invokedAgentId = acceptedAgentId)
-      } else {
-        request
-      }
-    reconcileGoalRepairOutputs(boundRequest, invocationId, retained)
-    retainedValidationResult(boundRequest, parentWorkflowId, invocationId, plan, retained)?.let { return it }
+    reconcileGoalRepairOutputs(request, invocationId, retained)
+    retainedValidationResult(request, parentWorkflowId, invocationId, plan, retained)?.let { return it }
     val result =
       runInternal(
-        boundRequest.copy(acceptedGoalQualityPlanText = acceptedExecutionPlan),
+        request.copy(acceptedGoalQualityPlanText = acceptedExecutionPlan),
         invocationId,
         parentWorkflowId,
         expectedBranch,
       )
-    reconcileGoalRepairOutputs(boundRequest, invocationId, boundRequest.goalQualityPhaseProgress)
-    persistQualityTerminal(boundRequest, invocationId, result)
+    reconcileGoalRepairOutputs(request, invocationId, request.goalQualityPhaseProgress)
+    persistQualityTerminal(request, invocationId, result)
     return result
   }
 
@@ -602,6 +600,7 @@ public class PhaseRunEntry(
     workflowId: String,
     standalone: MonitorPreparation.Prepared?,
   ): PhaseRunSetup {
+    validateQualityRoutingReference(request, workflowId)
     val acceptedExecutionPlan = request.acceptedGoalQualityPlanText
     val definition = SkeletonDefinition.byId(request.definitionId)
     if (definition.runStateKind != SkeletonRunStateKind.IN_MEMORY) {
@@ -630,6 +629,7 @@ public class PhaseRunEntry(
           encoded,
           request.definitionId,
           requireNotNull(request.acceptedGoalQualityAgentId),
+          request.workflowAgentAssignments?.takeIf { request.agentAssignmentsWorkflowId != null },
         )
       } ?: plans.resolveExecutionPlan(request, workflowId, branch, resolutionFacts)
     val facts =
@@ -642,8 +642,34 @@ public class PhaseRunEntry(
         invocationId,
         liveChecksInvocation,
       )
+    plans.verifyQualityPlanLaunches(request, facts, executionPlan, diagnostics)
     return PhaseRunSetup(branch, executionPlan, facts)
   }
+
+  private fun validateQualityRoutingReference(request: PhaseRunRequest, workflowId: String) {
+    val hasReference = request.agentAssignmentsWorkflowId != null || request.agentAssignmentsFingerprint != null
+    if (!hasReference) {
+      if (request.workflowAgentAssignments != null || request.workflowAgentAssignmentsFingerprint != null) {
+        invalidQualityRoutingReference()
+      }
+      return
+    }
+    if (request.agentAssignmentsWorkflowId.isNullOrBlank() ||
+      request.agentAssignmentsWorkflowId != workflowId ||
+      request.agentAssignmentsFingerprint.isNullOrBlank() ||
+      request.workflowAgentAssignments?.admissionWorkflowId != request.agentAssignmentsWorkflowId ||
+      request.workflowAgentAssignments?.policyMode != skillbill.config.model.WorkflowAgentAssignmentPolicyMode.FROZEN ||
+      request.workflowAgentAssignmentsFingerprint != request.agentAssignmentsFingerprint
+    ) {
+      invalidQualityRoutingReference()
+    }
+  }
+
+  private fun invalidQualityRoutingReference(): Nothing =
+    throw SkillBillRuntimeException(
+      WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION,
+      "The goal-quality routing reference does not match its accepted parent artifact.",
+    )
 
   private fun inMemoryRecords(
     request: PhaseRunRequest,

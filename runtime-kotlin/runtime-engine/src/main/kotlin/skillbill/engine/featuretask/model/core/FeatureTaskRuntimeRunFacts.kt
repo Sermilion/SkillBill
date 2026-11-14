@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.model.core
 
 import skillbill.agentaddon.model.HydratedAgentAddonSelection
+import skillbill.config.model.ResolvedWorkflowAgentAssignments
 import skillbill.config.model.CompactionSettings
 import skillbill.contracts.system.OpenCodeLaunchIdentity
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
@@ -27,6 +28,8 @@ import kotlin.time.Duration
  */
 public interface FeatureTaskRuntimeRunFacts {
   public val admittedExecution: AdmittedFeatureTaskRuntimeExecution?
+
+  public val workflowAgentAssignments: ResolvedWorkflowAgentAssignments?
 
   /** The caller's explicit in-memory QA selection; null when the caller supplies none. */
   public val qaSelection: FeatureTaskRuntimeQaSelection?

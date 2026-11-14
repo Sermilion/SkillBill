@@ -2,10 +2,13 @@ package skillbill.engine.goalrunner.persist.quality
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.workflow.decomposition.findCompletedPlanWorkflowIdForProjectSpec
+import skillbill.config.model.WorkflowAgentAssignmentPolicyMode
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.goal.GOAL_FINALIZATION_HISTORY_CONTRACT_VERSION
 import skillbill.contracts.workflow.goal.GOAL_QUALITY_EXECUTION_CONTRACT_VERSION
 import skillbill.contracts.workflow.goal.GoalQualityExecutionPayloadKeys
+import skillbill.engine.featuretask.lifecycle.assignment.WorkflowAgentAssignmentInspection
+import skillbill.engine.featuretask.lifecycle.assignment.WorkflowAgentAssignmentStore
 import skillbill.engine.goalrunner.history.GoalChildHistoryEvidenceStore
 import skillbill.engine.goalrunner.model.history.GoalFinalizationHistoryPayloadKeys
 import skillbill.engine.goalrunner.persist.GoalRunnerQualityExecutionStore
@@ -53,6 +56,7 @@ public class WorkflowGoalRunnerQualityExecutionStore
     private val artifactValidator: FeatureTaskRuntimeWireArtifactValidator,
     private val identifiers: IdentifierGeneratorPort,
     private val historyEvidence: GoalChildHistoryEvidenceStore,
+    private val workflowAgentAssignments: WorkflowAgentAssignmentStore,
   ) : GoalRunnerQualityExecutionStore {
     private val engine = WorkflowEngine()
 
@@ -77,27 +81,52 @@ public class WorkflowGoalRunnerQualityExecutionStore
           if (!family.contains(parent.artifacts)) {
             null
           } else {
-            readRetained(family.value(parent.artifacts)).also { retained ->
-              when (retained) {
-                is GoalQualityExecutionRead.Current -> validateParentIdentity(retained.record, parentWorkflowId)
-                is GoalQualityExecutionRead.Historical ->
-                  if (retained.parentWorkflowId != null && retained.parentWorkflowId != parentWorkflowId) {
-                    invalid(
-                      "Stored goal quality execution belongs to '${retained.parentWorkflowId}', " +
-                        "not '$parentWorkflowId'.",
-                    )
-                  }
-                is GoalQualityExecutionRead.Ambiguous -> Unit
+            readRetainedForObservation(family.value(parent.artifacts), parentWorkflowId)
+          }
+        }
+      }
+
+    override fun prepareGoalQualityExecution(parentWorkflowId: String): GoalQualityExecutionRead? =
+      withQualityPersistence {
+        try {
+          val needsMigration = database.read { unitOfWork ->
+            val parent = parent(unitOfWork, parentWorkflowId)
+            val payload =
+              DurableWorkflowArtifactFamily.GOAL_QUALITY_EXECUTION.value(parent.artifacts) ?: return@read false
+            val source = JsonCodec.anyToStringAnyMap(payload) ?: return@read false
+            source[GoalQualityExecutionPayloadKeys.CONTRACT_VERSION] == "0.7"
+          }
+          if (!needsMigration) return@withQualityPersistence retainedGoalQualityExecution(parentWorkflowId)
+          database.transaction { unitOfWork ->
+            val parent = parent(unitOfWork, parentWorkflowId)
+            val family = DurableWorkflowArtifactFamily.GOAL_QUALITY_EXECUTION
+            val payload = family.value(parent.artifacts) ?: return@transaction null
+            val source = JsonCodec.anyToStringAnyMap(payload)
+              ?: invalid("Stored goal quality execution is not an object.")
+            validate(source)
+            val sourceVersion = source[GoalQualityExecutionPayloadKeys.CONTRACT_VERSION] as String
+            if (sourceVersion != "0.7") {
+              return@transaction readRetained(payload).also { retained ->
+                if (retained is GoalQualityExecutionRead.Current) {
+                  validateParentIdentity(retained.record, parentWorkflowId)
+                }
               }
             }
+            val converted = migrateGoalQualityExecutionRouting07(source, parentWorkflowId)
+            validateCurrentRecord(converted)
+            persist(unitOfWork, parent, converted)
+            GoalQualityExecutionRead.Current(converted)
           }
+        } catch (failure: SkillBillRuntimeException) {
+          if (failure.code != WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION) throw failure
+          retainedGoalQualityExecution(parentWorkflowId)
         }
       }
 
     override fun chooseFreshGoalQualityExecution(parentWorkflowId: String): Boolean =
       withQualityPersistence {
         database.transaction { unitOfWork ->
-          val parent = parent(unitOfWork, parentWorkflowId)
+          val parent = prepareQualityInUnitOfWork(unitOfWork, parentWorkflowId)
           val payload =
             DurableWorkflowArtifactFamily.GOAL_QUALITY_EXECUTION.value(parent.artifacts)
               ?: return@transaction false
@@ -127,6 +156,7 @@ public class WorkflowGoalRunnerQualityExecutionStore
               persist(unitOfWork, parent, current.copy(readiness = CLEAN_UNSTARTED))
               true
             }
+            is GoalQualityExecutionRead.Invalid -> invalid("Stored goal quality execution is invalid and cannot be reset.")
             is GoalQualityExecutionRead.Historical ->
               if (retained.status != GoalQualityExecutionStatus.RETIRED && retained.invocationId != null) {
                 retireActiveExecution(unitOfWork, parentWorkflowId)
@@ -140,7 +170,7 @@ public class WorkflowGoalRunnerQualityExecutionStore
     override fun settleGoalQualityReadinessFromCompletedPlan(parentWorkflowId: String): Boolean =
       withQualityPersistence {
         database.transaction { unitOfWork ->
-          val parent = parent(unitOfWork, parentWorkflowId)
+          val parent = prepareQualityInUnitOfWork(unitOfWork, parentWorkflowId)
           val payload =
             DurableWorkflowArtifactFamily.GOAL_QUALITY_EXECUTION.value(parent.artifacts)
               ?: return@transaction false
@@ -172,6 +202,8 @@ public class WorkflowGoalRunnerQualityExecutionStore
                     ),
                 )
               }
+              is GoalQualityExecutionRead.Invalid ->
+                invalid("Stored goal quality execution is invalid and cannot be settled from inferred evidence.")
             }
           validateParentIdentity(current, parentWorkflowId)
           val manifest = parent.decompositionRuntime() ?: return@transaction false
@@ -243,7 +275,7 @@ public class WorkflowGoalRunnerQualityExecutionStore
 
         validatePhaseProgress(progress)
         database.transaction { unitOfWork ->
-          val parent = parent(unitOfWork, parentWorkflowId)
+          val parent = prepareQualityInUnitOfWork(unitOfWork, parentWorkflowId)
           val family = DurableWorkflowArtifactFamily.GOAL_QUALITY_EXECUTION
           val payload = family.value(parent.artifacts) ?: return@transaction false
           val current = decode(payload)
@@ -279,7 +311,7 @@ public class WorkflowGoalRunnerQualityExecutionStore
     override fun reenterGoalQualityBuild(proof: GoalQualityBuildSourceProof): GoalQualityExecutionRecord? =
       withQualityPersistence {
         database.transaction { unitOfWork ->
-          val parent = parent(unitOfWork, proof.parentWorkflowId)
+          val parent = prepareQualityInUnitOfWork(unitOfWork, proof.parentWorkflowId)
           val payload =
             DurableWorkflowArtifactFamily.GOAL_QUALITY_EXECUTION.value(parent.artifacts)
               ?: return@transaction null
@@ -358,7 +390,7 @@ public class WorkflowGoalRunnerQualityExecutionStore
       parentWorkflowId: String,
     ): Boolean =
       withQualityPersistence {
-        val parent = parent(unitOfWork, parentWorkflowId)
+        val parent = prepareQualityInUnitOfWork(unitOfWork, parentWorkflowId)
         val family = DurableWorkflowArtifactFamily.GOAL_QUALITY_EXECUTION
         val payload = family.value(parent.artifacts) ?: return@withQualityPersistence false
         val retained = readRetained(payload)
@@ -385,6 +417,7 @@ public class WorkflowGoalRunnerQualityExecutionStore
               )
             }
             is GoalQualityExecutionRead.Ambiguous -> return@withQualityPersistence false
+            is GoalQualityExecutionRead.Invalid -> return@withQualityPersistence false
           }
         val historicalRetired = retained is GoalQualityExecutionRead.Historical
         val retired = current.retire()
@@ -435,7 +468,7 @@ public class WorkflowGoalRunnerQualityExecutionStore
     ): Boolean =
       withQualityPersistence {
         database.transaction { unitOfWork ->
-          val parent = parent(unitOfWork, parentWorkflowId)
+          val parent = prepareQualityInUnitOfWork(unitOfWork, parentWorkflowId)
           val family = DurableWorkflowArtifactFamily.GOAL_QUALITY_EXECUTION
           val payload = family.value(parent.artifacts) ?: invalid("Admitted quality execution is absent.")
           val current = decode(payload)
@@ -451,7 +484,8 @@ public class WorkflowGoalRunnerQualityExecutionStore
           val buildTransition = validBuildTransition(execution, adoptedExecution)
           val sameRecordEnvelope =
             next.readiness == GoalQualityReadiness.ADMITTED && next.contractVersion == current.contractVersion &&
-              next.adoptionEvidence == current.adoptionEvidence
+              next.adoptionEvidence == current.adoptionEvidence &&
+              next.migrationEvidence == current.migrationEvidence
           val settledBuild =
             execution.preQaBuild in setOf(GoalQualityPreQaBuildState.PASSED, GoalQualityPreQaBuildState.WARNED)
           if (blocksQualityTransition(
@@ -485,6 +519,22 @@ public class WorkflowGoalRunnerQualityExecutionStore
           ?: invalid("Parent workflow '$parentWorkflowId' is missing.")
       snapshotValidator.validate(snapshot, WorkflowFamily.TASK_RUNTIME.definition.workflowName)
       return snapshot
+    }
+
+    private fun prepareQualityInUnitOfWork(
+      unitOfWork: UnitOfWork,
+      parentWorkflowId: String,
+    ): WorkflowStateSnapshot {
+      val snapshot = parent(unitOfWork, parentWorkflowId)
+      val family = DurableWorkflowArtifactFamily.GOAL_QUALITY_EXECUTION
+      val payload = family.value(snapshot.artifacts) ?: return snapshot
+      val source = JsonCodec.anyToStringAnyMap(payload) ?: invalid("Stored goal quality execution is not an object.")
+      if (source[GoalQualityExecutionPayloadKeys.CONTRACT_VERSION] != "0.7") return snapshot
+      validate(source)
+      val converted = migrateGoalQualityExecutionRouting07(source, parentWorkflowId)
+      validateCurrentRecord(converted)
+      persist(unitOfWork, snapshot, converted)
+      return parent(unitOfWork, parentWorkflowId)
     }
 
     private fun selectionFingerprint(
@@ -541,11 +591,51 @@ public class WorkflowGoalRunnerQualityExecutionStore
         validateCurrentRecord(record)
         return GoalQualityExecutionRead.Current(record)
       }
+      if (sourceVersion == "0.7") {
+        val execution = JsonCodec.anyToStringAnyMap(map[GoalQualityExecutionPayloadKeys.EXECUTION])
+        val recordedParentId = execution?.get(GoalQualityExecutionPayloadKeys.PARENT_WORKFLOW_ID) as? String
+          ?: invalid("Stored 0.7 quality execution has no parent identity.")
+        validateCurrentRecord(migrateGoalQualityExecutionRouting07(map, recordedParentId))
+        return GoalQualityExecutionRead.Ambiguous(
+          sourceVersion,
+          map.toMap(),
+          execution?.get(GoalQualityExecutionPayloadKeys.INVOCATION_ID) as? String,
+          execution?.get(GoalQualityExecutionPayloadKeys.STATUS) == GoalQualityExecutionStatus.RETIRED.wireValue,
+        )
+      }
       if (sourceVersion !in setOf("0.1", "0.2", "0.3", "0.4", "0.5", "0.6")) {
         invalid("Stored goal quality execution uses unsupported contract version '$sourceVersion'.")
       }
       return decodeLegacyQualityRead(map, sourceVersion)
     }
+
+    private fun readRetainedForObservation(
+      value: Any?,
+      parentWorkflowId: String,
+    ): GoalQualityExecutionRead =
+      try {
+        readRetained(value).also { retained ->
+          when (retained) {
+            is GoalQualityExecutionRead.Current -> validateParentIdentity(retained.record, parentWorkflowId)
+            is GoalQualityExecutionRead.Historical ->
+              if (retained.parentWorkflowId != null && retained.parentWorkflowId != parentWorkflowId) {
+                invalid(
+                  "Stored goal quality execution belongs to '${retained.parentWorkflowId}', " +
+                    "not '$parentWorkflowId'.",
+                )
+              }
+            is GoalQualityExecutionRead.Ambiguous, is GoalQualityExecutionRead.Invalid -> Unit
+          }
+        }
+      } catch (failure: SkillBillRuntimeException) {
+        if (failure.code != WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION) throw failure
+        val map = JsonCodec.anyToStringAnyMap(value)
+        GoalQualityExecutionRead.Invalid(
+          map?.get(GoalQualityExecutionPayloadKeys.CONTRACT_VERSION) as? String,
+          value,
+          failure.code,
+        )
+      }
 
     private fun validateCurrentRecord(record: GoalQualityExecutionRecord) {
       if ((record.readiness == GoalQualityReadiness.ADMITTED) != (record.execution != null) ||
@@ -554,6 +644,7 @@ public class WorkflowGoalRunnerQualityExecutionStore
         invalid("Stored goal quality readiness and admitted execution disagree.")
       }
       validateAdoptionArchive(record)
+      validateMigrationArchive(record)
       record.execution?.let { execution ->
         validateExecutionInputs(execution)
         validateExecutionIdentity(execution)
@@ -608,6 +699,12 @@ public class WorkflowGoalRunnerQualityExecutionStore
           mapOf(
             keys.EXECUTION_PLANS to plans,
             keys.PROGRESS to progress,
+            keys.GOVERNING_INPUTS to
+              retained.governingInputs?.toPersistenceWire()
+                ?: invalid("Historical quality execution has no retained governing inputs."),
+            keys.GOVERNING_INPUT_FINGERPRINT to
+              retained.governingInputs?.let(::governingInputFingerprint)
+                ?: invalid("Historical quality execution has no retained governing inputs."),
             keys.FINAL_VALIDATION_CONTENT_FINGERPRINT to
               execution[keys.FINAL_VALIDATION_CONTENT_FINGERPRINT] as? String,
             keys.PRE_QA_BUILD to GoalQualityPreQaBuildState.PENDING.wireValue,
@@ -648,6 +745,21 @@ public class WorkflowGoalRunnerQualityExecutionStore
           original.containsKey(GoalQualityExecutionPayloadKeys.ADOPTION_EVIDENCE)
         ) {
           invalid("Stored goal quality adoption evidence has a conflicting source version or nested archive.")
+        }
+        validate(original)
+      }
+    }
+
+    private fun validateMigrationArchive(record: GoalQualityExecutionRecord) {
+      record.migrationEvidence?.let { evidence ->
+        val originalObject = JsonCodec.parseObjectOrNull(evidence.originalPayloadJson)
+          ?: invalid("Stored goal quality migration evidence is not valid JSON.")
+        val original = JsonCodec.anyToStringAnyMap(JsonCodec.jsonElementToValue(originalObject))
+          ?: invalid("Stored goal quality migration evidence is not an object.")
+        if (evidence.sourceContractVersion != "0.7" ||
+          original[GoalQualityExecutionPayloadKeys.CONTRACT_VERSION] != evidence.sourceContractVersion
+        ) {
+          invalid("Stored goal quality migration evidence has a conflicting source version.")
         }
         validate(original)
       }
@@ -827,14 +939,60 @@ public class WorkflowGoalRunnerQualityExecutionStore
       parentWorkflowId: String,
       admission: GoalQualityAdmissionRequest,
     ): GoalQualityExecutionRecord {
-      val parent = parent(unitOfWork, parentWorkflowId)
+      val parent = prepareQualityInUnitOfWork(unitOfWork, parentWorkflowId)
       val storedPayload = DurableWorkflowArtifactFamily.GOAL_QUALITY_EXECUTION.value(parent.artifacts)
       val retained = storedPayload?.let(::readRetained)
       if (admission.expectedRetainedRead != null && retained != admission.expectedRetainedRead) {
         invalid("Stored goal quality evidence changed before transactional adoption; reload the retained execution.")
       }
+      validateRoutingAdmission(unitOfWork, parentWorkflowId, retained, admission.governingInputs)
       val adopted = retainedQualityRecord(unitOfWork, parent, parentWorkflowId, retained, admission)
       return finishAdmittedQuality(unitOfWork, parent, retained, adopted, admission)
+    }
+
+    private fun validateRoutingAdmission(
+      unitOfWork: UnitOfWork,
+      parentWorkflowId: String,
+      retained: GoalQualityExecutionRead?,
+      inputs: GoalQualityExecutionInputs,
+    ) {
+      val fresh =
+        retained == null ||
+          (retained is GoalQualityExecutionRead.Current &&
+            retained.record.readiness == GoalQualityReadiness.CLEAN_UNSTARTED && retained.record.execution == null)
+      val workflowId = inputs.agentAssignmentsWorkflowId
+      val fingerprint = inputs.agentAssignmentsFingerprint
+      val suppliedReference = workflowId != null || fingerprint != null
+      if (suppliedReference && (workflowId == null || fingerprint == null)) {
+        invalid("Goal-quality routing reference is incomplete; preserve the parent and repair the reference before retrying.")
+      }
+      val inspection = workflowAgentAssignments.inspect(unitOfWork, parentWorkflowId)
+      when (inspection) {
+        is WorkflowAgentAssignmentInspection.Present -> {
+          if (suppliedReference &&
+            (inspection.assignments.policyMode != WorkflowAgentAssignmentPolicyMode.FROZEN ||
+              workflowId != inspection.assignments.admissionWorkflowId || fingerprint != inspection.fingerprint)
+          ) {
+            invalid("Goal-quality routing reference does not match the accepted parent artifact; preserve both records and repair the reference.")
+          }
+          if (fresh && inspection.assignments.policyMode == WorkflowAgentAssignmentPolicyMode.FROZEN && !suppliedReference) {
+            invalid("New frozen goal-quality execution requires the accepted parent routing reference.")
+          }
+          if (fresh && inspection.assignments.policyMode == WorkflowAgentAssignmentPolicyMode.LEGACY && suppliedReference) {
+            invalid("Legacy parent routing must retain paired-null goal-quality references.")
+          }
+        }
+        WorkflowAgentAssignmentInspection.Legacy -> {
+          if (suppliedReference) {
+            invalid("Goal-quality routing reference has no accepted parent artifact; preserve the parent and repair the evidence.")
+          }
+        }
+        is WorkflowAgentAssignmentInspection.Problem ->
+          invalid("Parent routing cannot be verified: ${inspection.recoveryMessage}")
+      }
+      if (retained is GoalQualityExecutionRead.Historical && suppliedReference) {
+        invalid("Historical goal-quality execution must retain its recorded paired-null routing reference.")
+      }
     }
 
     private fun retainedQualityRecord(
@@ -860,6 +1018,8 @@ public class WorkflowGoalRunnerQualityExecutionStore
           )
         is GoalQualityExecutionRead.Historical ->
           adoptHistoricalQuality(unitOfWork, parent, parentWorkflowId, retained, admission)
+        is GoalQualityExecutionRead.Invalid ->
+          invalid("Stored goal quality execution is invalid and cannot be adopted.")
       }
 
     private fun adoptHistoricalQuality(

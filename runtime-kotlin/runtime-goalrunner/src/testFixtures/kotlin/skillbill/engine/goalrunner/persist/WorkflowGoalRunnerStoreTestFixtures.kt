@@ -281,6 +281,7 @@ fun testWorkflowGoalRunnerQualityExecutionStore(
       FeatureTaskRuntimeExecutionPlanSchemaValidator(),
       SqliteWorkflowArtifactWireEncoder(),
     ),
+    workflowAgentAssignmentStoreForTests(database),
   )
 }
 

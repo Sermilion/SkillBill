@@ -230,6 +230,7 @@ internal fun historyWriterOwnsCurrentContents(
   outcomeStore: GoalRunnerWorkflowOutcomeStore,
   phasePlans: PhaseRunPlanResolver,
   state: GoalRunnerManifestState,
+  request: GoalRunnerRunRequest,
   execution: GoalQualityExecution,
   currentFingerprint: String,
 ): Boolean {
@@ -250,11 +251,19 @@ internal fun historyWriterOwnsCurrentContents(
   ) {
     return false
   }
-  return historyWriterValidationMatches(phasePlans, execution, completion.preWriterContentFingerprint)
+  return historyWriterValidationMatches(
+    phasePlans,
+    request,
+    state,
+    execution,
+    completion.preWriterContentFingerprint,
+  )
 }
 
 private fun historyWriterValidationMatches(
   phasePlans: PhaseRunPlanResolver,
+  request: GoalRunnerRunRequest,
+  state: GoalRunnerManifestState,
   execution: GoalQualityExecution,
   preWriterContentFingerprint: String,
 ): Boolean {
@@ -266,6 +275,7 @@ private fun historyWriterValidationMatches(
       plans.validation,
       SkeletonDefinition.VALIDATION.id,
       inputs.effectiveAgentId,
+      qualityWorkflowAgentAssignments(inputs, request, state.parentWorkflowId),
     )
   val progress = execution.progress?.validation ?: return false
   val observation = progress.acceptedSourceObservations.lastOrNull()

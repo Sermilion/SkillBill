@@ -29,8 +29,9 @@ public class GoalQualityPreparation(
   internal fun prepare(
     state: GoalRunnerManifestState,
     request: GoalRunnerRunRequest,
-  ): Pair<GoalQualityExecutionRecord, FeatureTaskRuntimeRunInvariantsRead> =
-    admitPreparedQuality(
+  ): Pair<GoalQualityExecutionRecord, FeatureTaskRuntimeRunInvariantsRead> {
+    outcomeStore.prepareGoalQualityExecution(state.parentWorkflowId)
+    return admitPreparedQuality(
       PreparedQualityContext(
         diagnostics,
         phasePlans,
@@ -43,6 +44,7 @@ public class GoalQualityPreparation(
       request,
       registrations::openCodeIdentity,
     )
+  }
 
   private fun readParentInvariants(
     state: GoalRunnerManifestState,

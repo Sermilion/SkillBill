@@ -1,6 +1,26 @@
 package skillbill.error.featuretask
 
 import skillbill.error.core.ShellContentContractException
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.AgentAddonFailureCode
+import skillbill.error.shellcontent.WorkflowFailureCode
+
+private val QUALITY_ROUTING_REFUSAL_CODES =
+  setOf(
+    AgentAddonFailureCode.INVALID_SELECTION,
+    AgentAddonFailureCode.SELECTION_DRIFT,
+  )
+
+/**
+ * A refused durable routing decision that must propagate out of failure containment instead of settling the
+ * affected phase with a runtime-authored outcome: an incompatible retained execution plan, an add-on selection
+ * refusal or drift, or an already-classified invalid quality execution.
+ */
+val SkillBillRuntimeException.isQualityRoutingRefusal: Boolean
+  get() =
+    this is IncompatibleFeatureTaskRuntimeExecutionPlanError ||
+      code == WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION ||
+      code in QUALITY_ROUTING_REFUSAL_CODES
 
 sealed class FeatureTaskRuntimeExecutionPlanAdmissionError(
   val reasonCode: String,
