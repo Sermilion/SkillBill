@@ -404,7 +404,7 @@ class NewTaskHomeTest {
 
   @Test
   fun `chips stay disabled until a repository and an agent are selected`() = runComposeUiTest {
-    val startable = NewTaskScreenHost(now = { Instant.fromEpochMilliseconds(0) }, onOpenRun = {}, onShowAllWork = {}, onStart = { _, _, _ -> })
+    val startable = NewTaskScreenHost(now = { Instant.fromEpochMilliseconds(0) }, onOpenRun = {}, onShowAllWork = {}, onStart = { _, _, _, _ -> })
     val state = NewTaskUiState(home = newTaskHome(loadedBoard(mapOf(BoardSectionKind.Goals to listOf(workItem("SKILL-1"))))))
     val chats = unconfinedNewTaskChats()
     val draft = chats.selected.value
@@ -470,9 +470,9 @@ class NewTaskHomeTest {
       now = { Instant.fromEpochMilliseconds(0) },
       onOpenRun = {},
       onShowAllWork = {},
-      onStart = { wire, target, selectedAction ->
+      onStart = { origin, wire, target, selectedAction ->
         NewTaskActionKind.entries.firstOrNull { it.wire == wire }?.toNewTaskKind()?.let { kind ->
-          draft.start(kind, target = target, action = selectedAction)
+          draft.startForContext(origin.contextRevision, origin.chat, origin.selectedRoot, kind, null, selectedAction, target)
         }
       },
     )

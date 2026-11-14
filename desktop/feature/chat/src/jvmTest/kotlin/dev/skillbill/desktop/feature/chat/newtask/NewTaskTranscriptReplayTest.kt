@@ -32,7 +32,8 @@ class NewTaskTranscriptReplayTest {
     )
     assertEquals(
       "Earlier in this chat you were talking with claude. Here is that conversation:\n" +
-        "The repository changed from /old to /new.\n" +
+        "The effective working directory changed from /old to /new.\n" +
+        "The selected repository changed from /old to /new.\n" +
         "The base branch changed from the default branch to dev.\n\n" +
         "Operator: hi\n\nAgent: hello\n\nOperator: [Image #1] [Image #2]\n\nContinue from here.",
       newTaskReplayPreamble(replay, "/new", "dev"),

@@ -235,6 +235,8 @@
     }).join('')}</tr>`).join('');
     const variants = catalog.special.map((row) => `<tr><th scope="row">${esc(row.type)}</th><td>${X.statusIcon(X.lookup(row.id))} ${link(row.id, row.label)}</td><td>${esc(location(row.id))}</td></tr>`).join('');
     const chats = [
+      ['Panels', 'Floating details beside chat', 'panes/chat'],
+      ['Panels', 'Floating details beside plans', 'panes/plans'],
       /* Activity is part of each detail and reads that item's records. */
       ['Activity', 'Recorded run, 33 subtasks', 'detail/SKILL-512'], ['Activity', 'Running', 'detail/SKILL-417'], ['Activity', 'Blocked, with audit and review loops', 'detail/INF-7'], ['Activity', 'Standalone phase', 'detail/ph-rk-review'],
       ['Changes', 'Subtask scopes and ranges', 'changes'],

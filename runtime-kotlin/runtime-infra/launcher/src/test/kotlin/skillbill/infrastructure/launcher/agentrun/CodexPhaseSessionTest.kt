@@ -114,13 +114,13 @@ class CodexPhaseSessionTest {
           printf '%s\n' '{"id":3,"result":{"turn":{"id":"turn-1","status":"inProgress"}}}'
           if [[ "${'$'}count" -lt 6 ]]; then
             printf '%s\n' '{"method":"turn/completed","params":{"threadId":"thread-1","turn":{"id":"turn-1","status":"failed","error":{"message":"$CODEX_OUTPUT_TOKEN_LIMIT_MESSAGE"}}}}'
+            exit 7
           else
             printf '%s\n' '{"method":"item/completed","params":{"threadId":"thread-1","turnId":"turn-1","item":{"id":"i","type":"agentMessage","text":"Completed work"}}}'
             printf '%s\n' '{"method":"turn/completed","params":{"threadId":"thread-1","turn":{"id":"turn-1","status":"completed"}}}'
+            exit 0
           fi
-          cat >/dev/null
-          if [[ "${'$'}count" -lt 6 ]]; then exit 7; fi
-          exit 0 ;;
+          ;;
       esac
     done
     """.trimIndent()

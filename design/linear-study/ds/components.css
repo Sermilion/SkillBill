@@ -388,6 +388,13 @@ input { font: inherit; color: inherit; }
 .sb-pane-sec > .sb-tree-row { height: 28px; margin: 0 -8px; padding: 0 8px; border-radius: var(--r-sm); }
 .sb-pane-sec > .sb-tree-row > .caret { display: none; }
 
+/* A dock reserves layout space; floating details stay inside the remaining document. */
+.sb-work--docked { overflow-x: auto; }
+.sb-work--docked > .sb-work-main { min-width: 300px; }
+.sb-sidepane.sb-sidepane--docked { position: relative; inset: auto; z-index: auto; width: clamp(300px, var(--chat-w, min(38vw, 520px)), max(300px, calc(100% - 300px))); }
+.sb-sidepane--docked .sb-chat-tr, .sb-sidepane--docked .sb-dock { padding-left: 16px; padding-right: 16px; }
+.sb-sidepane--docked .sb-composer-ft { flex-wrap: wrap; }
+
 /* View header */
 .sb-vh { display: flex; align-items: center; gap: 8px; height: var(--header-h); padding: 0 10px 0 16px; border-bottom: 1px solid var(--border-subtle); flex: none; min-width: 0; }
 .sb-crumbs { display: flex; align-items: center; gap: 6px; min-width: 0; font: 500 var(--t-base)/1 var(--font-sans); color: var(--fg-muted); }
@@ -692,6 +699,11 @@ input { font: inherit; color: inherit; }
 /* Work area: main column + optional specs pane, terminal below */
 .sb-work { flex: 1; min-height: 0; display: flex; position: relative; }
 .sb-work-main { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.sb-work-content { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.sb-work-content .sb-split { position: static; }
+.sb-chat-grip { position: absolute; z-index: 20; left: -4px; top: 0; bottom: 0; width: 8px; cursor: ew-resize; outline: none; touch-action: none; }
+.sb-chat-grip::after { content: ""; position: absolute; left: 3px; top: 0; bottom: 0; width: 2px; background: var(--accent); opacity: 0; }
+.sb-chat-grip:hover::after, .sb-chat-grip:focus-visible::after, .sb-chat-grip.is-drag::after { opacity: 1; }
 .sb-work-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 
 /* Side pane */
@@ -1831,7 +1843,7 @@ button.sb-pun:focus-visible { outline-offset: -2px; }
   .sb-doc { padding: 20px 16px 48px; }
   .sb-set { padding: 24px 16px 56px; }
   .hide-sm { display: none; }
-  .sb-sidepane { position: absolute; inset: 0; width: auto; z-index: 15; border-left: 0; }
+  .sb-sidepane:not(.sb-sidepane--docked) { position: absolute; inset: 0; width: auto; z-index: 15; border-left: 0; }
   /* The details panel fills the work body and cannot be resized. */
   .sb-pane { width: 100%; border-left: 0; box-shadow: none; }
   .sb-pane-grip { display: none; }

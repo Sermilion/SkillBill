@@ -19,8 +19,9 @@ enum class ChatPermissionMode { ReadOnly, Act }
 
 enum class CursorMcpDependency { ProjectUserOnly, TeamDashboardRequired }
 
-/** What a chat is about: one [Execution], or [NewTask] work with no execution yet. [repositoryRoot] is where the agent runs. */
+/** What a chat is about. [repositoryRoot] is the non-null provider and approval directory; New task selection is separate. */
 sealed interface ChatScope {
+  /** The effective non-null directory for provider commands and approval ownership. */
   val repositoryRoot: String
 
   data class Execution(
@@ -32,7 +33,16 @@ sealed interface ChatScope {
     val verifySourceBranch: String? = null,
   ) : ChatScope
 
-  data class NewTask(override val repositoryRoot: String, val baseBranch: String?) : ChatScope
+  data class NewTask(
+    val workingDirectory: String,
+    val selectedRepositoryRoot: String?,
+    val baseBranch: String?,
+    val userHome: String = workingDirectory,
+  ) : ChatScope {
+    override val repositoryRoot: String get() = workingDirectory
+
+    constructor(repositoryRoot: String, baseBranch: String?) : this(repositoryRoot, repositoryRoot, baseBranch)
+  }
 }
 
 /**
@@ -130,6 +140,9 @@ sealed interface ChatEvent {
 
   data class SuggestedActions(val actions: List<ChatSuggestedAction>) : ChatEvent
 
+  /** A repository path proposed by a completed New task reply; callers must validate it before selection. */
+  data class RepositoryCandidate(val path: String) : ChatEvent
+
   /** A permission request of this chat's process, or its settled outcome; the same card may arrive again as it changes. */
   data class ApprovalRequested(val card: ApprovalCard) : ChatEvent
 
@@ -181,14 +194,38 @@ data class ChatHistoryLine(
 
 /** Where a saved new-task draft runs; it marks the save as a draft, which references no execution. */
 data class ChatNewTaskContext(
-  val repositoryRoot: String,
+  val workingDirectory: String,
+  val selectedRepositoryRoot: String?,
   val baseBranch: String?,
   val sessionEstablished: Boolean = true,
   val pendingTurnLineIndex: Int? = null,
   val changesBaseline: ChatChangesBaseline? = null,
   val changesCaptureAttempted: Boolean = false,
   val changesAttributedPaths: Set<String>? = null,
-)
+) {
+  /** Compatibility directory accessor used by provider and approval consumers. */
+  val repositoryRoot: String get() = workingDirectory
+
+  constructor(
+    repositoryRoot: String,
+    baseBranch: String?,
+    sessionEstablished: Boolean = true,
+    pendingTurnLineIndex: Int? = null,
+    changesBaseline: ChatChangesBaseline? = null,
+    changesCaptureAttempted: Boolean = false,
+    changesAttributedPaths: Set<String>? = null,
+    selectedRepositoryRoot: String? = repositoryRoot,
+  ) : this(
+    repositoryRoot,
+    selectedRepositoryRoot,
+    baseBranch,
+    sessionEstablished,
+    pendingTurnLineIndex,
+    changesBaseline,
+    changesCaptureAttempted,
+    changesAttributedPaths,
+  )
+}
 
 data class ChatChangesBaseline(
   val headSha: String,

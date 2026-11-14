@@ -3,3 +3,6 @@ command = "sona-mcp"
 
 [mcp_servers.linear-sona]
 url = "https://mcp.linear.app/mcp"
+
+[mcp_servers.sentry]
+url = "https://mcp.sentry.dev/mcp"

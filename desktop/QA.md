@@ -1,5 +1,7 @@
 # Desktop QA
 
+For the explicit Sentry delivery check, see [Crash reporting](CRASH_REPORTING.md).
+
 Launch the desktop app for QA with:
 
 ```bash

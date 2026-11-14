@@ -29,6 +29,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import kotlin.time.Clock
 
 class ChatOperationCardTest {
@@ -149,6 +150,30 @@ class ChatOperationCardTest {
   }
 
   @Test
+  fun `confirm rechecks remembered authority after the transcript save`() = runTest {
+    val card = verify()
+    val controls = FakeWorkControlRepository().apply { operationCards[card.launchId] = card }
+    val request = NewTaskStart("/repo", "", null, "agent", NewTaskKind.Verify, null, 1L)
+    var contextChanged = false
+    val coordinator = OperationCardCoordinator(
+      controls,
+      backgroundScope,
+      { request },
+      historyChanged = { contextChanged = true; true },
+      admissionProblem = { _, _, _ -> if (contextChanged) "The selected repository changed." else null },
+    )
+    coordinator.remember(card.launchId, request, Any())
+    val thread = ChatThread(Clock.System)
+    thread.showOperationCard(card)
+
+    coordinator.actions(thread).onConfirm(card.token)
+    runCurrent()
+
+    assertTrue(controls.newTaskRequests.isEmpty())
+    assertEquals("The selected repository changed.", thread.operationCard(card.token)?.refusal)
+  }
+
+  @Test
   fun `stale confirmation stays inert while dismissal reaches the runtime`() = runTest {
     val stale = verify(canConfirm = false)
     val controls = FakeWorkControlRepository().apply { operationCards[stale.launchId] = stale }
@@ -190,7 +215,7 @@ class ChatOperationCardTest {
     runCurrent()
     assertEquals(emptyList(), controls.newTaskRequests)
     assertEquals(true, thread.transcript.value.filterIsInstance<ChatMessage.Agent>().last().text.contains("How would you like"))
-    assertEquals(true, coordinator.submitAdjustment(thread, "Only review the first thread"))
+    assertEquals(OperationCardCoordinator.AdjustmentSubmission.Accepted, coordinator.submitAdjustment(thread, "Only review the first thread"))
     runCurrent()
 
     val sent = controls.newTaskRequests.single()
@@ -356,7 +381,7 @@ class ChatOperationCardTest {
     val runs = RecordingRunOpener()
     val coordinator = OperationCardCoordinator(FakeWorkControlRepository(), backgroundScope, { null }, runs = runs)
     val thread = ChatThread(Clock.System)
-    thread.showOperationCard(verify())
+    thread.showOperationCard(verify().copy(state = OperationCardState.Confirming))
 
     coordinator.actions(thread).onOpenRun("verify-token")
     runCurrent()
