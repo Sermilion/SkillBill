@@ -119,7 +119,8 @@ class CodexPhaseSessionTest {
             printf '%s\n' '{"method":"turn/completed","params":{"threadId":"thread-1","turn":{"id":"turn-1","status":"completed"}}}'
           fi
           cat >/dev/null
-          exit 7 ;;
+          if [[ "${'$'}count" -lt 6 ]]; then exit 7; fi
+          exit 0 ;;
       esac
     done
     """.trimIndent()
