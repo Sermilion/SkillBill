@@ -44,6 +44,7 @@ kotlin {
     implementation(libs.lifecycle.viewmodel.navigation3)
   }
   sourceSets.jvmMain.dependencies {
+    implementation(libs.sentry)
     implementation(libs.compose.native.tray)
     implementation(libs.nucleus.notification.common)
     implementation(libs.nucleus.application)
@@ -103,6 +104,20 @@ val trayJavaHome = extensions.getByType<JavaToolchainService>().launcherFor {
   languageVersion.set(JavaLanguageVersion.of(21))
   vendor.set(JvmVendorSpec.ADOPTIUM)
 }.map { it.metadata.installationPath.asFile.absolutePath }
+
+tasks.register<JavaExec>("sentrySmoke") {
+  group = "verification"
+  description = "Sends one synthetic error to SENTRY_DSN; -PsentryCrash=true throws it uncaught. Never runs as part of check."
+  if (providers.gradleProperty("sentryCrash").orNull == "true") args("--crash")
+  dependsOn("jvmTestClasses")
+  val testCompilation = kotlin.targets.getByName("jvm").compilations.getByName("test")
+  classpath = files(testCompilation.output.allOutputs, configurations.getByName("jvmTestRuntimeClasspath"))
+  mainClass.set("dev.skillbill.desktop.app.reporting.SentrySmokeKt")
+  javaLauncher.set(project.extensions.getByType<JavaToolchainService>().launcherFor {
+    languageVersion.set(JavaLanguageVersion.of(21))
+    vendor.set(JvmVendorSpec.ADOPTIUM)
+  })
+}
 val trayNative = layout.projectDirectory.dir("src/jvmMain/native")
 val linuxTrayResources = layout.buildDirectory.dir("generated/linuxTray/resources")
 val compileLinuxTrayNative = tasks.register<Exec>("compileLinuxTrayNative") {

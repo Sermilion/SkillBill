@@ -19,6 +19,7 @@ import dev.skillbill.desktop.app.tray.TrayHost
 import dev.skillbill.desktop.app.motion.OsReducedMotionReader
 import dev.skillbill.desktop.app.motion.ReducedMotionRead
 import dev.skillbill.desktop.app.shell.MainWindow
+import dev.skillbill.desktop.app.reporting.DesktopCrashReporting
 import dev.skillbill.desktop.core.common.DiagnosticsSwitch
 import dev.skillbill.desktop.core.common.HostEnvironment
 import dev.skillbill.desktop.core.ui.navigation.DetailRoute
@@ -35,6 +36,7 @@ fun main() {
   val environment = withShellEnvironment(System.getenv(), System.getProperty("os.name", ""))
   val host = HostEnvironment(environment, System.getProperty("user.home"), System.getProperty("user.dir"))
   val component = AppComponent::class.create(host, diagnostics)
+  DesktopCrashReporting.start(environment, System.getProperty("compose.application.resources.dir"), component.runtimeConfigRepository::telemetryLevel)
   component.databaseSessionManager.start()
   component.startAtLoginSync.start()
   val reducedMotion = when (val read = OsReducedMotionReader().read()) {
@@ -73,6 +75,7 @@ fun main() {
         } catch (cancelled: kotlinx.coroutines.CancellationException) {
           throw cancelled
         } catch (failure: Exception) {
+          DesktopCrashReporting.capture(failure)
           System.getLogger("dev.skillbill.desktop").log(System.Logger.Level.WARNING, "desktop:quit-chat-close-failed", failure)
           mainVisible = true
           focusRequest++
