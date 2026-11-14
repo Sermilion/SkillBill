@@ -53,6 +53,8 @@ import dev.skillbill.desktop.core.domain.model.ChatModel
 import dev.skillbill.desktop.core.domain.model.ChatModelsRead
 import dev.skillbill.desktop.core.ui.input.ShellLayer
 import dev.skillbill.desktop.core.ui.input.gatesShortcutsWhileFocused
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.collect
 
 private val PICKER_WIDTH = 560.dp
 private val AGENT_PANE_WIDTH = 168.dp
@@ -74,7 +76,7 @@ data class ModelPick(val model: String?, val effort: String?, val label: String)
 /**
  * The agent chip. Its popover lists agents on the left and the highlighted agent's models for [repositoryRoot] on the right.
  * Highlighting an agent only previews its models; picking a model calls [onChoose] once with both, so a switch never needs a
- * second trip. Models load each time an agent is highlighted.
+ * second trip. Models load each time an agent is highlighted, showing the stored list while discovery runs.
  */
 @Composable
 internal fun AgentPicker(
@@ -84,7 +86,7 @@ internal fun AgentPicker(
   enabled: Boolean,
   disabledWhy: String? = null,
   resolveAgent: suspend (String) -> ChatAgent,
-  loadModels: suspend (ChatAgent, String) -> ChatModelsRead,
+  loadModels: (ChatAgent, String) -> Flow<ChatModelsRead>,
   onChoose: (agentId: String, pick: ModelPick) -> Unit,
 ) {
   var open by remember { mutableStateOf(false) }
@@ -120,7 +122,7 @@ private fun AgentModelPanes(
   agents: List<String>,
   repositoryRoot: String?,
   resolveAgent: suspend (String) -> ChatAgent,
-  loadModels: suspend (ChatAgent, String) -> ChatModelsRead,
+  loadModels: (ChatAgent, String) -> Flow<ChatModelsRead>,
   onChoose: (String, ModelPick) -> Unit,
 ) {
   val initial = remember { current?.agentId?.takeIf { it in agents } ?: agents.first() }
@@ -181,7 +183,7 @@ private fun ModelPane(
   agentId: String,
   repositoryRoot: String?,
   resolveAgent: suspend (String) -> ChatAgent,
-  load: suspend (ChatAgent, String) -> ChatModelsRead,
+  load: (ChatAgent, String) -> Flow<ChatModelsRead>,
   searchFocus: FocusRequester,
   onBack: () -> Unit,
   onPick: (ModelPick) -> Unit,
@@ -197,7 +199,7 @@ private fun ModelPane(
     read = null
     val resolved = resolveAgent(agentId)
     configured = resolved.takeIf { it.model != null }
-    if (repositoryRoot != null) read = load(active ?: resolved, repositoryRoot)
+    if (repositoryRoot != null) load(active ?: resolved, repositoryRoot).collect { read = it }
   }
   val configuredChecked = active != null && configured?.let { it.model == active.model && it.effort == active.effort } == true
   Column(
@@ -227,21 +229,36 @@ private fun ModelPane(
           MutedText(result.message)
           SbButton("Retry", { retry++ }, size = SbControlSize.Small)
         }
-        is ChatModelsRead.Loaded -> {
-          val models = result.models.filter { it.id.contains(query, true) || it.label.contains(query, true) }
-          models.forEach { model ->
-            SbMenuItem(
-              SbMenuEntry.Item(model.label, { onPick(ModelPick.listed(model)) },
-                checked = active != null && model.id == active.model && !configuredChecked,
-                detail = model.id.takeUnless { it == model.label }),
-            )
-          }
-          if (models.isEmpty()) MutedText(if (result.models.isEmpty()) "No models reported by this agent." else "No matching models.")
+        is ChatModelsRead.Loaded -> ListedModels(result.models, query, active, configuredChecked, onPick)
+        is ChatModelsRead.Cached -> {
+          ListedModels(result.models, query, active, configuredChecked, onPick)
+          result.refreshFailure?.let { MutedText(it) }
         }
       }
     }
-    if (read is ChatModelsRead.Loaded) SbButton("Refresh models", { retry++ }, size = SbControlSize.Small)
+    if (read is ChatModelsRead.Loaded || read is ChatModelsRead.Cached) {
+      SbButton("Refresh models", { retry++ }, size = SbControlSize.Small)
+    }
   }
+}
+
+@Composable
+private fun ListedModels(
+  models: List<ChatModel>,
+  query: String,
+  active: ChatAgent?,
+  configuredChecked: Boolean,
+  onPick: (ModelPick) -> Unit,
+) {
+  val shown = models.filter { it.id.contains(query, true) || it.label.contains(query, true) }
+  shown.forEach { model ->
+    SbMenuItem(
+      SbMenuEntry.Item(model.label, { onPick(ModelPick.listed(model)) },
+        checked = active != null && model.id == active.model && !configuredChecked,
+        detail = model.id.takeUnless { it == model.label }),
+    )
+  }
+  if (shown.isEmpty()) MutedText(if (models.isEmpty()) "No models reported by this agent." else "No matching models.")
 }
 
 @Composable

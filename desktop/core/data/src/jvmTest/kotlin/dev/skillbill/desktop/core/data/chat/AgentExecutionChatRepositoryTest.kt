@@ -14,13 +14,17 @@ import dev.skillbill.desktop.core.common.HostEnvironment
 import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatFailure
+import dev.skillbill.desktop.core.domain.model.ChatModel
+import dev.skillbill.desktop.core.domain.model.ChatModelsRead
 import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
 import dev.skillbill.desktop.core.domain.repository.RuntimeConfigRepository
 import dev.skillbill.desktop.core.testing.FakeAppSettingsRepository
+import dev.skillbill.desktop.core.testing.FakeChatModelCache
 import dev.skillbill.desktop.core.testing.RecordingDiagnostics
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import java.lang.reflect.Proxy
 import kotlin.io.path.createTempDirectory
@@ -60,7 +64,7 @@ class AgentExecutionChatRepositoryTest {
     val modelCatalog = ChatModelCatalog(
       host, { error("unused") }, { error("unused") }, dev.skillbill.desktop.core.data.usage.UsageProfileResolver(host), settings, diagnostics,
     )
-    val repository = AgentExecutionChatRepository(setOf(claude), config, store, catalog, diagnostics, summarizer, modelCatalog)
+    val repository = AgentExecutionChatRepository(setOf(claude), config, store, catalog, diagnostics, summarizer, modelCatalog, FakeChatModelCache())
     assertEquals(ChatSteeringPolicy.LiveWhenAvailable, repository.steeringPolicy("claude"))
     for ((session, id) in listOf("one" to "a", "one" to "b", "two" to "c")) {
       repository.steer(ChatSteeringRequest(session, "claude", id, "guidance"))
@@ -98,7 +102,8 @@ class AgentExecutionChatRepositoryTest {
       val catalog = AgentSessionCatalog(host, settings, store, diagnostics)
       AgentExecutionChatRepository(setOf(claude), unusedConfig, store, catalog, diagnostics, summarizer,
         ChatModelCatalog(host, { error("unused") }, { error("unused") },
-          dev.skillbill.desktop.core.data.usage.UsageProfileResolver(host), settings, diagnostics))
+          dev.skillbill.desktop.core.data.usage.UsageProfileResolver(host), settings, diagnostics),
+        FakeChatModelCache())
     }
 
     val events = repository.send(chatRequest(agent = ChatAgent("codex", null, null))).toList()
@@ -106,5 +111,80 @@ class AgentExecutionChatRepositoryTest {
     assertEquals(listOf<ChatEvent>(ChatEvent.Failed(ChatFailure.AgentUnsupported, "codex")), events)
     assertEquals(0, runs)
     assertEquals(listOf("chat.agent_unsupported"), diagnostics.categories)
+  }
+
+  @Test
+  fun `a stored model list emits first and an identical fresh read emits nothing more and writes nothing`() = runTest {
+    val models = listOf(ChatModel("model-a", "Model A"))
+    val cache = FakeChatModelCache().apply { stored["codex" to null] = models }
+    val repository = modelRepository(cache, ModelConnection(listOf(
+      """{"id":1,"result":{}}""",
+      """{"id":2,"result":{"data":[{"id":"e","model":"model-a","displayName":"Model A"}],"nextCursor":null}}""",
+    )))
+
+    assertEquals(listOf(ChatModelsRead.Cached(models)), repository.models(ChatAgent("codex", null, null), "/repo").toList())
+    assertEquals(0, cache.writes)
+  }
+
+  @Test
+  fun `a changed fresh list emits after the cached one and rewrites the store`() = runTest {
+    val cached = listOf(ChatModel("model-a", "Model A"))
+    val fresh = listOf(ChatModel("model-b", "Model B"))
+    val cache = FakeChatModelCache().apply { stored["codex" to null] = cached }
+    val repository = modelRepository(cache, ModelConnection(listOf(
+      """{"id":1,"result":{}}""",
+      """{"id":2,"result":{"data":[{"id":"e","model":"model-b","displayName":"Model B"}],"nextCursor":null}}""",
+    )))
+
+    assertEquals(listOf(ChatModelsRead.Cached(cached), ChatModelsRead.Loaded(fresh)),
+      repository.models(ChatAgent("codex", null, null), "/repo").toList())
+    assertEquals(fresh, cache.stored["codex" to null])
+  }
+
+  @Test
+  fun `a failed refresh keeps the stored list and reports the failure after it`() = runTest {
+    val cached = listOf(ChatModel("model-a", "Model A"))
+    val cache = FakeChatModelCache().apply { stored["codex" to null] = cached }
+    val repository = modelRepository(cache, ModelConnection(listOf(
+      """{"id":1,"result":{}}""",
+      """{"id":2,"result":{"data":[{}]}}""",
+    )))
+
+    assertEquals(
+      listOf(
+        ChatModelsRead.Cached(cached),
+        ChatModelsRead.Cached(cached, "Model list unavailable. Check this agent's installation and sign-in, then retry."),
+      ),
+      repository.models(ChatAgent("codex", null, null), "/repo").toList(),
+    )
+  }
+
+  @Test
+  fun `without a stored list only the fresh read emits and the store saves it`() = runTest {
+    val cache = FakeChatModelCache()
+    val fresh = listOf(ChatModel("model-a", "Model A"))
+    val repository = modelRepository(cache, ModelConnection(listOf(
+      """{"id":1,"result":{}}""",
+      """{"id":2,"result":{"data":[{"id":"e","model":"model-a","displayName":"Model A"}],"nextCursor":null}}""",
+    )))
+
+    assertEquals(listOf(ChatModelsRead.Loaded(fresh)), repository.models(ChatAgent("codex", null, null), "/repo").toList())
+    assertEquals(fresh, cache.stored["codex" to null])
+  }
+
+  private fun TestScope.modelRepository(cache: FakeChatModelCache, connection: ModelConnection): AgentExecutionChatRepository {
+    val host = HostEnvironment(emptyMap(), createTempDirectory("chat-home").toString(), "")
+    val diagnostics = RecordingDiagnostics()
+    val store = ChatStore(host, diagnostics, Clock.System)
+    val settings = FakeAppSettingsRepository()
+    val summarizer = ChatSummarizer(host, settings, { error("unused") }, store, diagnostics, ApplicationCoroutineScope(backgroundScope))
+    val catalog = AgentSessionCatalog(host, settings, store, diagnostics)
+    val config = Proxy.newProxyInstance(javaClass.classLoader, arrayOf(RuntimeConfigRepository::class.java)) { _, _, _ ->
+      error("unused")
+    } as RuntimeConfigRepository
+    val modelCatalog = ChatModelCatalog(host, { BoundedProcessStart.Started(connection) },
+      { flowOf(ChatProcessOutput.Exited(1, "")) },
+      dev.skillbill.desktop.core.data.usage.UsageProfileResolver(host), settings, diagnostics)
+    return AgentExecutionChatRepository(emptySet(), config, store, catalog, diagnostics, summarizer, modelCatalog, cache)
   }
 }

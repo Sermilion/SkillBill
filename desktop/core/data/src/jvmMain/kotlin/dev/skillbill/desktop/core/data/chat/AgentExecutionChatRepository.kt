@@ -14,10 +14,12 @@ import dev.skillbill.desktop.core.domain.model.ChatSteeringRequest
 import dev.skillbill.desktop.core.domain.model.ChatSteeringResult
 import dev.skillbill.desktop.core.domain.model.ChatSteeringUpdate
 import dev.skillbill.desktop.core.domain.model.Detail
+import dev.skillbill.desktop.core.domain.model.ChatModelsRead
 import dev.skillbill.desktop.core.domain.model.RunOptions
 import dev.skillbill.desktop.core.domain.model.SessionMoveResult
 import dev.skillbill.desktop.core.domain.model.SavedChatProjection
 import dev.skillbill.desktop.core.domain.model.WorkItem
+import dev.skillbill.desktop.core.domain.repository.ChatModelCache
 import dev.skillbill.desktop.core.domain.repository.ExecutionChatRepository
 import dev.skillbill.desktop.core.domain.repository.RuntimeConfigRepository
 import kotlinx.coroutines.Dispatchers
@@ -48,6 +50,7 @@ class AgentExecutionChatRepository(
   private val diagnostics: Diagnostics,
   private val summarizer: ChatSummarizer,
   private val modelCatalog: ChatModelCatalog,
+  private val modelCache: ChatModelCache,
 ) : ExecutionChatRepository {
   private val resolver = ChatAgentResolver(runtimeConfig::machineConfig, diagnostics)
   private val activeTurns = ConcurrentHashMap<String, ActiveTurn>()
@@ -57,7 +60,18 @@ class AgentExecutionChatRepository(
 
   override suspend fun agentFor(agentId: String): ChatAgent = resolver.forAgent(agentId)
 
-  override suspend fun models(agent: ChatAgent, repositoryRoot: String) = modelCatalog.read(agent, repositoryRoot)
+  override fun models(agent: ChatAgent, repositoryRoot: String): Flow<ChatModelsRead> = flow {
+    val cached = modelCache.read(agent.agentId, agent.profile)
+    if (cached != null) emit(ChatModelsRead.Cached(cached))
+    when (val fresh = modelCatalog.read(agent, repositoryRoot)) {
+      is ChatModelsRead.Loaded -> if (fresh.models != cached) {
+        modelCache.write(agent.agentId, agent.profile, fresh.models)
+        emit(fresh)
+      }
+      is ChatModelsRead.Failed -> emit(cached?.let { ChatModelsRead.Cached(it, fresh.message) } ?: fresh)
+      is ChatModelsRead.Cached -> emit(fresh)
+    }
+  }.flowOn(Dispatchers.IO)
 
   override fun agents(): List<String> = transports.map { it.agentId }.sorted()
 

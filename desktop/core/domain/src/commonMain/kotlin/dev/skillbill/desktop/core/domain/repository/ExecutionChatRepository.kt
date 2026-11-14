@@ -28,8 +28,12 @@ interface ExecutionChatRepository {
   /** [agentId] with its reasoning model from the machine config, or the CLI's own default when the config sets none. */
   suspend fun agentFor(agentId: String): ChatAgent
 
-  /** Reads the selected profile's available models without sending a chat prompt. */
-  suspend fun models(agent: ChatAgent, repositoryRoot: String): ChatModelsRead
+  /**
+   * Reads the selected profile's available models without sending a chat prompt. A stored list emits as
+   * [ChatModelsRead.Cached] first; the fresh read emits as [ChatModelsRead.Loaded] only when it differs, or as
+   * [ChatModelsRead.Failed] when nothing is stored.
+   */
+  fun models(agent: ChatAgent, repositoryRoot: String): Flow<ChatModelsRead>
 
   /** The agent ids a chat can run on, in a stable order. */
   fun agents(): List<String>

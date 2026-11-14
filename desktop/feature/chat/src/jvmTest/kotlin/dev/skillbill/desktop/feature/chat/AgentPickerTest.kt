@@ -15,6 +15,9 @@ import dev.skillbill.desktop.core.domain.model.ChatModel
 import dev.skillbill.desktop.core.domain.model.ChatModelsRead
 import dev.skillbill.desktop.core.ui.input.LocalShellInput
 import dev.skillbill.desktop.core.ui.input.ShellInput
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -31,7 +34,7 @@ class AgentPickerTest {
   fun `highlighting another agent previews its models and one model pick switches both`() = runComposeUiTest {
     val choices = mutableListOf<Pair<String, ModelPick>>()
     picker(ChatAgent("codex", null, null), onChoose = { agent, pick -> choices += agent to pick }) { agent ->
-      ChatModelsRead.Loaded(listOf(ChatModel("${agent.agentId}-model", "${agent.agentId}-model")))
+      flowOf(ChatModelsRead.Loaded(listOf(ChatModel("${agent.agentId}-model", "${agent.agentId}-model"))))
     }
     onNodeWithText(chipText(ChatAgent("codex", null, null))).performClick()
     onNodeWithText("codex-model").assertExists()
@@ -50,7 +53,7 @@ class AgentPickerTest {
   fun `configured row picks the matrix model with its effort`() = runComposeUiTest {
     var choice: ModelPick? = null
     picker(ChatAgent("codex", null, null), resolve = { ChatAgent(it, "gpt-5", "high") }, onChoose = { _, pick -> choice = pick }) {
-      ChatModelsRead.Loaded(listOf(ChatModel("gpt-5", "GPT-5")))
+      flowOf(ChatModelsRead.Loaded(listOf(ChatModel("gpt-5", "GPT-5"))))
     }
     onNodeWithText(chipText(ChatAgent("codex", null, null))).performClick()
     onNodeWithText("Configured").performClick()
@@ -61,7 +64,7 @@ class AgentPickerTest {
   fun `operator searches provider models and chooses an exact model id`() = runComposeUiTest {
     var choice: ModelPick? = null
     picker(ChatAgent("codex", null, null), onChoose = { _, pick -> choice = pick }) {
-      ChatModelsRead.Loaded(listOf(ChatModel("new-model", "New model"), ChatModel("other", "Other model")))
+      flowOf(ChatModelsRead.Loaded(listOf(ChatModel("new-model", "New model"), ChatModel("other", "Other model"))))
     }
     onNodeWithText(chipText(ChatAgent("codex", null, null))).performClick()
     onNode(hasSetTextAction()).performTextInput("new")
@@ -74,7 +77,7 @@ class AgentPickerTest {
   fun `agent default clears the explicit model`() = runComposeUiTest {
     var choice: ModelPick? = null
     picker(ChatAgent("codex", "new-model", null), onChoose = { _, pick -> choice = pick }) {
-      ChatModelsRead.Loaded(listOf(ChatModel("new-model", "New model")))
+      flowOf(ChatModelsRead.Loaded(listOf(ChatModel("new-model", "New model"))))
     }
     onNodeWithText(chipText(ChatAgent("codex", "new-model", null))).performClick()
     onNodeWithText("Agent default").performClick()
@@ -85,8 +88,8 @@ class AgentPickerTest {
   fun `failed discovery is visible and retry fetches the model list again`() = runComposeUiTest {
     var reads = 0
     picker(ChatAgent("claude", null, null)) {
-      if (++reads == 1) ChatModelsRead.Failed("Sign in and retry")
-      else ChatModelsRead.Loaded(listOf(ChatModel("new-model", "New model")))
+      if (++reads == 1) flowOf(ChatModelsRead.Failed("Sign in and retry"))
+      else flowOf(ChatModelsRead.Loaded(listOf(ChatModel("new-model", "New model"))))
     }
     onNodeWithText(chipText(ChatAgent("claude", null, null))).performClick()
     onNodeWithText("Sign in and retry").assertExists()
@@ -96,9 +99,33 @@ class AgentPickerTest {
   }
 
   @Test
+  fun `a stored list renders while discovery runs and keeps a refresh failure under it`() = runComposeUiTest {
+    picker(ChatAgent("codex", null, null)) {
+      flowOf(ChatModelsRead.Cached(listOf(ChatModel("old-model", "Old model")), "Discovery failed"))
+    }
+    onNodeWithText(chipText(ChatAgent("codex", null, null))).performClick()
+    onNodeWithText("Old model").assertExists()
+    onNodeWithText("Discovery failed").assertExists()
+    onNodeWithText("Refresh models").assertExists()
+  }
+
+  @Test
+  fun `a differing fresh read replaces the stored list`() = runComposeUiTest {
+    picker(ChatAgent("codex", null, null)) {
+      flow {
+        emit(ChatModelsRead.Cached(listOf(ChatModel("old-model", "Old model"))))
+        emit(ChatModelsRead.Loaded(listOf(ChatModel("fresh-model", "Fresh model"))))
+      }
+    }
+    onNodeWithText(chipText(ChatAgent("codex", null, null))).performClick()
+    onNodeWithText("Fresh model").assertExists()
+    onNodeWithText("Old model").assertDoesNotExist()
+  }
+
+  @Test
   fun `without a repository the model section asks for one and loads nothing`() = runComposeUiTest {
     var reads = 0
-    picker(ChatAgent("claude", null, null), repositoryRoot = null) { reads++; ChatModelsRead.Loaded(emptyList()) }
+    picker(ChatAgent("claude", null, null), repositoryRoot = null) { reads++; flowOf(ChatModelsRead.Loaded(emptyList())) }
     onNodeWithText(chipText(ChatAgent("claude", null, null))).performClick()
     onNodeWithText("Choose a repository to list models.").assertExists()
     runOnIdle { assertEquals(0, reads) }
@@ -109,7 +136,7 @@ class AgentPickerTest {
     repositoryRoot: String? = "/repo",
     resolve: (String) -> ChatAgent = { ChatAgent(it, null, null) },
     onChoose: (String, ModelPick) -> Unit = { _, _ -> },
-    load: (ChatAgent) -> ChatModelsRead,
+    load: (ChatAgent) -> Flow<ChatModelsRead>,
   ) {
     setContent {
       Themed {

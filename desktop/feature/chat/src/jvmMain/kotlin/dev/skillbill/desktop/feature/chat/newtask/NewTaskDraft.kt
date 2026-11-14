@@ -695,7 +695,7 @@ class NewTaskDraft internal constructor(
     ).also { previewTracker = root to it }
   }
 
-  internal suspend fun models(agent: ChatAgent, root: String) = chats.models(agent, root)
+  internal fun models(agent: ChatAgent, root: String) = chats.models(agent, root)
 
   internal suspend fun agentFor(agentId: String) = chats.agentFor(agentId)
 

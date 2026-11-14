@@ -30,6 +30,7 @@ internal object AppPreferenceKeys {
   val USAGE_LAST_AGENT = stringPreferencesKey("usage_last_agent")
   val USAGE_LAST_READINGS = stringSetPreferencesKey("usage_last_readings")
   val ONBOARDING_TOUR_SEEN = booleanPreferencesKey("onboarding_tour_seen")
+  val CHAT_MODELS = stringSetPreferencesKey("chat_models")
 
   private val NOTIFY_BLOCKED = booleanPreferencesKey("notify_blocked")
   private val NOTIFY_FAILED = booleanPreferencesKey("notify_failed")

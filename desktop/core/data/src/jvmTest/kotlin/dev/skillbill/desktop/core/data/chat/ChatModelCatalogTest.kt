@@ -103,17 +103,18 @@ class ChatModelCatalogTest {
       { processes(it) }, UsageProfileResolver(host), FakeAppSettingsRepository(), diagnostics)
   }
 
-  private class ModelConnection(lines: List<String>, private val cancel: Boolean = false) : BoundedProtocolConnection {
-    private val remaining = ArrayDeque(lines)
-    val sent = mutableListOf<JsonObject>()
-    var closed = false
-    override suspend fun sendLine(line: String): Boolean { sent += checkNotNull(parseStreamLine(line)); return true }
-    override suspend fun receive(): BoundedProtocolInput {
-      if (cancel) throw CancellationException("picker dismissed")
-      return remaining.removeFirstOrNull()?.let(BoundedProtocolInput::Line) ?: BoundedProtocolInput.Exited
-    }
-    override fun beginResponseBudget() = Unit
-    override fun endResponseBudget() = Unit
-    override suspend fun close() { closed = true }
+}
+
+internal class ModelConnection(lines: List<String>, private val cancel: Boolean = false) : BoundedProtocolConnection {
+  private val remaining = ArrayDeque(lines)
+  val sent = mutableListOf<JsonObject>()
+  var closed = false
+  override suspend fun sendLine(line: String): Boolean { sent += checkNotNull(parseStreamLine(line)); return true }
+  override suspend fun receive(): BoundedProtocolInput {
+    if (cancel) throw CancellationException("picker dismissed")
+    return remaining.removeFirstOrNull()?.let(BoundedProtocolInput::Line) ?: BoundedProtocolInput.Exited
   }
+  override fun beginResponseBudget() = Unit
+  override fun endResponseBudget() = Unit
+  override suspend fun close() { closed = true }
 }

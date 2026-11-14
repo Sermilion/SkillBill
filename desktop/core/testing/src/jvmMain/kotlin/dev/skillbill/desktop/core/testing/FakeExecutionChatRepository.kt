@@ -47,7 +47,9 @@ class FakeExecutionChatRepository(
   var agentFor: (String) -> ChatAgent = { ChatAgent(it, null, null) }
   val agentForCalls: MutableList<String> = Collections.synchronizedList(mutableListOf())
 
-  override suspend fun models(agent: ChatAgent, repositoryRoot: String) = ChatModelsRead.Loaded(emptyList())
+  var modelsResult: (ChatAgent, String) -> Flow<ChatModelsRead> = { _, _ -> flowOf(ChatModelsRead.Loaded(emptyList())) }
+
+  override fun models(agent: ChatAgent, repositoryRoot: String) = modelsResult(agent, repositoryRoot)
 
   override suspend fun agentFor(agentId: String): ChatAgent {
     agentForCalls += agentId

@@ -706,7 +706,7 @@ class ChatWorkspace(
     }
   }
 
-  internal suspend fun models(agent: ChatAgent, root: String) = chat.models(agent, root)
+  internal fun models(agent: ChatAgent, root: String) = chat.models(agent, root)
 
   internal suspend fun agentFor(agentId: String) = chat.agentFor(agentId)
 
