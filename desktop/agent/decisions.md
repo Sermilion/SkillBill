@@ -1,3 +1,40 @@
+## [2026-11-14] Read the tour-seen flag outside the settings Flow
+Context: The first-run tour opens once per install, but the shared settings Flow emits empty preferences on IOException, which would read as not seen and reopen the tour on every launch after a read failure.
+Decision: readOnboardingTourSeen loads the store snapshot directly and maps IOException to SettingsRejection.ReadFailed; markOnboardingTourSeen writes true through the existing edit helper and keeps the existing write diagnostic.
+Reason: A read failure must stay distinct from not seen so the launch gate keeps the tour closed. An additive boolean key needs no file version bump, migration or AppSettings field.
+
+## [2026-11-14] Treat a missing tour flag as not seen
+Context: Installations upgrading from builds without the tour have no onboarding_tour_seen key, and each install should see the tour once.
+Decision: A missing key reads as not seen, so upgraded installs auto-open the tour once. The gate marks the flag when it auto-opens, so a quit or crash mid-tour still counts as seen; a failed mark still shows that launch's tour.
+Reason: Inferring install age from other keys misclassifies installs that never wrote a preference and adds a heuristic migration. Marking at auto-open bounds the tour to one launch without suppressing it on write failure.
+
+## [2026-11-14] Keep the tour a staged demo that cannot touch real state
+Context: The tour shows scripted scenes of real product flows while a real run may sit behind the overlay, and feature screens are bound to ViewModels and runtime repositories.
+Decision: Build the tour in app/onboarding as an overlay with a staged 1120x680 frame fed by fixture data; tour composables take only tour state, step data and the navigate callback, never repositories or ViewModels. Every scene control is an inert no-op, and the step 06 toast renders inside the frame from a fixture ToastData instead of the window toast host.
+Reason: Fixtures through real screens would put fake repositories in production DI and risk real control calls, which breaks the tour's explanation-only contract; the tour must never pause or resume real runs, send a real review, or surface a window-level notification for actions that never happened.
+
+## [2026-11-14] Consume raw key events while the tour is open
+Context: While the tour overlay is open, shell shortcuts such as P, R, the G chords and the command menu must not act on the real work underneath.
+Decision: Route onPreviewKeyEvent to a tour handler ahead of the Changes panel and ShellKeyboard; arrows and Esc navigate or close, Enter, Space and Tab fall through to focused overlay controls, and every other event is consumed.
+Reason: Consuming at the preview boundary guarantees no shortcut reaches real work. Extending ShellKey and KeyPressMapping with arrows was a named non-goal, so the tour reads raw Compose KeyEvents the way ChangesWindowKeys does.
+
+## [2026-11-14] Tour fixture pins Cursor to data slot 5
+Context: The onboarding tour mock colors its staged agents Claude, Codex and Cursor as data-4, data-2 and data-5, while agentDataSlot in Avatar.kt maps cursor to slot 6.
+Decision: TourFixture stores explicit data slots and renders with dataColor(slot) instead of calling agentDataSlot.
+Reason: The tour reproduces the design mock; the shared mapping serves real agents, and reusing it would recolor Cursor away from the mock.
+Revisit when: the mock's agent colors are reconciled with agentDataSlot.
+
+## [2026-11-14] Tour start card passes a null issue key
+Context: Step 02 renders the real StartCard, and startCardSubtitle joins kind, issue key and location; the spec fixes the visible subtitle as "Goal · acme-web from main".
+Decision: The scene calls StartCard with issueKey = null and StartCardContext("acme-web", "main"); the goal key ACME-121 appears on the Work board in step 03 instead.
+Reason: Passing the goal key would render "Goal · ACME-121 · acme-web from main", and the non-goals forbid changing StartCard to suppress it.
+
+## [2026-11-14] Tour Start goal click is inert
+Context: AC-001 permits a real click on a demo button to advance the timeline but does not require it.
+Decision: onStart is a no-op; the demo cursor's timed action performs the start.
+Reason: The step runner cannot restart a step from an offset, so a real click could only replay the scene from its start and lose typed state; the click still touches only tour state and never reaches a chat or runtime repository.
+Revisit when: the tour runner gains restart-from-offset support.
+
 ## [2026-11-13] Preserve saved chats when their agent becomes unavailable
 Context: A saved chat can outlive its agent's support. Dropping its ChatAgent would hide it from history, while automatically selecting another agent would change who handles the conversation.
 Decision: Normalize unsupported non-null stored agent ids to unavailable during decode, retain other chat data, and persist the sentinel on the next ordinary save. Restore the transcript with one pick-an-agent notice and gate sending until the operator chooses a supported agent.

@@ -27,6 +27,8 @@ import dev.skillbill.desktop.app.command.CommandMenu
 import dev.skillbill.desktop.app.display.DesktopUiScale
 import dev.skillbill.desktop.app.display.DesktopUiScaleProvider
 import dev.skillbill.desktop.app.di.WindowComponent
+import dev.skillbill.desktop.app.onboarding.OnboardingTourOverlay
+import dev.skillbill.desktop.app.onboarding.handleTourKey
 import dev.skillbill.desktop.app.shell.qadevice.QaDeviceSwitcher
 import dev.skillbill.desktop.app.keyboard.ShortcutSheet
 import dev.skillbill.desktop.app.keyboard.KeyPress
@@ -46,6 +48,7 @@ import dev.skillbill.desktop.core.ui.feedback.ToastMessage
 import dev.skillbill.desktop.core.ui.feedback.ToastTone
 import dev.skillbill.desktop.core.ui.navigation.AppRoute
 import dev.skillbill.desktop.core.ui.navigation.PaneSlot
+import dev.skillbill.desktop.core.ui.navigation.NewTaskRoute
 import dev.skillbill.desktop.core.ui.navigation.SettingsRoute
 import dev.skillbill.desktop.core.ui.shell.LocalShellLayout
 import dev.skillbill.desktop.core.ui.shell.ShellLayout
@@ -107,6 +110,7 @@ fun ApplicationScope.MainWindow(
     }
   }
   LaunchedEffect(window) { window.navigator.followSession() }
+  LaunchedEffect(window) { window.onboardingTour.startOnLaunch() }
   LaunchedEffect(window.controls) {
     window.controls.launchFailures.collect { reason ->
       window.toasts.show(ToastMessage(
@@ -126,6 +130,8 @@ fun ApplicationScope.MainWindow(
     icon = skillBillIcon(),
     state = windowState,
     onPreviewKeyEvent = onPreviewKeyEvent@{ event ->
+      // The tour is modal: its keys win, and no shell shortcut fires under it.
+      if (window.onboardingTour.open) return@onPreviewKeyEvent handleTourKey(event, window.onboardingTour)
       // The Changes panel is modal: its keys win, and no shell shortcut fires under it.
       if (changesEntry != null) return@onPreviewKeyEvent changesKeys.handle(event)
       val press = event.toKeyPress()
@@ -201,6 +207,12 @@ fun ApplicationScope.MainWindow(
               if (panes.shortcutsOpen) ShortcutSheet { panes.shortcutsOpen = false }
               changesEntry?.let { entry ->
                 key(entry.source.id) { ChangesOverlay(entry, changesKeys, createChangesViewModel, changes::close) }
+              }
+              if (window.onboardingTour.open) {
+                OnboardingTourOverlay(window.onboardingTour) {
+                  window.onboardingTour.close()
+                  window.navigator.navigate(NewTaskRoute)
+                }
               }
               ToastStack(window.toasts.host)
             }

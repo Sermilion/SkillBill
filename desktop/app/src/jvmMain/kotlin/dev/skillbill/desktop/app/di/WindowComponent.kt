@@ -5,6 +5,7 @@ import dev.skillbill.desktop.app.command.CommandMenuState
 import dev.skillbill.desktop.app.keyboard.ShellKeyboard
 import dev.skillbill.desktop.app.keyboard.TerminalTriggers
 import dev.skillbill.desktop.app.navigation.WindowNavigator
+import dev.skillbill.desktop.app.onboarding.OnboardingTourState
 import dev.skillbill.desktop.app.shell.ShellBoardState
 import dev.skillbill.desktop.app.shell.FavoritesSidebarState
 import dev.skillbill.desktop.app.usage.UsageSidebarModel
@@ -62,6 +63,7 @@ interface WindowComponent {
   val board: ShellBoardState
   val favorites: FavoritesSidebarState
   val qaDevice: QaDevicePickerState
+  val onboardingTour: OnboardingTourState
   val boardRepository: WorkBoardRepository
   val details: WorkDetailRepository
   val controls: WorkControlRepository

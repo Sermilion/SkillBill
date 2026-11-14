@@ -38,6 +38,9 @@ class FakeAppSettingsRepository(initial: AppSettings = AppSettings.DEFAULT) : Ap
   var favoriteWriteFailure = false
   var specFavoriteWriteFailure = false
   var qaDeviceReadFailure = false
+  var onboardingTourSeen = false
+  var onboardingTourReadFailure = false
+  var onboardingTourWriteFailure = false
   var detailsWidthWriteFailure = false
   var favoriteReadFailure: Boolean
     get() = favoriteReadFailureState.value
@@ -65,6 +68,15 @@ class FakeAppSettingsRepository(initial: AppSettings = AppSettings.DEFAULT) : Ap
 
   override suspend fun readQaDevice(): Outcome<QaDevicePick?, SettingsRejection> =
     if (qaDeviceReadFailure) Outcome.Failure(SettingsRejection.ReadFailed) else Outcome.Success(settings.value.qaDevice)
+
+  override suspend fun readOnboardingTourSeen(): Outcome<Boolean, SettingsRejection> =
+    if (onboardingTourReadFailure) Outcome.Failure(SettingsRejection.ReadFailed) else Outcome.Success(onboardingTourSeen)
+
+  override suspend fun markOnboardingTourSeen(): Outcome<Unit, SettingsRejection> {
+    if (onboardingTourWriteFailure) return Outcome.Failure(SettingsRejection.WriteFailed)
+    onboardingTourSeen = true
+    return Outcome.Success(Unit)
+  }
 
   override suspend fun setDefaultAgent(agentId: String?) =
     change { it.copy(defaultAgentId = agentId?.trim()?.ifEmpty { null }) }

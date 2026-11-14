@@ -46,6 +46,12 @@ interface AppSettingsRepository {
 
   suspend fun readQaDevice(): Outcome<QaDevicePick?, SettingsRejection>
 
+  /** Reads whether the first-run tour was seen; a read failure stays distinct from not seen. */
+  suspend fun readOnboardingTourSeen(): Outcome<Boolean, SettingsRejection>
+
+  /** Marks the first-run tour as seen. */
+  suspend fun markOnboardingTourSeen(): Outcome<Unit, SettingsRejection>
+
   /** Null or blank clears the default, so new work starts with the first detected agent again. */
   suspend fun setDefaultAgent(agentId: String?): Outcome<Unit, SettingsRejection>
 

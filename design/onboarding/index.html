@@ -370,6 +370,21 @@ kbd{font:500 11px var(--font-mono);min-width:19px;height:19px;padding:0 5px;bord
 @media (prefers-reduced-motion: reduce){
   *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;transition-delay:0s!important}
 }
+@media (max-height: 599px){
+  .cap{padding:8px 14px}
+  #capB,#capX,.cap .try,#dots{display:none}
+  .hero h1{font-size:30px}
+}
+@media (max-width: 760px){
+  .top{padding:0 12px}
+  .tb-brand .faint{display:none}
+  .cap{grid-template-columns:1fr}
+  .cap-r{flex-direction:row;align-items:center;justify-content:flex-end}
+  .cap .xgrid{grid-template-columns:repeat(2,auto)}
+  .hero h1{font-size:30px}
+  .hero p{font-size:14px;max-width:420px}
+  .hero .acts{flex-wrap:wrap;justify-content:center}
+}
 </style>
 </head>
 <body>
@@ -394,8 +409,8 @@ kbd{font:500 11px var(--font-mono);min-width:19px;height:19px;padding:0 5px;bord
   <div class="logo-wrap"><span class="ring"></span><span class="ring r2"></span><span id="heroMarkO"></span></div>
   <h1>That's the loop</h1>
   <p>Describe it, start it, steer it, review it, ship it. The rest of Sona builds on those five moves.</p>
-  <div class="acts"><button class="btn pri lg" id="firstTask">Start your first task</button><button class="btn ghost lg" data-go="1">Replay tour</button><a class="btn ghost lg" href="../linear-study/index.html">Back to prototype</a></div>
-  <div class="hint">Open the tour again from the command menu: <kbd>⌘</kbd><kbd>K</kbd> then "Show tour"</div>
+  <div class="acts"><button class="btn pri lg" id="firstTask">Start your first task</button><button class="btn ghost lg" data-go="1">Replay tour</button><button class="btn ghost lg" id="closeB">Close</button></div>
+  <div class="hint">Open the tour again from the command menu: <kbd id="modK">⌘</kbd><kbd>K</kbd> then "Show tour"</div>
 </section>
 
 <main class="stage">
@@ -486,6 +501,8 @@ const si = (st, p) => `<span class="si ${st}" style="--p:${p || 35}%">${I.check}
 $('#tbBrand').innerHTML = `${mark()}<span>Sona</span><span class="faint">First-run tour</span>`;
 $('#heroMarkW').outerHTML = mark();
 $('#heroMarkO').outerHTML = mark();
+const modPlatform = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '';
+$('#modK').textContent = /mac/i.test(modPlatform) ? '⌘' : 'Ctrl';
 const NAV = [
   ['newtask', I.pencil, 'New task'],
   ['work', I.target, 'Work'],
@@ -513,12 +530,13 @@ const navEl = n => $(`.nav[data-nav="${n}"]`);
 /* ---------- fit ---------- */
 let scale = 1;
 function fit() {
-  const availW = innerWidth * 0.94, availH = innerHeight - 52 - 200;
-  scale = Math.max(0.4, Math.min(1, availW / W, availH / H));
+  const capH = $('#cap').offsetHeight;
+  const availW = innerWidth * 0.94, availH = innerHeight - 52 - capH - 22;
+  scale = Math.max(0, Math.min(1, availW / W, availH / H));
   wrap.style.width = W * scale + 'px';
   wrap.style.height = H * scale + 'px';
   frame.style.transform = `scale(${scale})`;
-  wrap.style.marginTop = Math.max(12, (innerHeight - 52 - (H * scale + 22 + 190)) / 2) + 'px';
+  wrap.style.marginTop = Math.max(12, (innerHeight - 52 - (H * scale + 22 + capH)) / 2) + 'px';
 }
 fit();
 
@@ -852,7 +870,7 @@ const BEATS = [
       at(t + 500, () => {
         const c = document.createElement('div');
         c.className = 'startcard'; c.id = 'startCard';
-        c.innerHTML = `<div class="sc-ic">${I.target}</div><div class="sc-t"><b>${GOAL.t}</b><span>Goal · 3 subtasks · acme-web from main</span></div><button class="btn pri" id="startGoal">Start goal</button>`;
+        c.innerHTML = `<div class="sc-ic">${I.target}</div><div class="sc-t"><b>${GOAL.t}</b><span>Goal · acme-web from main</span></div><button class="btn pri" id="startGoal">Start goal</button>`;
         $('#msgs').appendChild(c);
       });
       at(t + 1100, () => spot($('#startGoal'), { tip: '<b>Your call</b>Starting the goal is always a click. The agent never launches work on its own.', side: 'bottom', pad: 5 }));
@@ -1089,6 +1107,7 @@ function go(n) {
   $$('#dots button').forEach(d => { const i = +d.dataset.go; d.className = i === n ? 'on' : i < n ? 'done' : ''; });
   nextB.textContent = n === LAST - 1 ? 'Finish' : 'Next';
   backB.disabled = false;
+  fit();
 
   // shell
   $$('.nav').forEach(x => x.classList.remove('on', 'hl', 'ping'));
@@ -1107,6 +1126,9 @@ $('#replayB').addEventListener('click', () => go(cur));
 $('#skipB').addEventListener('click', () => go(LAST));
 document.addEventListener('click', e => { const g = e.target.closest('[data-go]'); if (g) go(g.dataset.go); });
 $('#firstTask').addEventListener('click', () => { const b = $('#firstTask'); b.textContent = 'In the app, this opens New task'; setTimeout(() => b.textContent = 'Start your first task', 1800); });
+$('#closeB').addEventListener('click', () => { const b = $('#closeB'); b.textContent = 'In the app, this closes the tour'; setTimeout(() => b.textContent = 'Close', 1800); });
+/* In the app, while the tour is open every other key is swallowed: P, Shift P, R, the G chords and ⌘K do
+   nothing. Enter, Space and Tab act on the focused button; Esc on the outro closes the tour. */
 document.addEventListener('keydown', e => {
   if (e.metaKey || e.ctrlKey || e.altKey) return;
   if (e.key === 'ArrowRight') { e.preventDefault(); go(cur + 1); }

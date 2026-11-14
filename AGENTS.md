@@ -116,7 +116,7 @@ In `runtime-kotlin` and `build-logic`, ban `//` and non-KDoc `/* */`. Permit `/*
 
 For `runtime-kotlin` planning, design, changes, or review, read [Runtime Architecture Guidelines](docs/architecture-guidelines.md) and apply A1–A12, G1–G7, and P1–P8. Reviews use its section 5 checklist and cite rule IDs.
 
-For `runtime-kotlin` design, changes, or review, apply [Design Principles](runtime-kotlin/ARCHITECTURE.md#design-principles) for dependencies, ownership, persistence, contracts, simplicity, and test value. `PrincipleEnforcementInventory.enforceableRules` pairs rules with tests; review the rest. Existing violations do not excuse new ones.
+Also apply [Design Principles](runtime-kotlin/ARCHITECTURE.md#design-principles) for dependencies, ownership, persistence, contracts, simplicity, and test value. `PrincipleEnforcementInventory.enforceableRules` pairs rules with tests; review the rest. Existing violations do not excuse new ones.
 
 Follow [Code Principles](docs/code-principles.md) for Kotlin patterns, packages, imports, file-size limits, and architecture guards under `runtime-kotlin/runtime-core/src/repoTest/kotlin/skillbill/architecture/`.
 
