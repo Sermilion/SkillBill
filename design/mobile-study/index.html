@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sona Mobile Study</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="../linear-study/ds/tokens.css">
+<link rel="stylesheet" href="../linear-study/ds/components.css">
+<link rel="stylesheet" href="ds/mobile.css">
+<style>
+/* Documentation chrome only. Product UI lives in ds/. */
+body { overflow: hidden; }
+#root { height: 100%; display: flex; flex-direction: column; }
+.doc-bar { display: flex; align-items: center; gap: 10px; height: 44px; flex: none; padding: 0 14px; border-bottom: 1px solid var(--border-subtle); background: var(--bg-frame); }
+.doc-bar-ti { font: 600 var(--t-base)/1 var(--font-sans); display: flex; align-items: center; gap: 8px; }
+.doc-bar-sub { font-size: var(--t-sm); color: var(--fg-faint); }
+.doc-views { margin-left: auto; display: flex; gap: 2px; padding: 2px; border-radius: var(--r-sm); background: var(--bg-raised); border: 1px solid var(--border); }
+.doc-views button { height: 24px; padding: 0 10px; border: 0; border-radius: var(--r-xs); background: none; color: var(--fg-muted); font: 500 var(--t-sm)/1 var(--font-sans); cursor: pointer; }
+.doc-views button.on { background: var(--bg-active); color: var(--fg); }
+.doc-pane { flex: 1; min-height: 0; overflow: auto; }
+.doc-proto { min-height: 100%; display: flex; align-items: center; justify-content: center; gap: 56px; padding: 32px; }
+.doc-proto-side { width: 300px; align-self: center; }
+.doc-proto-side h1 { margin: 0 0 8px; font: 600 var(--t-2xl)/1.2 var(--font-sans); letter-spacing: -0.015em; }
+.doc-proto-side p { margin: 0 0 12px; color: var(--fg-muted); line-height: 1.6; }
+.doc-tip { font-size: var(--t-sm); color: var(--fg-faint) !important; }
+.doc-jump-g { margin-top: 18px; }
+.doc-jump-g h3 { margin: 0 0 6px; font: 500 var(--t-xs)/1 var(--font-sans); color: var(--fg-faint); }
+.doc-jump-g button { display: inline-flex; margin: 0 4px 4px 0; height: 26px; padding: 0 10px; border-radius: var(--r-full); border: 1px solid var(--border); background: var(--bg-raised); color: var(--fg-2); font: 500 var(--t-sm)/1 var(--font-sans); cursor: pointer; align-items: center; }
+.doc-jump-g button:hover { border-color: var(--border-strong); color: var(--fg); }
+.doc-gal { padding: 28px 32px 80px; }
+.doc-gal-sec { margin-bottom: 44px; }
+.doc-gal-sec h2 { margin: 0 0 6px; font: 600 var(--t-lg)/1.2 var(--font-sans); }
+.doc-gal-sec > p { margin: 0 0 18px; color: var(--fg-muted); max-width: 760px; line-height: 1.6; }
+.doc-gal-row { display: flex; gap: 28px; overflow-x: auto; padding: 4px 4px 16px; }
+.doc-gal-row figure { margin: 0; flex: none; display: flex; flex-direction: column; gap: 10px; }
+.doc-gal-row figcaption { font-size: var(--t-sm); color: var(--fg-muted); text-align: center; }
+.doc-gal-ph { zoom: 0.72; }
+.doc-scope { max-width: 900px; margin: 0 auto; padding: 36px 40px 80px; line-height: 1.6; }
+.doc-scope h1 { margin: 0 0 8px; font: 600 var(--t-2xl)/1.2 var(--font-sans); letter-spacing: -0.015em; }
+.doc-scope h2 { margin: 36px 0 12px; font: 600 var(--t-lg)/1.2 var(--font-sans); }
+.doc-scope p { color: var(--fg-muted); margin: 0 0 12px; max-width: 700px; }
+.doc-scope table { width: 100%; border-collapse: collapse; font-size: var(--t-base); }
+.doc-scope th, .doc-scope td { text-align: left; vertical-align: top; padding: 8px 12px 8px 0; border-bottom: 1px solid var(--border-subtle); }
+.doc-scope th { font: 500 var(--t-xs)/1.2 var(--font-sans); color: var(--fg-faint); }
+.doc-scope td:first-child { color: var(--fg); width: 30%; }
+.doc-scope td { color: var(--fg-2); }
+.doc-scope code { font: 500 0.9em var(--font-mono); background: var(--bg-active); padding: 1px 4px; border-radius: 3px; }
+</style>
+</head>
+<body>
+<div id="root">
+  <div class="doc-bar">
+    <span class="doc-bar-ti" id="brand">Sona mobile</span><span class="doc-bar-sub">Design study · Linear mobile patterns on the linear-study tokens</span>
+    <div class="doc-views"><button type="button" data-view="prototype">Prototype</button><button type="button" data-view="screens">Screens</button><button type="button" data-view="scope">Scope</button></div>
+  </div>
+  <div class="doc-pane" id="v-prototype" hidden></div>
+  <div class="doc-pane" id="v-screens" hidden></div>
+  <div class="doc-pane" id="v-scope" hidden>
+    <div class="doc-scope">
+      <h1>Scope</h1>
+      <p>The phone observes and controls. Goals, chats and agents run on the machine where Sona is installed. The phone connects over SSH when it opens, reads a snapshot, sends controls, and disconnects when it closes. Push notifications are the only thing that reaches the phone while the app is closed.</p>
+
+      <h2>From the desktop, adapted</h2>
+      <table>
+        <tr><th>Desktop feature</th><th>On mobile</th></tr>
+        <tr><td>Work board: Needs you, Goal runs, Standalone phases, Operations, Finished today</td><td>Needs you is its own tab with a badge. Work keeps the other groups. Rows follow Linear mobile: status, key, title, reason, facts.</td></tr>
+        <tr><td>History with 6h, 24h, 7d windows</td><td>Work › History, grouped by day.</td></tr>
+        <tr><td>Detail: every section, plus the details pane's Execution and Runs and fixes</td><td>One scrolling page in the desktop's order, with collapsible sections. Phase pipeline is a horizontal strip. The nav bar pages between items.</td></tr>
+        <tr><td>Validation, Verify, monitor, plan and standalone QA run documents; standalone Phase results and Spec bundle</td><td>Same sections and cells, stacked. Wide grids (monitor cycles, outcome cells) become two or three columns.</td></tr>
+        <tr><td>Run app on Android goals</td><td>Kept, with a device sheet listing devices attached to the machine. Off with the desktop's reason until the goal completes or reaches monitoring.</td></tr>
+        <tr><td>Details panel: subtask inspector and phase peek, for subtasks and Goal finish</td><td>Tap a subtask row, or Goal finish, to push a Subtask screen with the same properties, phase tabs and phase cards. Up and down page between subtasks.</td></tr>
+        <tr><td>Run controls: Pause after subtask, Pause now, Resume or Run again with agent, Cancel, Recover with prerequisites, Confirm criteria</td><td>All kept. One primary action in a sticky bar, the rest in a More sheet. Swipe left on a Needs you row for the primary action.</td></tr>
+        <tr><td>Changes window and Diff comments</td><td>Read-only. Scope picker, file list, unified diff, published threads. No drafting or publishing.</td></tr>
+        <tr><td>Run chats: one per run, from the Chat button on its detail; Verify proposal and operator decision cards</td><td>Kept. A chat button on every run, a Runs segment in Chats, a context strip, and a composer locked to the run's checkout. The cards are Confirm, Adjust, Dismiss and the three decisions.</td></tr>
+        <tr><td>New task chats: transcript, suggested actions, start cards, queue, Stop, repository and branch picker, chat changes</td><td>Kept. Tabs become a Chats list. Pickers and the queue become sheets. Add repository by path is desktop only.</td></tr>
+        <tr><td>Plans pane: project picker, status tabs, bundle tree, Start, Resume, Pause</td><td>Plans tab with a project pill, segmented status, bundle detail and read-only files.</td></tr>
+        <tr><td>Usage limits card and panel</td><td>Settings › Usage, all providers at once.</td></tr>
+        <tr><td>Default agent</td><td>Settings › Defaults.</td></tr>
+        <tr><td>Six OS notification types</td><td>Six push types with the same names, plus a toggle that hides run titles.</td></tr>
+      </table>
+
+      <h2>New for mobile</h2>
+      <table>
+        <tr><th>Feature</th><th>Notes</th></tr>
+        <tr><td>Machines</td><td>Add over SSH: host, port, user; a phone key generated on device; trust on first use of the host key; Sona presence and version check. Several machines, one current.</td></tr>
+        <tr><td>Connection states</td><td>Connecting, unreachable with the last snapshot, host key changed (blocking), key rejected, Sona missing, Sona too old. Controls that fail say so and offer Retry. Nothing is queued.</td></tr>
+        <tr><td>Push</td><td>Desktop app sends on board transitions through a Sona push relay to Firebase. The phone registers its FCM token on the machine over SSH during pairing. Stops while the desktop app is not running.</td></tr>
+      </table>
+
+      <h2>Not on mobile</h2>
+      <table>
+        <tr><th>Desktop feature</th><th>Why</th></tr>
+        <tr><td>Terminal pane</td><td>Not a phone task.</td></tr>
+        <tr><td>Settings › General: database path, Claude directories, history retention, start at login</td><td>Machine-local.</td></tr>
+        <tr><td>Runtime config: Models, Compaction, Project, Telemetry and agents</td><td>Configuration work belongs on the desktop.</td></tr>
+        <tr><td>QA device switcher in the sidebar</td><td>No sidebar. Run app picks its device in a sheet.</td></tr>
+        <tr><td>Command menu, keyboard shortcuts, right-click menus, resizable and floating panes, tray popover</td><td>Replaced by tabs, sheets, swipe and long-press.</td></tr>
+        <tr><td>Drafting and publishing diff comments</td><td>Read-only by decision.</td></tr>
+        <tr><td>Add repository, Reveal specs folder, Import work</td><td>Need the machine's file system.</td></tr>
+        <tr><td>Items in HANDOFF 4.4 of the desktop study (read and unread inbox, bulk actions, filter chips, light theme)</td><td>Still not in the product.</td></tr>
+      </table>
+    </div>
+  </div>
+</div>
+<script src="../linear-study/ds/components.js"></script>
+<script src="app/data.js"></script>
+<script src="app/detail-data.js"></script>
+<script src="app/peek.js"></script>
+<script src="ds/components.js"></script>
+<script src="app/kinds.js"></script>
+<script src="app/run-chats.js"></script>
+<script src="app/screens.js"></script>
+<script src="app/main.js"></script>
+<script>document.getElementById('brand').insertAdjacentHTML('afterbegin', window.SB.BrandMark(18));</script>
+</body>
+</html>
