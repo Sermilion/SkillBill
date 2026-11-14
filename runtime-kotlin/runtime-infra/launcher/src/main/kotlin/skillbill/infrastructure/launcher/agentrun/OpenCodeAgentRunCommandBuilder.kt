@@ -75,7 +75,8 @@ internal class OpenCodeAgentRunCommandBuilder(
           preserveSnapshotSelections = true,
         )
       return continuation.copy(
-        environment = bindingEnvironment + continuation.environment + identity.environment,
+        environment =
+          bindingEnvironment + continuation.environment + identity.environment + AcpProvider.OpenCode.launchEnvironment,
         removedEnvironmentKeys = identity.removedKeys,
         preflightFailure = identity.failure,
         outputDecoder = AgentRunOutputDecoder.PLAIN,
@@ -90,7 +91,7 @@ internal class OpenCodeAgentRunCommandBuilder(
       stdinText = launchPrompt(request),
       environment =
         bindingEnvironment + goalContinuationEnvironment(request) + runtimeDatabaseEnvironment(true, databasePath) +
-          identity.environment,
+          identity.environment + AcpProvider.OpenCode.launchEnvironment,
       removedEnvironmentKeys = identity.removedKeys,
       inheritEnvironment = true,
       approvalProtocol = approvalProtocol,
@@ -129,7 +130,7 @@ internal class OpenCodeAgentRunCommandBuilder(
       workingDirectory = admitted.cwd,
       timeout = request.timeout,
       stdinText = prompt,
-      environment = admitted.environment,
+      environment = admitted.environment + AcpProvider.OpenCode.launchEnvironment,
       inheritEnvironment = false,
       approvalProtocol = approvalProtocol,
       sessionModel = request.modelOverride,

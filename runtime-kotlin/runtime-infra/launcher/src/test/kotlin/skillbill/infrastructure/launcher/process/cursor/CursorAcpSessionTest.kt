@@ -504,11 +504,82 @@ class CursorAcpSessionTest {
   }
 
   @Test
+  fun `OpenCode residual permission requests never park owned chats or unowned workers`() {
+    listOf(false, true).forEach { owned ->
+      val harness = Harness(provider = AcpProvider.OpenCode, bindOwner = owned)
+      harness.session.start()
+      harness.respond("""{"protocolVersion":1,"agentCapabilities":{}}""")
+      harness.respond("""{"sessionId":"s"}""")
+      harness.permission("90", "run", "git status")
+
+      assertTrue(harness.cards.isEmpty())
+      assertTrue(harness.owner.requests.isEmpty())
+      assertEquals(
+        Json.parseToJsonElement("""{"outcome":{"outcome":"selected","optionId":"once-run"}}"""),
+        harness.frames.last()[CursorAcpKeys.RESULT],
+      )
+      assertTrue(harness.records.any { "permission_auto_allowed" in it })
+      harness.session.observe(
+        """{"jsonrpc":"2.0","id":91,"method":"session/request_permission","params":{"sessionId":"stale",""" +
+          """"options":[{"optionId":"yes","name":"Allow","kind":"allow_once"}]}}""",
+      )
+      assertEquals(
+        Json.parseToJsonElement("""{"outcome":{"outcome":"cancelled"}}"""),
+        harness.frames.last()[CursorAcpKeys.RESULT],
+      )
+      harness.session.close()
+    }
+  }
+
+  @Test
+  fun `Devin new and resumed sessions select bypass before sending a prompt`() {
+    listOf(null, "s").forEach { saved ->
+      val harness = Harness(saved = saved, provider = AcpProvider.Devin)
+      harness.session.start()
+      harness.respond("""{"protocolVersion":1,"agentCapabilities":{"loadSession":true}}""")
+      harness.respond(
+        """{"sessionId":"s","configOptions":[{"id":"mode","category":"mode","currentValue":"accept-edits",""" +
+          """"options":[{"value":"accept-edits"},{"value":"bypass"}]}]}""",
+      )
+      val selection = harness.frames.last()
+      assertEquals("session/set_config_option", selection.text(CursorAcpKeys.METHOD))
+      assertEquals("bypass", selection.obj(CursorAcpKeys.PARAMS)?.text(CursorAcpKeys.VALUE))
+      assertFalse(harness.session.ready)
+      assertTrue(harness.frames.none { it.text(CursorAcpKeys.METHOD) == "session/prompt" })
+
+      harness.respond("""{"configOptions":[{"id":"mode","currentValue":"bypass"}]}""")
+      assertTrue(harness.session.ready)
+      assertEquals("session/prompt", harness.frames.last().text(CursorAcpKeys.METHOD))
+      assertTrue(harness.cards.isEmpty())
+      harness.session.close()
+    }
+  }
+
+  @Test
+  fun `Devin never sends a prompt when bypass is unavailable or refused`() {
+    listOf(false, true).forEach { offered ->
+      val harness = Harness(provider = AcpProvider.Devin)
+      harness.session.start()
+      harness.respond("""{"protocolVersion":1,"agentCapabilities":{}}""")
+      val mode = if (offered) "bypass" else "accept-edits"
+      harness.respond("""{"sessionId":"s","modes":{"availableModes":[{"id":"$mode"}]}}""")
+      if (offered) {
+        assertEquals("session/set_mode", harness.frames.last().text(CursorAcpKeys.METHOD))
+        assertEquals("bypass", harness.frames.last().obj(CursorAcpKeys.PARAMS)?.text(CursorAcpKeys.MODE_ID))
+        harness.reject(-32602)
+      }
+      assertNotNull(harness.session.outcome()?.failure)
+      assertTrue(harness.frames.none { it.text(CursorAcpKeys.METHOD) == "session/prompt" })
+    }
+  }
+
+  @Test
   fun `Devin refuses an unimplemented blocking method with its request id`() {
     val harness = Harness(provider = AcpProvider.Devin)
     harness.session.start()
     harness.respond("""{"protocolVersion":1,"agentCapabilities":{}}""")
-    harness.respond("""{"sessionId":"s"}""")
+    harness.respond("""{"sessionId":"s","modes":{"availableModes":[{"id":"bypass"}]}}""")
+    harness.respond("{}")
 
     harness.session.observe(
       """{"jsonrpc":"2.0","id":73,"method":"fs/read_text_file","params":{"path":"secret.txt"}}""",

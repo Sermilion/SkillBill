@@ -137,7 +137,7 @@ internal fun acpTurnLaunch(
   workingDirectory: String = request.scope.repositoryRoot,
 ): Pair<ChatCommand, CursorAcpLaunch> {
   val cursor = provider == AcpProvider.Cursor
-  val command = ChatCommand(acpCommand(provider, shell, request.agent.model), workingDirectory, environment, "")
+  val command = ChatCommand(acpCommand(provider, shell, request.agent.model), workingDirectory, environment + provider.launchEnvironment, "")
   return command to CursorAcpLaunch(
     cwd = workingDirectory,
     prompt = prompt,

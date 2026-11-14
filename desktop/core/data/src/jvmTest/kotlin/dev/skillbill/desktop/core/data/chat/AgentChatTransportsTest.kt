@@ -45,6 +45,22 @@ class AgentChatTransportsTest {
   }
 
   @Test
+  fun `OpenCode new and resumed chats override inherited permission prompts in either scope mode`() {
+    dev.skillbill.desktop.core.domain.model.ChatPermissionMode.entries.forEach { mode ->
+      listOf(null, "saved-opencode").forEach { saved ->
+        val request = chatRequest(agent = ChatAgent("opencode", null, null), mode = mode)
+        val (command, launch) = acpTurnLaunch(
+          AcpProvider.OpenCode, null, mapOf("OPENCODE_PERMISSION" to "ask", "PROFILE" to "keep"),
+          request, saved, "prompt", CursorAcpMcpDependency.ProjectUserOnly,
+        )
+        assertEquals("""{"*":"allow"}""", command.environment["OPENCODE_PERMISSION"])
+        assertEquals("keep", command.environment["PROFILE"])
+        assertEquals(saved, launch.savedSession)
+      }
+    }
+  }
+
+  @Test
   fun `ACP and app-server agents without an operator channel launch nothing and retain the saved conversation`() = runTest {
     val launcher = NoLaunch()
     val request = chatRequest(agent = ChatAgent("codex", null, null), firstTurn = false)

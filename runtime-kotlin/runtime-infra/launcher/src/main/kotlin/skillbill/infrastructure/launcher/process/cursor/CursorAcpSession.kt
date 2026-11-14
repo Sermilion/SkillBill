@@ -410,7 +410,7 @@ class CursorAcpSession(
   }
 
   private fun selectMode() {
-    val mode = launch.mode
+    val mode = launch.mode ?: launch.provider.defaultMode
     if (mode == null) prompt() else selectMode(mode)
   }
 
@@ -506,7 +506,7 @@ class CursorAcpSession(
     val id = message[K.ID] ?: return stop("$providerName blocking request has no identity.")
     if (method == K.REQUEST_PERMISSION) {
       val owner = permissions
-      if (owner != null) {
+      if (owner != null && !launch.provider.autoApprovePermissions) {
         owner.request(message)
       } else {
         reply(id, permissionAllowResult(message))
@@ -536,7 +536,10 @@ class CursorAcpSession(
   }
 
   private fun permissionAllowResult(message: JsonObject): JsonObject {
-    val optionId = CursorPermissionRequests.allowOnceOptionId(message)
+    val optionId =
+      CursorPermissionRequests.allowOnceOptionId(message).takeIf {
+        sessionId != null && message.obj(K.PARAMS)?.text(K.SESSION_ID) == sessionId
+      }
     val outcome = if (optionId == null) "permission_unavailable_cancelled" else "permission_auto_allowed"
     record("seam=$seam outcome=$outcome")
     return buildJsonObject {

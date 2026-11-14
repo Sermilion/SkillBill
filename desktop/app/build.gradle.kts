@@ -12,6 +12,11 @@ plugins {
   id("skillbill.desktop.kotlin.inject")
 }
 
+dependencies {
+  add("kspJvmTest", libs.kotlin.inject.compiler)
+  add("kspJvmTest", libs.anvil.compiler)
+}
+
 group = "dev.skillbill.desktop"
 version = "0.1.0"
 

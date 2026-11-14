@@ -489,8 +489,13 @@ and `dangerFullAccess` on each turn; one-shot Codex launches use
 `--dangerously-bypass-approvals-and-sandbox`. Cursor uses `--force`, `--trust`,
 `--approve-mcps` and `--sandbox disabled`, including ACP launches. This policy supersedes
 the earlier default of routing every eligible permission prompt to the operator.
-Read-only phase instructions still constrain the requested work; they do not
-select a restrictive provider sandbox by default.
+Devin selects the native ACP `bypass` mode before each prompt. OpenCode launches
+with `OPENCODE_PERMISSION={"*":"allow"}`, including chats, goal workers, phases,
+operations and governed review workers. Agent-specific OpenCode ask rules can
+override the environment, so the ACP host also auto-approves residual OpenCode
+permission requests without creating approval cards. Read-only instructions
+still constrain the requested work; they do not select a restrictive provider
+sandbox by default.
 
 Runtime launches outside chat approvals use the native headless CLIs. Skill-bill
 does not host their tool requests and must not add a deny, cancel, skip or

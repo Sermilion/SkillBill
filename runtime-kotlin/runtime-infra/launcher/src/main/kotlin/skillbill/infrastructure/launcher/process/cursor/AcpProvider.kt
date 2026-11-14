@@ -10,6 +10,9 @@ data class AcpProvider(
   val lacksTeamDashboardMcp: Boolean,
   val exactModels: Boolean = false,
   val loginCommand: String? = null,
+  val defaultMode: String? = null,
+  val autoApprovePermissions: Boolean = false,
+  val launchEnvironment: Map<String, String> = emptyMap(),
 ) {
   val seam: String get() = "${id}_acp"
 
@@ -17,6 +20,8 @@ data class AcpProvider(
     acpArguments + if (exactModels && model != null) listOf("--model", model) else emptyList()
 
   companion object {
+    private const val OPENCODE_PERMISSION = "OPENCODE_PERMISSION"
+
     val Cursor =
       AcpProvider(
         SupportedAgent.CURSOR.wireValue,
@@ -34,6 +39,8 @@ data class AcpProvider(
         authMethodId = null,
         lacksTeamDashboardMcp = false,
         loginCommand = "opencode auth login",
+        autoApprovePermissions = true,
+        launchEnvironment = mapOf(OPENCODE_PERMISSION to """{"*":"allow"}"""),
       )
 
     val Devin =
@@ -45,6 +52,7 @@ data class AcpProvider(
         lacksTeamDashboardMcp = false,
         exactModels = true,
         loginCommand = "devin auth login",
+        defaultMode = "bypass",
       )
   }
 }
