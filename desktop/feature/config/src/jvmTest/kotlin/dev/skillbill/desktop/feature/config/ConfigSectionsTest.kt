@@ -4,6 +4,7 @@ import dev.skillbill.desktop.core.domain.model.*
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class ConfigSectionsTest {
   @Test
@@ -58,6 +59,41 @@ class ConfigSectionsTest {
     val changedClaude = changedAgents["claude"] as Map<*, *>
     assertEquals("implementation", (changedSection[ConfigFileKeys.PHASE_TIERS] as Map<*, *>)["review"])
     assertEquals(mapOf("model" to "model", "effort" to "high"), changedClaude["review"])
+  }
+
+  @Test
+  fun authoredRoutingEntriesAreEmittedAlongsideModelsAndTiers() {
+    val matrix = ExecutionMatrixConfig(
+      mapOf("review" to Tier.REASONING),
+      mapOf("claude" to mapOf(Tier.REASONING to ModelDirective("m", "high"))),
+      emptyMap(),
+      tierAgents = mapOf(Tier.IMPLEMENTATION to "cursor"),
+      phaseAgents = mapOf("review" to "codex"),
+    )
+
+    val section = executionMatrixSection(matrix, defaults())
+
+    assertEquals(mapOf("implementation" to "cursor"), section[ConfigFileKeys.TIER_AGENTS])
+    assertEquals(mapOf("review" to "codex"), section[ConfigFileKeys.PHASE_AGENTS])
+    assertTrue(ConfigFileKeys.AGENTS in section)
+    assertTrue(ConfigFileKeys.PHASE_TIERS in section)
+  }
+
+  @Test
+  fun routingOnlyEditStillEmitsExistingAuthoredEntries() {
+    val baseline = ExecutionMatrixConfig(
+      emptyMap(),
+      mapOf("claude" to mapOf(Tier.REASONING to ModelDirective("m", null))),
+      emptyMap(),
+      tierAgents = mapOf(Tier.REASONING to "claude"),
+    )
+    val updated = baseline.copy(phaseAgents = mapOf("review" to "codex"))
+
+    val section = executionMatrixSection(updated, defaults(), baseline)
+
+    assertEquals(mapOf("reasoning" to "claude"), section[ConfigFileKeys.TIER_AGENTS])
+    assertEquals(mapOf("review" to "codex"), section[ConfigFileKeys.PHASE_AGENTS])
+    assertTrue(ConfigFileKeys.AGENTS in section)
   }
 
   @Test

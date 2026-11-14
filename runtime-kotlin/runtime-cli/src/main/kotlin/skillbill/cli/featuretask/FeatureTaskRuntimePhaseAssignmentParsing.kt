@@ -13,26 +13,6 @@ import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelecti
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Path
 
-internal fun parsePhaseAgents(rawAssignments: List<String>): Map<String, String> {
-  val parsed = LinkedHashMap<String, String>()
-  rawAssignments.forEach { assignment ->
-    val separatorIndex = assignment.indexOf('=')
-    if (separatorIndex <= 0 || separatorIndex == assignment.length - 1) {
-      throw UsageError("--phase-agent must be phase=agent, e.g. --phase-agent plan=claude (got '$assignment').")
-    }
-    val phaseId = assignment.substring(0, separatorIndex).trim()
-    val agentId = assignment.substring(separatorIndex + 1).trim()
-    if (phaseId !in FeatureTaskRuntimePhaseWorkflowDefinition.definition.stepIds) {
-      throw UsageError(
-        "--phase-agent phase '$phaseId' is not a runtime phase " +
-          "(${FeatureTaskRuntimePhaseWorkflowDefinition.definition.stepIds.joinToString()}).",
-      )
-    }
-    parsed[phaseId] = agentId
-  }
-  return parsed
-}
-
 internal fun parsePhaseModels(rawAssignments: List<String>): Map<String, PhaseModelDirective> {
   val parsed = LinkedHashMap<String, PhaseModelDirective>()
   rawAssignments.forEach { assignment ->

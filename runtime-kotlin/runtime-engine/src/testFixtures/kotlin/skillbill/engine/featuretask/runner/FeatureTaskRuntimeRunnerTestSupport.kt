@@ -139,6 +139,8 @@ import skillbill.ports.agentrun.model.AgentRunLaunchCapabilityRequest
 import skillbill.ports.agentrun.model.AgentRunLaunchModelRequest
 import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
 import skillbill.ports.agentrun.model.AgentRunLaunchRequest
+import skillbill.ports.agentrun.model.AgentRunLocalAvailability
+import skillbill.ports.agentrun.model.AgentRunLocalAvailabilityRequest
 import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.ports.agentrun.passThroughResolvedLaunchModel
 import skillbill.ports.config.RepoLocalConfigPort
@@ -1681,6 +1683,9 @@ private fun testStepLaunchResolver(): FeatureTaskRuntimeStepLaunchResolver =
     object : AgentRunLauncher {
       override fun queryLaunchCapability(request: AgentRunLaunchCapabilityRequest): AgentRunLaunchCapability =
         AgentRunLaunchCapability.Supported
+
+      override fun queryLocalAvailability(request: AgentRunLocalAvailabilityRequest): AgentRunLocalAvailability =
+        AgentRunLocalAvailability.Registered(request.agent, request.agent.wireValue)
 
       override fun resolveLaunchModel(request: AgentRunLaunchModelRequest) = passThroughResolvedLaunchModel(request)
 

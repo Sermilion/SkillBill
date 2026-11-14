@@ -26,6 +26,7 @@ class ConfigCommand(
   resolveExternalPlatformPacksCommand: ConfigResolveExternalPlatformPacksCommand,
   registerExternalPlatformPackCommand: ConfigRegisterExternalPlatformPackCommand,
   unregisterExternalPlatformPackCommand: ConfigUnregisterExternalPlatformPackCommand,
+  agentsCommand: ConfigAgentsCommand,
   editCommand: ConfigEditCommand,
 ) : DocumentedNoOpCliCommand(
     "config",
@@ -39,6 +40,7 @@ class ConfigCommand(
       resolveExternalPlatformPacksCommand,
       registerExternalPlatformPackCommand,
       unregisterExternalPlatformPackCommand,
+      agentsCommand,
       editCommand,
     )
   }

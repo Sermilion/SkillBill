@@ -20,7 +20,43 @@ data class ResolvedPhase(val phaseId: String, val tier: Tier, val tierChanged: B
 
 data class AgentModels(val agentId: String, val tiers: Map<Tier, ModelDirective?>, val phases: List<ResolvedPhase>)
 
-data class ModelMatrixView(val document: ConfigDocument<MachineConfig>, val agents: Map<String, AgentModels>)
+/** Where a phase's provider comes from when no invocation context exists. */
+enum class AgentRoutingSource { CONFIGURED_PHASE, CONFIGURED_TIER, INHERITED_INVOCATION }
+
+data class PhaseRoutingPreview(
+  val phaseId: String,
+  val tier: Tier,
+  val source: AgentRoutingSource,
+  val providerId: String?,
+)
+
+/** The runtime's read-only local launch observation for a provider; never derived from directory detection. */
+sealed interface AgentRuntimeAvailability {
+  data class Registered(val executable: String) : AgentRuntimeAvailability
+
+  data class ExecutableMissing(val reason: String) : AgentRuntimeAvailability
+
+  data class Unsupported(val reason: String) : AgentRuntimeAvailability
+
+  data class Unknown(val reason: String) : AgentRuntimeAvailability
+}
+
+data class AgentRoutingView(
+  val tierAgents: Map<Tier, String>,
+  val phaseAgents: Map<String, String>,
+  val phases: List<PhaseRoutingPreview>,
+  val availability: Map<String, AgentRuntimeAvailability>,
+) {
+  companion object {
+    val EMPTY: AgentRoutingView = AgentRoutingView(emptyMap(), emptyMap(), emptyList(), emptyMap())
+  }
+}
+
+data class ModelMatrixView(
+  val document: ConfigDocument<MachineConfig>,
+  val agents: Map<String, AgentModels>,
+  val routing: AgentRoutingView = AgentRoutingView.EMPTY,
+)
 
 data class AdvertisedAgentBinding(val providerId: String, val profile: String?, val workingDirectory: String)
 

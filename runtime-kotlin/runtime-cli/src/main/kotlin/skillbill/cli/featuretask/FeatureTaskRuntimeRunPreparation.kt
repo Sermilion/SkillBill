@@ -6,6 +6,7 @@ import skillbill.agentaddon.model.AgentAddonConsumer
 import skillbill.agentaddon.model.HydratedAgentAddonSelection
 import skillbill.application.config.ConfigResolutionService
 import skillbill.cli.kernel.agent.parseAgentAddonSelection
+import skillbill.cli.kernel.agent.parsePhaseAgents
 import skillbill.cli.kernel.agent.refuseUnsupportedModelDirectives
 import skillbill.cli.kernel.cli.resolveCliRepositoryRoot
 import skillbill.cli.model.CliRunInputs

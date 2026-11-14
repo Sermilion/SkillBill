@@ -83,6 +83,7 @@ import dev.skillbill.desktop.core.domain.model.ModelDirective
 import dev.skillbill.desktop.core.domain.model.AdvertisedAgentChoices
 import dev.skillbill.desktop.core.domain.model.AdvertisedChoice
 import dev.skillbill.desktop.core.domain.model.AdvertisedEffortSupport
+import dev.skillbill.desktop.core.domain.model.AgentRoutingView
 import dev.skillbill.desktop.core.domain.model.OpenOutcome
 import dev.skillbill.desktop.core.domain.model.PhaseInstructionFilesRead
 import dev.skillbill.desktop.core.domain.model.ProjectConfig
@@ -1382,6 +1383,36 @@ internal fun ConfigPage(
       } else {
         resolved?.phases?.forEach { phase -> modelRow(phase.phaseId, phase.tier, phase.directive, true, phase.override, phase.tierChanged) }
       }
+      val routing = matrix?.routing ?: AgentRoutingView.EMPTY
+      val routingRows = agentRoutingRows(current, routing, defaults, repository, unavailableDocument)
+      built += routingRows
+      SettingsGroup(
+        title = "Agent routing",
+        rows = routingRows.map { row ->
+          inlineRow(row) {
+            SettingRow(
+              label = row.label,
+              description = row.description,
+              control = {
+                RoutingProviderSelector(
+                  selected = inlineValue(row, ConfigFileKeys.AGENT),
+                  inheritedText = row.default,
+                  providers = defaults.agents,
+                  availability = routing.availability,
+                  authored = row.remove != null,
+                  enabled = inlineEnabled(row),
+                  label = row.label ?: row.key,
+                  onSelect = { provider -> inlineEdit(row, ConfigFileKeys.AGENT, provider, commit = true) },
+                  onInherit = {
+                    if (row.key !in openRows) open(row)
+                    if (row.key in openRows) scope.launch { remove(row) }
+                  },
+                )
+              },
+            )
+          }
+        },
+      )
       SettingsGroup(
         title = "Tiers",
         rows = built.filter { it.group == "Tiers" }.map { row ->

@@ -2,17 +2,25 @@ package dev.skillbill.desktop.core.data.config
 
 import dev.skillbill.desktop.core.common.Diagnostics
 import dev.skillbill.desktop.core.domain.model.AgentModels
+import dev.skillbill.desktop.core.domain.model.AgentRoutingSource
+import dev.skillbill.desktop.core.domain.model.AgentRoutingView
+import dev.skillbill.desktop.core.domain.model.AgentRuntimeAvailability
 import dev.skillbill.desktop.core.domain.model.ConfigAgent
 import dev.skillbill.desktop.core.domain.model.ConfigDefaults
 import dev.skillbill.desktop.core.domain.model.PhaseGroupKind
+import dev.skillbill.desktop.core.domain.model.PhaseRoutingPreview
 import dev.skillbill.desktop.core.domain.model.ResolvedPhase
 import dev.skillbill.desktop.core.domain.model.RuntimePhase
+import dev.skillbill.desktop.core.domain.model.Tier
 import skillbill.config.model.CompactionSettings
 import skillbill.config.model.ExecutionMatrix
 import skillbill.config.model.ExecutionTier
+import skillbill.config.model.PhaseAgentRoutingSource
+import skillbill.config.model.resolvePhaseAgent
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseProjectInstructions
 import skillbill.install.model.MODEL_DIRECTIVE_CAPABLE_AGENTS
 import skillbill.install.model.SupportedAgent
+import skillbill.ports.agentrun.model.AgentRunLocalAvailability
 import skillbill.review.context.model.accounting.ReviewContextBudgetPolicy
 import skillbill.telemetry.DEFAULT_TELEMETRY_BATCH_SIZE
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
@@ -69,4 +77,53 @@ internal fun resolveModelMatrix(matrix: ExecutionMatrix?, defaults: ConfigDefaul
       },
     )
   }
+}
+
+internal fun AgentRunLocalAvailability.toAvailability(): AgentRuntimeAvailability = when (this) {
+  is AgentRunLocalAvailability.Registered -> AgentRuntimeAvailability.Registered(executable)
+  is AgentRunLocalAvailability.ExecutableMissing -> AgentRuntimeAvailability.ExecutableMissing(reason)
+  is AgentRunLocalAvailability.Unsupported -> AgentRuntimeAvailability.Unsupported(reason)
+  is AgentRunLocalAvailability.Unavailable -> AgentRuntimeAvailability.Unknown(reason)
+}
+
+/** A configuration-time preview: invocation-free, so run overrides and CLI options never appear. */
+internal fun resolveRoutingView(
+  matrix: ExecutionMatrix?,
+  defaults: ConfigDefaults,
+  availability: Map<String, AgentRuntimeAvailability>,
+  diagnostics: Diagnostics,
+): AgentRoutingView {
+  val value = matrix ?: ExecutionMatrix()
+  return AgentRoutingView(
+    tierAgents = value.tierAgents.mapKeys { it.key.toDomain() }.mapValues { it.value.id },
+    phaseAgents = value.phaseAgents.mapValues { it.value.id },
+    phases = defaults.phases.mapNotNull { phase ->
+      val tier = try {
+        value.tierOf(phase.id).toDomain()
+      } catch (_: NoSuchElementException) {
+        diagnostics.record("desktop_config_phase_default_missing")
+        return@mapNotNull null
+      }
+      val selection = resolvePhaseAgent(phase.id, "", emptyMap(), null, value)
+      val source =
+        when (selection.source) {
+          PhaseAgentRoutingSource.CONFIGURED_PHASE -> AgentRoutingSource.CONFIGURED_PHASE
+          PhaseAgentRoutingSource.CONFIGURED_TIER -> AgentRoutingSource.CONFIGURED_TIER
+          PhaseAgentRoutingSource.INVOKING_AGENT,
+          PhaseAgentRoutingSource.RUN_OVERRIDE,
+          PhaseAgentRoutingSource.CLI_PHASE,
+          PhaseAgentRoutingSource.LEGACY_RECORDED,
+          PhaseAgentRoutingSource.LEGACY_INVOKING -> AgentRoutingSource.INHERITED_INVOCATION
+        }
+      PhaseRoutingPreview(
+        phase.id,
+        tier,
+        source,
+        selection.providerId.takeUnless {
+          source == AgentRoutingSource.INHERITED_INVOCATION || it.isBlank()
+        },
+      )
+    },
+    availability = availability,
+  )
 }

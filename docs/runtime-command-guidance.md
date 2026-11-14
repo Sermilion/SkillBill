@@ -405,6 +405,13 @@ then the invoking provider. `--agent` identifies the provider that invoked the
 runtime. A run-wide override wins over phase choices. When a phase is repeated,
 the last `--phase-agent` value wins.
 
+`sona config agents show` prints the authored routes and each phase's inherited
+source. `sona config agents set --tier reasoning --agent claude` or
+`set --phase review --agent codex` writes one route; the matching `unset --tier`
+or `unset --phase` removes it so the phase inherits again. `sona goal` and
+feature-task commands accept repeatable `--phase-agent phase=provider`; it covers
+repair and finalization phases such as `goal_assessment` and `goal_assessment_fix`.
+
 For example, a matrix can route reasoning phases to Claude and implementation
 phases to Cursor, with `review` routed to Codex by `phase_agents`. This describes
 provider selection only; it does not promise that any provider executable is
@@ -415,10 +422,12 @@ start an agent by themselves.
 
 Subtask 2 activates frozen-run routing at admission, and subtasks 3 and 4 adopt it
 for goal and final-quality runs. Once admitted, ordinary configuration drift does
-not retarget a frozen run. A matching explicit override leaves its admitted choices
-alone; a conflicting explicit override is refused. Legacy records keep their
-compatibility behavior and do not imply historical provider settings that were
-never stored. This subtask adds no frozen-run retarget command.
+not retarget a frozen run. A changed wrapper `--agent` or environment is
+invocation context, not a retarget. A matching explicit override leaves its
+admitted choices alone; a conflicting explicit `--agent-override` or
+`--phase-agent` is refused with guidance to remove that option. Legacy records
+keep their compatibility behavior and do not imply historical provider settings
+that were never stored. There is no frozen-run retarget command.
 
 
 ## Desktop new-task start

@@ -35,11 +35,13 @@ enum class Tier { REASONING, IMPLEMENTATION }
 
 data class ModelDirective(val model: String, val effort: String?)
 
-/** Agent keys are the runtime's agent ids. */
+/** Agent keys are the runtime's agent ids. `tierAgents`/`phaseAgents` are authored provider routes. */
 data class ExecutionMatrixConfig(
   val phaseTiers: Map<String, Tier>,
   val agents: Map<String, Map<Tier, ModelDirective>>,
   val agentPhaseOverrides: Map<String, Map<String, ModelDirective>>,
+  val tierAgents: Map<Tier, String> = emptyMap(),
+  val phaseAgents: Map<String, String> = emptyMap(),
 )
 
 data class PhaseCompaction(val windowTokens: Int, val triggerPct: Int)
@@ -93,6 +95,16 @@ data class MachineConfigExecutionMatrixEditIntent(
   val agentTierDirectives: List<MachineConfigAgentTierDirectiveEdit> = emptyList(),
   val phaseTiers: List<MachineConfigPhaseTierEdit> = emptyList(),
   val agentPhaseOverrides: List<MachineConfigAgentPhaseOverrideEdit> = emptyList(),
+  val tierAgents: List<MachineConfigTierAgentEdit> = emptyList(),
+  val phaseAgents: List<MachineConfigPhaseAgentEdit> = emptyList(),
+)
+
+data class MachineConfigTierAgentEdit(
+  val tier: Tier,
+)
+
+data class MachineConfigPhaseAgentEdit(
+  val phaseId: String,
 )
 
 data class MachineConfigAgentTierDirectiveEdit(

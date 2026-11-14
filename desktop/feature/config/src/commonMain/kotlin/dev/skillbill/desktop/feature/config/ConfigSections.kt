@@ -13,6 +13,9 @@ import dev.skillbill.desktop.core.domain.model.Tier
 internal object ConfigFileKeys {
   const val PHASE_TIERS = "phase_tiers"
   const val AGENTS = "agents"
+  const val TIER_AGENTS = "tier_agents"
+  const val PHASE_AGENTS = "phase_agents"
+  const val AGENT = "agent"
   const val MODEL = "model"
   const val EFFORT = "effort"
   const val ENABLED = "enabled"
@@ -60,6 +63,10 @@ internal fun executionMatrixSection(
   return buildMap {
     if (tiers.isNotEmpty()) put(ConfigFileKeys.PHASE_TIERS, tiers)
     if (agents.isNotEmpty() || tiers.isNotEmpty()) put(ConfigFileKeys.AGENTS, agents)
+    if (matrix.tierAgents.isNotEmpty()) {
+      put(ConfigFileKeys.TIER_AGENTS, matrix.tierAgents.mapKeys { it.key.wireValue() })
+    }
+    if (matrix.phaseAgents.isNotEmpty()) put(ConfigFileKeys.PHASE_AGENTS, matrix.phaseAgents)
   }
 }
 

@@ -41,6 +41,8 @@ import skillbill.ports.agentrun.model.AgentRunLaunchCapability
 import skillbill.ports.agentrun.model.AgentRunLaunchCapabilityRequest
 import skillbill.ports.agentrun.model.AgentRunLaunchModelRequest
 import skillbill.ports.agentrun.model.AgentRunLaunchRequest
+import skillbill.ports.agentrun.model.AgentRunLocalAvailability
+import skillbill.ports.agentrun.model.AgentRunLocalAvailabilityRequest
 import skillbill.ports.agentrun.passThroughResolvedLaunchModel
 import skillbill.ports.config.RepoLocalConfigPort
 import skillbill.ports.config.model.ReadRepoLocalConfigRequest
@@ -279,6 +281,9 @@ fun PhaseRunEntryFixture.plans(): PhaseRunPlanResolver {
     object : AgentRunLauncher {
       override fun queryLaunchCapability(request: AgentRunLaunchCapabilityRequest): AgentRunLaunchCapability =
         AgentRunLaunchCapability.Supported
+
+      override fun queryLocalAvailability(request: AgentRunLocalAvailabilityRequest): AgentRunLocalAvailability =
+        AgentRunLocalAvailability.Registered(request.agent, request.agent.wireValue)
 
       override fun resolveLaunchModel(request: AgentRunLaunchModelRequest) = launchModelResolver(request)
 

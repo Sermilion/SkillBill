@@ -17,7 +17,9 @@ import dev.skillbill.desktop.core.domain.model.MachineConfigCompactionEditIntent
 import dev.skillbill.desktop.core.domain.model.MachineConfigCompactionField
 import dev.skillbill.desktop.core.domain.model.MachineConfigChange
 import dev.skillbill.desktop.core.domain.model.MachineConfigExecutionMatrixEditIntent
+import dev.skillbill.desktop.core.domain.model.MachineConfigPhaseAgentEdit
 import dev.skillbill.desktop.core.domain.model.MachineConfigPhaseTierEdit
+import dev.skillbill.desktop.core.domain.model.MachineConfigTierAgentEdit
 import dev.skillbill.desktop.core.domain.model.ModelDirective
 import dev.skillbill.desktop.core.domain.model.PhaseCompaction
 import dev.skillbill.desktop.core.domain.model.ProjectConfig
@@ -33,7 +35,9 @@ import skillbill.application.config.model.CompactionEditIntent
 import skillbill.application.config.model.ExecutionMatrixAgentPhaseOverrideEdit
 import skillbill.application.config.model.ExecutionMatrixAgentTierDirectiveEdit
 import skillbill.application.config.model.ExecutionMatrixEditIntent
+import skillbill.application.config.model.ExecutionMatrixPhaseAgentEdit
 import skillbill.application.config.model.ExecutionMatrixPhaseTierEdit
+import skillbill.application.config.model.ExecutionMatrixTierAgentEdit
 import skillbill.application.config.model.MachineConfigEdit
 import skillbill.application.config.model.MachineConfigValues
 import skillbill.application.config.model.ProjectConfigEdit
@@ -142,6 +146,8 @@ private fun MachineConfigExecutionMatrixEditIntent.toRuntime() = ExecutionMatrix
   agentPhaseOverrides = agentPhaseOverrides.map { edit ->
     ExecutionMatrixAgentPhaseOverrideEdit(edit.agentId, edit.phaseId)
   },
+  tierAgents = tierAgents.map { edit -> ExecutionMatrixTierAgentEdit(edit.tier.toRuntime()) },
+  phaseAgents = phaseAgents.map { edit -> ExecutionMatrixPhaseAgentEdit(edit.phaseId) },
 )
 
 private fun Tier.toRuntime(): ExecutionTier = when (this) {
@@ -160,12 +166,14 @@ internal fun ProjectConfigChange.toRuntime(): ProjectConfigEdit = when (this) {
   is ProjectConfigChange.SetReviewContextBudget -> ProjectConfigEdit.SetReviewContextBudget(section)
 }
 
-private fun ExecutionMatrix.toDomain() = ExecutionMatrixConfig(
+internal fun ExecutionMatrix.toDomain() = ExecutionMatrixConfig(
   phaseTiers = phaseTiers.mapValues { it.value.toDomain() },
   agents = agents.entries.associate { (agent, tiers) ->
     agent.id to tiers.entries.associate { (tier, directive) -> tier.toDomain() to directive.toDomain() }
   },
   agentPhaseOverrides = agentPhaseOverrides.entries.associate { (agent, phases) -> agent.id to phases.mapValues { it.value.toDomain() } },
+  tierAgents = tierAgents.mapKeys { it.key.toDomain() }.mapValues { it.value.id },
+  phaseAgents = phaseAgents.mapValues { it.value.id },
 )
 
 internal fun ExecutionTier.toDomain(): Tier = when (this) {

@@ -8,6 +8,7 @@ import dev.skillbill.desktop.core.data.runtime.readOrProblem
 import dev.skillbill.desktop.core.data.session.DatabaseSessionManager
 import dev.skillbill.desktop.core.domain.model.ConfigDocument
 import dev.skillbill.desktop.core.domain.model.AdvertisedAgentChoices
+import dev.skillbill.desktop.core.domain.model.AgentRuntimeAvailability
 import dev.skillbill.desktop.core.domain.model.ConfigFingerprint
 import dev.skillbill.desktop.core.domain.model.ConfigWriteOutcome
 import dev.skillbill.desktop.core.domain.model.DetectedAgent
@@ -46,6 +47,8 @@ import skillbill.application.telemetry.model.TelemetrySnapshotInstallIdSource
 import skillbill.application.telemetry.model.TelemetrySnapshotPriorLevel
 import skillbill.di.core.RuntimeComponent
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseProjectInstructions
+import skillbill.install.model.SupportedAgent
+import skillbill.ports.agentrun.model.AgentRunLocalAvailabilityRequest
 import skillbill.telemetry.INSTALL_ID_ENVIRONMENT_KEY
 import skillbill.telemetry.TELEMETRY_BATCH_SIZE_ENVIRONMENT_KEY
 import skillbill.telemetry.TELEMETRY_ENABLED_ENVIRONMENT_KEY
@@ -87,12 +90,30 @@ class RuntimeConfigAdapter(
     call("config_matrix_read", read = true, { ModelMatrixRead.Failed(it) }) { runtime ->
       val document = runtime.runtimeConfigEditService.readMachineConfigSnapshot()
       val mapped = document.toDomain { it.toDomain() }
+      val availability = runtimeAvailability(runtime)
       val agents = when (val read = document.document) {
         is ConfigDocumentRead.Present -> resolveModelMatrix(read.values.executionMatrix, defaults)
         is ConfigDocumentRead.Absent -> resolveModelMatrix(null, defaults)
         is ConfigDocumentRead.Unreadable -> emptyMap()
       }
-      ModelMatrixRead.Success(ModelMatrixView(mapped, agents))
+      val matrix = (document.document as? ConfigDocumentRead.Present)?.values?.executionMatrix
+      val routing = resolveRoutingView(matrix, defaults, availability, diagnostics)
+      ModelMatrixRead.Success(ModelMatrixView(mapped, agents, routing))
+    }
+
+  private fun runtimeAvailability(runtime: RuntimeComponent): Map<String, AgentRuntimeAvailability> =
+    SupportedAgent.entries.associate { agent ->
+      agent.id to
+        try {
+          runtime.agentRunLauncher
+            .queryLocalAvailability(AgentRunLocalAvailabilityRequest(agent))
+            .toAvailability()
+        } catch (failure: Exception) {
+          diagnostics.record("desktop_agent_capability_unavailable")
+          AgentRuntimeAvailability.Unknown(
+            failure.message ?: failure.javaClass.simpleName,
+          )
+        }
     }
 
   override suspend fun advertisedAgentChoices(request: AdvertisedAgentChoicesRequest): AdvertisedAgentChoices {

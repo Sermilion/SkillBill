@@ -44,6 +44,7 @@ import skillbill.cli.goal.run.resolveInvokedAgentId
 import skillbill.cli.goal.status.GoalStatusCommand
 import skillbill.cli.goal.status.GoalWatchCommand
 import skillbill.cli.kernel.agent.invokingAgentResolutionHelp
+import skillbill.cli.kernel.agent.parsePhaseAgents
 import skillbill.cli.kernel.agent.resolveRequestedQaDevice
 import skillbill.cli.kernel.agent.resolveRequestedQaSelection
 import skillbill.cli.kernel.cli.CliRunState
@@ -158,6 +159,17 @@ class GoalRunCommand(
     "--agent-override",
     help = "Agent to use for child subtask runs instead of the invoking agent. Wins over --agent and detection.",
   )
+  private val phaseAgents by option(
+    "--phase-agent",
+    help =
+      "Provider for one runtime phase, phase=provider (repeatable; the last value wins for a repeated " +
+        "phase). Covers repair and finalization phases such as goal_assessment and goal_assessment_fix. " +
+        "First admission resolves --agent-override, then --phase-agent, then execution_matrix.phase_agents, " +
+        "then execution_matrix.tier_agents for the phase's tier, then the invoking provider. Persist routes " +
+        "with 'sona config agents set --phase <phase> --agent <provider>' or '--tier <tier>'; 'sona config " +
+        "agents unset' removes a route so the phase inherits. A frozen run keeps its admitted providers; a " +
+        "conflicting explicit override is refused - remove that option.",
+  ).multiple()
   private val repoRoot by option("--repo-root", help = "Repository root for child agent runs.")
   private val codeReviewMode by option(
     FeatureTaskRuntimeGoalContinuationLaunchTokens.CODE_REVIEW_MODE_FLAG,
@@ -333,7 +345,11 @@ class GoalRunCommand(
       routingConfiguration?.compactionSettings
         ?: retainedPlanningWorkflowId?.let { configResolutionService.resolveCompactionSettings() }
     val agentAssignment =
-      FeatureTaskRuntimeAgentAssignment(override = request.configuredAgentOverrideId, matrix = routingMatrix)
+      FeatureTaskRuntimeAgentAssignment(
+        override = request.configuredAgentOverrideId,
+        matrix = routingMatrix,
+        perPhaseAgentIds = parsePhaseAgents(phaseAgents, WORKFLOW_AGENT_ASSIGNMENT_PHASE_IDS),
+      )
     val retainedPlanningRouting =
       retainedPlanningWorkflowId?.let { workflowId ->
         planLauncher.retainedGoalRoutingProviders(workflowId, request.invokedAgentId, agentAssignment)
