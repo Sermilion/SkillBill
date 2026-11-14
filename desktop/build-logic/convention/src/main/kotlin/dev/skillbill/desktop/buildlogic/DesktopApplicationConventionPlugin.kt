@@ -44,13 +44,34 @@ class DesktopApplicationConventionPlugin : Plugin<Project> {
       }
     }
     registerSharedRuntimeVersionCheck()
+    compactLinuxLauncherClasspath()
     tasks.withType(AbstractJPackageTask::class.java).configureEach {
       inputs.dir(appResourcesDir).withPropertyName("applicationResources").optional().withPathSensitivity(PathSensitivity.RELATIVE)
-      if (name == "createDistributable" && System.getProperty("os.name").contains("linux", true)) {
-        doLast { compactLauncherClasspath(destinationDir.get().asFile) }
-      }
     }
     pluginManager.withPlugin("skillbill.build-identity") { packageBuildIdentity() }
+  }
+
+  private fun Project.compactLinuxLauncherClasspath() {
+    if (!providers.systemProperty("os.name").get().startsWith("Linux", ignoreCase = true)) return
+    val image = layout.buildDirectory.dir("compose/binaries/main/app")
+    tasks.matching { it.name == "createDistributable" }.configureEach {
+      doLast {
+        val configs = image.get().asFile.walkTopDown()
+          .filter { it.isFile && it.extension == "cfg" && it.parentFile.name == "app" }.toList()
+        check(configs.isNotEmpty()) { "The Linux application image has no launcher configuration." }
+        configs.forEach { config ->
+          val prefix = "app.classpath="
+          val lines = config.readLines()
+          val entries = lines.filter { it.startsWith(prefix) }
+          check(entries.isNotEmpty() && entries.all {
+            it.startsWith("$prefix\$APPDIR/") && (it.endsWith(".jar") || it == "$prefix\$APPDIR/*")
+          }) { "Unsupported launcher classpath in $config." }
+          val compact = lines.filterNot { it.startsWith(prefix) }.toMutableList()
+          compact.add(lines.indexOfFirst { it.startsWith(prefix) }, "$prefix\$APPDIR/*")
+          config.writeText(compact.joinToString("\n", postfix = "\n"))
+        }
+      }
+    }
   }
 
   // The record is an app resource, so the packaged app and install.sh both read it as a plain file. Compose's own

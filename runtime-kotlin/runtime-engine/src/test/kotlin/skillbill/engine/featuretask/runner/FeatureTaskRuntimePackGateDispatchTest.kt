@@ -1,6 +1,10 @@
 package skillbill.engine.featuretask.runner
 
+import skillbill.config.model.applyValidationGateGradleWrapper
 import skillbill.contracts.JsonCodec
+import skillbill.contracts.config.projectchecks.ProjectCheckCategoryConfig
+import skillbill.contracts.config.projectchecks.ProjectCheckCommand
+import skillbill.contracts.config.projectchecks.ProjectCheckCommandSnapshot
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeGoalContinuationContext
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.validation.repoLocalConfig
@@ -51,6 +55,14 @@ class FeatureTaskRuntimePackGateDispatchTest {
                   qualityGateSelection = FeatureTaskRuntimeQualityGateSelection.BUILD,
                 ),
               validationGatePlatformManifests = listOf(pack.copy(validationGate = missing)),
+              admittedProjectCheckSnapshot =
+                ProjectCheckCommandSnapshot(
+                  projectId = "test-project",
+                  buildCommands = null,
+                  validationCommands = null,
+                  parserMetadata = null,
+                  gradleWrapper = null,
+                ).frozen(),
               validationGateRunner =
                 object : ValidationGateRunner {
                   override fun run(request: ValidationGateRunRequest): ValidationGateRunResult =
@@ -110,6 +122,7 @@ class FeatureTaskRuntimePackGateDispatchTest {
               ),
             validationGatePlatformManifests = listOf(pack),
             gateRepoLocalConfig = repoLocalConfig("./tools/gradlew"),
+            admittedProjectCheckSnapshot = admittedBuildSnapshot("./tools/gradlew", pack),
             validationGateRunner =
               object : ValidationGateRunner {
                 override fun run(request: ValidationGateRunRequest): ValidationGateRunResult {
@@ -140,13 +153,8 @@ class FeatureTaskRuntimePackGateDispatchTest {
       val report = harness.runner.run(harness.request)
 
       assertIs<FeatureTaskRuntimeRunReport.Completed>(report, report.toString())
-      assertEquals(
-        listOf(
-          listOf("./tools/gradlew", "-p", "./tools", "build-discovery"),
-          listOf("./tools/gradlew", "-p", "./tools", "build-verification"),
-        ),
-        requests.map { it.argv },
-      )
+      val discovery = listOf("./tools/gradlew", "-p", "./tools", "build-discovery")
+      assertEquals(listOf(discovery, discovery), requests.map { it.argv })
       val records = harness.recorder.loadPhaseRecords(WORKFLOW_ID).orEmpty()
       val build = assertNotNull(records["build"])
       val envelope = assertIs<Map<*, *>>(JsonCodec.parseValue(assertNotNull(build.outputArtifact)))
@@ -157,7 +165,8 @@ class FeatureTaskRuntimePackGateDispatchTest {
       assertFalse("validate" in records)
       val progress = assertNotNull(harness.recorder.loadBuildGateProgress(WORKFLOW_ID))
       assertEquals(listOf(1, 0), progress.gateRuns.map { it.exitCode })
-      assertEquals(requests.map { it.argv.joinToString(" ") }, progress.gateRuns.map { it.command })
+      val commandIdentity = ".::${discovery.joinToString("\u0000")}"
+      assertEquals(listOf(commandIdentity, commandIdentity), progress.gateRuns.map { it.command })
       assertEquals(
         listOf("build"),
         launcher.requests.mapNotNull { it.skillRunRequest.promptOverride?.let(::phaseIdFromPrompt) }
@@ -166,6 +175,24 @@ class FeatureTaskRuntimePackGateDispatchTest {
     } finally {
       repo.toFile().deleteRecursively()
     }
+  }
+
+  private fun admittedBuildSnapshot(
+    wrapper: String,
+    pack: PlatformManifest,
+  ): ProjectCheckCommandSnapshot {
+    val argv =
+      applyValidationGateGradleWrapper(
+        requireNotNull(requireNotNull(pack.validationGate).buildCommand),
+        wrapper,
+      )
+    return ProjectCheckCommandSnapshot(
+      projectId = "test-project",
+      buildCommands = ProjectCheckCategoryConfig(listOf(ProjectCheckCommand(argv, "."))),
+      validationCommands = null,
+      parserMetadata = null,
+      gradleWrapper = wrapper,
+    ).frozen()
   }
 
   private fun buildDispatchPack(): PlatformManifest {

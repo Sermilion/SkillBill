@@ -6,12 +6,12 @@ import skillbill.infrastructure.sqlite.core.schema.retireUnsupportedLaunchAgents
 internal fun retiredUnsupportedLaunchAgentMigrations(): List<DatabaseMigration> =
   listOf(
     DatabaseMigration(
-      version = 132,
+      version = 134,
       name = "retire-unsupported-agent-ids",
       operation = ::retireUnsupportedLaunchAgents,
     ),
     DatabaseMigration(
-      version = 133,
+      version = 135,
       name = "normalize-launch-agents-after-vocabulary-change",
       operation = ::retireUnsupportedLaunchAgents,
     ),

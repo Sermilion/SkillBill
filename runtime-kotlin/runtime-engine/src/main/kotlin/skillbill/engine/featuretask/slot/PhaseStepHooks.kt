@@ -132,6 +132,9 @@ internal interface PhaseRuntimeOwnedStepHooks {
   /** Whether the launch prompt of this step carries the build command the validation gate declares. */
   val carriesPackBuildCommand: Boolean
 
+  /** Whether the launch prompt of this step carries saved validation commands from project configuration. */
+  val carriesValidationCommand: Boolean
+
   /**
    * The outcome [outputText] of [run] settles to before the shared output gate decodes it, or null when the shared
    * gate decodes it.
@@ -303,6 +306,9 @@ internal val PhaseStepHooks<*>.checksImmediateConsumerProjection: Boolean
 
 internal val PhaseStepLaunchHooks<*>.carriesPackBuildCommand: Boolean
   get() = (this as? PhaseRuntimeOwnedStepHooks)?.carriesPackBuildCommand ?: false
+
+internal val PhaseStepLaunchHooks<*>.carriesValidationCommand: Boolean
+  get() = (this as? PhaseRuntimeOwnedStepHooks)?.carriesValidationCommand ?: false
 
 internal fun PhaseStepHooks<*>.earlyOutput(
   run: PhaseRun,

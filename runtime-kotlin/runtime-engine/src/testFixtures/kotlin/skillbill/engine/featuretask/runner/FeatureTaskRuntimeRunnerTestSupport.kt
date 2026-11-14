@@ -18,6 +18,7 @@ import skillbill.application.testDecompositionManifestValidator
 import skillbill.application.testHarnessClock
 import skillbill.config.model.RepoLocalConfig
 import skillbill.contracts.JsonCodec
+import skillbill.contracts.config.projectchecks.ProjectCheckCommandSnapshot
 import skillbill.contracts.time.JvmSystemClock
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CHECKPOINT_IDENTITY_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
@@ -80,6 +81,8 @@ import skillbill.engine.featuretask.runloop.finalization.CommitPushManifestCompl
 import skillbill.engine.featuretask.runloop.finalization.NoopCommitPushManifestCompletion
 import skillbill.engine.featuretask.runloop.observability.AgentBuildObserverFactory
 import skillbill.engine.featuretask.runloop.qualitygate.RuntimeQualityGateCycles
+import skillbill.engine.featuretask.runloop.qualitygate.RuntimeQualityGateLaunch
+import skillbill.engine.featuretask.runloop.settlement.ValidationCommandLaunchPreparer
 import skillbill.engine.featuretask.slot.ApprovingReviewPhaseRunner
 import skillbill.engine.featuretask.slot.OpenPullRequestIdentityLookup
 import skillbill.engine.featuretask.slot.PassingPullRequestChecksLookup
@@ -101,14 +104,16 @@ import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorSer
 import skillbill.engine.featuretask.slot.runner.DefaultPhaseRunner
 import skillbill.engine.featuretask.slot.state.PhaseRunState
 import skillbill.engine.featuretask.slot.statusProjectionPhaseStrategies
+import skillbill.engine.featuretask.slot.testAdmittedProjectCheckSnapshot
 import skillbill.engine.featuretask.slot.testPhaseStrategies
 import skillbill.engine.featuretask.slot.unavailableQaReportSettlement
 import skillbill.engine.featuretask.slot.validJsonOutput
 import skillbill.engine.featuretask.slot.verifyFindingsOutput
 import skillbill.engine.featuretask.testing.featureTaskRuntimeWireArtifactValidatorForTest
-import skillbill.engine.featuretask.validation.FeatureTaskRuntimeBuildGateCoordinator
 import skillbill.engine.featuretask.validation.FeatureTaskRuntimeValidationGateCoordinator
 import skillbill.engine.featuretask.validation.ValidationGateResolver
+import skillbill.engine.featuretask.validation.buildFeatureTaskRuntimeBuildGateCoordinator
+import skillbill.engine.featuretask.validation.projectchecks.projectCheckCommandResolverForTests
 import skillbill.error.core.RejectedOutputDiagnosticFailureCode
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rejectedOutputDiagnosticConflictMessage
@@ -171,6 +176,7 @@ import skillbill.ports.goalrunner.runner.PullRequestChecksLookup
 import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
 import skillbill.ports.goalrunner.runner.model.GoalRunnerSubtaskLaunchRequest
 import skillbill.ports.idestatus.AgentActivityStampRepository
+import skillbill.ports.idestatus.InMemoryMonitorRepairValidationSnapshotRepository
 import skillbill.ports.learning.LearningRepository
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.persistence.UnitOfWorkDefaults
@@ -761,6 +767,7 @@ data class RuntimeHarnessConfig(
   val qaExecution: QaExecutionLifecycle = testQaExecutionLifecycle(),
   val qaReports: QaReportSettlement = unavailableQaReportSettlement(),
   val phaseInstructionSource: PhaseInstructionFileSource? = null,
+  val admittedProjectCheckSnapshot: ProjectCheckCommandSnapshot? = null,
 ) {
   val harnessGitOperations: WorkflowGitOperations get() = gitOperationsOverride ?: branchSetup.gitOperations
 }
@@ -812,7 +819,7 @@ private fun testRunLoopEntry(deps: RuntimePhaseGatesDeps): TestFeatureTaskRuntim
     lifecycleTelemetry = deps.lifecycleTelemetry,
     qualityGateCycles =
       RuntimeQualityGateCycles(
-        FeatureTaskRuntimeBuildGateCoordinator(
+        buildFeatureTaskRuntimeBuildGateCoordinator(
           validationGateResolver,
           validationGateRunner,
           deps.gateRepoLocalConfig,
@@ -1516,6 +1523,7 @@ private fun runnerExecutionEntry(
       config.gateRepoLocalConfig,
       database,
       fixture.compatibility,
+      projectCheckCommandResolverForTests(),
       diagnostics = NoopRuntimeDiagnostics,
     )
   if (!config.seedDurableWorkflow) {
@@ -1535,9 +1543,17 @@ private fun runnerExecutionEntry(
       config.goalContinuation.validationDepth,
       null,
     )
+  val seeded = fixture.strategies.executionPlan(facts)
+  val plan =
+    seeded.withProjectCheckCommands(
+      config.admittedProjectCheckSnapshot ?: testAdmittedProjectCheckSnapshot(seeded.qualityGateSelection),
+    )
   val descriptor =
     fixture.validator.read(
-      fixture.codec.encodeExecution(fixture.strategies.executionPlan(facts), inputs),
+      fixture.codec.encodeExecution(
+        plan,
+        inputs.copy(projectCheckSnapshot = plan.projectCheckCommands),
+      ),
       "runner fixture",
     )
   database.transaction { unit ->
@@ -1574,7 +1590,7 @@ private fun runnerSelectionFacts(config: RuntimeHarnessConfig): PhaseStrategySel
 private fun defaultQualityGateCycles(): RuntimeQualityGateCycles {
   val resolver = ValidationGateResolver { listOf(kotlinPackWithValidationGate()) }
   return RuntimeQualityGateCycles(
-    FeatureTaskRuntimeBuildGateCoordinator(
+    buildFeatureTaskRuntimeBuildGateCoordinator(
       resolver,
       passingValidationGateRunner(),
       defaultRepoLocalConfigPort(),
@@ -1583,6 +1599,37 @@ private fun defaultQualityGateCycles(): RuntimeQualityGateCycles {
     AcceptingFeatureTaskRuntimeWireArtifactValidator,
     FeatureTaskRuntimeValidationGateCoordinator(),
     resolver,
+  )
+}
+
+fun validationCommandLaunchPreparerForTests(
+  gitOperations: WorkflowGitOperations,
+  qualityGateCycles: RuntimeQualityGateCycles,
+): ValidationCommandLaunchPreparer {
+  val database = RuntimeFakeDatabaseSessionFactory(InMemoryRuntimeWorkflowRepository())
+  val commands = projectCheckCommandResolverForTests()
+  val fixture = ExecutionPlanAdmissionFixture()
+  val executionPlans =
+    FeatureTaskRuntimeExecutionPlanResolver(
+      fixture.strategies,
+      fixture.codec,
+      fixture.validator,
+      ValidationGateResolver { listOf(kotlinPackWithValidationGate()) },
+      gitOperations,
+      defaultRepoLocalConfigPort(),
+      database,
+      fixture.compatibility,
+      commands,
+      NoopRuntimeDiagnostics,
+    )
+  return ValidationCommandLaunchPreparer(
+    database,
+    commands,
+    qualityGateCycles,
+    gitOperations,
+    defaultRepoLocalConfigPort(),
+    NoopRuntimeDiagnostics,
+    executionPlans,
   )
 }
 
@@ -1631,13 +1678,15 @@ open class TestFeatureTaskRuntimeRunLoopEntry(
   commitPushManifestCompletion: CommitPushManifestCompletion = NoopCommitPushManifestCompletion,
   projectStore: ProjectStorePort = RUNNER_TEST_PROJECT_STORE,
   stepLaunchResolver: FeatureTaskRuntimeStepLaunchResolver = testStepLaunchResolver(),
+  validationCommandLaunch: ValidationCommandLaunchPreparer =
+    validationCommandLaunchPreparerForTests(gitOperations, qualityGateCycles),
 ) : FeatureTaskRuntimeRunLoopEntry(
     gitOperations,
     decompositionPlanner,
     findingVerificationBoundaryMemory,
     specIntentProjectionResolver,
     lifecycleTelemetry,
-    qualityGateCycles,
+    RuntimeQualityGateLaunch(qualityGateCycles, validationCommandLaunch),
     sharedEvidenceResolver,
     diffResolver,
     implementationChecklistStore,
@@ -2271,8 +2320,11 @@ class RuntimeFakeDatabaseSessionFactory(
 
   private val qaOutcomes = InMemoryFeatureTaskQaOutcomeRepository()
 
+  private val monitorRepairValidationSnapshotStore = InMemoryMonitorRepairValidationSnapshotRepository()
+
   private fun unitOfWork(): UnitOfWork =
     object : UnitOfWorkDefaults() {
+      override val monitorRepairValidationSnapshots = monitorRepairValidationSnapshotStore
       override val agentActivityStamps = activityStampRepository
       override val dbPath: Path = this@RuntimeFakeDatabaseSessionFactory.dbPath
       override val reviews: ReviewRepository = this@RuntimeFakeDatabaseSessionFactory.reviewsPort
@@ -2845,7 +2897,7 @@ fun FeatureTaskRuntimeRunLoopContext.withRunState(state: PhaseRunState): Feature
     findingVerificationBoundaryMemory,
     specIntentProjectionResolver,
     lifecycleTelemetry,
-    qualityGateCycles,
+    qualityGateLaunch,
     sharedEvidenceResolver,
     diffResolver,
     phaseRunFactory,

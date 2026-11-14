@@ -1,5 +1,6 @@
 {
-  "contract_version": "0.3",
+  "contract_version": "0.4",
+  "project_check_commands": null,
   "definition": {
     "id": "goal-child",
     "semantic_revision": 2

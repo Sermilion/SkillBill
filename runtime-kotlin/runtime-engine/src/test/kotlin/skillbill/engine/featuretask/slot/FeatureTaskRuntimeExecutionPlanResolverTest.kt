@@ -1,6 +1,8 @@
 package skillbill.engine.featuretask.slot
 
 import skillbill.application.FakeDatabaseSessionFactory
+import skillbill.contracts.config.projectchecks.ProjectCheckConfig
+import skillbill.contracts.workflow.identity.task.FEATURE_TASK_RUNTIME_EXECUTION_PLAN_PREVIOUS_CONTRACT_VERSION
 import skillbill.engine.featuretask.lifecycle.execution.ExecutionPlanAdmissionFixture
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
 import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
@@ -9,12 +11,15 @@ import skillbill.engine.featuretask.model.execution.ValidationGateCommandFamily
 import skillbill.engine.featuretask.runner.InMemoryRuntimeWorkflowRepository
 import skillbill.engine.featuretask.validation.ValidationGateResolver
 import skillbill.engine.featuretask.validation.kotlinPackWithoutGate
+import skillbill.engine.featuretask.validation.projectchecks.committedProjectCheckConfigForTests
+import skillbill.engine.featuretask.validation.projectchecks.projectCheckCommandResolverForTests
 import skillbill.engine.featuretask.validation.repoLocalConfig
 import skillbill.engine.featuretask.validation.reviewFallbackPackWithoutGate
 import skillbill.engine.featuretask.validation.validationGateTestDeclaration
 import skillbill.engine.featuretask.validation.validationGateTestRepoRoot
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
+import skillbill.error.featuretask.UnsupportedFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.shellcontent.ManifestFailureCode
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
@@ -48,21 +53,11 @@ class FeatureTaskRuntimeExecutionPlanResolverTest {
         ValidationDepth.FULL,
         7.minutes,
       )
-    val descriptor =
-      resolver.resolveCreation(
-        FeatureTaskRuntimeExecutionPlanCreationRequest(
-          root,
-          SkeletonDefinition.GOAL_CHILD,
-          CodeReviewExecutionMode.INLINE,
-          FeatureTaskRuntimeQualityGateSelection.BUILD,
-          ValidationDepth.FULL,
-          7.minutes,
-        ),
-      )
+    val descriptor = resolver.resolveCreation(fixture.creationRequest())
     val plan =
       fixture.execution.compatibility.requireSupportedExecution(
         fixture.execution.validator.write(descriptor.artifactValue, "created descriptor"),
-        inputs,
+        fixture.boundInputs(inputs, descriptor),
       )
 
     assertEquals("kotlin", inputs.packSlug)
@@ -82,7 +77,7 @@ class FeatureTaskRuntimeExecutionPlanResolverTest {
         ValidationDepth.FULL,
         7.minutes,
       )
-    assertFailsWith<IncompatibleFeatureTaskRuntimeExecutionPlanError> {
+    assertFailsWith<UnsupportedFeatureTaskRuntimeExecutionPlanError> {
       fixture.execution.compatibility.requireSupportedExecution(
         fixture.execution.validator.write(descriptor.artifactValue, "created descriptor"),
         changed,
@@ -97,6 +92,8 @@ class FeatureTaskRuntimeExecutionPlanResolverTest {
           null,
           ValidationDepth.FULL,
           7.minutes,
+          issueKey = "SKILL-384",
+          invokedAgentId = "claude",
         ),
       )
     assertNotEquals(descriptor.artifactValue, validation.artifactValue)
@@ -140,14 +137,16 @@ class FeatureTaskRuntimeExecutionPlanResolverTest {
     assertFailsWith<IncompatibleFeatureTaskRuntimeExecutionPlanError> { fixture.create() }
     fixture.tracked = WorkflowGitNameListResult.Listed(listOf("runtime-kotlin/Main.kt"))
     fixture.packs = listOf(kotlinPackWithoutGate())
-    assertFailsWith<SkillBillRuntimeException> {
-      fixture.create()
-    }.also { failure ->
-      assertEquals(ManifestFailureCode.MANIFEST_FAILURE, failure.code)
-    }
+    assertFailsWith<IncompatibleFeatureTaskRuntimeExecutionPlanError> { fixture.create() }
     fixture.packs = fixture.packs.map { it.copy(validationGate = validationGateTestDeclaration) }
     assertFailsWith<SkillBillRuntimeException> {
-      fixture.create()
+      fixture.resolver(
+        committed =
+          committedProjectCheckConfigForTests(
+            knownEmptyBuild = true,
+            validationArgv = validationGateTestDeclaration.fullGateCommand,
+          ),
+      ).resolveCreation(fixture.creationRequest())
     }.also { failure ->
       assertEquals(ManifestFailureCode.MANIFEST_FAILURE, failure.code)
     }
@@ -192,7 +191,10 @@ class FeatureTaskRuntimeExecutionPlanResolverTest {
     fixture.packs = listOf(reviewFallbackPackWithoutGate())
     fixture.inventory = WorkflowGitNameListResult.Listed(emptyList())
     fixture.tracked = WorkflowGitNameListResult.Listed(listOf("runtime-kotlin/Main.kt"))
-    val resolver = fixture.resolver()
+    val resolver =
+      fixture.resolver(
+        committed = committedProjectCheckConfigForTests(buildArgv = null),
+      )
     val inputs =
       resolver.resolveInputs(
         root,
@@ -202,19 +204,12 @@ class FeatureTaskRuntimeExecutionPlanResolverTest {
       )
     val descriptor =
       resolver.resolveCreation(
-        FeatureTaskRuntimeExecutionPlanCreationRequest(
-          root,
-          SkeletonDefinition.GOAL_CHILD,
-          CodeReviewExecutionMode.INLINE,
-          FeatureTaskRuntimeQualityGateSelection.VALIDATE,
-          ValidationDepth.FULL,
-          7.minutes,
-        ),
+        fixture.creationRequest(FeatureTaskRuntimeQualityGateSelection.VALIDATE),
       )
     val plan =
       fixture.execution.compatibility.requireSupportedExecution(
         fixture.execution.validator.write(descriptor.artifactValue, "created descriptor"),
-        inputs,
+        fixture.boundInputs(inputs, descriptor),
       )
 
     assertEquals(null, inputs.packSlug)
@@ -257,21 +252,7 @@ class FeatureTaskRuntimeExecutionPlanResolverTest {
       ),
     )
     fixture.inventory = WorkflowGitNameListResult.Listed(listOf("ios/New.swift"))
-    assertEquals(
-      clean,
-      resolver.resolveInputs(
-        root,
-        FeatureTaskRuntimeQualityGateSelection.BUILD,
-        ValidationDepth.FULL,
-        7.minutes,
-        "wftr-clean",
-      ),
-    )
-    fixture.packs =
-      fixture.packs.map { pack ->
-        pack.copy(validationGate = requireNotNull(pack.validationGate).copy(buildCommand = listOf("other-build")))
-      }
-    assertFailsWith<IncompatibleFeatureTaskRuntimeExecutionPlanError> {
+    val rerouted =
       resolver.resolveInputs(
         root,
         FeatureTaskRuntimeQualityGateSelection.BUILD,
@@ -279,7 +260,33 @@ class FeatureTaskRuntimeExecutionPlanResolverTest {
         7.minutes,
         "wftr-clean",
       )
-    }
+    assertEquals(clean.packSlug, rerouted.packSlug)
+    assertEquals(clean.commandFamily, rerouted.commandFamily)
+    assertEquals(clean.phaseTimeoutMillis, rerouted.phaseTimeoutMillis)
+    assertEquals(
+      clean.projectCheckSnapshot?.buildCommandList?.map { it.argv },
+      rerouted.projectCheckSnapshot?.buildCommandList?.map { it.argv },
+    )
+    fixture.packs =
+      fixture.packs.map { pack ->
+        pack.copy(validationGate = requireNotNull(pack.validationGate).copy(buildCommand = listOf("other-build")))
+      }
+    val drifted =
+      resolver.resolveInputs(
+        root,
+        FeatureTaskRuntimeQualityGateSelection.BUILD,
+        ValidationDepth.FULL,
+        7.minutes,
+        "wftr-clean",
+      )
+    assertEquals(
+      clean.projectCheckSnapshot?.buildCommandList?.map { it.argv },
+      drifted.projectCheckSnapshot?.buildCommandList?.map { it.argv },
+    )
+    assertEquals(
+      listOf("./gradlew", "compileKotlin"),
+      drifted.projectCheckSnapshot?.buildCommands?.commands?.single()?.argv,
+    )
     assertEquals(0, fixture.execution.launches)
   }
 
@@ -289,7 +296,9 @@ class FeatureTaskRuntimeExecutionPlanResolverTest {
     fixture.packs = fixture.packs + reviewFallbackPackWithoutGate()
     val original =
       fixture.execution.codec.encodeExecution(
-        fixture.execution.plan,
+        fixture.execution.plan
+          .withProjectCheckCommands(null)
+          .withContractVersion(FEATURE_TASK_RUNTIME_EXECUTION_PLAN_PREVIOUS_CONTRACT_VERSION),
         EffectiveGatePolicyInputs(
           ValidationGateCommandFamily.BUILD,
           "generic",
@@ -351,17 +360,18 @@ class FeatureTaskRuntimeExecutionPlanResolverTest {
     assertEquals(planBefore, planStates.getFeatureTaskWorkflow("wftr-drift"))
 
     val (child, childStates) = driftedSeed(SkeletonDefinition.GOAL_CHILD)
-    val error =
-      assertFailsWith<IncompatibleFeatureTaskRuntimeExecutionPlanError> {
-        child.recoveryResolver(wrapperForRoot = { "gradlew" }).resolveInputs(
-          root,
-          FeatureTaskRuntimeQualityGateSelection.VALIDATE,
-          ValidationDepth.FULL,
-          7.minutes,
-          "wftr-drift",
-        )
-      }
-    assertContains(error.message.orEmpty(), "no longer match any declared platform-pack gate")
+    val resumedChild =
+      child.recoveryResolver(wrapperForRoot = { "gradlew" }).resolveInputs(
+        root,
+        FeatureTaskRuntimeQualityGateSelection.VALIDATE,
+        ValidationDepth.FULL,
+        7.minutes,
+        "wftr-drift",
+      )
+    assertEquals(
+      child.inputs.projectCheckSnapshot?.validationCommandList,
+      resumedChild.projectCheckSnapshot?.validationCommandList,
+    )
     assertTrue(childStates.getFeatureTaskWorkflow("wftr-drift") != null)
     assertEquals(0, planning.launches + child.launches)
   }
@@ -388,39 +398,60 @@ class FeatureTaskRuntimeExecutionPlanResolverTest {
         ),
       )
 
-    fun resolver(wrapper: String = "runtime/gradlew") =
-      FeatureTaskRuntimeExecutionPlanResolver(
-        execution.strategies,
-        execution.codec,
-        execution.validator,
-        ValidationGateResolver { packs },
-        object : WorkflowGitOperations by NoopWorkflowGitOperations {
-          override fun repositoryOwnedPaths(repoRoot: Path): WorkflowGitNameListResult {
-            return inventory
-          }
+    fun resolver(
+      wrapper: String = "runtime/gradlew",
+      committed: ProjectCheckConfig? = committedFromPacks(),
+    ) = FeatureTaskRuntimeExecutionPlanResolver(
+      execution.strategies,
+      execution.codec,
+      execution.validator,
+      ValidationGateResolver { packs },
+      object : WorkflowGitOperations by NoopWorkflowGitOperations {
+        override fun repositoryOwnedPaths(repoRoot: Path): WorkflowGitNameListResult {
+          return inventory
+        }
 
-          override fun trackedPaths(repoRoot: Path): WorkflowGitNameListResult {
-            inventoryRoot = repoRoot
-            return tracked
-          }
-        },
-        repoLocalConfig(wrapper),
-        database,
-        execution.compatibility,
-        diagnostics = NoopRuntimeDiagnostics,
-      )
+        override fun trackedPaths(repoRoot: Path): WorkflowGitNameListResult {
+          inventoryRoot = repoRoot
+          return tracked
+        }
+      },
+      repoLocalConfig(wrapper),
+      database,
+      execution.compatibility,
+      projectCheckCommandResolverForTests(committed = committed),
+      diagnostics = NoopRuntimeDiagnostics,
+    )
 
-    fun create() =
-      resolver().resolveCreation(
-        FeatureTaskRuntimeExecutionPlanCreationRequest(
-          root,
-          SkeletonDefinition.GOAL_CHILD,
-          CodeReviewExecutionMode.INLINE,
-          FeatureTaskRuntimeQualityGateSelection.BUILD,
-          ValidationDepth.FULL,
-          7.minutes,
-        ),
-      )
+    fun creationRequest(
+      qualityGate: FeatureTaskRuntimeQualityGateSelection? = FeatureTaskRuntimeQualityGateSelection.BUILD,
+      workflowId: String? = null,
+    ) = FeatureTaskRuntimeExecutionPlanCreationRequest(
+      root,
+      if (qualityGate == null) SkeletonDefinition.STANDALONE else SkeletonDefinition.GOAL_CHILD,
+      CodeReviewExecutionMode.INLINE,
+      qualityGate,
+      ValidationDepth.FULL,
+      7.minutes,
+      workflowId,
+      issueKey = "SKILL-384",
+      invokedAgentId = "claude",
+    )
+
+    fun boundInputs(
+      inputs: EffectiveGatePolicyInputs,
+      descriptor: ValidatedFeatureTaskRuntimeExecutionPlan,
+    ) = inputs.copy(projectCheckSnapshot = execution.codec.decode(descriptor.encoded()).projectCheckCommands)
+
+    fun committedFromPacks(): ProjectCheckConfig? {
+      val gate = packs.singleOrNull()?.validationGate ?: return null
+      val build = gate.buildCommand?.takeIf { it.isNotEmpty() }
+      val validation = gate.fullGateCommand.takeIf { it.isNotEmpty() }
+      if (build == null && validation == null) return null
+      return committedProjectCheckConfigForTests(buildArgv = build, validationArgv = validation)
+    }
+
+    fun create() = resolver().resolveCreation(creationRequest())
   }
 
   private companion object {

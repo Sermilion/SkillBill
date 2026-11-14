@@ -2449,8 +2449,10 @@ private val expectedMigrationDefinitions =
     129 to "add-feature-verify-branch-worktree-retained",
     130 to "record-opencode-launch-identity",
     131 to "record-verify-criterion-resolutions",
-    132 to "retire-unsupported-agent-ids",
-    133 to "normalize-launch-agents-after-vocabulary-change",
+    132 to "add-project-check-config",
+    133 to "record-monitor-repair-validation-snapshots",
+    134 to "retire-unsupported-agent-ids",
+    135 to "normalize-launch-agents-after-vocabulary-change",
   )
 
 private object NoopMigrationDiagnostics : RuntimeDiagnostics {

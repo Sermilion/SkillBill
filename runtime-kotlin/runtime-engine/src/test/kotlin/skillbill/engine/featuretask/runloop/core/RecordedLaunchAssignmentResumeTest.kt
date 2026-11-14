@@ -175,7 +175,7 @@ private fun FeatureTaskRuntimeRunLoopContext.resumedAs(
       findingVerificationBoundaryMemory,
       specIntentProjectionResolver,
       lifecycleTelemetry,
-      qualityGateCycles,
+      qualityGateLaunch,
       sharedEvidenceResolver,
       diffResolver,
       phaseRunFactory,

@@ -9,13 +9,15 @@ import skillbill.cli.model.CliRuntimeContext
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationLaunchTokens
 import skillbill.di.core.RuntimeComponent
 import skillbill.di.core.create
-import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanCodec
+import skillbill.engine.featuretask.lifecycle.execution.featureTaskRuntimeExecutionPlanCodecForTest
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunInput
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
 import skillbill.engine.featuretask.model.execution.ValidationGateCommandFamily
 import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
 import skillbill.engine.featuretask.slot.statusProjectionPhaseStrategies
+import skillbill.engine.featuretask.slot.testAdmittedProjectCheckSnapshot
+import skillbill.engine.featuretask.slot.withTestProjectCheckSnapshot
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeExecutionPlanSchemaValidator
 import skillbill.infrastructure.host.CanonicalRepositoryRoot
 import skillbill.ports.agentrun.ExecutableLookup
@@ -164,9 +166,9 @@ private data class ContinuationFixture(
           SkeletonDefinition.GOAL_CHILD,
           setOf(CodeReviewExecutionMode.DEFAULT, FeatureTaskRuntimeQualityGateSelection.VALIDATE),
         ),
-      )
+      ).withTestProjectCheckSnapshot()
     val descriptor =
-      FeatureTaskRuntimeExecutionPlanCodec(validator).encodeExecution(
+      featureTaskRuntimeExecutionPlanCodecForTest(validator).encodeExecution(
         plan,
         EffectiveGatePolicyInputs(
           ValidationGateCommandFamily.VALIDATION,
@@ -175,6 +177,7 @@ private data class ContinuationFixture(
           null,
           ValidationDepth.FULL,
           null,
+          projectCheckSnapshot = testAdmittedProjectCheckSnapshot(FeatureTaskRuntimeQualityGateSelection.VALIDATE),
         ),
       )
     val opened =

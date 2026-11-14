@@ -850,7 +850,7 @@ class CliPhasePlanRuntimeTest {
     override fun launch(request: AgentRunLaunchRequest): AgentRunLaunchOutcome {
       val skillRequest = request.skillRunRequest
       return if (skillRequest.goalContinuation == null && skillRequest.promptOverride != null) {
-        planner.launch(request)
+        projectCheckDiscoveryLaunchOutcome(skillRequest.promptOverride) ?: planner.launch(request)
       } else {
         goal.launch(request)
       }

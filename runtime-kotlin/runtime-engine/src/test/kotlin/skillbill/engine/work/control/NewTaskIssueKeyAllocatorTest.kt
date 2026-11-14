@@ -153,6 +153,8 @@ internal fun projectStore(
         repoRoot.resolve("phases"),
       )
 
+    override fun resolveCurrent(workingDirectory: Path) = resolve(workingDirectory)
+
     override fun link(
       workingDirectory: Path,
       projectId: String,

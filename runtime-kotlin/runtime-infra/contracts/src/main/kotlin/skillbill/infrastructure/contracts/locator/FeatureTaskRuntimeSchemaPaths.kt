@@ -1,5 +1,23 @@
 package skillbill.infrastructure.contracts.locator
 
+object ProjectCheckConfigSchemaPaths {
+  const val REPO_RELATIVE_PATH = "orchestration/contracts/project-check-config-schema.yaml"
+  const val CLASSPATH_RESOURCE = "skillbill/contracts/project-check-config-schema.yaml"
+  const val EXPECTED_SCHEMA_ID = "https://skill-bill.dev/contracts/project-check-config-schema.yaml"
+}
+
+object ProjectCheckDiscoverySchemaPaths {
+  const val REPO_RELATIVE_PATH = "orchestration/contracts/project-check-discovery-schema.yaml"
+  const val CLASSPATH_RESOURCE = "skillbill/contracts/project-check-discovery-schema.yaml"
+  const val EXPECTED_SCHEMA_ID = "https://skill-bill.dev/contracts/project-check-discovery-schema.yaml"
+}
+
+object ProjectCheckCommandSnapshotSchemaPaths {
+  const val REPO_RELATIVE_PATH = "orchestration/contracts/project-check-command-snapshot-schema.yaml"
+  const val CLASSPATH_RESOURCE = "skillbill/contracts/project-check-command-snapshot-schema.yaml"
+  const val EXPECTED_SCHEMA_ID = "https://skill-bill.dev/contracts/project-check-command-snapshot-schema.yaml"
+}
+
 object FeatureTaskRuntimeExecutionPlanSchemaPaths {
   const val REPO_RELATIVE_PATH: String =
     "orchestration/contracts/feature-task-runtime-execution-plan.yaml"
@@ -13,6 +31,10 @@ object FeatureTaskRuntimeExecutionPlanSchemaPaths {
     "orchestration/contracts/feature-task-runtime-execution-plan-0.2.yaml"
   const val HISTORICAL_0_2: String =
     "skillbill/infrastructure/contracts/feature-task-runtime-execution-plan-0.2.yaml"
+  const val HISTORICAL_0_3_REPO_RELATIVE_PATH: String =
+    "orchestration/contracts/feature-task-runtime-execution-plan-0.3.yaml"
+  const val HISTORICAL_0_3: String =
+    "skillbill/infrastructure/contracts/feature-task-runtime-execution-plan-0.3.yaml"
   const val EXPECTED_SCHEMA_ID: String =
     "https://skill-bill.dev/contracts/feature-task-runtime-execution-plan.yaml"
 }

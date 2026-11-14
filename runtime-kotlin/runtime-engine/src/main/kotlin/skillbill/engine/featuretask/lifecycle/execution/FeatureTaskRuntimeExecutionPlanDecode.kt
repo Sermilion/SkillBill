@@ -3,6 +3,7 @@ package skillbill.engine.featuretask.lifecycle.execution
 import skillbill.contracts.JsonCodec
 import skillbill.error.featuretask.InvalidFeatureTaskRuntimeExecutionPlanSchemaError
 import skillbill.error.featuretask.UnsupportedFeatureTaskRuntimeExecutionPlanError
+import skillbill.ports.config.projectchecks.ProjectCheckCommandSnapshotValidator
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.taskruntime.model.skeleton.EffectiveLaunchModel
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
@@ -15,6 +16,7 @@ import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedExecutionPolicy
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedFeatureTaskRuntimeExecutionSettings
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
+import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhasePlanAttachments
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseStepRecords
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseStrategyDispatch
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseStrategyIdentity
@@ -22,9 +24,18 @@ import skillbill.workflow.taskruntime.model.skeleton.RuntimeReviewSelection
 import skillbill.workflow.taskruntime.model.skeleton.StepLaunchAssignment
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPlanKeys as Keys
 
-public fun decodeExecutionPlan(payload: Map<String, Any?>): ResolvedPhaseExecutionPlan {
+public fun decodeExecutionPlan(
+  payload: Map<String, Any?>,
+  snapshotValidator: ProjectCheckCommandSnapshotValidator,
+): ResolvedPhaseExecutionPlan {
   val definition = planObject(payload[Keys.DEFINITION])
   val contractVersion = payload[Keys.CONTRACT_VERSION] as? String ?: invalidPlanValue()
+  val projectCheckCommands =
+    if (executionPlanSupportsProjectCheckCommands(contractVersion)) {
+      decodeProjectCheckCommandSnapshot(payload[Keys.PROJECT_CHECK_COMMANDS], snapshotValidator, "execution plan")
+    } else {
+      null
+    }
   val plan =
     ResolvedPhaseExecutionPlan(
       definitionId = planString(definition, Keys.ID),
@@ -39,10 +50,15 @@ public fun decodeExecutionPlan(payload: Map<String, Any?>): ResolvedPhaseExecuti
         payload[Keys.QUALITY_GATE_SELECTION]?.let { value ->
           FeatureTaskRuntimeQualityGateSelection.entries.singleOrNull { it.wireValue == value } ?: invalidPlanValue()
         },
-      qaSelection =
-        payload[Keys.QA_SELECTION]?.let { value ->
-          FeatureTaskRuntimeQaSelection.entries.singleOrNull { it.wireValue == value } ?: invalidPlanValue()
-        },
+      attachments =
+        ResolvedPhasePlanAttachments(
+          qaSelection =
+            payload[Keys.QA_SELECTION]?.let { value ->
+              FeatureTaskRuntimeQaSelection.entries.singleOrNull { it.wireValue == value } ?: invalidPlanValue()
+            },
+          projectCheckCommands = projectCheckCommands,
+          sourceContractVersion = contractVersion,
+        ),
       traversal = decodeExecutionPlanTraversal(planObject(payload[Keys.TRAVERSAL])),
       stepRecords =
         ResolvedPhaseStepRecords(

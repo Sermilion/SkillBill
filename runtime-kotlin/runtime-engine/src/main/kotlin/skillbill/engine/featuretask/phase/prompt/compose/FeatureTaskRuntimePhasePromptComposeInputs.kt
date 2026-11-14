@@ -7,6 +7,7 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeImplementationC
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeImplementationTurn
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBriefing
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseSettlementTarget
+import skillbill.engine.featuretask.model.phase.ValidationCommandLaunchTransport
 import skillbill.engine.featuretask.model.phase.ValidationFindingSetProjection
 import skillbill.engine.featuretask.phase.planning.PlanBundleTarget
 import skillbill.goalrunner.model.history.GoalHistoryWriterInput
@@ -57,6 +58,8 @@ public data class FeatureTaskRuntimePhasePromptComposeInputs(
   internal val agentRunValidateFallback: Boolean = false,
   public val packConfirmationGateCommand: String? = null,
   public val packBuildCommand: String? = null,
+  public val packValidationCommand: String? = null,
+  public val validationLaunchTransport: ValidationCommandLaunchTransport? = null,
   public val repairLedger: FeatureTaskRuntimeRepairLedger? = null,
   public val priorReviewContext: FeatureTaskRuntimePriorReviewContext? = null,
   public val phaseSettlement: FeatureTaskRuntimePhaseSettlementTarget? = null,

@@ -5,6 +5,8 @@ import skillbill.error.core.DatabaseFailureCode
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.UnresolvedEnvironmentContextFieldError
 import skillbill.infrastructure.contracts.BlockIncidentSchemaValidator
+import skillbill.infrastructure.contracts.projectchecks.ProjectCheckCommandSnapshotSchemaValidator
+import skillbill.infrastructure.contracts.projectchecks.ProjectCheckConfigSchemaValidator
 import skillbill.infrastructure.sqlite.telemetry.lifecycle.parseDurationSeconds
 import skillbill.infrastructure.sqlite.workflow.featuretask.parseWorkerLeaseInstant
 import skillbill.model.EnvironmentContext
@@ -72,6 +74,8 @@ class SqliteDegradationDiagnosticsTest {
           },
           "test-runtime-version",
           BlockIncidentSchemaValidator(),
+          ProjectCheckConfigSchemaValidator(),
+          ProjectCheckCommandSnapshotSchemaValidator(),
         )
       }
     assertEquals("userHome", error.fieldName)

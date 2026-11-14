@@ -11,8 +11,11 @@ import skillbill.engine.featuretask.runner.kotlinPackWithBuildGate
 import skillbill.engine.featuretask.runner.kotlinPackWithValidationGate
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
+import skillbill.engine.featuretask.slot.testAdmittedProjectCheckSnapshot
 import skillbill.engine.featuretask.slot.testPhaseStrategies
+import skillbill.engine.featuretask.slot.withTestProjectCheckSnapshot
 import skillbill.engine.featuretask.validation.ValidationGateResolver
+import skillbill.engine.featuretask.validation.projectchecks.projectCheckCommandResolverForTests
 import skillbill.engine.featuretask.validation.repoLocalConfig
 import skillbill.infrastructure.contracts.workflow.featuretask.ContractFeatureTaskRuntimePhaseOutputMigration
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeExecutionPlanSchemaValidator
@@ -74,7 +77,7 @@ class ExecutionPlanAdmissionFixture(
       NoopWorkflowGitOperations,
     )
   val validator = FeatureTaskRuntimeExecutionPlanSchemaValidator()
-  val codec = FeatureTaskRuntimeExecutionPlanCodec(validator)
+  val codec = featureTaskRuntimeExecutionPlanCodecForTest(validator)
   val compatibility = FeatureTaskRuntimeExecutionPlanCompatibility(codec, strategies)
   val inputs =
     EffectiveGatePolicyInputs(
@@ -88,6 +91,7 @@ class ExecutionPlanAdmissionFixture(
       null,
       ValidationDepth.FULL,
       null,
+      projectCheckSnapshot = testAdmittedProjectCheckSnapshot(qualityGate),
     )
   private val recoveryGateDeclaration =
     requireNotNull(kotlinPackWithValidationGate().validationGate).copy(
@@ -107,7 +111,7 @@ class ExecutionPlanAdmissionFixture(
         ),
         stepLaunchAssignments,
       ),
-    )
+    ).withTestProjectCheckSnapshot()
   val encoded = codec.encodeExecution(plan, inputs)
 
   val admission =
@@ -171,6 +175,7 @@ class ExecutionPlanAdmissionFixture(
       repoLocalConfig(),
       database,
       compatibility,
+      projectCheckCommandResolverForTests(),
       diagnostics = NoopRuntimeDiagnostics,
     )
 
@@ -204,6 +209,7 @@ class ExecutionPlanAdmissionFixture(
       },
       database,
       compatibility,
+      projectCheckCommandResolverForTests(),
       diagnostics = NoopRuntimeDiagnostics,
     )
 

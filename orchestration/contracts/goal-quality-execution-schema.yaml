@@ -325,7 +325,7 @@ $defs:
     additionalProperties: false
     required: [contract_version, gate_run_count, gate_runs, remaining_findings, complete_findings, repair_window_phase, repairs_used, captured_triage_plan, last_agent_unfixed_criteria, pending_external_operation, pending_external_checkpoint, accepted_repair_outputs, terminal_outcome, terminal_reason, terminal_failure_disposition, terminal_failure_code]
     properties:
-      contract_version: {enum: ["0.2", "0.3"]}
+      contract_version: {enum: ["0.2", "0.3", "0.4"]}
       gate_run_count: {type: integer, minimum: 0}
       gate_runs: {type: array, items: {type: object}}
       remaining_findings: {type: array, items: {type: object}}
@@ -343,10 +343,37 @@ $defs:
       terminal_reason: {type: [string, "null"]}
       terminal_failure_disposition: {type: [string, "null"]}
       terminal_failure_code: {type: [string, "null"]}
+      build_command_attempt:
+        oneOf:
+          - type: "null"
+          - type: object
+            additionalProperties: false
+            required: [contract_version, list_identity, commands]
+            properties:
+              contract_version: {const: "0.1"}
+              list_identity: {type: string, minLength: 1}
+              commands:
+                type: array
+                minItems: 1
+                items:
+                  type: object
+                  additionalProperties: false
+                  required: [argv, working_directory, outcome, exit_code, duration_ms, command]
+                  properties:
+                    argv:
+                      type: array
+                      minItems: 1
+                      items: {type: string}
+                    working_directory: {type: string, minLength: 1}
+                    command: {type: string, minLength: 1}
+                    exit_code: {type: integer}
+                    duration_ms: {type: integer, minimum: 0}
+                    outcome: {enum: [passed, failed, rejected_zero_work]}
+                    stdout_excerpt: {type: string, maxLength: 8192}
     allOf:
       - if:
           properties:
-            contract_version: {const: "0.3"}
+            contract_version: {enum: ["0.3", "0.4"]}
         then:
           required: [triage_disposition]
   phase_progress:

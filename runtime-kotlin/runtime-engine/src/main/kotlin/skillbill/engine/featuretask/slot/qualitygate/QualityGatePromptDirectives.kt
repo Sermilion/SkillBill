@@ -1,15 +1,8 @@
 package skillbill.engine.featuretask.slot.qualitygate
 
+import skillbill.engine.featuretask.model.phase.ValidationCommandLaunchTransport
 import skillbill.engine.featuretask.model.phase.ValidationFindingSetProjection
-
-private const val VALIDATE_PHASE_FORBIDDEN_EXTRAS: String =
-  "Do not run `sona validate`, `npx agnix`, `scripts/validate_agent_configs`, or any other " +
-    "repo-root checklist. Those commands are not this phase. "
-
-private const val VALIDATE_TRIAGE_FORBIDDEN_PACK_GATE: String =
-  "Do not run `sona phase validation`, the pack validation_gate collect_all_full_gate_command, " +
-    "cache_bypassing_collect_all_full_gate_command, or any other pack-declared full-suite argv " +
-    "during this triage turn. "
+import skillbill.engine.featuretask.validation.projectchecks.QualityGateCommandRendering
 
 private const val MACHINE_BUILD_SETTINGS_DIRECTIVE: String =
   "Run build tools with the machine's own settings and shared caches. Do not point a build tool at a " +
@@ -21,104 +14,157 @@ private const val BUILD_PHASE_FORBIDDEN_EXTRAS: String =
     "`sona phase validation`, `./gradlew check`, `check " + "--" + "continue`, or the pack " +
     "collect_all_full_gate_command. Those are not this phase. "
 
-internal fun runtimeOwnedValidateAgentPhaseTask(): String {
-  return "Discover the validation checks required by this project from its repository instructions, " +
-    "build and test configuration, scripts, and CI workflows. Use the project's commands and environment. " +
-    "Before choosing a host or container, read the applicable repository instructions and CI/setup scripts. " +
-    "Before an expensive validation command, check the required toolchain and tools, writable home, cache, " +
-    "and temporary paths, and any required display support. Prefer a known working host or the established " +
-    "isolated setup required by those instructions. Keep useful setup and discovery context in this invocation. " +
+internal fun savedValidationAgentDirective(
+  transport: ValidationCommandLaunchTransport?,
+  packValidationCommand: String?,
+  triage: Boolean,
+): Pair<String, Boolean> =
+  when (transport) {
+    is ValidationCommandLaunchTransport.Commands -> {
+      val directive =
+        if (triage) {
+          validateGateTriagePhaseTask(transport.rendered)
+        } else {
+          runtimeOwnedValidateAgentPhaseTask(transport.rendered)
+        }
+      directive to false
+    }
+    is ValidationCommandLaunchTransport.KnownEmpty -> {
+      val directive =
+        if (triage) {
+          validateGateTriageKnownEmptyPhaseTask()
+        } else {
+          runtimeOwnedValidateAgentKnownEmptyPhaseTask()
+        }
+      directive to false
+    }
+    is ValidationCommandLaunchTransport.LegacyCommands -> {
+      val directive =
+        if (triage) {
+          validateGateTriagePhaseTask(transport.rendered)
+        } else {
+          runtimeOwnedValidateAgentPhaseTask(transport.rendered)
+        }
+      directive to false
+    }
+    null -> {
+      val directive =
+        if (triage) {
+          validateGateTriagePhaseTask(packValidationCommand)
+        } else {
+          runtimeOwnedValidateAgentPhaseTask(packValidationCommand)
+        }
+      directive to (packValidationCommand != null)
+    }
+  }
+
+internal fun runtimeOwnedValidateAgentKnownEmptyPhaseTask(): String =
+  "You are the validation agent for this step — do not spawn delegated subagents. " +
+    "The admitted saved validation command list is explicitly empty after completed discovery. " +
+    "Do not run any validation commands or invent checks. " +
+    MACHINE_BUILD_SETTINGS_DIRECTIVE +
+    "Print a warning that no validation commands were found, then settle completed " +
+    "and allow the workflow to advance. " +
+    "Do not invent commands or report checks as passed when none ran. " +
+    "Settle blocked only for a concrete external obstacle."
+
+internal fun validateGateTriageKnownEmptyPhaseTask(): String =
+  "You are triaging an unparseable validation gate failure blob before the first repair turn — do not spawn " +
+    "delegated subagents. The admitted saved validation command list is explicitly empty after completed discovery; " +
+    "there is no saved command boundary to triage beyond confirming the known-empty outcome. " +
+    "Do not execute checks during triage. " +
+    "Reply with a short prose repair plan only if the gate blob still implies actionable failures; " +
+    "otherwise return prose that the validation boundary is empty."
+
+internal fun runtimeOwnedValidateAgentPhaseTask(packValidationCommand: String?): String {
+  val rediscoveryPolicy =
+    "The runtime already resolved missing configuration; do not rediscover checks from scripts, CI, or packs."
+  val gateLine =
+    when {
+      packValidationCommand.isNullOrBlank() ->
+        "Run only the admitted saved validation command list and its recorded working directories. " +
+          rediscoveryPolicy
+      else ->
+        "Run only the admitted saved validation command records below, in listed order and from each " +
+          "recorded working directory:\n${QualityGateCommandRendering.markdownCodeBlock(packValidationCommand)} " +
+          rediscoveryPolicy
+    }
+  return "You are the validation agent for this step — do not spawn delegated subagents. $gateLine " +
+    "Do not run commands outside the admitted saved validation command list. Every runnable command in that list " +
+    "is allowed, regardless of executable. " +
     MACHINE_BUILD_SETTINGS_DIRECTIVE +
     "Never reuse another worktree's mutable state; the machine's shared tool caches are not worktree state. " +
     "Do not install packages automatically, stop a shared daemon, or change unrelated jobs. " +
-    "Revisit setup when relevant scripts, configuration, toolchain, or workspace requirements change; " +
-    "an earlier setup does not prove an uninspected change is safe. " +
-    "For each repair candidate, run every required local check whose tooling is available before publication, " +
-    "preserve clean and cache-bypass requirements, and do not count a previous candidate's pass as current evidence. " +
+    "For each repair candidate, rerun every saved runnable validation command before publication and " +
+    "do not count a previous candidate's pass as current evidence. " +
     "When preflight or command output confirms that a required tool, SDK, or host platform is unavailable, " +
-    "skip only the checks that depend on it and continue all independent checks. This includes packaging " +
-    "utilities missing on Linux and targets requiring macOS with Xcode on a Linux host. Report each skip " +
+    "skip only the saved commands that depend on it and continue all independent saved commands. Report each skip " +
     "as a warning naming the exact command or target, missing prerequisite, and confirming evidence. " +
-    "Never count a skipped check as passed. If an aggregate command stops solely at unavailable tooling, " +
-    "run its remaining independent tasks separately. Skip artifact checks only when they require an " +
-    "artifact that the unavailable tooling must produce, and report that dependency. Do not edit project " +
-    "configuration, disable targets, or add test skips to work around missing tooling. Source, dependency, " +
-    "test, analysis, formatting, fixture, and configuration failures still require repair; an unexplained " +
-    "command failure is not evidence of unavailable tooling. " +
-    "If you find no applicable validation commands after inspecting those sources, print a warning " +
-    "that no validation commands were found, then settle completed and allow the workflow to advance. " +
-    "Do not invent commands or report checks as passed when none ran. A failed discovery command or " +
-    "unreadable project configuration is an obstacle, not evidence that no checks exist. " +
-    "Run the full project validation when checks exist, including required tests, static analysis, " +
-    "formatting checks, and " +
-    "repository checks. Compilation alone is insufficient. " +
-    "Validation owns running checks and fixing every failure, including build failures. Run the project's " +
-    "build and packaging commands when checks need them, including the pack build_command. Prepare missing " +
-    "or stale artifacts in this session. Rebuild after source repairs so the artifacts match the candidate " +
-    "under validation, then rerun every runnable required check. Do not return to an earlier phase or ask " +
-    "the operator to rebuild artifacts you can create here. The separate compile-only build gate does not restrict " +
-    "builds required by validation. Preserve artifact identity and integrity checks; do not bypass them " +
-    "or count a rebuild alone as validation success. " +
-    "Put every temporary copy, file, or directory this session creates under ${'$'}TMPDIR; the runtime owns " +
-    "that directory and deletes it when the session ends. Never create them under ~/.cache, the " +
-    "skill-bill state directory, or beside the checkout. " +
+    "Never count a skipped check as passed. If a saved aggregate stops solely at unavailable tooling, " +
+    "report the aggregate coverage it did not reach rather than inventing a smaller command set. " +
+    "Do not edit project configuration, disable targets, or add test skips to work around missing tooling. " +
+    "Source, dependency, test, analysis, formatting, fixture, and configuration failures still require repair. " +
+    "When the admitted list is explicitly empty, print a warning that no validation commands were found, " +
+    "then settle completed and allow the workflow to advance. " +
+    "Do not invent commands or report checks as passed when none ran. " +
+    "Put every temporary copy, file, or directory this session creates under ${'$'}TMPDIR. " +
     "Do not recursively invoke `sona phase validation`. " +
-    "Keep repairing in this same session until every runnable required project check passes. Do not spawn delegated " +
-    "subagents. Settle completed when every runnable required check passes, with warnings for unavailable " +
-    "tooling coverage. Missing tooling alone never blocks validation. If no checks can run because their " +
-    "tooling is unavailable, complete with warnings and state that no checks ran. Name the checks you ran " +
-    "and how each ended. Build failures, test failures, static-analysis findings, formatting failures, " +
-    "and outdated fixtures are " +
-    "repair work in this session: fix a formatting failure with the project's formatter, then rerun the " +
-    "required checks. No failure, formatting included, hands the work to another validation session. " +
-    "Do not stop after reducing the failure count or return a partial progress report. Keep fixing and " +
-    "rerunning the runnable required checks in this session until they all pass. " +
-    "Settle blocked only for a concrete external obstacle other than confirmed unavailable tooling that " +
-    "you cannot resolve, and describe the obstacle, " +
-    "any setup retries, the required operator action, and any remaining failures in ordinary prose. " +
-    "Use the existing blocked and recovery behavior. Wall-clock timeout still stops " +
-    "the subtask. The runtime does not rerun the checks itself. Report each command and its result, " +
-    "or the warning when discovery finds none. Never silence findings with annotations, " +
-    "baselines, disabled rules, weakened configuration, or skipped tests; fix root causes instead. " +
-    "Discover the applicable checks independently from your existing plan and current repository-scope inputs. " +
-    "Authoring phases may have run or deferred scoped formatter and analysis commands, but their reports are " +
-    "not delivered here in full and never clear a build or validation gate; deferred authoring checks are " +
-    "still discovered and run here."
+    "Keep repairing in this same session until every runnable saved check passes. " +
+    "Settle completed when every runnable saved check passes, with warnings for unavailable tooling coverage. " +
+    "If no saved checks can run because their tooling is unavailable, complete with warnings and " +
+    "state that no checks ran. " +
+    "Settle blocked only for a concrete external obstacle other than confirmed unavailable tooling. " +
+    "The runtime does not rerun the checks itself. Never silence findings with annotations, " +
+    "baselines, disabled rules, weakened configuration, or skipped tests; fix root causes instead."
 }
 
-internal fun validateGateTriagePhaseTask(): String =
-  "You are triaging an unparseable validation gate failure blob before the first repair turn — do not spawn " +
+internal fun validateGateTriagePhaseTask(packValidationCommand: String? = null): String {
+  val savedCommandsDirective =
+    if (packValidationCommand.isNullOrBlank()) {
+      "The admitted saved validation command list is the complete ordinary validation boundary for this launch."
+    } else {
+      "The admitted saved validation command records are below. Do not run them during triage:\n" +
+        QualityGateCommandRendering.markdownCodeBlock(packValidationCommand)
+    }
+  return "You are triaging an unparseable validation gate failure blob before the first repair turn — do not spawn " +
     "delegated subagents. Read the gate stdout blob and repository files as needed to understand failures; " +
-    "prefer read-only inspection. $VALIDATE_PHASE_FORBIDDEN_EXTRAS$VALIDATE_TRIAGE_FORBIDDEN_PACK_GATE" +
+    "prefer read-only inspection. $savedCommandsDirective " +
+    "Do not execute checks during triage. " +
     "Do not mutate the tree unless strictly needed to understand failures. Reply with a short prose " +
     "repair plan naming where each failure lives and how you would fix it. Return prose guidance only; " +
     "do not fix code or report validation results or gate evidence."
+}
 
 internal fun runtimeOwnedBuildPhaseTask(packBuildCommand: String?): String {
   val gateLine =
-    if (packBuildCommand.isNullOrBlank()) {
-      "Run only the pack-declared validation_gate build_command and read that command's output."
-    } else {
-      "Run only this pack-declared build command and read that command's output: `$packBuildCommand`."
+    when {
+      packBuildCommand.isNullOrBlank() ->
+        "Run only the admitted saved build command(s) frozen at admission and read that command output."
+      else ->
+        "Run only the admitted saved build command records below, in listed order and from each " +
+          "project-relative working directory, then read their output:\n" +
+          QualityGateCommandRendering.markdownCodeBlock(packBuildCommand)
     }
   return "You are the only build agent for this step — do not spawn delegated subagents. The runtime may " +
     "give you up to three repair turns against the remaining findings; each turn is another session of " +
     "this same agent. $gateLine $BUILD_PHASE_FORBIDDEN_EXTRAS$MACHINE_BUILD_SETTINGS_DIRECTIVE" +
     "This phase is compile/buildability proof only: no suite tests, no full check, no substitute " +
-    "agent-run gate. Address every open finding in the same turn. Do not rerun the pack build command " +
+    "agent-run gate. Address every open finding in the same turn. Do not rerun the admitted build commands " +
     "after each individual fix; targeted compile tasks are allowed while repairing when they are " +
-    "part of that same pack gate. When the set looks clean, you may run that same build command once to " +
+    "part of the same admitted list. When the set looks clean, you may run one saved command once to " +
     "sanity-check. Never silence findings with @Suppress, @file:Suppress, baselines, disabled rules, " +
     "weakened configuration, or skipped tests — fix root causes instead. After you stop, the runtime " +
-    "re-runs the pack build command and mints the receipt; report nothing but prose."
+    "re-runs the full admitted build command list and mints the receipt; report nothing but prose."
 }
 
 internal fun buildGateTriagePhaseTask(packBuildCommand: String?): String {
   val gateLine =
-    if (packBuildCommand.isNullOrBlank()) {
-      "The dominant pack declares validation_gate.build_command for build proof."
-    } else {
-      "The pack build command is `$packBuildCommand` — do not run it during triage."
+    when {
+      packBuildCommand.isNullOrBlank() ->
+        "The admitted saved build command list provides build proof for this run."
+      else ->
+        "The admitted saved build command records are below. Do not run them during triage:\n" +
+          QualityGateCommandRendering.markdownCodeBlock(packBuildCommand)
     }
   return "You are triaging an unparseable build gate failure blob before the first repair turn — do not spawn " +
     "delegated subagents. Read the gate stdout blob and repository files as needed; prefer read-only " +
@@ -211,5 +257,6 @@ internal const val VALIDATE_VALUE_CONTENT: String =
     "Never introduce suppressions, baselines, disabled rules, or skipped tests to silence findings."
 
 internal const val BUILD_VALUE_CONTENT: String =
-  "Run only the pack build_command. Do not run collect_all_full_gate_command, check " + "--" + "continue,\n" +
+  "Run only the admitted saved build command list. Do not run collect_all_full_gate_command, check " +
+    "--" + "continue,\n" +
     "sona validate, or sona phase validation. Gate runs and their evidence are runtime-measured."

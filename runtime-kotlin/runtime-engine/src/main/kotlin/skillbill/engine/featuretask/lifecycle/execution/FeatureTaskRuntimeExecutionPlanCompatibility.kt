@@ -43,12 +43,18 @@ public class FeatureTaskRuntimeExecutionPlanCompatibility(
   ): SupportedExecution {
     val composition = requireSupportedCompositionWithRecordedSemantics(encoded)
     val plan = composition.plan
-    val supported = FeatureTaskRuntimeEffectivePolicies.resolve(plan, effectiveInputs).sortedBy { it.id }
+    val comparisonInputs =
+      if (executionPlanSupportsProjectCheckCommands(plan.sourceContractVersion)) {
+        effectiveInputs
+      } else {
+        effectiveInputs.copy(projectCheckSnapshot = null)
+      }
+    val supported = FeatureTaskRuntimeEffectivePolicies.resolve(plan, comparisonInputs).sortedBy { it.id }
     val supportedById = supported.associateBy { it.id }
     if (plan.effectivePolicies.any { supportedById[it.id]?.semanticRevision != it.semanticRevision }) {
       throw UnsupportedFeatureTaskRuntimeExecutionPlanError()
     }
-    if (!FeatureTaskRuntimeEffectivePolicies.matchesRecorded(plan, effectiveInputs)) incompatible()
+    if (!FeatureTaskRuntimeEffectivePolicies.matchesRecorded(plan, comparisonInputs)) incompatible()
     if (!codec.encode(plan).contentEquals(codec.encode(decodePlan(requireNotNull(encoded))))) onMapping?.invoke()
     return SupportedExecution(plan, composition.recordedMonitorSemantics)
   }
@@ -73,7 +79,13 @@ public class FeatureTaskRuntimeExecutionPlanCompatibility(
   ): ResolvedPhaseExecutionPlan {
     val plan = requireSupportedComposition(encoded)
     val inputs = effectiveInputs ?: incompatible()
-    if (!FeatureTaskRuntimeEffectivePolicies.matchesRecorded(plan, inputs)) incompatible()
+    val comparisonInputs =
+      if (executionPlanSupportsProjectCheckCommands(plan.sourceContractVersion)) {
+        inputs
+      } else {
+        inputs.copy(projectCheckSnapshot = null)
+      }
+    if (!FeatureTaskRuntimeEffectivePolicies.matchesRecorded(plan, comparisonInputs)) incompatible()
     return plan
   }
 
@@ -182,8 +194,19 @@ public class FeatureTaskRuntimeExecutionPlanCompatibility(
         "checkpoint-ownership",
         "finalization",
       )
-    if (policies.map { it.id }.toSet() != supported || policies.any { it.semanticRevision != 1 }) {
+    if (policies.map { it.id }.toSet() != supported) {
       throw UnsupportedFeatureTaskRuntimeExecutionPlanError()
+    }
+    policies.forEach { policy ->
+      val allowedRevisions =
+        when (policy.id) {
+          GATE_COMMANDS_POLICY_ID ->
+            setOf(1, EffectiveGatePolicyInputs.GATE_COMMANDS_SNAPSHOT_REVISION)
+          else -> setOf(1)
+        }
+      if (policy.semanticRevision !in allowedRevisions) {
+        throw UnsupportedFeatureTaskRuntimeExecutionPlanError()
+      }
     }
   }
 

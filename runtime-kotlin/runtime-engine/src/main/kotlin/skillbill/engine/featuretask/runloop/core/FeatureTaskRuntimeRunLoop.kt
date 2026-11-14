@@ -18,6 +18,8 @@ import skillbill.engine.featuretask.runloop.finalization.CommitPushManifestCompl
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
 import skillbill.engine.featuretask.runloop.qualitygate.RuntimeQualityGateCycles
+import skillbill.engine.featuretask.runloop.qualitygate.RuntimeQualityGateLaunch
+import skillbill.engine.featuretask.runloop.settlement.ValidationCommandLaunchPreparer
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnapshotAccess
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunEvidenceOwnership
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepBindingCoordinator
@@ -69,11 +71,14 @@ public class FeatureTaskRuntimeRunLoopContext internal constructor(
   override val findingVerificationBoundaryMemory: FeatureTaskRuntimeFindingVerificationBoundaryMemory,
   override val specIntentProjectionResolver: SpecIntentProjectionResolver,
   override val lifecycleTelemetry: FeatureTaskRuntimeLifecycleTelemetry,
-  internal val qualityGateCycles: RuntimeQualityGateCycles,
+  internal val qualityGateLaunch: RuntimeQualityGateLaunch,
   override val sharedEvidenceResolver: FeatureTaskRuntimeSharedEvidenceResolverPort,
   override val diffResolver: DiffResolverPort,
   internal val phaseRunFactory: FeatureTaskRuntimePhaseRunFactory,
 ) : PhaseRunLoopAttemptCollaborators {
+  internal val qualityGateCycles: RuntimeQualityGateCycles get() = qualityGateLaunch.cycles
+  internal val validationCommandLaunch: ValidationCommandLaunchPreparer
+    get() = qualityGateLaunch.validationCommandLaunch
   internal val commitPushManifestCompletion: CommitPushManifestCompletion?
     get() = runState.commitPushManifestCompletion
   override val progress: FeatureTaskRuntimeProgressSnapshotAccess get() = runState.coupledProgress().progressSnapshot
@@ -141,6 +146,7 @@ public class FeatureTaskRuntimeRunLoopContext internal constructor(
         directSharedEvidenceResolver = sharedEvidenceResolver,
         directDiffResolver = diffResolver,
         directQualityGateCycles = qualityGateCycles,
+        directValidationCommandLaunch = validationCommandLaunch,
       ),
     )
 
@@ -244,7 +250,7 @@ public open class FeatureTaskRuntimeRunLoopEntry(
   private val findingVerificationBoundaryMemory: FeatureTaskRuntimeFindingVerificationBoundaryMemory,
   private val specIntentProjectionResolver: SpecIntentProjectionResolver,
   private val lifecycleTelemetry: FeatureTaskRuntimeLifecycleTelemetry,
-  private val qualityGateCycles: RuntimeQualityGateCycles,
+  private val qualityGateLaunch: RuntimeQualityGateLaunch,
   private val sharedEvidenceResolver: FeatureTaskRuntimeSharedEvidenceResolverPort,
   private val diffResolver: DiffResolverPort,
   private val implementationChecklistStore: FeatureTaskImplementationChecklistStore,
@@ -265,7 +271,7 @@ public open class FeatureTaskRuntimeRunLoopEntry(
       findingVerificationBoundaryMemory,
       specIntentProjectionResolver,
       lifecycleTelemetry,
-      qualityGateCycles,
+      qualityGateLaunch,
       sharedEvidenceResolver,
       diffResolver,
       phaseRunFactory,

@@ -535,9 +535,11 @@ once and relay its output as a phase form.
 ## Pack routing
 
 Review routes to the dominant pack for the current unit of work. Validation uses
-the same full project validation strategy as goal validate. Its agent discovers
-required checks from the repository instructions, build configuration, scripts,
-and CI, then runs and repairs those checks. Confirmed unavailable tooling skips only
+the same full project validation strategy as goal validate. On first use the runtime
+resolves missing validation commands through the shared project-check discovery path,
+then persists and reuses the accepted saved commands on later validation and monitor
+repair. The validation agent runs only that admitted list at its saved directories.
+Confirmed unavailable tooling skips only
 dependent checks, with warnings naming the commands or targets, missing prerequisites,
 and evidence. Validation completes when every runnable required check passes. Skipped
 coverage is never reported as passed. Compilation alone is insufficient.

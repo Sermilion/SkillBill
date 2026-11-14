@@ -1,4 +1,4 @@
-package skillbill.engine.goalrunner.status
+package skillbill.engine.goalrunner.status.worker
 
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseQuery
 import skillbill.goalrunner.model.ExecutionLiveness

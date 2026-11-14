@@ -4,17 +4,22 @@ import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimeRunInvarian
 import skillbill.engine.featuretask.phase.core.MonitorRepairStepRoles
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
+import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.slot.MonitorRepairCapability
+import skillbill.engine.featuretask.slot.PhaseBeforeLaunchHooks
 import skillbill.engine.featuretask.slot.PhaseBindingFamily
+import skillbill.engine.featuretask.slot.PhaseRuntimeOwnedStepHooks
 import skillbill.engine.featuretask.slot.PhaseStepDescriptor
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStepOutputCheck
 import skillbill.engine.featuretask.slot.PhaseStrategy
+import skillbill.engine.featuretask.slot.attempt.PhaseAttemptLaunchHookContext
 import skillbill.engine.featuretask.slot.attempt.PhaseStepOutputContext
 import skillbill.engine.featuretask.slot.attempt.policyOf
 import skillbill.engine.featuretask.slot.attempt.runAgentStep
 import skillbill.engine.featuretask.slot.qualitygate.runtimeOwnedValidateAgentPhaseTask
+import skillbill.engine.featuretask.slot.qualitygate.savedValidationAgentDirective
 import skillbill.engine.featuretask.slot.state.CiWatchListeners
 import skillbill.engine.featuretask.slot.state.ExpectedCiHead
 import skillbill.engine.featuretask.slot.state.PhaseCiObservation
@@ -94,7 +99,30 @@ public class MonitorStrategy(
   }
 
   private val repairPublication =
-    object : PhaseStepHooks<PhaseMonitorStepBinding> {
+    object :
+      PhaseStepHooks<PhaseMonitorStepBinding>,
+      PhaseBeforeLaunchHooks<PhaseMonitorStepBinding>,
+      PhaseRuntimeOwnedStepHooks {
+      override val carriesPackBuildCommand: Boolean = false
+      override val carriesValidationCommand: Boolean = true
+
+      override fun earlyOutput(
+        run: PhaseRun,
+        iteration: Int,
+        outputText: String,
+      ): PhaseOutcome? = null
+
+      override fun beforeAgentLaunch(
+        run: PhaseRun,
+        context: PhaseAttemptLaunchHookContext,
+        state: PhaseMonitorStepBinding,
+      ): String? {
+        if (state.repairValidationLaunchTransport() == null) {
+          return "Monitor repair launched without the accepted validation command snapshot."
+        }
+        return null
+      }
+
       override fun settleCompletedOutput(
         run: PhaseRun,
         context: PhaseStepOutputContext,
@@ -109,7 +137,14 @@ public class MonitorStrategy(
             )
           }
         val publicationBlock =
-          publicationGate.verify(run.request.repoRoot, state.resolvedBranch()?.baseBranch)
+          publicationGate
+            .verify(
+              MonitorRepairPublicationGateRequest(
+                run.request.repoRoot,
+                state.resolvedBranch()?.baseBranch,
+                state.repairValidationLaunchTransport(),
+              ),
+            )
             .publicationBlockingCheck()
         if (publicationBlock != null) return publicationBlock
         return state
@@ -124,7 +159,7 @@ public class MonitorStrategy(
     return if (stepId == entryStep) {
       MONITOR_DIRECTIVE
     } else {
-      runtimeOwnedValidateAgentPhaseTask() + " " + MONITOR_FIX_DIRECTIVE
+      runtimeOwnedValidateAgentPhaseTask(null) + " " + MONITOR_FIX_DIRECTIVE
     }
   }
 
@@ -136,14 +171,20 @@ public class MonitorStrategy(
     return if (stepId == entryStep) {
       PhaseStepPromptSections(taskDirective = directiveFor(stepId), settles = false)
     } else {
+      val (taskDirective, runsBuildGate) =
+        savedValidationAgentDirective(
+          inputs.validationLaunchTransport,
+          inputs.packValidationCommand,
+          inputs.validationGateTriage,
+        )
       PhaseStepPromptSections(
-        taskDirective = directiveFor(stepId),
+        taskDirective = taskDirective + " " + MONITOR_FIX_DIRECTIVE,
         stepContext =
           MonitorFixBrief.stepContextFor(
             inputs.workflowId?.let { id -> catchingNonCancellation { cycles.latest(id) }.getOrNull() },
           ),
         runsValidationGate = true,
-        runsBuildGate = true,
+        runsBuildGate = runsBuildGate,
       )
     }
   }

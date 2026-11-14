@@ -25,7 +25,7 @@ class FeatureTaskRuntimeBuildGateFullDiscoverTest {
     val repairRuleIds = mutableListOf<List<String>>()
     val progress = mutableListOf<FeatureTaskRuntimeValidationGateProgress>()
     val cycle =
-      FeatureTaskRuntimeBuildGateCoordinator(
+      buildFeatureTaskRuntimeBuildGateCoordinator(
         declaredResolver(
           validationGateTestDeclaration.copy(
             buildCommand = listOf("echo", "build"),

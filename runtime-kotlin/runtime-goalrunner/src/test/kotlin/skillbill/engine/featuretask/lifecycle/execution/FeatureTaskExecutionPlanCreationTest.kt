@@ -119,6 +119,8 @@ class FeatureTaskExecutionPlanCreationTest {
             FeatureTaskRuntimeQualityGateSelection.VALIDATE,
             ValidationDepth.FULL,
             null,
+            issueKey = "SKILL-384",
+            invokedAgentId = "claude",
           ),
         ).encoded(),
       )
@@ -159,6 +161,8 @@ class FeatureTaskExecutionPlanCreationTest {
             null,
             ValidationDepth.FULL,
             null,
+            issueKey = "SKILL-384",
+            invokedAgentId = "claude",
           ),
         )
       val rejecting = RejectDescriptorWrites(database)
@@ -634,6 +638,8 @@ class FeatureTaskExecutionPlanCreationTest {
               FeatureTaskRuntimeQualityGateSelection.VALIDATE,
               ValidationDepth.FULL,
               null,
+              issueKey = "SKILL-384",
+              invokedAgentId = "claude",
             ),
           ),
       )

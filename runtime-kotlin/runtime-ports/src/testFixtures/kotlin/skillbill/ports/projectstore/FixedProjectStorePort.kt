@@ -22,6 +22,8 @@ class FixedProjectStorePort(
 
   override fun resolve(workingDirectory: Path): ProjectStoreLocation = location
 
+  override fun resolveCurrent(workingDirectory: Path): ProjectStoreLocation = location
+
   override fun link(
     workingDirectory: Path,
     projectId: String,

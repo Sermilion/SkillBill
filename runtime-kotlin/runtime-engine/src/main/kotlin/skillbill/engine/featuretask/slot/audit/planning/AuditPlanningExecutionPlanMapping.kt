@@ -4,6 +4,7 @@ import skillbill.engine.featuretask.slot.PhaseExecutionPlanMapping
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
+import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhasePlanAttachments
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseStepRecords
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
@@ -93,7 +94,11 @@ internal object AuditPlanningExecutionPlanMapping {
       recorded.effectivePolicies,
       recorded.effectivePolicySettings,
       recorded.contractVersion,
-      current.qaSelection,
+      ResolvedPhasePlanAttachments(
+        current.qaSelection,
+        recorded.projectCheckCommands,
+        recorded.sourceContractVersion,
+      ),
     )
   }
 
@@ -116,6 +121,10 @@ internal object AuditPlanningExecutionPlanMapping {
       recorded.effectivePolicies,
       recorded.effectivePolicySettings,
       current.contractVersion,
-      current.qaSelection,
+      ResolvedPhasePlanAttachments(
+        current.qaSelection,
+        recorded.projectCheckCommands,
+        recorded.sourceContractVersion,
+      ),
     )
 }

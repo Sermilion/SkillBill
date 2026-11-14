@@ -2,6 +2,8 @@ package skillbill.infrastructure.host.system
 
 import skillbill.error.core.SkillBillRuntimeException
 import java.io.IOException
+import java.io.InterruptedIOException
+import java.nio.channels.ClosedByInterruptException
 import java.nio.channels.FileChannel
 import java.nio.channels.FileLock
 import java.nio.channels.OverlappingFileLockException
@@ -32,6 +34,17 @@ object FileConfigDocumentLocks {
   fun <T> withLocks(
     paths: Collection<Path>,
     action: () -> T,
+  ): T = withLocks(paths, interruptible = false, action)
+
+  fun <T> withInterruptibleLocks(
+    paths: Collection<Path>,
+    action: () -> T,
+  ): T = withLocks(paths, interruptible = true, action)
+
+  private fun <T> withLocks(
+    paths: Collection<Path>,
+    interruptible: Boolean,
+    action: () -> T,
   ): T {
     val lockIdentities = identities(paths)
     val held = heldLocks.get() ?: linkedMapOf<Path, HeldConfigLock>().also(heldLocks::set)
@@ -40,17 +53,14 @@ object FileConfigDocumentLocks {
     val acquired = mutableListOf<Path>()
     try {
       missing.forEach { identity ->
-        held[identity] = acquireLock(identity)
+        held[identity] = acquireLock(identity, interruptible)
         acquired.add(identity)
       }
-      if (identities(paths) != lockIdentities) {
-        throw configDocumentIoException(
-          lockIdentities.firstOrNull() ?: Path.of("."),
-          "lock",
-          IOException("Config path identity changed while acquiring its lock."),
-        )
-      }
+      requireStableIdentities(paths, lockIdentities)
     } catch (error: SkillBillRuntimeException) {
+      releaseLocks(acquired)
+      throw error
+    } catch (error: InterruptedException) {
       releaseLocks(acquired)
       throw error
     } catch (error: IOException) {
@@ -79,6 +89,19 @@ object FileConfigDocumentLocks {
     }
   }
 
+  private fun requireStableIdentities(
+    paths: Collection<Path>,
+    lockIdentities: List<Path>,
+  ) {
+    if (identities(paths) != lockIdentities) {
+      throw configDocumentIoException(
+        lockIdentities.firstOrNull() ?: Path.of("."),
+        "lock",
+        IOException("Config path identity changed while acquiring its lock."),
+      )
+    }
+  }
+
   private fun failAcquiring(
     acquired: List<Path>,
     identities: List<Path>,
@@ -88,19 +111,31 @@ object FileConfigDocumentLocks {
     throw configDocumentIoException(identities.firstOrNull() ?: Path.of("."), "lock", error)
   }
 
-  private fun acquireLock(identity: Path): HeldConfigLock {
+  private fun acquireLock(
+    identity: Path,
+    interruptible: Boolean,
+  ): HeldConfigLock {
     val mutex = pathLocks.computeIfAbsent(identity) { ReentrantLock() }
-    mutex.lock()
+    try {
+      if (interruptible) {
+        mutex.lockInterruptibly()
+      } else {
+        mutex.lock()
+      }
+    } catch (_: InterruptedException) {
+      Thread.currentThread().interrupt()
+      throw InterruptedException("Config lock wait was interrupted.")
+    }
     var channel: FileChannel? = null
     var acquired = false
     try {
+      if (interruptible && Thread.interrupted()) {
+        throw InterruptedException("Config lock wait was interrupted.")
+      }
       Files.createDirectories(identity.parent)
       val lockPath = identity.resolveSibling("${identity.fileName}.lock")
-      if (Files.isSymbolicLink(lockPath)) {
-        throw IOException("Config lock path must not be a symbolic link.")
-      }
-      channel = FileChannel.open(lockPath, CREATE, WRITE, NOFOLLOW_LINKS)
-      val fileLock = channel.lock()
+      channel = openLockChannel(lockPath)
+      val fileLock = exclusiveFileLock(channel, interruptible)
       acquired = true
       return HeldConfigLock(mutex, channel, fileLock)
     } finally {
@@ -112,6 +147,36 @@ object FileConfigDocumentLocks {
         }
       }
     }
+  }
+
+  private fun openLockChannel(lockPath: Path): FileChannel {
+    if (Files.isSymbolicLink(lockPath)) {
+      throw IOException("Config lock path must not be a symbolic link.")
+    }
+    return FileChannel.open(lockPath, CREATE, WRITE, NOFOLLOW_LINKS)
+  }
+
+  private fun exclusiveFileLock(
+    channel: FileChannel,
+    interruptible: Boolean,
+  ): FileLock =
+    try {
+      channel.lock()
+    } catch (error: ClosedByInterruptException) {
+      interruptedFileLock(interruptible, error)
+    } catch (error: InterruptedIOException) {
+      interruptedFileLock(interruptible, error)
+    }
+
+  private fun interruptedFileLock(
+    interruptible: Boolean,
+    error: IOException,
+  ): Nothing {
+    Thread.currentThread().interrupt()
+    if (interruptible) {
+      throw InterruptedException("Config lock wait was interrupted.")
+    }
+    throw error
   }
 
   private fun lockIdentity(path: Path): Path {

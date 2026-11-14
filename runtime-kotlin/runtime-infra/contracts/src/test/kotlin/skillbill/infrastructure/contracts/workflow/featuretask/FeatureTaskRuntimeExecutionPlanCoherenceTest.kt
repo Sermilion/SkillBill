@@ -108,10 +108,7 @@ class FeatureTaskRuntimeExecutionPlanCoherenceTest {
 
     val previous = contradicting.deepCopy()
     previous.put(Keys.CONTRACT_VERSION, FEATURE_TASK_RUNTIME_EXECUTION_PLAN_PREVIOUS_CONTRACT_VERSION)
-    previous.remove(Keys.QA_SELECTION)
-    previous.traversal().rows(Keys.BACKWARD_EDGES).forEach { edge ->
-      (edge as ObjectNode).remove(Keys.CROSS_SLOT_ALLOWANCE)
-    }
+    previous.remove(Keys.PROJECT_CHECK_COMMANDS)
     previous.rows(Keys.STEP_LAUNCH_ASSIGNMENTS).objectAt(0).put(Keys.EFFECTIVE_MODEL, "claude-opus-5-5")
     validate(previous)
 
@@ -346,6 +343,7 @@ class FeatureTaskRuntimeExecutionPlanCoherenceTest {
       putNull(Keys.REVIEW_SELECTION)
       putNull(Keys.QUALITY_GATE_SELECTION)
       putNull(Keys.QA_SELECTION)
+      putNull(Keys.PROJECT_CHECK_COMMANDS)
       putObject(Keys.EFFECTIVE_POLICY_SETTINGS)
         .put(Keys.VALIDATION_DEPTH, "full")
         .putNull(Keys.PHASE_TIMEOUT_MILLIS)

@@ -1,7 +1,7 @@
 ## [2026-11-13] SONA-19 saved-data compatibility and agent removal
 Areas: runtime-domain, runtime-contracts, runtime-ports, runtime-application, runtime-cli, runtime-goalrunner, runtime-infra/sqlite, launcher and skills, orchestration/contracts
 - MEDIUM feature removes the retired fourth agent from vocabulary, launch adapters, install and uninstall targets, MCP registration, native-agent rendering and schemas. OpenCode and Devin remain supported alongside Claude, Codex and Cursor.
-- The current migration ledger assigns unsupported launch-id normalization to 132 and 133; DesktopReadSchema is 133. Both use the supported vocabulary at application time and preserve supported and null standalone launch ids.
+- The current migration ledger assigns unsupported launch-id normalization to 134 and 135; DesktopReadSchema is 135. Both use the supported vocabulary at application time and preserve supported and null standalone launch ids.
 - reusable: GoalQualityRetainedMatrix preserves textual matrix keys for persistence and fingerprints while execution uses a supported-only projection. Projection mismatches fail integrity checks; current and historical reads emit bounded normalization diagnostics.
 - Native-agent inventories prune unsupported textual providers before schema validation. Malformed providers still fail; reads preserve inventory bytes and linked files until an ordinary inventory write.
 - Compatibility preserves run identity, completed work, commits, history, migration records and original quality proof. Strict agent parsers and user execution_matrix configuration validation remain strict.
@@ -9,6 +9,21 @@ Areas: runtime-domain, runtime-contracts, runtime-ports, runtime-application, ru
 - Acceptance discrepancy: runtime vocabulary, installer choices and schemas exceed the spec's three-agent set. AC-002, AC-004 and AC-005 remain incomplete; this history records the current implementation without claiming their repair.
 Feature flag: N/A
 Acceptance criteria: 2/5 parent criteria implemented across the affected boundaries
+## [2026-11-13] SONA-17 persist minimal project check commands
+Areas: runtime-contracts, runtime-domain, runtime-ports, runtime-engine/featuretask, runtime-goalrunner, runtime-infra/contracts, runtime-infra/host, runtime-infra/sqlite, runtime-infra/workflow, runtime-core, orchestration/contracts, platform-packs/kotlin, platform-packs/kmp, skills/skill-bill, docs, desktop/build-logic
+- MEDIUM feature. project_config stores build, lint, test, formatting and validation commands against the existing projectId. Null categories remain undiscovered; explicit empty lists retain completed discovery with no applicable commands.
+- First use launches read-only discovery under a project-scoped interruptible file lock. Atomic fill-missing retains the first committed non-null category; failed, unreadable or truncated discovery publishes nothing.
+- Applicable AGENTS.md prescriptions take priority over manifest fallbacks. Kotlin/KMP ordinary validation defaults to ./gradlew check without added clean, cache-bypass, packaging, installation or smoke work. Build remains compile-only.
+- Execution-plan 0.4 freezes ordered argv, project-relative directories, wrapper selection and nullable parser metadata in snapshot 0.1. Historical 0.3 plans retain declared-candidate identity reconstruction rather than adopting current project commands.
+- Saved commands execute at their declared directories without nested Gradle expansion or wrapper and flag injection. Ordered build attempts retain every failure; generic exit/stdout findings apply when parser metadata is absent.
+- Goal and standalone validation reuse admitted commands. Monitor repair freezes a durable owner/cycle/phase snapshot before launch and reuses it for retries and runtime publication checks; observation-only monitoring does not discover commands.
+- Migrations 132 and 133 add command configuration and repair snapshots without replacing existing records. First-commit promotion retains the assigned project ID and directory; explicit project linking does not merge command rows.
+- reusable: ProjectCheckCommandResolver, ProjectCheckConfigAccess, ProjectCheckCommandSnapshot, ValidationCommandLaunchPreparer and MonitorRepairValidationSnapshotRepository separate configuration, admission and execution evidence.
+- Limits: no automatic refresh or command-editing UI. Saved configuration is not a passing result. Known-empty build refuses capability; known-empty validation retains the no-check policy with diagnostics. Corrupt or unsupported configuration retains its bytes and fails with owned errors.
+- Linux packaged launcher generation compacts its classpath to Java's wildcard while retaining jars, options and arguments. desktop/agent/decisions.md records the existing rationale.
+- QA limitation: validation changed code after QA settled, so QA does not cover the final tree. This entry makes no new execution or validation claim.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
 
 ## [2026-11-12] SONA-8 isolate planning worktrees
 Areas: runtime-cli, runtime-application, runtime-core, runtime-engine, runtime-goalrunner, runtime-domain, runtime-ports, runtime-infra/sqlite, runtime-infra/workflow, runtime-contracts

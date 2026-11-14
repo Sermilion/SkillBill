@@ -356,6 +356,34 @@ object PrincipleEnforcementInventory {
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
           "runtime-kotlin/runtime-infra/contracts/src/main/kotlin/skillbill/infrastructure/contracts/" +
+            "projectchecks/ProjectCheckConfigSchemaValidator.kt",
+        functionNames = setOf("validate", "category", "validDirectory", "invalid"),
+      ),
+      ArchitectureScanSupport.ParseBoundarySite(
+        relativePath =
+          "runtime-kotlin/runtime-infra/contracts/src/main/kotlin/skillbill/infrastructure/contracts/" +
+            "projectchecks/ProjectCheckDiscoverySchemaValidator.kt",
+        functionNames =
+          setOf(
+            "validate",
+            "parsedRoot",
+            "requireSupportedVersion",
+            "requireCanonicalSchema",
+            "parsedCategories",
+            "categoryValue",
+            "validDirectory",
+            "invalid",
+          ),
+      ),
+      ArchitectureScanSupport.ParseBoundarySite(
+        relativePath =
+          "runtime-kotlin/runtime-infra/sqlite/src/main/kotlin/skillbill/infrastructure/sqlite/" +
+            "config/projectchecks/SqliteProjectCheckConfigStore.kt",
+        functionNames = setOf("load", "categoryNode"),
+      ),
+      ArchitectureScanSupport.ParseBoundarySite(
+        relativePath =
+          "runtime-kotlin/runtime-infra/contracts/src/main/kotlin/skillbill/infrastructure/contracts/" +
             "workflow/featuretask/FeatureTaskRuntimeExecutionPlanSchemaValidator.kt",
         functionNames = setOf("validateExecutionPlanCoherence", "validateExecutionPlanTraversal", "incoherentPlan"),
       ),
@@ -556,6 +584,12 @@ object PrincipleEnforcementInventory {
           "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/taskruntime/model/core/" +
             "FeatureTaskRuntimeDecomposeTerminal.kt",
         functionNames = setOf("fromArtifactMap"),
+      ),
+      ArchitectureScanSupport.ParseBoundarySite(
+        relativePath =
+          "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/taskruntime/model/validation/" +
+            "FeatureTaskRuntimeProjectCheckBuildCommandAttempt.kt",
+        functionNames = setOf("fromArtifactMap", "commandEntry", "invalid"),
       ),
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =

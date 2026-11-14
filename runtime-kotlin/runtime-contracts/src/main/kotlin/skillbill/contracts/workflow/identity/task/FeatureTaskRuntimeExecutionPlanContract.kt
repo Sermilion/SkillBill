@@ -2,9 +2,10 @@ package skillbill.contracts.workflow.identity.task
 
 import skillbill.contracts.SharedPayloadKeys
 
-const val FEATURE_TASK_RUNTIME_EXECUTION_PLAN_CONTRACT_VERSION: String = "0.3"
+const val FEATURE_TASK_RUNTIME_EXECUTION_PLAN_CONTRACT_VERSION: String = "0.4"
 
-const val FEATURE_TASK_RUNTIME_EXECUTION_PLAN_PREVIOUS_CONTRACT_VERSION: String = "0.2"
+const val FEATURE_TASK_RUNTIME_EXECUTION_PLAN_PREVIOUS_CONTRACT_VERSION: String = "0.3"
+const val FEATURE_TASK_RUNTIME_EXECUTION_PLAN_HISTORICAL_0_2_CONTRACT_VERSION: String = "0.2"
 const val FEATURE_TASK_RUNTIME_EXECUTION_PLAN_LEGACY_CONTRACT_VERSION: String = "0.1"
 
 object FeatureTaskRuntimeExecutionPlanKeys {
@@ -21,6 +22,7 @@ object FeatureTaskRuntimeExecutionPlanKeys {
   const val EFFECTIVE_POLICIES: String = "effective_policies"
   const val EFFECTIVE_POLICY_SETTINGS: String = "effective_policy_settings"
   const val STEP_LAUNCH_ASSIGNMENTS: String = "step_launch_assignments"
+  const val PROJECT_CHECK_COMMANDS: String = "project_check_commands"
   const val VALIDATION_DEPTH: String = "validation_depth"
   const val PHASE_TIMEOUT_MILLIS: String = "phase_timeout_millis"
   const val ID: String = "id"

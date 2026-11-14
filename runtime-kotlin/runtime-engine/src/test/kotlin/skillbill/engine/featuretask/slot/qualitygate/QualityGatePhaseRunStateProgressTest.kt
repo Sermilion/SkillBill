@@ -5,6 +5,7 @@ import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.validation.FeatureTaskRuntimeBuildGateCoordinator
 import skillbill.engine.featuretask.validation.ScriptedGateRunner
 import skillbill.engine.featuretask.validation.blockedRepair
+import skillbill.engine.featuretask.validation.buildFeatureTaskRuntimeBuildGateCoordinator
 import skillbill.engine.featuretask.validation.completedRepair
 import skillbill.engine.featuretask.validation.declaredResolver
 import skillbill.engine.featuretask.validation.failedWith
@@ -69,7 +70,7 @@ class QualityGatePhaseRunStateProgressTest {
   }
 
   private fun coordinator(runner: ScriptedGateRunner): FeatureTaskRuntimeBuildGateCoordinator =
-    FeatureTaskRuntimeBuildGateCoordinator(
+    buildFeatureTaskRuntimeBuildGateCoordinator(
       declaredResolver(
         validationGateTestDeclaration.copy(
           buildCommand = listOf("echo", "build"),

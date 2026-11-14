@@ -43,4 +43,6 @@ public class RuntimeQualityGateCycles(
     return inputs.declaration?.let { ValidationGateResolution.Declared(requireNotNull(inputs.packSlug), it) }
       ?: ValidationGateResolution.Absent(inputs.packSlug)
   }
+
+  internal fun declaredValidationGates(): List<ValidationGateResolution> = resolver.declaredCandidates()
 }

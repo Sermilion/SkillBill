@@ -4,6 +4,7 @@ import skillbill.ports.approval.ApprovalStore
 import skillbill.ports.blockincident.BlockIncidentRecoveryRepository
 import skillbill.ports.blockincident.BlockIncidentRepository
 import skillbill.ports.blockincident.ProductReportRepository
+import skillbill.ports.config.projectchecks.ProjectCheckConfigRepository
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticPermissions
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticRepository
 import skillbill.ports.featuretask.FeatureTaskPhaseSettlementRepository
@@ -22,6 +23,7 @@ import skillbill.ports.idestatus.StandalonePhaseStatusRepository
 import skillbill.ports.idestatus.WorkBoardReadModelRepository
 import skillbill.ports.idestatus.WorktreeEditJournalRepository
 import skillbill.ports.idestatus.monitor.MonitorCiCycleRepository
+import skillbill.ports.idestatus.monitor.MonitorRepairValidationSnapshotRepository
 import skillbill.ports.idestatus.verify.VerifyCriterionResolutionRepository
 import skillbill.ports.learning.LearningRepository
 import skillbill.ports.operation.OperationCardRepository
@@ -56,6 +58,7 @@ interface UnitOfWork : GoalRunnerPersistenceSession {
   val worktreeEditJournal: WorktreeEditJournalRepository
   val agentBuildRuns: AgentBuildRunRepository
   val monitorCiCycles: MonitorCiCycleRepository
+  val monitorRepairValidationSnapshots: MonitorRepairValidationSnapshotRepository
   val verifyCriterionResolutions: VerifyCriterionResolutionRepository
   val standalonePhaseStatuses: StandalonePhaseStatusRepository
   val rejectedOutputDiagnostics: RejectedOutputDiagnosticRepository
@@ -69,6 +72,7 @@ interface UnitOfWork : GoalRunnerPersistenceSession {
   val blockIncidentRecoveries: BlockIncidentRecoveryRepository
   val productReports: ProductReportRepository
   val diffComments: DiffCommentStore
+  val projectCheckConfigs: ProjectCheckConfigRepository
 
   fun purgeDecomposedGoal(target: GoalPurgeTarget): GoalPurgeTableCounts
 

@@ -11,6 +11,7 @@ import com.networknt.schema.ValidationMessage
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.identity.task.FEATURE_TASK_RUNTIME_EXECUTION_PLAN_CONTRACT_VERSION
+import skillbill.contracts.workflow.identity.task.FEATURE_TASK_RUNTIME_EXECUTION_PLAN_HISTORICAL_0_2_CONTRACT_VERSION
 import skillbill.contracts.workflow.identity.task.FEATURE_TASK_RUNTIME_EXECUTION_PLAN_LEGACY_CONTRACT_VERSION
 import skillbill.contracts.workflow.identity.task.FEATURE_TASK_RUNTIME_EXECUTION_PLAN_PREVIOUS_CONTRACT_VERSION
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPlanKeys
@@ -22,6 +23,7 @@ import skillbill.error.shellcontent.malformedStepLaunchAssignment
 import skillbill.infrastructure.contracts.ClasspathContractSchemaLoader
 import skillbill.infrastructure.contracts.CompiledSchemaRequest
 import skillbill.infrastructure.contracts.locator.FeatureTaskRuntimeExecutionPlanSchemaPaths
+import skillbill.infrastructure.contracts.projectchecks.inlineProjectCheckCommandSnapshotSchemaRefs
 import java.nio.ByteBuffer
 import java.nio.charset.CharacterCodingException
 import java.nio.charset.CodingErrorAction
@@ -63,6 +65,7 @@ class FeatureTaskRuntimeExecutionPlanSchemaValidator : FeatureTaskRuntimeExecuti
     val versionText = version.takeIf { it.isTextual }?.asText()
     val supportedHistorical =
       versionText == FEATURE_TASK_RUNTIME_EXECUTION_PLAN_PREVIOUS_CONTRACT_VERSION ||
+        versionText == FEATURE_TASK_RUNTIME_EXECUTION_PLAN_HISTORICAL_0_2_CONTRACT_VERSION ||
         versionText == FEATURE_TASK_RUNTIME_EXECUTION_PLAN_LEGACY_CONTRACT_VERSION
     if (unsupportedCurrentVersion(versionText, supportedHistorical)) {
       throw UnsupportedFeatureTaskRuntimeExecutionPlanError()
@@ -122,15 +125,22 @@ private fun historicalSchema(): JsonSchema =
     FEATURE_TASK_RUNTIME_EXECUTION_PLAN_LEGACY_CONTRACT_VERSION,
   )
 
-private fun previousExecutionPlanSchema(): JsonSchema =
+private fun historical02ExecutionPlanSchema(): JsonSchema =
   compiledExecutionPlanSchema(
     FeatureTaskRuntimeExecutionPlanSchemaPaths.HISTORICAL_0_2,
+    FEATURE_TASK_RUNTIME_EXECUTION_PLAN_HISTORICAL_0_2_CONTRACT_VERSION,
+  )
+
+private fun previousExecutionPlanSchema(): JsonSchema =
+  compiledExecutionPlanSchema(
+    FeatureTaskRuntimeExecutionPlanSchemaPaths.HISTORICAL_0_3,
     FEATURE_TASK_RUNTIME_EXECUTION_PLAN_PREVIOUS_CONTRACT_VERSION,
   )
 
 private fun schemaFor(contractVersion: String?): JsonSchema =
   when (contractVersion) {
     FEATURE_TASK_RUNTIME_EXECUTION_PLAN_LEGACY_CONTRACT_VERSION -> historicalSchema()
+    FEATURE_TASK_RUNTIME_EXECUTION_PLAN_HISTORICAL_0_2_CONTRACT_VERSION -> historical02ExecutionPlanSchema()
     FEATURE_TASK_RUNTIME_EXECUTION_PLAN_PREVIOUS_CONTRACT_VERSION -> previousExecutionPlanSchema()
     FEATURE_TASK_RUNTIME_EXECUTION_PLAN_CONTRACT_VERSION -> schema()
     else -> schema()
@@ -157,6 +167,9 @@ private fun compiledExecutionPlanSchema(
       expectedSchemaId = FeatureTaskRuntimeExecutionPlanSchemaPaths.EXPECTED_SCHEMA_ID,
       expectedContractVersion = expectedVersion,
       identityFailure = ::InvalidFeatureTaskRuntimeExecutionPlanSchemaError,
+      prepareSchemaDocument = { yamlNode ->
+        yamlNode.inlineProjectCheckCommandSnapshotSchemaRefs()
+      },
     ),
   )
 

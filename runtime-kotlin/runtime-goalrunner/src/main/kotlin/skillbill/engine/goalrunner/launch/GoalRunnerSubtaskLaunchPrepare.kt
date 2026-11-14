@@ -351,7 +351,7 @@ public class GoalRunnerSubtaskLaunchPrepare(
     priorWorkflowId: String?,
   ): ValidatedFeatureTaskRuntimeExecutionPlan {
     val assignedQualityGate =
-      if (priorWorkflowId == null) executionPlans.creationQualityGate(request.repoRoot, qualityGate) else qualityGate
+      if (priorWorkflowId == null) executionPlans.creationQualityGate(qualityGate) else qualityGate
     return executionPlans.resolveCreation(
       FeatureTaskRuntimeExecutionPlanCreationRequest(
         repoRoot = request.repoRoot,
@@ -360,6 +360,9 @@ public class GoalRunnerSubtaskLaunchPrepare(
         qualityGate = qualityGate,
         validationDepth = ValidationDepth.FULL,
         timeout = request.timeout,
+        issueKey = request.issueKey,
+        invokedAgentId = request.configuredAgentOverrideId ?: request.invokedAgentId,
+        discoveryInvocationId = priorWorkflowId,
         workflowId = priorWorkflowId,
         stepLaunchAssignments =
           FeatureTaskRuntimeStepLaunchAssignmentFactory.resolve(

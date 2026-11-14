@@ -66,7 +66,7 @@ import kotlin.test.assertNotNull
 import skillbill.contracts.workflow.featuretask.AcceptanceCriterionRepairPayloadKeys as Keys
 
 class SerialRepairSqliteFixture(
-  archiveRevision: Int? = null,
+  private val archiveRevision: Int? = null,
   supervisor: FeatureTaskRuntimeWorkerSupervisor = NoopFeatureTaskRuntimeWorkerSupervisor,
   archiveMode: String = "goal-child-validate",
 ) : AutoCloseable {
@@ -197,7 +197,11 @@ class SerialRepairSqliteFixture(
   fun owned(block: (AcquiredFeatureTaskRuntimeWorker) -> Unit) =
     coordinator.runOwned(
       workflowId,
-      execution.inputs,
+      if (archiveRevision != null) {
+        execution.inputs.copy(projectCheckSnapshot = null)
+      } else {
+        execution.inputs
+      },
       execution.identity(workflowId),
     ) { _, worker -> block(worker) }
 

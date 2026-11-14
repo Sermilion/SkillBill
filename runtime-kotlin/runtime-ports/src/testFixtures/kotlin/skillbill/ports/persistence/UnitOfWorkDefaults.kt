@@ -18,6 +18,8 @@ import skillbill.ports.blockincident.InMemoryBlockIncidentRecoveryRepository
 import skillbill.ports.blockincident.InMemoryBlockIncidentRepository
 import skillbill.ports.blockincident.InMemoryProductReportRepository
 import skillbill.ports.blockincident.ProductReportRepository
+import skillbill.ports.config.projectchecks.ProjectCheckConfigRepository
+import skillbill.ports.config.projectchecks.UnavailableProjectCheckConfigRepository
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticPermissions
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticRepository
 import skillbill.ports.diagnostics.UnavailableRejectedOutputDiagnosticPermissions
@@ -38,6 +40,7 @@ import skillbill.ports.idestatus.AgentBuildRunRepository
 import skillbill.ports.idestatus.EmptyAgentActivityStampRepository
 import skillbill.ports.idestatus.EmptyAgentBuildRunRepository
 import skillbill.ports.idestatus.EmptyMonitorCiCycleRepository
+import skillbill.ports.idestatus.EmptyMonitorRepairValidationSnapshotRepository
 import skillbill.ports.idestatus.EmptyVerifyCriterionResolutionRepository
 import skillbill.ports.idestatus.EmptyWorktreeEditJournalRepository
 import skillbill.ports.idestatus.StandalonePhaseStatusRepository
@@ -67,6 +70,7 @@ import skillbill.ports.idestatus.model.WorkBoardReadModelPageQuery
 import skillbill.ports.idestatus.model.WorkBoardReadModelRow
 import skillbill.ports.idestatus.model.WorkValidationBranchRun
 import skillbill.ports.idestatus.monitor.MonitorCiCycleRepository
+import skillbill.ports.idestatus.monitor.MonitorRepairValidationSnapshotRepository
 import skillbill.ports.idestatus.verify.VerifyCriterionResolutionRepository
 import skillbill.ports.operation.OperationCardRepository
 import skillbill.ports.operation.OperationProposalRepository
@@ -79,6 +83,7 @@ import skillbill.ports.review.diffcomment.UnavailableDiffCommentStore
 import java.time.Instant
 
 abstract class UnitOfWorkDefaults : UnitOfWork {
+  open override val projectCheckConfigs: ProjectCheckConfigRepository = UnavailableProjectCheckConfigRepository
   open override val goalPlanningOwnership: GoalPlanningOwnershipRepository = EmptyGoalPlanningOwnershipRepository
   open override val databaseFileObservation: DatabaseFileObservation? = null
   open override val workBoardReadModel: WorkBoardReadModelRepository = EmptyBoardReadModel()
@@ -86,6 +91,8 @@ abstract class UnitOfWorkDefaults : UnitOfWork {
   open override val agentActivityStamps: AgentActivityStampRepository = EmptyAgentActivityStampRepository
   open override val worktreeEditJournal: WorktreeEditJournalRepository = EmptyWorktreeEditJournalRepository
   open override val monitorCiCycles: MonitorCiCycleRepository = EmptyMonitorCiCycleRepository
+  open override val monitorRepairValidationSnapshots: MonitorRepairValidationSnapshotRepository =
+    EmptyMonitorRepairValidationSnapshotRepository
   open override val verifyCriterionResolutions: VerifyCriterionResolutionRepository =
     EmptyVerifyCriterionResolutionRepository
   open override val agentBuildRuns: AgentBuildRunRepository = EmptyAgentBuildRunRepository

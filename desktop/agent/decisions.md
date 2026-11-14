@@ -13,6 +13,7 @@ Context: Validation observed a native launcher crash before JVM startup. The env
 Decision: After Linux createDistributable, replace launcher classpath entries with one manifest jar that retains dependency order. Preserve the main class, JVM options and bundled jars.
 Reason: The manifest shortens the native launcher classpath while Java resolves dependencies in their original order. Clearing inherited LD_LIBRARY_PATH did not resolve the crash.
 Revisit when: The bundled JDK launcher handles long classpaths without the partial pipe-read defect.
+Superseded by: Compact the Linux packaged launcher classpath (2026-11-13).
 
 ## [2026-11-13] Keep Finalize eligibility and release in the runtime
 Context: Terminal-row UI checks hid launch actions even when completed unfinalized work still needed operator attention.
@@ -646,3 +647,8 @@ Superseded by: Default all provider launches to native permission bypass (2026-1
 Context: The 2000-character instruction limit dropped goal start cards containing detailed requirements. A separate 16000-character action-block limit also rejected longer intake.
 Decision: Remove both size caps from suggested-action decoding and remove the instruction-length restriction from both chat prompts. Keep nonblank instructions, label limits, valid modes, supported starts and block structure checks.
 Reason: Start cards must retain the operator's requirements and resolved decisions. The regression test decodes an instruction longer than both former caps and checks its complete value and sibling action.
+
+## [2026-11-13] Compact the Linux packaged launcher classpath
+Context: The packaged data smoke crashed in `jvmLauncherStartJvm` before starting Java with Adoptium 21.0.12.1 and 21.0.13, on the host and in Ubuntu. The native launcher passed invalid environment pointers to `setenv` with the long expanded jar list. The same image passed the unchanged smoke assertions with Java's classpath wildcard.
+Decision: After creating a Linux application image, replace its generated per-jar launcher classpath entries with `$APPDIR/*`. Reject unexpected classpath roots and retain every packaged jar, Java option and application argument. Keep the runtime-free image check and packaged data smoke unchanged.
+Reason: The wildcard shortens the native launch data while Java still loads the packaged dependencies. The existing smoke checks the actual distribution launcher, runtime identity, board, detail and settings.

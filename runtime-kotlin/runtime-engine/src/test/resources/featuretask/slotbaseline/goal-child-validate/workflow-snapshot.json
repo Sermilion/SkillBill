@@ -616,7 +616,7 @@
             }
         ],
         "feature_task_runtime_execution_plan": {
-            "contract_version": "0.3",
+            "contract_version": "0.4",
             "definition": {
                 "id": "goal-child",
                 "semantic_revision": 4
@@ -726,7 +726,7 @@
                 {
                     "id": "gate-commands",
                     "semantic_digest": "__NORMALIZED_SHA64__",
-                    "semantic_revision": 1
+                    "semantic_revision": 2
                 },
                 {
                     "id": "receipt-interpretation",
@@ -752,6 +752,24 @@
             "effective_policy_settings": {
                 "phase_timeout_millis": null,
                 "validation_depth": "full"
+            },
+            "project_check_commands": {
+                "build_commands": null,
+                "contract_version": "0.1",
+                "gradle_wrapper": null,
+                "parser_metadata": null,
+                "project_id": "test-project",
+                "validation_commands": {
+                    "commands": [
+                        {
+                            "argv": [
+                                "echo",
+                                "validate"
+                            ],
+                            "working_directory": "."
+                        }
+                    ]
+                }
             },
             "qa_selection": null,
             "quality_gate_selection": "validate",

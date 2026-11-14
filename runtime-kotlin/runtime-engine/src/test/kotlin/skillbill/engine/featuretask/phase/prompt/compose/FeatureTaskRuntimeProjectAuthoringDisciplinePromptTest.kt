@@ -66,14 +66,15 @@ class FeatureTaskRuntimeProjectAuthoringDisciplinePromptTest {
   }
 
   @Test
-  fun `audit inspection has no compile exception and validate keeps independent discovery`() {
+  fun `audit inspection has no compile exception and validate reuses saved commands`() {
     val audit = composePhasePrompt(PROMPT_COMPOSER_ISSUE_KEY, promptComposerBriefingFor("audit"))
     val validate = composePhasePrompt(PROMPT_COMPOSER_ISSUE_KEY, promptComposerBriefingFor("validate"))
 
     assertFalse(audit.contains("application compiles"))
     assertFalse(audit.contains("validation_gate.build_command to check"))
     assertContains(audit, "Inspect production code without editing it")
-    assertContains(validate, "not delivered here in full and never clear a build or validation gate")
+    assertContains(validate, "admitted saved validation")
+    assertContains(validate, "do not rediscover checks")
   }
 
   @Test

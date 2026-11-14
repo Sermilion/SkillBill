@@ -1,0 +1,51 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://skill-bill.dev/contracts/project-check-discovery-schema.yaml
+title: Project check discovery response
+type: object
+additionalProperties: false
+required:
+  - contract_version
+  - project_id
+  - categories
+properties:
+  contract_version:
+    const: '0.1'
+  project_id:
+    type: string
+    minLength: 1
+    pattern: '\S'
+  categories:
+    type: object
+    additionalProperties: false
+    properties:
+      build: { $ref: '#/$defs/category' }
+      lint: { $ref: '#/$defs/category' }
+      test: { $ref: '#/$defs/category' }
+      formatting: { $ref: '#/$defs/category' }
+      validation: { $ref: '#/$defs/category' }
+$defs:
+  category:
+    type: object
+    additionalProperties: false
+    required: [commands]
+    properties:
+      commands:
+        type: array
+        items: { $ref: '#/$defs/command' }
+  command:
+    type: object
+    additionalProperties: false
+    required: [argv, working_directory]
+    properties:
+      argv:
+        type: array
+        minItems: 1
+        prefixItems:
+          - type: string
+            minLength: 1
+            pattern: '\S'
+        items: { type: string }
+      working_directory:
+        type: string
+        minLength: 1
+        pattern: '^(\.|(?!/)(?![A-Za-z]:)(?!.*(^|/)(?:\.|\.\.)(/|$))[^/\\]+(?:/[^/\\]+)*)$'
