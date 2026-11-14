@@ -23,6 +23,9 @@ class SqliteOperationCardRepository(
   override fun findLaunchContext(launchId: String): OperationLaunchContext? =
     databaseSessionFactory.read { it.operationCards.findLaunchContext(launchId) }
 
+  override fun findLaunchContextByInvocation(invocationId: String): OperationLaunchContext? =
+    databaseSessionFactory.read { it.operationCards.findLaunchContextByInvocation(invocationId) }
+
   override fun publish(
     card: OperationCardProjection,
     authority: OperationProposal?,

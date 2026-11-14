@@ -1,6 +1,7 @@
 package skillbill.cli
 
 import skillbill.contracts.persistence.RuntimeDatabaseEnvironmentKeys
+import skillbill.contracts.system.OpenCodeEnvironmentKeys
 import skillbill.telemetry.STATE_DIR_ENVIRONMENT_KEY
 import java.nio.file.Files
 import java.nio.file.Path
@@ -17,7 +18,8 @@ internal fun isolatedCliEnvironment(home: Path? = null): Map<String, String> {
   val filtered =
     System.getenv().filterKeys { key ->
       key != CODEX_HOME_ENV && key != GOAL_CONTINUATION_ENV &&
-        key != DATABASE_PATH_ENV && key != STATE_DIR_ENVIRONMENT_KEY
+        key != DATABASE_PATH_ENV && key != STATE_DIR_ENVIRONMENT_KEY &&
+        key !in OpenCodeEnvironmentKeys.ALL
     }
   if (home == null) {
     return filtered

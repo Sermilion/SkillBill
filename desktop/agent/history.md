@@ -9,9 +9,20 @@ Areas: desktop/core/domain, desktop/core/data/chat, desktop/core/data/control, d
 - reusable: OperationCardCoordinator accepts caller-owned admission checks and rechecks after saves. New task starts and card decisions require current selection and originating context/database authority; refusal never adopts a replacement database session or retries on selection.
 - RuntimeWorkControlRepository validates canonical selected-root equality before all nine NewTaskKind dispatches. Database changes take refusal precedence; only GoalRun and PlanOnly apply new-work base-branch policy.
 - Compatibility: legacy root-only constructors remain repository-bound, repositoryRoot remains the provider/approval directory, and execution-chat scope is unchanged. Changed-home resume stages a fresh provider session while retaining the original saved draft.
-- Limits: admission proves validity at dispatch, not against later external deletion. No global CLI admission or repository-management service. Supplied capability_absent warning says validation changed code after QA settled; final-tree QA and native macOS/Windows behavior remain unverified.
+- Limits: admission establishes validity at dispatch; later external deletion remains possible. No global CLI admission or repository-management service. The dedicated all-kind data-admission regression matrix is absent. Supplied capability_absent warning records code changes after QA settled; final-tree QA and native macOS/Windows behavior remain unverified.
 Feature flag: N/A
 Acceptance criteria: 5/5 implemented
+
+## [2026-11-13] SONA-20 desktop Finalize controls
+Areas: desktop/feature/detail and work; desktop/core/data, domain and ui; desktop/app/command; design/linear-study; docs/runtime-command-guidance.md
+- MEDIUM feature. Detail actions, the Work row menu and CommandCatalog offer Finalize from runtime canFinalize and retain Resume or Run again from canLaunch, including completed unfinalized rows.
+- RunOptions maps canFinalize with a false default. WorkAction.Finalize forwards WorkControlAction.FINALIZE through ControlKind.FINALIZE, retains changed-target handling and reports Finalize recorded. Desktop performs no worktree removal.
+- Final section mapping preserves runtime liveSection. Only null liveSection with recentlyFinishedPhase or doneWithinDay maps to Finished today; execution finishedAt and null liveSection alone do not qualify. Canceled or hidden rows stay available in loaded items for history paths.
+- reusable: workRowMenuEntries derives launch and Finalize entries from runtime options without Compose.
+- Design screens, menu/library data, HANDOFF sections 9.1 and 9.2 item 4, and sibling-worktree guidance describe Finalize and last-holder release.
+- Limits: no Finalize shortcut; R remains Resume. Supplied QA-1 remains open, the screenshot inventory rejected 10 entries, and QA did not rerun after validate changed code.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented across SONA-20; QA-1 remains open.
 
 ## [2026-11-11] SKILL-538 rename desktop app to Sona
 Areas: desktop/app copy, tray and packaging; desktop/core/data and designsystem; desktop/feature/chat, config, settings, specs and tray; desktop/build-logic; docs/assets; root installer/uninstaller; scripts smoke and USB display; runtime-cli installer fixtures

@@ -29,6 +29,7 @@ object WorkBoardReadModelPayloadKeys {
   const val SNAPSHOT = "snapshot"
   const val REPOSITORY_ROOT = "repository_root"
   const val FINISHED_AT = "finished_at"
+  const val OPERATOR_FINALIZED_AT = "operator_finalized_at"
   const val FINISHED_AT_SOURCE = "finished_at_source"
   const val CONTROL_LEASE = "control_lease"
   const val OBSERVATION = "observation"

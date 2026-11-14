@@ -304,7 +304,12 @@ internal class ChatTurns(
     cursorMcpDependency: CursorMcpDependency,
   ): Boolean {
     val root = header.workingRoot()
-    val scope = ChatScope.Execution(header.id, header.kind, header.issueKey, header.title, root)
+    val scope = ChatScope.Execution(
+      header.id, header.kind, header.issueKey, header.title, root,
+      verifySourceBranch = if (header.kind == WorkKind.Operation && header.runKindLabel == "verify") {
+        header.branch?.takeIf(String::isNotBlank) ?: "HEAD"
+      } else null,
+    )
     val savedHistory = if (agent.agentId == "opencode") savedHistory(session, agent) else null
     val request = ChatTurnRequest(
       session.sessionId,

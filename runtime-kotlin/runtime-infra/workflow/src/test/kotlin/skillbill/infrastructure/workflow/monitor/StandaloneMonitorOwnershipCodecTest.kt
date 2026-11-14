@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.node.ObjectNode
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper
+import skillbill.contracts.workflow.identity.task.STANDALONE_MONITOR_OWNERSHIP_CONTRACT_VERSION
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.infrastructure.contracts.locator.StandaloneMonitorOwnershipSchemaPaths
 import skillbill.ports.monitor.model.MonitorBranchIdentity
@@ -80,7 +81,7 @@ class StandaloneMonitorOwnershipCodecTest {
   private fun fieldsOf(node: JsonNode): Set<String> = node.fieldNames().asSequence().toSet()
 
   @Test
-  fun `an existing pull request record decodes and re-encodes byte-identical`() {
+  fun `an existing pull request record from contract 1_0 still decodes`() {
     val record =
       """
       {
@@ -109,7 +110,15 @@ class StandaloneMonitorOwnershipCodecTest {
       }
       """.trimIndent()
 
-    assertEquals(record, StandaloneMonitorOwnershipCodec.encode(StandaloneMonitorOwnershipCodec.decode(record, "t")))
+    val decoded = StandaloneMonitorOwnershipCodec.decode(record, "t")
+    assertEquals("invocation-1", decoded.invocationId)
+    assertEquals(
+      record.replace(
+        "\"contract_version\" : \"1.0\"",
+        "\"contract_version\" : \"$STANDALONE_MONITOR_OWNERSHIP_CONTRACT_VERSION\"",
+      ),
+      StandaloneMonitorOwnershipCodec.encode(decoded),
+    )
   }
 
   @Test

@@ -50,6 +50,8 @@ import skillbill.ports.idestatus.model.StandaloneEligiblePage
 import skillbill.ports.idestatus.model.StandaloneNarrowWriteResult
 import skillbill.ports.idestatus.model.StandalonePhaseExecutionAnchor
 import skillbill.ports.idestatus.model.StandalonePhaseExecutionQuery
+import skillbill.ports.idestatus.model.StandalonePhaseFinalizeRequest
+import skillbill.ports.idestatus.model.StandalonePhaseFinalizeResult
 import skillbill.ports.idestatus.model.StandalonePhaseOutputLine
 import skillbill.ports.idestatus.model.StandalonePhaseOutputSnapshot
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
@@ -133,6 +135,9 @@ abstract class UnitOfWorkDefaults : UnitOfWork {
 
       override fun update(request: StandalonePhaseStatusUpdate): StandalonePhaseStatusUpdateResult =
         StandalonePhaseStatusUpdateResult.MISSING
+
+      override fun finalize(request: StandalonePhaseFinalizeRequest): StandalonePhaseFinalizeResult =
+        StandalonePhaseFinalizeResult.MISSING
 
       override fun releaseExpiredLease(
         record: StandalonePhaseStatusRecord,

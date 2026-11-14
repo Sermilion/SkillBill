@@ -33,7 +33,6 @@ import skillbill.ports.operation.ReleaseBuildGate
 import skillbill.ports.operation.UnavailableOperationCardRepository
 import skillbill.ports.operation.model.ReleaseBuildReadiness
 import skillbill.ports.projectstore.FixedProjectStorePort
-import skillbill.ports.workflow.branchworktree.RecordingBranchWorktreeResources
 import java.nio.file.Files
 import java.nio.file.Path
 import java.sql.DriverManager
@@ -74,7 +73,6 @@ class ReleaseOperationTest {
       OperationConfirmationGate(proposals, UnavailableOperationCardRepository, git, Clock.systemUTC()),
       OperationStepRunner(runner, git, AgentBuildObserverFactory.NONE),
       projectStore,
-      RecordingBranchWorktreeResources(),
       NoOperationCardLifecycle,
     )
   private val executorWithOtherOperation =
@@ -83,7 +81,6 @@ class ReleaseOperationTest {
       OperationConfirmationGate(proposals, UnavailableOperationCardRepository, git, Clock.systemUTC()),
       OperationStepRunner(runner, git, AgentBuildObserverFactory.NONE),
       projectStore,
-      RecordingBranchWorktreeResources(),
       NoOperationCardLifecycle,
     )
 

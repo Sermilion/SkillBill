@@ -42,6 +42,8 @@ data class WorkUiState(
   fun canLaunch(item: WorkItem): Boolean = runOptions[item.id]?.canLaunch == true && !isReserved(item)
 
   fun canCancel(item: WorkItem): Boolean = runOptions[item.id]?.canCancel == true && !isReserved(item)
+
+  fun canFinalize(item: WorkItem): Boolean = runOptions[item.id]?.canFinalize == true && !isReserved(item)
 }
 
 data class WorkImportConfirmation(
@@ -79,6 +81,7 @@ sealed interface WorkAction {
   data class PauseAfterSubtask(val item: WorkItem) : WorkAction
   data class PauseNow(val item: WorkItem) : WorkAction
   data class Launch(val item: WorkItem) : WorkAction
+  data class Finalize(val item: WorkItem) : WorkAction
   data class Cancel(val item: WorkItem) : WorkAction
   data class RequestExport(val item: WorkItem) : WorkAction
   data object DismissExportLive : WorkAction

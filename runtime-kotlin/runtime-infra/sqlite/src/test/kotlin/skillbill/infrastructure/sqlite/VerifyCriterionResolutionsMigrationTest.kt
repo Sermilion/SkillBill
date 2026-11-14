@@ -21,7 +21,7 @@ class VerifyCriterionResolutionsMigrationTest {
         }
         statement.execute("DROP TABLE verify_criterion_resolutions")
         statement.executeUpdate("DELETE FROM schema_migrations WHERE name = 'record-verify-criterion-resolutions'")
-        statement.execute("PRAGMA user_version = 127")
+        statement.execute("PRAGMA user_version = 130")
         statement.executeUpdate(
           "INSERT INTO feature_verify_workflows (workflow_id, session_id) VALUES ('$WORKFLOW', '$SESSION')",
         )

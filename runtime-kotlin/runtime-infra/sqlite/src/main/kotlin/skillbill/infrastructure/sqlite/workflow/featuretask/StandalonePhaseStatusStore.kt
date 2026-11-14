@@ -35,9 +35,14 @@ import skillbill.infrastructure.sqlite.core.migration.area.idestatus.writeStanda
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.infrastructure.sqlite.core.ops.inNestedWriteTransaction
 import skillbill.infrastructure.sqlite.core.schema.AGENT_ENVIRONMENT_COLUMN
+import skillbill.infrastructure.sqlite.core.schema.BRANCH_WORKTREE_RETAINED_DETAIL_COLUMN
+import skillbill.infrastructure.sqlite.core.schema.BRANCH_WORKTREE_RETAINED_PATH_COLUMN
 import skillbill.infrastructure.sqlite.core.schema.LAUNCH_SCOPE_COLUMN
 import skillbill.infrastructure.sqlite.core.schema.OPEN_CODE_IDENTITY_COLUMN
+import skillbill.infrastructure.sqlite.core.schema.OPERATOR_FINALIZED_AT_COLUMN
 import skillbill.infrastructure.sqlite.core.schema.REPORTED_MODEL_COLUMN
+import skillbill.infrastructure.sqlite.core.schema.STANDALONE_SUCCESSFUL_COMPLETION_LIFECYCLES
+import skillbill.infrastructure.sqlite.core.schema.STANDALONE_SUCCESSFUL_COMPLETION_LIFECYCLES_SQL
 import skillbill.infrastructure.sqlite.core.schema.agentEnvironmentJson
 import skillbill.infrastructure.sqlite.core.schema.openCodeIdentityJson
 import skillbill.infrastructure.sqlite.core.schema.readAgentEnvironment
@@ -58,6 +63,8 @@ import skillbill.ports.idestatus.model.StandaloneEligiblePage
 import skillbill.ports.idestatus.model.StandaloneEligibleSlice
 import skillbill.ports.idestatus.model.StandalonePhaseExecutionAnchor
 import skillbill.ports.idestatus.model.StandalonePhaseExecutionQuery
+import skillbill.ports.idestatus.model.StandalonePhaseFinalizeRequest
+import skillbill.ports.idestatus.model.StandalonePhaseFinalizeResult
 import skillbill.ports.idestatus.model.StandalonePhaseOutputLine
 import skillbill.ports.idestatus.model.StandalonePhaseOutputSnapshot
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
@@ -177,9 +184,22 @@ internal class StandalonePhaseStatusStore(
     val liveFrom = now.minus(LIVE_RETENTION)
     val settledFrom = now.minus(SETTLED_RETENTION)
     val liveStates = LIVE_STATES.joinToString(", ") { "'$it'" }
+    val successfulTerminal = "lifecycle_state IN ($STANDALONE_SUCCESSFUL_COMPLETION_LIFECYCLES_SQL)"
+    val unfinalizedCompleted =
+      "($successfulTerminal AND $OPERATOR_FINALIZED_AT_COLUMN IS NULL)"
     val live =
-      "(lifecycle_state IN ($liveStates) AND ${instantAtOrAfterBoundSql("updated_at", "live_from")})"
-    val settled = "(finished_at IS NOT NULL AND ${instantAfterBoundSql("finished_at", "settled_from")})"
+      "((lifecycle_state IN ($liveStates) AND ${instantAtOrAfterBoundSql("updated_at", "live_from")})" +
+        " OR $unfinalizedCompleted)"
+    val finalizedSettled =
+      "($successfulTerminal AND $OPERATOR_FINALIZED_AT_COLUMN IS NOT NULL AND " +
+        "${instantAfterBoundSql(OPERATOR_FINALIZED_AT_COLUMN, "settled_from")})"
+    val failedCanceled =
+      listOf(IdeStatusLifecycleState.FAILED.wireValue, IdeStatusLifecycleState.CANCELED.wireValue)
+        .joinToString(", ") { "'$it'" }
+    val failedCanceledSettled =
+      "(lifecycle_state IN ($failedCanceled) AND finished_at IS NOT NULL AND " +
+        "${instantAfterBoundSql("finished_at", "settled_from")})"
+    val settled = "($finalizedSettled OR $failedCanceledSettled)"
     val eligible =
       when (slice) {
         StandaloneEligibleSlice.LIVE -> live
@@ -333,6 +353,51 @@ internal class StandalonePhaseStatusStore(
   override fun update(request: StandalonePhaseStatusUpdate): StandalonePhaseStatusUpdateResult =
     connection.inNestedWriteTransaction(diagnostics, transactionActive) {
       updateInTransaction(request)
+    }
+
+  override fun finalize(request: StandalonePhaseFinalizeRequest): StandalonePhaseFinalizeResult =
+    connection.inNestedWriteTransaction(diagnostics, transactionActive) {
+      val current =
+        readOne("execution_id", request.executionId)
+          ?: return@inNestedWriteTransaction StandalonePhaseFinalizeResult.MISSING
+      if (current.operatorFinalizedAt != null) {
+        return@inNestedWriteTransaction StandalonePhaseFinalizeResult.ALREADY_FINALIZED
+      }
+      if (current.finishedAt == null || current.lifecycleState !in STANDALONE_SUCCESSFUL_COMPLETION_LIFECYCLES) {
+        return@inNestedWriteTransaction StandalonePhaseFinalizeResult.INELIGIBLE
+      }
+      val terminalResult =
+        request.terminalResultAppendix?.let { appendix ->
+          listOfNotNull(current.terminalResult?.takeIf(String::isNotBlank), appendix).joinToString("\n\n")
+        } ?: current.terminalResult
+      val monitorAssignments = request.monitorCleanup?.let { ", $MONITOR_CLEANUP_ASSIGNMENTS" }.orEmpty()
+      val updated =
+        connection.prepareStatement(
+          """
+          UPDATE standalone_phase_status SET
+            $OPERATOR_FINALIZED_AT_COLUMN = ?,
+            $BRANCH_WORKTREE_RETAINED_PATH_COLUMN = COALESCE(?, $BRANCH_WORKTREE_RETAINED_PATH_COLUMN),
+            $BRANCH_WORKTREE_RETAINED_DETAIL_COLUMN = COALESCE(?, $BRANCH_WORKTREE_RETAINED_DETAIL_COLUMN),
+            terminal_result = COALESCE(?, terminal_result)$monitorAssignments
+          WHERE execution_id = ?
+            AND $OPERATOR_FINALIZED_AT_COLUMN IS NULL
+            AND finished_at IS NOT NULL
+            AND lifecycle_state IN ($STANDALONE_SUCCESSFUL_COMPLETION_LIFECYCLES_SQL)
+          """.trimIndent(),
+        ).use { statement ->
+          statement.bindAll(
+            buildList {
+              add(request.operatorFinalizedAt.toString())
+              add(request.branchWorktreeRetainedPath)
+              add(request.branchWorktreeRetainedDetail)
+              add(terminalResult)
+              if (request.monitorCleanup != null) addAll(request.monitorCleanup.columnValues())
+              add(request.executionId)
+            },
+          )
+          statement.executeUpdate()
+        }
+      if (updated == 1) StandalonePhaseFinalizeResult.ACCEPTED else StandalonePhaseFinalizeResult.INELIGIBLE
     }
 
   override fun writeQaChecklist(
@@ -853,14 +918,15 @@ internal class StandalonePhaseStatusStore(
       lifecycleState = getString("lifecycle_state"),
       currentStep = getString("current_step"),
       currentActivity = getString("current_activity"),
-      startedAt = standaloneInstant("started_at"),
-      updatedAt = standaloneInstant("updated_at"),
-      finishedAt = standaloneInstantOrNull("finished_at"),
+      startedAt = standaloneStatusInstant("started_at"),
+      updatedAt = standaloneStatusInstant("updated_at"),
+      finishedAt = standaloneStatusInstantOrNull("finished_at"),
+      operatorFinalizedAt = standaloneStatusInstantOrNull(OPERATOR_FINALIZED_AT_COLUMN),
       activeDurationMs = getLong("active_duration_ms").takeIf { !wasNull() },
-      activeDurationAsOf = standaloneInstantOrNull("active_duration_as_of"),
+      activeDurationAsOf = standaloneStatusInstantOrNull("active_duration_as_of"),
       leaseOwner = getString("lease_owner"),
       leaseGeneration = getLong("lease_generation"),
-      leaseExpiresAt = standaloneInstant("lease_expires_at"),
+      leaseExpiresAt = standaloneStatusInstant("lease_expires_at"),
       terminalResult = getString("terminal_result"),
       acceptedResult = getString("accepted_result"),
       processOwner = readProcessOwner(),
@@ -880,28 +946,10 @@ internal class StandalonePhaseStatusStore(
       liveChecks = readLiveChecks("standalone-status"),
       validationOutcome = readValidationOutcome("standalone-status"),
       reportedModel = readStandaloneReportedModel(),
-      primaryRepositoryRoot = optionalString(PRIMARY_REPOSITORY_ROOT_COLUMN),
+      primaryRepositoryRoot = getString("primary_repository_root"),
+      branchWorktreeRetainedPath = getString(BRANCH_WORKTREE_RETAINED_PATH_COLUMN),
+      branchWorktreeRetainedDetail = getString(BRANCH_WORKTREE_RETAINED_DETAIL_COLUMN),
     )
-  }
-
-  private fun ResultSet.standaloneInstant(column: String): Instant {
-    val raw = getString(column)
-    return parsePersistedInstantOrNull(raw.orEmpty())
-      ?: throw invalidIdeStatusSchemaError(
-        sourceLabel = "standalone status '${getString("invocation_id")}'",
-        fieldPath = column,
-        reason = "Invalid persisted timestamp.",
-      )
-  }
-
-  private fun ResultSet.standaloneInstantOrNull(column: String): Instant? {
-    val raw = getString(column) ?: return null
-    return parsePersistedInstantOrNull(raw)
-      ?: throw invalidIdeStatusSchemaError(
-        sourceLabel = "standalone status '${getString("invocation_id")}'",
-        fieldPath = column,
-        reason = "Invalid persisted timestamp.",
-      )
   }
 
   private fun ResultSet.readLaunchArguments(): List<String>? {
@@ -983,6 +1031,26 @@ internal class StandalonePhaseStatusStore(
       WHERE repository_identity = ?
       """.trimIndent()
   }
+}
+
+private fun ResultSet.standaloneStatusInstant(column: String): Instant {
+  val raw = getString(column)
+  return parsePersistedInstantOrNull(raw.orEmpty())
+    ?: throw invalidIdeStatusSchemaError(
+      sourceLabel = "standalone status '${getString("invocation_id")}'",
+      fieldPath = column,
+      reason = "Invalid persisted timestamp.",
+    )
+}
+
+private fun ResultSet.standaloneStatusInstantOrNull(column: String): Instant? {
+  val raw = getString(column) ?: return null
+  return parsePersistedInstantOrNull(raw)
+    ?: throw invalidIdeStatusSchemaError(
+      sourceLabel = "standalone status '${getString("invocation_id")}'",
+      fieldPath = column,
+      reason = "Invalid persisted timestamp.",
+    )
 }
 
 private fun instantAtOrBeforeSql(columnName: String): String =

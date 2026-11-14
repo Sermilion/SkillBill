@@ -5,7 +5,7 @@ Reason: Tools and approval ownership need a directory. A directory alone does no
 
 ## [2026-11-13] Version saved draft context before projection
 Context: The legacy repository-root field also marked saved records as New task drafts. Removing it could misclassify a conversation without repository selection.
-Decision: Persist context version 1 with explicit directory and selection facts. Migrate legacy bound drafts atomically before projection, preserve source fields, and return typed failures with recovery guidance while retaining invalid originals.
+Decision: Persist context version 1 with explicit directory and selection facts; null-selected writes omit the legacy root marker. Migrate legacy bound drafts atomically before projection, preserve source fields, and return typed failures with recovery guidance while retaining invalid originals.
 Reason: Versioning distinguishes intentional absence from legacy selection and execution records. Failed reads must not become defaults, destructive rewrites or orphan deletion.
 
 ## [2026-11-13] Keep repository switching available through durable replacement
@@ -15,7 +15,7 @@ Reason: A provider binding cannot silently move directories. A failed save must 
 
 ## [2026-11-13] Validate exact roots for selection and every New task dispatch
 Context: Git discovery can resolve a candidate or deleted selected child to an enclosing repository. Standalone and operation routes previously dispatched before goal/plan repository admission.
-Decision: Manual and chat picks use branch authority plus canonical exact-root equality; project metadata is display-only. Validate again before every NewTaskKind dispatch, reservation or proposal, recheck database identity after suspension, and apply new-work branch policy only to GoalRun and PlanOnly.
+Decision: Manual and chat picks use branch authority plus canonical exact-root equality; project metadata is display-only. Validate before every NewTaskKind dispatch, reservation or proposal and pass the canonical root downstream. Recheck database identity after suspension; apply new-work branch policy only to GoalRun and PlanOnly.
 Reason: A successful Git read does not prove the requested directory is the intended root. Every run kind needs a valid selected repository, while standalone and operation branch policy must remain unchanged and database changes must retain refusal precedence.
 
 ## [2026-11-13] Settle repository candidates before draining queued messages
@@ -32,6 +32,16 @@ Reason: Hiding a button does not revoke retained callbacks or saved card referen
 Context: SONA-21 permits ordinary home chat without repository selection. Callbacks and parked requests can outlive their repository context or database session.
 Decision: Require actual selection and originating draft, chat, root, context revision and database session for starts and operation decisions, including checks after saves. Selection never retries work; a database-change refusal retains the original session fence and asks the operator to reopen the chat.
 Reason: Home Git metadata, issue keys and readiness advice do not identify the intended repository or authorize a run. An earlier action must not acquire authority in a replacement context. Ordinary tools and execution-chat scope retain their existing rules.
+
+## [2026-11-13] Keep Finalize eligibility and release in the runtime
+Context: Terminal-row UI checks hid launch actions even when completed unfinalized work still needed operator attention.
+Decision: Render Finalize from canFinalize and launch from canLaunch. Forward Finalize through the runtime work-control action without local git removal or lifecycle-based eligibility checks.
+Reason: Runtime owns the predicate and last-holder release. A second desktop predicate can hide an eligible row, while local deletion would bypass shared holders and Kept handling.
+
+## [2026-11-13] Require runtime completion windows for Finished today
+Context: Mapping every null liveSection to Finished today placed failed or canceled rows there without operator finalization.
+Decision: Preserve non-null runtime liveSection. For null liveSection, show Finished today only when recentlyFinishedPhase or doneWithinDay is true; otherwise omit the row from live sections.
+Reason: Null liveSection alone is not completion evidence. Runtime window facts distinguish operator-finalized standalone work and completed goals without desktop lifecycle or finishedAt inference.
 
 ## [2026-11-12] Let normal desktop launches choose the Skiko renderer
 Context: The Changes panel was slow even for small diffs. DesktopLauncher forced CPU rendering on Linux when no renderer override was supplied.

@@ -87,7 +87,11 @@ class CliWorkDetailTest {
     val context = CliRuntimeContext(environment = emptyMap(), userHome = home)
     val board = CliRuntime.run(listOf("--db", dbPath.toString(), "work", "board"), context)
     assertEquals(0, board.exitCode, board.stdout)
-    assertEquals(emptyList<Any>(), decodeJsonObject(board.stdout)["items"])
+    val boardItems = decodeJsonObject(board.stdout)["items"] as List<*>
+    assertEquals(1, boardItems.size)
+    val boardSnapshot = (boardItems.single() as Map<*, *>)["snapshot"] as Map<*, *>
+    assertEquals("plan-invocation", boardSnapshot["invocation_id"])
+    assertEquals("terminal", boardSnapshot["lifecycle_state"])
 
     listOf(workflowId, "plan-invocation").forEach { id ->
       val result = CliRuntime.run(listOf("--db", dbPath.toString(), "work", "detail", id), context)

@@ -15,6 +15,7 @@ import skillbill.engine.specbrowser.model.SpecBundleDeletion
 import skillbill.engine.specbrowser.model.SpecBundleRunState
 import skillbill.engine.work.EmptyOutcomeStore
 import skillbill.engine.work.control.WorkRunActions
+import skillbill.engine.work.control.WorkRunFinalizer
 import skillbill.engine.work.fixtureCheckedOutBranch
 import skillbill.engine.work.goalManifestState
 import skillbill.engine.work.ideStatusClock
@@ -29,6 +30,7 @@ import skillbill.infrastructure.sqlite.establishTemporarySchemaReadiness
 import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
 import skillbill.model.EnvironmentContext
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.monitor.NoopStandaloneMonitorResources
 import skillbill.ports.projectstore.FixedProjectStorePort
 import skillbill.ports.projectstore.ProjectCatalogPort
 import skillbill.ports.projectstore.model.ProjectCatalogEntry
@@ -39,6 +41,7 @@ import skillbill.ports.work.model.WorkRunLaunchRequest
 import skillbill.ports.work.model.WorkRunLaunchResult
 import skillbill.ports.work.model.WorkRunStopRequest
 import skillbill.ports.work.model.WorkRunStopResult
+import skillbill.ports.workflow.branchworktree.RecordingBranchWorktreeResources
 import skillbill.ports.workflow.goalstate.LocalGoalRuntimeStateFileStore
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import java.nio.file.Files
@@ -449,6 +452,7 @@ class SpecBrowserServiceTest {
         goalPreflightServiceForTests(database),
         EnvironmentContext(environment = mapOf("HOME" to repo.toString()), userHome = repo),
         TestRepositoryEnclosingRoot,
+        WorkRunFinalizer(RecordingBranchWorktreeResources(), NoopStandaloneMonitorResources),
       )
     val catalog =
       object : ProjectCatalogPort {

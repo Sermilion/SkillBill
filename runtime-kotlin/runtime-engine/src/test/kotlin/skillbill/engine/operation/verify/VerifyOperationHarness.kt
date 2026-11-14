@@ -61,7 +61,6 @@ import skillbill.ports.projectstore.FixedProjectStorePort
 import skillbill.ports.review.pullrequest.PullRequestReviewThreadOperations
 import skillbill.ports.review.pullrequest.model.ReviewPullRequest
 import skillbill.ports.system.CheckedOutBranchSource
-import skillbill.ports.workflow.branchworktree.RecordingBranchWorktreeResources
 import skillbill.ports.workflow.decomposition.UnavailableDecompositionManifestStore
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
@@ -212,7 +211,6 @@ internal class VerifyOperationHarness : AutoCloseable {
         OperationConfirmationGate(proposals, UnavailableOperationCardRepository, git, clock),
         OperationStepRunner(runner, git, AgentBuildObserverFactory.NONE),
         FixedProjectStorePort(projectStoreRoot),
-        RecordingBranchWorktreeResources(),
         NoOperationCardLifecycle,
       )
   }

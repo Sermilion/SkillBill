@@ -164,6 +164,10 @@ class RuntimeWorkControlRepository(
     runtime.workControlService.request(target, WorkControlAction.CANCEL).toControlOutcome(ControlKind.CANCEL, diagnostics)
   }
 
+  override suspend fun finalize(item: WorkItem): ControlOutcome = runControl(item, "control_finalize") { runtime, target ->
+    runtime.workControlService.request(target, WorkControlAction.FINALIZE).toControlOutcome(ControlKind.FINALIZE, diagnostics)
+  }
+
   override suspend fun launch(item: WorkItem, agentId: String?): ControlOutcome {
     val session = currentSession(item) ?: return ControlOutcome.Refused(ControlRejection.CHANGED_TARGET, null)
     val qaDevice = if (item.kind == WorkKind.Goal || item.control.phaseId == SkeletonDefinition.QA.id) when (val result = readQaDevice()) {

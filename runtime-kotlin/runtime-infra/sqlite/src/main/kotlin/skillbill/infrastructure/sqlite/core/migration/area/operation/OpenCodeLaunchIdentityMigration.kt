@@ -5,7 +5,7 @@ import skillbill.infrastructure.sqlite.core.schema.recordOpenCodeLaunchIdentity
 
 internal fun openCodeLaunchIdentityMigration(): DatabaseMigration =
   DatabaseMigration(
-    version = 127,
+    version = 130,
     name = "record-opencode-launch-identity",
     operation = { connection ->
       recordOpenCodeLaunchIdentity(connection)

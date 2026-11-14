@@ -496,7 +496,8 @@
         it.kind === 'goal' ? '-' : null,
         it.kind === 'goal' ? { icon: 'pause', label: it.pauseRequested ? 'Pause requested' : 'Pause after subtask', kbd: 'P', act: 'pause-soft', arg: it.id, disabled: !X.pauseEligible(it) } : null,
         it.kind === 'goal' ? { icon: 'stop', label: 'Pause', kbd: '⇧ P', act: 'pause-now', arg: it.id, danger: true, disabled: !X.controllable(it) } : null,
-        X.resumable(it) ? { icon: 'play', label: ro.launchLabel || 'Resume', kbd: 'R', act: 'launch', arg: it.id, disabled: !ro.canLaunch } : null,
+        X.resumable(it) ? { icon: 'play', label: ro.launchLabel || 'Resume', kbd: 'R', act: 'launch', arg: it.id } : null,
+        ro.canFinalize ? { icon: 'checkCircle', label: 'Finalize', act: 'finalize', arg: it.id } : null,
         { icon: 'x', label: 'Cancel', act: 'cancel', arg: it.id, danger: true, disabled: !ro.canCancel },
       ].filter(Boolean) });
     }
@@ -556,7 +557,8 @@
         st.view !== 'detail' && { id: 'open:' + it.id, icon: 'external', label: `Open ${X.rowKey(it)}`, kbd: '↵' },
         X.pauseEligible(it) && { id: 'pause-soft:' + it.id, icon: 'pause', label: 'Pause after subtask', kbd: 'P' },
         X.controllable(it) && { id: 'pause-now:' + it.id, icon: 'stop', label: 'Pause now', kbd: '⇧ P' },
-        X.resumable(it) && ro.canLaunch && { id: 'launch:' + it.id, icon: 'play', label: ro.launchLabel || 'Resume', kbd: 'R' },
+        X.resumable(it) && { id: 'launch:' + it.id, icon: 'play', label: ro.launchLabel || 'Resume', kbd: 'R' },
+        ro.canFinalize && { id: 'finalize:' + it.id, icon: 'checkCircle', label: 'Finalize' },
         ro.canCancel && { id: 'cancel:' + it.id, icon: 'x', label: 'Cancel' },
         it.reason && { id: 'copy:' + it.reason, icon: 'copy', label: 'Copy reason' },
         { id: 'term-here:' + it.id, icon: 'terminal', label: `Open terminal in ${it.repo}` },
@@ -1070,7 +1072,7 @@
       if (!it || !it.runOptions || !it.runOptions.canLaunch) return render();
       const agent = st.chosenAgent[id] || it.runOptions.agentId;
       if (!agent) { const btn = root.querySelector(`[data-act="agent-menu"][data-arg="${id}"]`); if (btn) return A['agent-menu'](id, btn); }
-      Object.assign(it, { lifecycle: 'active', live: true, pauseRequested: false, finishedAt: null, finishedAgo: null, liveness: 'live', reason: null, incident: null, agent, section: it.kind === 'goal' ? 'goals' : it.kind === 'operation' ? 'operations' : 'phases', runOptions: Object.assign({}, it.runOptions, { canLaunch: false, canCancel: true }) });
+      Object.assign(it, { lifecycle: 'active', live: true, pauseRequested: false, finishedAt: null, finishedAgo: null, liveness: 'live', reason: null, incident: null, agent, section: it.kind === 'goal' ? 'goals' : it.kind === 'operation' ? 'operations' : 'phases', runOptions: Object.assign({}, it.runOptions, { canLaunch: false, canCancel: true, canFinalize: false }) });
       (it.flowEvents ||= []).push({ name: 'Run resumed', t: `Continuing at ${it.step}.` });
       render(); toast({ state: 'active', frac: 0.2, title: `${it.runOptions.launchLabel || 'Resume'} requested`, body: `Starts the installed ${agent} harness.` });
     },
@@ -1080,7 +1082,18 @@
       st.chosenAgent[id] = agent; st.popover = null; render();
       if (after && id.startsWith('spec:')) A['spec-start'](id.slice(5));
     },
-    cancel(id) { const it = item(id); st.popover = null; if (!it || !it.runOptions || !it.runOptions.canCancel) return render(); Object.assign(it, { lifecycle: 'canceled', section: 'finished', live: false, liveness: 'idle', reason: null, incident: null, pauseRequested: false, runOptions: Object.assign({}, it.runOptions, { canCancel: false, canLaunch: true, launchLabel: 'Run again' }) }); (it.flowEvents ||= []).push({ name: 'Canceled', status: 'canceled', t: 'Branch and commits retained.' }); render(); toast({ state: 'canceled', title: 'Cancel recorded', body: `${X.rowKey(it)} is marked canceled. Its branch and commits stay.` }); },
+    finalize(id) {
+      const it = item(id); st.popover = null;
+      if (!it || !it.runOptions || !it.runOptions.canFinalize) return render();
+      const keepLaunch = it.kind === 'phase' && it.phase === 'validation';
+      Object.assign(it, {
+        section: 'finished',
+        runOptions: Object.assign({}, it.runOptions, { canFinalize: false, canLaunch: keepLaunch ? it.runOptions.canLaunch : false }),
+      });
+      (it.flowEvents ||= []).push({ name: 'Finalized', t: 'Run recorded as finished.' });
+      render(); toast({ icon: 'checkCircle', title: 'Finalize recorded' });
+    },
+    cancel(id) { const it = item(id); st.popover = null; if (!it || !it.runOptions || !it.runOptions.canCancel) return render(); Object.assign(it, { lifecycle: 'canceled', section: 'finished', live: false, liveness: 'idle', reason: null, incident: null, pauseRequested: false, runOptions: Object.assign({}, it.runOptions, { canCancel: false, canLaunch: true, canFinalize: false, launchLabel: 'Run again' }) }); (it.flowEvents ||= []).push({ name: 'Canceled', status: 'canceled', t: 'Branch and commits retained.' }); render(); toast({ state: 'canceled', title: 'Cancel recorded', body: `${X.rowKey(it)} is marked canceled. Its branch and commits stay.` }); },
     prereq(key) { st.prereqs.has(key) ? st.prereqs.delete(key) : st.prereqs.add(key); render(); },
     recover(id) { const it = item(id); if (!it || !X.recoveryOffered(st, it)) return; st.dialog = { type: 'recover', arg: id }; render(); },
     'recover-confirm'(id) { st.recovered.add(id); st.dialog = null; render(); toast({ icon: 'refresh', title: 'Recovery request finished', body: 'Incident details were refreshed.' }); },

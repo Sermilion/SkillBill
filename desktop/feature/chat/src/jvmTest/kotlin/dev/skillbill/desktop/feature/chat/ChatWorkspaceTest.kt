@@ -449,6 +449,37 @@ class ChatWorkspaceTest {
     workspace.closeAll()
   }
 
+  @Test
+  fun `verify fixes retain the original branch after its checkout is deleted and the chat is reopened`() = runTest {
+    val checkout = worktreeDir()
+    val item = workItem("SONA-1").copy(
+      kind = WorkKind.Operation,
+      runKindLabel = "verify",
+      repositoryRoot = checkout,
+      primaryRepositoryRoot = "/repo",
+      branch = "feature/verified-work",
+    )
+    details.details = mapOf(item.id to MutableStateFlow(loaded(item)))
+    val workspace = workspace()
+    workspace.open(item)
+    runCurrent()
+    assertEquals(checkout, chat.requests.single().scope.repositoryRoot)
+
+    Path.of(checkout).toFile().deleteRecursively()
+    workspace.send(item.id, "Fix the verify findings directly")
+    runCurrent()
+    val scope = assertIs<ChatScope.Execution>(chat.requests.last().scope)
+    assertEquals("/repo", scope.repositoryRoot)
+    assertEquals("feature/verified-work", scope.verifySourceBranch)
+    workspace.closeAll()
+
+    val reopened = workspace()
+    reopened.open(item)
+    runCurrent()
+    assertEquals("feature/verified-work", assertIs<ChatScope.Execution>(chat.requests.last().scope).verifySourceBranch)
+    reopened.closeAll()
+  }
+
   // Resuming a Claude session whose file stayed in the worktree's project directory would find no session in the repository root.
   @Test
   fun `a failed or throwing session move restarts a started claude session with a new id and says so`() = runTest {

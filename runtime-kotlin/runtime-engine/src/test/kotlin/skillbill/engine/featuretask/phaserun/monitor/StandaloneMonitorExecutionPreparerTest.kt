@@ -119,6 +119,12 @@ private class RecordingResources : StandaloneMonitorResources {
       settlement
     }
 
+  override fun deferUntilFinalize(request: MonitorSettleRequest): MonitorSettlement =
+    step("deferUntilFinalize") { settlement }
+
+  override fun finalizeDeferredRemoval(admissionDirectory: Path): MonitorSettlement =
+    step("finalizeDeferredRemoval") { settlement }
+
   override fun recoverStale(request: MonitorStaleRecoveryRequest): MonitorStaleRecovery =
     step("recoverStale") { recovery }
 
@@ -159,6 +165,27 @@ class StandaloneMonitorExecutionPreparerTest {
     intake: String? = PR_URL,
     expectedStaleOwner: MonitorExpectedOwnerToken? = null,
   ) = preparer.prepare(MonitorPreparationRequest(CALLER_ROOT, intake, "feat/x", expectedStaleOwner))
+
+  @Test
+  fun `completed cleanup defers removal, unregisters the exit hook, and later settle is a no-op`() {
+    val prepared = assertIs<MonitorPreparation.Prepared>(prepare())
+    resources.settlement =
+      MonitorSettlement.Retained(
+        MonitorRetentionReason.AWAITING_FINALIZE,
+        Path.of("/wt"),
+        "awaiting operator finalize",
+      )
+
+    val deferred =
+      prepared.cleanup.deferUntilFinalize(MonitorPrimaryOutcome(MonitorOutcomeKind.COMPLETED, "completed"))
+
+    assertEquals(resources.settlement, deferred)
+    assertEquals(1, resources.calls.count { it == "deferUntilFinalize" })
+    assertEquals(0, resources.calls.count { it == "settle" })
+    assertTrue(shutdownHooks.registered.isEmpty())
+    assertEquals(deferred, prepared.cleanup.settleCompleted())
+    assertEquals(0, resources.calls.count { it == "settle" })
+  }
 
   @Test
   fun `a prepared invocation hands back an execution context and keeps its resources until settled`() {

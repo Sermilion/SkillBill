@@ -29,6 +29,8 @@ interface WorkControlRepository {
 
   suspend fun cancel(item: WorkItem): ControlOutcome
 
+  suspend fun finalize(item: WorkItem): ControlOutcome
+
   suspend fun launch(item: WorkItem, agentId: String?): ControlOutcome
 
   suspend fun startGoal(repoRoot: String, issueKey: String, agentId: String?): ControlOutcome

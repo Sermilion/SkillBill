@@ -23,6 +23,8 @@ object EmptyOperationCardRepository : OperationCardRepository {
 
   override fun findByLaunch(launchId: String): OperationCardProjection? = null
 
+  override fun findLaunchContextByInvocation(invocationId: String): OperationLaunchContext? = null
+
   override fun admitConfirmation(
     token: String,
     selection: String?,

@@ -198,4 +198,19 @@ class ChatSystemPromptTest {
     assertFalse("Route applicable work through Sona" in prompt)
     assertFalse("Readiness advice" in prompt)
   }
+
+  @Test
+  fun `verify follow up fixes require the recorded branch even when chat runs in the primary checkout`() {
+    val prompt = scopeSystemPrompt(
+      ChatScope.Execution("verify-1", WorkKind.Operation, null, "Verify", "/work/main", "feature/verified-work"),
+    )
+
+    assertTrue("Verify source branch: feature/verified-work" in prompt)
+    assertTrue("use the original checkout holding the recorded source branch" in prompt)
+    assertTrue("Never use it for run chat fixes, even if it still exists" in prompt)
+    assertTrue("ask the operator\nto resolve the checkout before editing" in prompt)
+    val ordinary = scopeSystemPrompt(ChatScope.Execution("review-1", WorkKind.Phase, null, "Review", "/work/main"))
+    assertFalse("Verify source branch:" in ordinary)
+    assertTrue("All fixes requested through run chat belong in the run's original source checkout on its original branch" in ordinary)
+  }
 }
