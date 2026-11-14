@@ -7,18 +7,22 @@ import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatChangesBaseline
 import dev.skillbill.desktop.core.domain.model.ChatFailure
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
+import dev.skillbill.desktop.core.domain.model.ChatHistoryRead
 import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
 import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
 import dev.skillbill.desktop.core.domain.model.ChatNewTaskContext
-import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
+import dev.skillbill.desktop.core.domain.model.ChatStoreRead
+import dev.skillbill.desktop.core.domain.model.ChatStoreReadFailure
 import dev.skillbill.desktop.core.domain.model.ChatRecoveryEntry
 import dev.skillbill.desktop.core.domain.model.ChatRecoveryReason
 import dev.skillbill.desktop.core.domain.model.SavedChatProjection
+import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.NewTaskActionKind
 import dev.skillbill.desktop.core.domain.model.OperationCardReference
 import dev.skillbill.desktop.core.domain.model.OperationCardState
 import dev.skillbill.desktop.core.domain.model.VerifyQaChoice
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -31,12 +35,16 @@ import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.jsonObject
 import me.tatarka.inject.annotations.Inject
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
 import java.io.File
 import java.io.IOException
 import java.nio.file.Files
+import java.nio.file.StandardCopyOption.ATOMIC_MOVE
 import java.nio.file.StandardCopyOption.REPLACE_EXISTING
+import java.util.logging.Level
+import java.util.logging.Logger
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Instant
@@ -49,6 +57,7 @@ internal const val CHAT_STORE_PATH = ".skill-bill/desktop/chats"
 private const val CHATS_PER_EXECUTION = 20
 private val ORPHAN_AGE = 7.days
 private val safeSessionId = Regex("[A-Za-z0-9._-]+")
+private val chatStoreLogger = Logger.getLogger("dev.skillbill.desktop.chat.store")
 
 /** One Junie exchange; Junie cannot resume a session, so each turn replays these. */
 internal data class ChatExchange(val operator: String, val agent: String)
@@ -88,6 +97,9 @@ private object ChatStoreKeys {
   const val OPERATOR = "operator"
   const val AGENT = "agent"
   const val NEW_TASK_ROOT = "new_task_repository_root"
+  const val NEW_TASK_CONTEXT_VERSION = "new_task_context_version"
+  const val NEW_TASK_WORKING_DIRECTORY = "new_task_working_directory"
+  const val NEW_TASK_SELECTED_REPOSITORY_ROOT = "new_task_selected_repository_root"
   const val NEW_TASK_BASE_BRANCH = "new_task_base_branch"
   const val NEW_TASK_SESSION_ESTABLISHED = "new_task_session_established"
   const val NEW_TASK_PENDING_TURN_LINE_INDEX = "new_task_pending_turn_line_index"
@@ -142,27 +154,35 @@ private data class StoredChat(
   val summary: String? = null,
   val summarySourceUpdatedAt: Instant? = null,
   val executionCheckoutRoot: String? = null,
+  val source: JsonObject = JsonObject(emptyMap()),
 )
 
 /**
  * Saved chats, one JSON file per session under the user's home, so a chat and its agent session outlive the window. Every
- * read-modify-write holds one lock; callers run it off the UI thread. An unreadable existing file is never replaced by defaults.
+ * read-modify-write holds one lock; callers run it off the UI thread. Invalid files are retained and excluded from updates
+ * and orphan sweeping.
  */
 @Inject
 @SingleIn(AppScope::class)
 class ChatStore(host: HostEnvironment, private val diagnostics: Diagnostics, private val clock: Clock) {
   private val directory = File(host.userHome, CHAT_STORE_PATH)
   private val lock = Any()
+  private var scanFailure: ChatStoreReadFailure? = null
 
-  internal fun agentSession(sessionId: String): String? = read(sessionId)?.agentSession
+  internal fun agentSession(sessionId: String): String? = (agentSessionRead(sessionId) as? ChatStoreRead.Value)?.value
+
+  internal fun agentSessionRead(sessionId: String): ChatStoreRead<String?> = read(sessionId).map { it.agentSession }
 
   internal fun saveAgentSession(sessionId: String, agentSession: String) =
     update(sessionId) { stored, _ -> stored.copy(agentSession = agentSession) }
 
-  internal fun cursorSessionBinding(sessionId: String): CursorSessionBinding? = read(sessionId)?.let { chat ->
-    val profile = chat.cursorProfileIdentity ?: return@let null
-    val workingDirectory = chat.cursorWorkingDirectory ?: return@let null
-    CursorSessionBinding(profile, workingDirectory)
+  internal fun cursorSessionBinding(sessionId: String): CursorSessionBinding? =
+    (cursorSessionBindingRead(sessionId) as? ChatStoreRead.Value)?.value
+
+  internal fun cursorSessionBindingRead(sessionId: String): ChatStoreRead<CursorSessionBinding?> = read(sessionId).map { chat ->
+    val profile = chat.cursorProfileIdentity
+    val workingDirectory = chat.cursorWorkingDirectory
+    if (profile == null || workingDirectory == null) null else CursorSessionBinding(profile, workingDirectory)
   }
 
   internal fun saveCursorSession(sessionId: String, agentSession: String, binding: CursorSessionBinding) =
@@ -174,22 +194,27 @@ class ChatStore(host: HostEnvironment, private val diagnostics: Diagnostics, pri
       )
     }
 
-  internal fun openCodeBinding(sessionId: String): OpenCodeSessionBinding? = read(sessionId)?.openCodeBinding
+  internal fun openCodeBinding(sessionId: String): OpenCodeSessionBinding? =
+    (read(sessionId) as? ChatStoreRead.Value)?.value?.openCodeBinding
 
   internal fun openCodeSavedState(sessionId: String): OpenCodeSavedState = synchronized(lock) {
     val file = fileFor(sessionId) ?: return@synchronized OpenCodeSavedState.Missing
     if (!file.isFile) return@synchronized OpenCodeSavedState.Missing
-    val stored = readFile(file) ?: return@synchronized OpenCodeSavedState.Unusable(file.absolutePath)
-    if (stored.invalidOpenCodeBinding || (stored.agentSession != null && stored.agent?.agentId != "opencode")) {
-      OpenCodeSavedState.Unusable(file.absolutePath)
-    } else {
-      OpenCodeSavedState.Readable(stored.agent?.agentId, stored.agentSession, stored.openCodeBinding)
+    when (val result = readFile(file)) {
+      is ChatStoreRead.Failed, ChatStoreRead.Missing -> OpenCodeSavedState.Unusable(file.absolutePath)
+      is ChatStoreRead.Value -> {
+        val stored = result.value
+        if (stored.invalidOpenCodeBinding || (stored.agentSession != null && stored.agent?.agentId != "opencode")) {
+          OpenCodeSavedState.Unusable(file.absolutePath)
+        } else {
+          OpenCodeSavedState.Readable(stored.agent?.agentId, stored.agentSession, stored.openCodeBinding)
+        }
+      }
     }
   }
 
-  internal fun savedEntry(sessionId: String): ChatHistoryEntry? = synchronized(lock) {
-    fileFor(sessionId)?.let(::readFile)?.toEntry()
-  }
+  internal fun savedEntry(sessionId: String): ChatHistoryEntry? =
+    (savedForRead(sessionId) as? ChatStoreRead.Value)?.value
 
   internal fun saveOpenCodeSession(
     sessionId: String,
@@ -197,9 +222,9 @@ class ChatStore(host: HostEnvironment, private val diagnostics: Diagnostics, pri
     binding: OpenCodeSessionBinding,
     history: ChatHistoryEntry? = null,
   ): Boolean = synchronized(lock) {
-    val current = fileFor(sessionId)?.let(::readFile)
-    if (current?.agentSession != null &&
-      (current.agentSession != agentSession || current.openCodeBinding != binding || current.agent?.agentId != "opencode")) return@synchronized false
+    val current = (readFile(fileFor(sessionId) ?: return@synchronized false) as? ChatStoreRead.Value)?.value
+    if (current?.needsRecovery() == true || (current?.agentSession != null &&
+      (current.agentSession != agentSession || current.openCodeBinding != binding || current.agent?.agentId != "opencode"))) return@synchronized false
     update(sessionId) { stored, _ ->
       stored.copy(
         executionId = history?.executionId ?: stored.executionId,
@@ -214,14 +239,18 @@ class ChatStore(host: HostEnvironment, private val diagnostics: Diagnostics, pri
     }
   }
 
-  internal fun exchanges(sessionId: String): List<ChatExchange> = read(sessionId)?.let { chat ->
-    if (chat.newTask != null) chat.lines.toExchanges() else chat.exchanges
-  }.orEmpty()
+  internal fun exchanges(sessionId: String): List<ChatExchange> = (exchangesRead(sessionId) as? ChatStoreRead.Value)?.value.orEmpty()
 
-  internal fun newTaskHistory(sessionId: String): List<ChatExchange> = read(sessionId)?.let { chat ->
-    val context = chat.newTask ?: return@let emptyList()
-    chat.lines.take(context.pendingTurnLineIndex ?: chat.lines.size).toExchanges()
-  }.orEmpty()
+  internal fun exchangesRead(sessionId: String): ChatStoreRead<List<ChatExchange>> = read(sessionId).map { chat ->
+    if (chat.newTask != null) chat.lines.toExchanges() else chat.exchanges
+  }.orElse(emptyList())
+
+  internal fun newTaskHistory(sessionId: String): List<ChatExchange> = (newTaskHistoryRead(sessionId) as? ChatStoreRead.Value)?.value.orEmpty()
+
+  internal fun newTaskHistoryRead(sessionId: String): ChatStoreRead<List<ChatExchange>> = read(sessionId).map { chat ->
+    val context = chat.newTask
+    if (context == null) emptyList() else chat.lines.take(context.pendingTurnLineIndex ?: chat.lines.size).toExchanges()
+  }.orElse(emptyList())
 
   internal fun saveExchanges(sessionId: String, exchanges: List<ChatExchange>) =
     update(sessionId) { stored, _ -> stored.copy(exchanges = exchanges) }
@@ -240,45 +269,56 @@ class ChatStore(host: HostEnvironment, private val diagnostics: Diagnostics, pri
     if (!saved) return false
     val executionId = entry.executionId ?: return saved
     synchronized(lock) {
-      chatsOf(executionId).filterNot(StoredChat::needsRecovery)
-        .drop(CHATS_PER_EXECUTION).forEach { fileFor(it.sessionId)?.delete() }
+      chatsOf(executionId).filterNot(StoredChat::needsRecovery).drop(CHATS_PER_EXECUTION).forEach { fileFor(it.sessionId)?.delete() }
     }
     return saved
   }
 
-  internal fun savedChats(executionId: String): SavedChatProjection = synchronized(lock) {
+  internal fun savedChats(executionId: String): SavedChatProjection = savedProjection(executionId = executionId)
+
+  internal fun savedChatsRead(executionId: String): ChatHistoryRead = synchronized(lock) {
     sweepOrphans()
-    val records = allFiles().map { file -> file to readFile(file) }
-    val entries = records.mapNotNull { (_, stored) -> stored?.takeIf { it.executionId == executionId && !it.needsRecovery() }?.toEntry() }
-    val recoveries = records.mapNotNull { (file, stored) ->
+    val reads = allFiles().map(::readFile)
+    ChatHistoryRead(
+      reads.mapNotNull { (it as? ChatStoreRead.Value)?.value }
+        .filter { it.executionId == executionId }.sortedByDescending { it.updatedAt ?: Instant.DISTANT_PAST }
+        .mapNotNull(StoredChat::toEntry),
+      reads.mapNotNull { (it as? ChatStoreRead.Failed)?.failure } + listOfNotNull(scanFailure),
+    )
+  }
+
+  internal fun newTaskDrafts(limit: Int? = null): SavedChatProjection = savedProjection(limit = limit, draftsOnly = true)
+
+  internal fun newTaskDraftsRead(limit: Int? = null): ChatHistoryRead = synchronized(lock) {
+    val reads = allFiles().map(::readFile)
+    val drafts = reads.mapNotNull { (it as? ChatStoreRead.Value)?.value }.filter { it.newTask != null }
+      .sortedByDescending { it.updatedAt ?: Instant.DISTANT_PAST }.mapNotNull(StoredChat::toEntry)
+    ChatHistoryRead(if (limit == null) drafts else drafts.take(limit), reads.mapNotNull { (it as? ChatStoreRead.Failed)?.failure } + listOfNotNull(scanFailure))
+  }
+
+  private fun savedProjection(executionId: String? = null, limit: Int? = null, draftsOnly: Boolean = false): SavedChatProjection = synchronized(lock) {
+    if (!draftsOnly) sweepOrphans()
+    val reads = allFiles().map { file -> file to readFile(file) }
+    val entries = reads.mapNotNull { (_, result) ->
+      val stored = (result as? ChatStoreRead.Value)?.value ?: return@mapNotNull null
+      if (stored.needsRecovery() || (executionId != null && stored.executionId != executionId) || (draftsOnly && stored.newTask == null)) {
+        return@mapNotNull null
+      }
+      stored.toEntry()
+    }.sortedByDescending { it.updatedAt }
+    val recoveries = reads.mapNotNull { (file, result) ->
+      val stored = (result as? ChatStoreRead.Value)?.value
       if (stored?.isResumeOnly() == true) return@mapNotNull null
       val relevant = when {
-        stored == null -> true
-        stored.executionId != null -> stored.executionId == executionId
-        stored.newTask != null -> false
+        result is ChatStoreRead.Failed -> true
+        stored == null -> false
+        executionId != null && stored.executionId != null -> stored.executionId == executionId
+        executionId != null && stored.newTask != null -> false
+        draftsOnly -> stored.executionId == null && (stored.newTask != null || stored.needsRecovery() || stored.toEntry() == null)
         else -> stored.needsRecovery() || stored.toEntry() == null
       }
       if (!relevant || (stored != null && !stored.needsRecovery() && stored.toEntry() != null)) return@mapNotNull null
       stored?.let { recoveryFor(file, it) } ?: recoveryFor(file, null)
-    }
-    SavedChatProjection(entries.sortedByDescending { it.updatedAt }, recoveries)
-  }
-
-  internal fun newTaskDrafts(limit: Int? = null): SavedChatProjection = synchronized(lock) {
-    val records = allFiles().map { file -> file to readFile(file) }
-    val drafts = records.mapNotNull { (_, stored) -> stored?.takeIf { it.newTask != null } }
-      .sortedByDescending { it.updatedAt ?: Instant.DISTANT_PAST }
-    val entries = drafts.filterNot(StoredChat::needsRecovery).mapNotNull(StoredChat::toEntry)
-    val recoveries = records.mapNotNull { (file, stored) ->
-      if (stored?.isResumeOnly() == true) return@mapNotNull null
-      val relevant = when {
-        stored == null -> true
-        stored.newTask != null -> stored.needsRecovery() || stored.toEntry() == null
-        stored.executionId != null -> false
-        else -> stored.needsRecovery() || stored.toEntry() == null
-      }
-      if (!relevant || (stored != null && !stored.needsRecovery() && stored.toEntry() != null)) return@mapNotNull null
-      recoveryFor(file, stored)
     }
     SavedChatProjection(if (limit == null) entries else entries.take(limit), recoveries)
   }
@@ -288,66 +328,165 @@ class ChatStore(host: HostEnvironment, private val diagnostics: Diagnostics, pri
   }
 
   /** The app's save of the chat whose own session or agent session is [sessionId], when it holds an operator message. */
-  internal fun savedFor(sessionId: String): ChatHistoryEntry? = synchronized(lock) {
-    (fileFor(sessionId)?.let(::readFile)?.toEntry())
-      ?: allFiles().mapNotNull(::readFile).firstOrNull { !it.needsRecovery() && it.agentSession == sessionId }?.toEntry()
+  internal fun savedFor(sessionId: String): ChatHistoryEntry? = (savedForRead(sessionId) as? ChatStoreRead.Value)?.value
+
+  internal fun savedForRead(sessionId: String): ChatStoreRead<ChatHistoryEntry?> = synchronized(lock) {
+    val directFile = fileFor(sessionId)
+    if (directFile == null) return@synchronized ChatStoreRead.Failed(failureFor(sessionId, "invalid session identifier"))
+    when (val direct = readFile(directFile)) {
+      is ChatStoreRead.Failed -> return@synchronized direct
+      is ChatStoreRead.Value -> {
+        val entry = direct.value.toEntry()
+        if (entry != null) return@synchronized ChatStoreRead.Value(entry)
+      }
+      ChatStoreRead.Missing -> Unit
+    }
+    val reads = allFiles().map(::readFile)
+    val match = reads.filterIsInstance<ChatStoreRead.Value<StoredChat>>().firstOrNull { it.value.agentSession == sessionId }
+    when {
+      match != null -> ChatStoreRead.Value(match.value.toEntry())
+      reads.any { it is ChatStoreRead.Failed } -> reads.first { it is ChatStoreRead.Failed } as ChatStoreRead.Failed
+      scanFailure != null -> ChatStoreRead.Failed(scanFailure!!)
+      else -> ChatStoreRead.Value(null)
+    }
   }
 
   /** Writes [summary] onto an existing record only, keeping `updated_at`, so a chat deleted during the call stays deleted. */
   internal fun saveSummary(sessionId: String, summary: String, sourceUpdatedAt: Instant): Boolean = synchronized(lock) {
     val file = fileFor(sessionId) ?: return@synchronized false
-    val stored = readFile(file)?.takeUnless(StoredChat::needsRecovery) ?: return@synchronized false
+    val stored = (readFile(file) as? ChatStoreRead.Value)?.value ?: return@synchronized false
     write(file, stored.copy(summary = summary, summarySourceUpdatedAt = sourceUpdatedAt))
   }
 
   /** The chat of [sessionId], found as [savedFor] finds it, when its summary is missing or older than its last save. */
-  internal fun staleForSummary(sessionId: String): ChatHistoryEntry? = synchronized(lock) {
-    val stored = fileFor(sessionId)?.let(::readFile)?.takeIf { !it.needsRecovery() && it.toEntry() != null }
-      ?: allFiles().mapNotNull(::readFile).firstOrNull { !it.needsRecovery() && it.agentSession == sessionId }
-    stored?.takeIf { it.needsSummary() }?.toEntry()
+  internal fun staleForSummary(sessionId: String): ChatHistoryEntry? =
+    (staleForSummaryRead(sessionId) as? ChatStoreRead.Value)?.value
+
+  internal fun staleForSummaryRead(sessionId: String): ChatStoreRead<ChatHistoryEntry?> = synchronized(lock) {
+    val direct = fileFor(sessionId)?.let(::readFile) ?: ChatStoreRead.Failed(failureFor(sessionId, "invalid session identifier"))
+    val stored = when (direct) {
+      is ChatStoreRead.Failed -> return@synchronized direct
+      ChatStoreRead.Missing -> {
+        val reads = allFiles().map(::readFile)
+        when {
+          reads.any { it is ChatStoreRead.Failed } -> return@synchronized reads.first { it is ChatStoreRead.Failed } as ChatStoreRead.Failed
+          scanFailure != null -> return@synchronized ChatStoreRead.Failed(scanFailure!!)
+          else -> reads.filterIsInstance<ChatStoreRead.Value<StoredChat>>().firstOrNull { it.value.agentSession == sessionId }?.value
+            ?: return@synchronized ChatStoreRead.Value(null)
+        }
+      }
+      is ChatStoreRead.Value -> direct.value
+    }
+    ChatStoreRead.Value(stored.takeIf { it.needsSummary() }?.toEntry())
   }
 
   /** Every chat that needs a summary, newest first, at most [limit]. */
-  internal fun staleSummaries(limit: Int): List<ChatHistoryEntry> = synchronized(lock) {
-    allFiles().mapNotNull(::readFile).filter { !it.needsRecovery() && it.needsSummary() }
-      .sortedByDescending { it.updatedAt ?: Instant.DISTANT_PAST }.take(limit).mapNotNull(StoredChat::toEntry)
+  internal fun staleSummaries(limit: Int): List<ChatHistoryEntry> = staleSummariesRead(limit).entries
+
+  internal fun staleSummariesRead(limit: Int): ChatHistoryRead = synchronized(lock) {
+    val reads = allFiles().map(::readFile)
+    ChatHistoryRead(
+      reads.mapNotNull { (it as? ChatStoreRead.Value)?.value }.filter { it.needsSummary() }
+        .sortedByDescending { it.updatedAt ?: Instant.DISTANT_PAST }.take(limit).mapNotNull(StoredChat::toEntry),
+      reads.mapNotNull { (it as? ChatStoreRead.Failed)?.failure } + listOfNotNull(scanFailure),
+    )
   }
 
   private fun chatsOf(executionId: String): List<StoredChat> =
-    allFiles().mapNotNull(::readFile).filter { it.executionId == executionId }.sortedByDescending { it.updatedAt ?: Instant.DISTANT_PAST }
+    allFiles().map(::readFile).mapNotNull { (it as? ChatStoreRead.Value)?.value }
+      .filter { it.executionId == executionId }.sortedByDescending { it.updatedAt ?: Instant.DISTANT_PAST }
 
   private fun sweepOrphans() {
     val cutoff = (clock.now() - ORPHAN_AGE).toEpochMilliseconds()
     allFiles().filter { file ->
-      file.lastModified() < cutoff && readFile(file)?.let { stored ->
-        !stored.needsRecovery() && !stored.isResumeOnly() && stored.executionId == null && stored.newTask == null
+      file.lastModified() < cutoff && (readFile(file) as? ChatStoreRead.Value)?.value?.let {
+        !it.needsRecovery() && !it.isResumeOnly() && it.toEntry() != null && it.executionId == null && it.newTask == null
       } == true
     }.forEach { it.delete() }
   }
 
-  private fun allFiles(): List<File> = directory.listFiles { file -> file.isFile && file.name.endsWith(".json") }?.toList().orEmpty()
+  private fun allFiles(): List<File> {
+    val files = try {
+      directory.listFiles { file -> file.name.endsWith(".json") }
+    } catch (_: SecurityException) {
+      null
+    }
+    if (files != null) {
+      scanFailure = null
+      return files.toList()
+    }
+    val directoryMissing = try {
+      Files.notExists(directory.toPath())
+    } catch (_: SecurityException) {
+      false
+    }
+    if (directoryMissing) {
+      scanFailure = null
+      return emptyList()
+    }
+    diagnostics.record("chat.store_scan_failed")
+    scanFailure = ChatStoreReadFailure(
+      "chat-store", directory.absolutePath, "the chat store directory could not be listed",
+      "Keep the directory contents unchanged and restore read access before retrying.",
+    )
+    chatStoreLogger.log(Level.WARNING, "chat.store_scan_failed ${directory.absolutePath.escapeLog()}")
+    return emptyList()
+  }
 
-  private fun read(sessionId: String): StoredChat? = synchronized(lock) { fileFor(sessionId)?.let(::readFile) }
+  private fun recoveryFor(file: File, stored: StoredChat?): ChatRecoveryEntry = ChatRecoveryEntry(
+    sessionId = file.name.removeSuffix(".json"),
+    originalDataPath = file.absolutePath,
+    reason = when {
+      stored == null -> ChatRecoveryReason.UnreadableFile
+      stored.invalidOpenCodeBinding -> ChatRecoveryReason.InvalidOpenCodeBinding
+      stored.needsRecovery() -> ChatRecoveryReason.OpenCodeHandleUnbound
+      else -> ChatRecoveryReason.MissingResumeMetadata
+    },
+    executionId = stored?.executionId,
+    repositoryRoot = stored?.newTask?.repositoryRoot,
+    title = stored?.lines?.firstOrNull { it.role == ChatHistoryRole.Operator }?.text,
+    updatedAt = stored?.updatedAt,
+    agentId = stored?.agent?.agentId,
+    lines = stored?.lines.orEmpty(),
+  )
+
+  private fun read(sessionId: String): ChatStoreRead<StoredChat> = synchronized(lock) {
+    val file = fileFor(sessionId) ?: return@synchronized ChatStoreRead.Failed(failureFor(sessionId, "invalid session identifier"))
+    readFile(file)
+  }
 
   private fun update(sessionId: String, change: (StoredChat, Boolean) -> StoredChat): Boolean = synchronized(lock) {
     val file = fileFor(sessionId) ?: return@synchronized false
-    val existing = readFile(file)
-    if (file.isFile && existing == null) return@synchronized false
-    if (existing?.needsRecovery() == true) return@synchronized false
+    val result = readFile(file)
+    val existing = when (result) {
+      is ChatStoreRead.Failed -> return@synchronized false
+      ChatStoreRead.Missing -> null
+      is ChatStoreRead.Value -> result.value.also { if (it.needsRecovery()) return@synchronized false }
+    }
     write(file, change(existing ?: StoredChat(sessionId), existing != null))
   }
 
   private fun write(file: File, stored: StoredChat): Boolean {
+    return replaceJson(file, encode(stored), "chat.store_write_failed") == null
+  }
+
+  private fun replaceJson(file: File, value: JsonObject, diagnostic: String): String? {
     val temporary = File(directory, "${file.name}.tmp")
     return try {
       directory.mkdirs()
-      temporary.writeText(encode(stored).toString(), Charsets.UTF_8)
-      Files.move(temporary.toPath(), file.toPath(), java.nio.file.StandardCopyOption.ATOMIC_MOVE, REPLACE_EXISTING)
-      true
-    } catch (_: IOException) {
-      diagnostics.record("chat.store_write_failed")
-      temporary.delete()
-      false
+      temporary.writeText(value.toString(), Charsets.UTF_8)
+      Files.move(temporary.toPath(), file.toPath(), ATOMIC_MOVE, REPLACE_EXISTING)
+      null
+    } catch (failure: IOException) {
+      diagnostics.record(diagnostic)
+      val reason = failure.message ?: failure::class.simpleName ?: "write failed"
+      chatStoreLogger.log(Level.WARNING, "$diagnostic ${reason.escapeLog()} ${file.absolutePath.escapeLog()}; temporary ${temporary.absolutePath.escapeLog()}")
+      reason
+    } catch (failure: SecurityException) {
+      diagnostics.record(diagnostic)
+      val reason = failure.message ?: failure::class.simpleName ?: "write denied"
+      chatStoreLogger.log(Level.WARNING, "$diagnostic ${reason.escapeLog()} ${file.absolutePath.escapeLog()}; temporary ${temporary.absolutePath.escapeLog()}")
+      reason
     }
   }
 
@@ -359,70 +498,107 @@ class ChatStore(host: HostEnvironment, private val diagnostics: Diagnostics, pri
     return File(directory, "$sessionId.json")
   }
 
-  private fun readFile(file: File): StoredChat? {
-    if (!file.isFile) return null
-    val fileSessionId = file.name.removeSuffix(".json")
-    val stored = try {
-      parseStreamLine(file.readText(Charsets.UTF_8))?.let { decode(it, fileSessionId, diagnostics) }
-    } catch (_: Exception) {
-      null
+  private fun readFile(file: File): ChatStoreRead<StoredChat> {
+    try {
+      val path = file.toPath()
+      if (Files.notExists(path)) return ChatStoreRead.Missing
+      if (!Files.exists(path)) return failed(file, "the source path exists but cannot be read", "chat.store_unreadable")
+      if (!Files.isRegularFile(path)) return failed(file, "the source path is not a regular chat file", "chat.store_unreadable")
+    } catch (failure: SecurityException) {
+      return failed(file, "source path access failed: ${failure.message ?: failure::class.simpleName}", "chat.store_unreadable")
     }
-    if (stored == null || stored.sessionId != fileSessionId) {
-      diagnostics.record("chat.store_unreadable")
-      return null
+    val source = try {
+      Json.parseToJsonElement(file.readText(Charsets.UTF_8)).jsonObject
+    } catch (failure: Exception) {
+      return failed(file, "unreadable JSON: ${failure::class.simpleName}", "chat.store_unreadable")
     }
-    return stored
+    var root = source
+    val version = root[ChatStoreKeys.NEW_TASK_CONTEXT_VERSION]
+    val workingDirectory = root[ChatStoreKeys.NEW_TASK_WORKING_DIRECTORY]
+    val selectedRoot = root[ChatStoreKeys.NEW_TASK_SELECTED_REPOSITORY_ROOT]
+    val legacyRoot = root[ChatStoreKeys.NEW_TASK_ROOT]
+    val otherDraftMarker = listOf(
+      ChatStoreKeys.NEW_TASK_BASE_BRANCH,
+      ChatStoreKeys.NEW_TASK_SESSION_ESTABLISHED,
+      ChatStoreKeys.NEW_TASK_PENDING_TURN_LINE_INDEX,
+      ChatStoreKeys.NEW_TASK_CHANGES_BASELINE,
+      ChatStoreKeys.NEW_TASK_CHANGES_CAPTURE_ATTEMPTED,
+      ChatStoreKeys.NEW_TASK_CHANGES_ATTRIBUTED_PATHS,
+    ).any(root::containsKey)
+    if (version == null && workingDirectory == null && selectedRoot == null && legacyRoot != null) {
+      val oldRoot = (legacyRoot as? JsonPrimitive)?.takeIf { it.isString }?.content
+      if (oldRoot.isNullOrBlank()) return failed(file, "legacy repository root is missing or blank", "chat.store_legacy_context_invalid")
+      root = JsonObject(root + mapOf(
+        ChatStoreKeys.NEW_TASK_CONTEXT_VERSION to JsonPrimitive(1),
+        ChatStoreKeys.NEW_TASK_WORKING_DIRECTORY to JsonPrimitive(oldRoot),
+        ChatStoreKeys.NEW_TASK_SELECTED_REPOSITORY_ROOT to JsonPrimitive(oldRoot),
+      ))
+      replaceJson(file, root, "chat.store_migration_failed")?.let { reason ->
+        return failed(file, "legacy context migration failed: $reason; inspect the source and sibling .tmp file", "chat.store_migration_failed")
+      }
+    } else if (version != null || workingDirectory != null || selectedRoot != null) {
+      val parsedVersion = (version as? JsonPrimitive)?.intOrNull
+      val directoryValue = (workingDirectory as? JsonPrimitive)?.takeIf { it.isString }?.content
+      val selectionValid = selectedRoot == JsonNull || (selectedRoot as? JsonPrimitive)?.let { it.isString && it.content.isNotBlank() } == true
+      if (parsedVersion != 1 || directoryValue.isNullOrBlank() || selectedRoot == null || !selectionValid) {
+        return failed(file, "unsupported version or malformed explicit new-task context", "chat.store_context_invalid")
+      }
+    } else if (otherDraftMarker) {
+      return failed(file, "legacy new-task markers are incomplete", "chat.store_legacy_context_invalid")
+    }
+    return try {
+      ChatStoreRead.Value(decode(root, file.name.removeSuffix(".json"), diagnostics))
+    } catch (failure: Exception) {
+      failed(file, "record decoding failed: ${failure::class.simpleName}", "chat.store_decode_failed")
+    }
   }
 
-  private fun recoveryFor(file: File, stored: StoredChat?): ChatRecoveryEntry = ChatRecoveryEntry(
-    sessionId = file.name.removeSuffix(".json"),
-    originalDataPath = file.absolutePath,
-    reason = when {
-      stored == null -> ChatRecoveryReason.UnreadableFile
-      stored.invalidOpenCodeBinding -> ChatRecoveryReason.InvalidOpenCodeBinding
-      stored.needsRecovery() -> ChatRecoveryReason.OpenCodeHandleUnbound
-      stored.toEntry() == null -> ChatRecoveryReason.MissingResumeMetadata
-      else -> ChatRecoveryReason.MissingResumeMetadata
-    },
-    executionId = stored?.executionId,
-    repositoryRoot = stored?.newTask?.repositoryRoot,
-    title = stored?.lines?.firstOrNull { it.role == ChatHistoryRole.Operator }?.text,
-    updatedAt = stored?.updatedAt,
-    agentId = stored?.agent?.agentId,
-    lines = stored?.lines.orEmpty(),
-  )
+  private fun failed(file: File, reason: String, diagnostic: String): ChatStoreRead.Failed {
+    diagnostics.record(diagnostic)
+    val failure = ChatStoreReadFailure(file.name.removeSuffix(".json"), file.absolutePath, reason, "Keep this file unchanged and recover it from the source path or its sibling .tmp file.")
+    chatStoreLogger.log(Level.WARNING, "$diagnostic ${reason.escapeLog()} ${file.absolutePath.escapeLog()}")
+    return ChatStoreRead.Failed(failure)
+  }
+
+  private fun failureFor(sessionId: String, reason: String) = ChatStoreReadFailure(sessionId, File(directory, "$sessionId.json").absolutePath, reason, "Check the saved chat file and restore it before retrying.")
 }
 
-private fun StoredChat.needsRecovery(): Boolean = invalidOpenCodeBinding ||
-  (agent?.agentId == "opencode" && ((agentSession != null && openCodeBinding == null) ||
-    (agentSession.isNullOrBlank() && openCodeBinding != null)))
+private fun <T, R> ChatStoreRead<T>.map(transform: (T) -> R): ChatStoreRead<R> = when (this) {
+  ChatStoreRead.Missing -> ChatStoreRead.Missing
+  is ChatStoreRead.Failed -> this
+  is ChatStoreRead.Value -> ChatStoreRead.Value(transform(value))
+}
 
-private fun StoredChat.isResumeOnly(): Boolean =
-  executionId == null && newTask == null && lines.isEmpty() && exchanges.isEmpty() &&
-    !agentSession.isNullOrBlank() && summary == null && !needsRecovery()
+private fun <T> ChatStoreRead<T>.orElse(value: T): ChatStoreRead<T> = when (this) {
+  ChatStoreRead.Missing -> ChatStoreRead.Value(value)
+  is ChatStoreRead.Failed -> this
+  is ChatStoreRead.Value -> this
+}
+
+private fun String.escapeLog(): String = replace("\r", "\\r").replace("\n", "\\n")
 
 private fun StoredChat.toEntry(): ChatHistoryEntry? {
   val operator = lines.firstOrNull { it.role == ChatHistoryRole.Operator }
-  val openingReply = lines.firstOrNull { it.role == ChatHistoryRole.Agent && it.text.isNotBlank() }
   val boundExecution = executionId != null && newTask == null && agent?.agentId == "opencode" &&
     !agentSession.isNullOrBlank() && openCodeBinding != null
   if (operator == null && !boundExecution) return null
-  val title = operator?.text ?: openingReply?.text ?: "OpenCode conversation"
+  val title = operator?.text ?: lines.firstOrNull { it.role == ChatHistoryRole.Agent && it.text.isNotBlank() }?.text
+    ?: "OpenCode conversation"
   return ChatHistoryEntry(
-    sessionId,
-    executionId,
-    agent ?: return null,
-    updatedAt ?: Instant.DISTANT_PAST,
-    title,
-    lines,
-    newTask,
-    summary,
+    sessionId, executionId, agent ?: return null, updatedAt ?: Instant.DISTANT_PAST, title, lines, newTask, summary,
+    executionCheckoutRoot = executionCheckoutRoot ?: cursorWorkingDirectory,
   )
 }
 
 /** Staleness rule: a listable chat whose summary source differs from its `updated_at`. */
 private fun StoredChat.needsSummary(): Boolean =
   toEntry() != null && summarySourceUpdatedAt?.toEpochMilliseconds() != updatedAt?.toEpochMilliseconds()
+
+private fun StoredChat.needsRecovery(): Boolean = invalidOpenCodeBinding ||
+  (agent?.agentId == "opencode" && ((agentSession != null && openCodeBinding == null) || (agentSession.isNullOrBlank() && openCodeBinding != null)))
+
+private fun StoredChat.isResumeOnly(): Boolean = executionId == null && newTask == null && lines.isEmpty() && exchanges.isEmpty() &&
+  !agentSession.isNullOrBlank() && summary == null && !needsRecovery()
 
 private fun List<ChatHistoryLine>.toExchanges(): List<ChatExchange> = buildList {
   var index = 0
@@ -449,7 +625,37 @@ private fun List<ChatHistoryLine>.toExchanges(): List<ChatExchange> = buildList 
   }
 }
 
+private val REWRITTEN_CHAT_KEYS = setOf(
+    ChatStoreKeys.EXECUTION_ID,
+    ChatStoreKeys.AGENT_ID,
+    ChatStoreKeys.MODEL,
+    ChatStoreKeys.EFFORT,
+    ChatStoreKeys.PROFILE,
+    ChatStoreKeys.UPDATED_AT,
+    ChatStoreKeys.AGENT_SESSION,
+    ChatStoreKeys.CURSOR_PROFILE_IDENTITY,
+    ChatStoreKeys.CURSOR_WORKING_DIRECTORY,
+    ChatStoreKeys.OPENCODE_PROFILE_IDENTITY,
+    ChatStoreKeys.OPENCODE_CONFIG_IDENTITY,
+    ChatStoreKeys.OPENCODE_DATA_ROOT,
+    ChatStoreKeys.OPENCODE_WORKING_DIRECTORY,
+    ChatStoreKeys.SUMMARY,
+    ChatStoreKeys.SUMMARY_SOURCE_UPDATED_AT,
+    ChatStoreKeys.EXECUTION_CHECKOUT_ROOT,
+    ChatStoreKeys.NEW_TASK_ROOT,
+    ChatStoreKeys.NEW_TASK_CONTEXT_VERSION,
+    ChatStoreKeys.NEW_TASK_WORKING_DIRECTORY,
+    ChatStoreKeys.NEW_TASK_SELECTED_REPOSITORY_ROOT,
+    ChatStoreKeys.NEW_TASK_BASE_BRANCH,
+    ChatStoreKeys.NEW_TASK_SESSION_ESTABLISHED,
+    ChatStoreKeys.NEW_TASK_PENDING_TURN_LINE_INDEX,
+    ChatStoreKeys.NEW_TASK_CHANGES_BASELINE,
+    ChatStoreKeys.NEW_TASK_CHANGES_CAPTURE_ATTEMPTED,
+    ChatStoreKeys.NEW_TASK_CHANGES_ATTRIBUTED_PATHS,
+)
+
 private fun encode(chat: StoredChat): JsonObject = buildJsonObject {
+  chat.source.forEach { (key, value) -> if (key !in REWRITTEN_CHAT_KEYS) put(key, value) }
   put(ChatStoreKeys.SESSION_ID, chat.sessionId)
   chat.executionId?.let { put(ChatStoreKeys.EXECUTION_ID, it) }
   chat.agent?.let { agent ->
@@ -485,7 +691,14 @@ private fun encode(chat: StoredChat): JsonObject = buildJsonObject {
     put(ChatStoreKeys.OPENCODE_WORKING_DIRECTORY, binding.workingDirectory)
   }
   chat.newTask?.let { newTask ->
-    put(ChatStoreKeys.NEW_TASK_ROOT, newTask.repositoryRoot)
+    put(ChatStoreKeys.NEW_TASK_CONTEXT_VERSION, 1)
+    put(ChatStoreKeys.NEW_TASK_WORKING_DIRECTORY, newTask.workingDirectory)
+    if (newTask.selectedRepositoryRoot == null) {
+      put(ChatStoreKeys.NEW_TASK_SELECTED_REPOSITORY_ROOT, JsonNull)
+    } else {
+      put(ChatStoreKeys.NEW_TASK_SELECTED_REPOSITORY_ROOT, newTask.selectedRepositoryRoot)
+      put(ChatStoreKeys.NEW_TASK_ROOT, newTask.selectedRepositoryRoot)
+    }
     newTask.baseBranch?.let { put(ChatStoreKeys.NEW_TASK_BASE_BRANCH, it) }
     put(ChatStoreKeys.NEW_TASK_SESSION_ESTABLISHED, newTask.sessionEstablished)
     put(ChatStoreKeys.NEW_TASK_CHANGES_CAPTURE_ATTEMPTED, newTask.changesCaptureAttempted)
@@ -521,8 +734,9 @@ private fun decode(root: JsonObject, fallbackSessionId: String, diagnostics: Dia
     ChatStoreKeys.OPENCODE_DATA_ROOT,
     ChatStoreKeys.OPENCODE_WORKING_DIRECTORY,
   )
-  val hasOpenCodeBinding = openCodeFields.any { root.containsKey(it) }
+  val hasOpenCodeBinding = openCodeFields.any(root::containsKey)
   val openCodeValues = openCodeFields.map { root.string(it)?.takeIf(String::isNotBlank) }
+  if (hasOpenCodeBinding && openCodeValues.any { it == null }) diagnostics.record("chat.opencode_binding_unreadable")
   return StoredChat(
     sessionId = root.string(ChatStoreKeys.SESSION_ID) ?: fallbackSessionId,
     executionId = root.string(ChatStoreKeys.EXECUTION_ID),
@@ -545,21 +759,21 @@ private fun decode(root: JsonObject, fallbackSessionId: String, diagnostics: Dia
     agentSession = root.string(ChatStoreKeys.AGENT_SESSION),
     cursorProfileIdentity = root.string(ChatStoreKeys.CURSOR_PROFILE_IDENTITY),
     cursorWorkingDirectory = root.string(ChatStoreKeys.CURSOR_WORKING_DIRECTORY),
-    openCodeBinding = if (hasOpenCodeBinding) {
-      val (profile, config, data, cwd) = openCodeValues
-      if (openCodeValues.all { it != null }) {
-        OpenCodeSessionBinding(requireNotNull(profile), requireNotNull(config), requireNotNull(data), requireNotNull(cwd))
-      }
-      else { diagnostics.record("chat.opencode_binding_unreadable"); null }
+    openCodeBinding = if (hasOpenCodeBinding && openCodeValues.all { it != null }) {
+      OpenCodeSessionBinding(requireNotNull(openCodeValues[0]), requireNotNull(openCodeValues[1]), requireNotNull(openCodeValues[2]), requireNotNull(openCodeValues[3]))
     } else null,
     invalidOpenCodeBinding = hasOpenCodeBinding && openCodeValues.any { it == null },
     exchanges = root.objects(ChatStoreKeys.EXCHANGES).mapNotNull { exchange ->
       val operator = exchange.string(ChatStoreKeys.OPERATOR) ?: return@mapNotNull null
       exchange.string(ChatStoreKeys.AGENT)?.let { ChatExchange(operator, it) }
     },
-    newTask = root.string(ChatStoreKeys.NEW_TASK_ROOT)?.let {
+    newTask = root.string(ChatStoreKeys.NEW_TASK_WORKING_DIRECTORY)?.let { workingDirectory ->
+      val selectedRoot = when (root[ChatStoreKeys.NEW_TASK_SELECTED_REPOSITORY_ROOT]) {
+        JsonNull -> null
+        else -> root.string(ChatStoreKeys.NEW_TASK_SELECTED_REPOSITORY_ROOT)
+      }
       ChatNewTaskContext(
-        it,
+        workingDirectory,
         root.string(ChatStoreKeys.NEW_TASK_BASE_BRANCH),
         (root[ChatStoreKeys.NEW_TASK_SESSION_ESTABLISHED] as? JsonPrimitive)?.content?.toBooleanStrictOrNull() ?: true,
         (root[ChatStoreKeys.NEW_TASK_PENDING_TURN_LINE_INDEX] as? JsonPrimitive)?.intOrNull,
@@ -568,11 +782,13 @@ private fun decode(root: JsonObject, fallbackSessionId: String, diagnostics: Dia
           ?: ((root[ChatStoreKeys.NEW_TASK_SESSION_ESTABLISHED] as? JsonPrimitive)?.content?.toBooleanStrictOrNull() != false
             || root[ChatStoreKeys.NEW_TASK_CHANGES_BASELINE] != null),
         decodeAttributedPaths(root[ChatStoreKeys.NEW_TASK_CHANGES_ATTRIBUTED_PATHS], diagnostics),
+        selectedRoot,
       )
     },
     summary = root.string(ChatStoreKeys.SUMMARY)?.takeIf { it.isNotBlank() },
     summarySourceUpdatedAt = (root[ChatStoreKeys.SUMMARY_SOURCE_UPDATED_AT] as? JsonPrimitive)?.longOrNull?.let(Instant::fromEpochMilliseconds),
     executionCheckoutRoot = root.string(ChatStoreKeys.EXECUTION_CHECKOUT_ROOT),
+    source = root,
   )
 }
 

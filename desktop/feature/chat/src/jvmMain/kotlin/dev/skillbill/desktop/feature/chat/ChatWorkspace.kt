@@ -879,7 +879,7 @@ class ChatWorkspace(
   private fun drainQueue(session: ChatSession) = synchronized(session) {
     if (session.recoveryOnly || !session.job.isActive || session.busyState.value || session.turnJob != null || session.resumeJob != null || session.goneState.value) return@synchronized
     val message = session.thread.takeQueuedMessage() ?: return@synchronized
-    if (message.action == null && cards(session).submitAdjustment(session.thread, message.text)) return@synchronized
+    if (message.action == null && cards(session).submitAdjustment(session.thread, message.text) == OperationCardCoordinator.AdjustmentSubmission.Accepted) return@synchronized
     session.busyState.value = true
     session.append(ChatMessage.Operator(message.text, message.action, message.images))
     if (message.pauseAndAct) pauseAndAct(session, message.text, message.images, message.cursorMcpDependency) else send(session, message.text, message.images, message.cursorMcpDependency)

@@ -9,24 +9,80 @@ import dev.skillbill.desktop.core.domain.model.VerifyQaChoice
 import dev.skillbill.desktop.core.domain.model.VerifyReviewModeChoice
 import dev.skillbill.desktop.core.domain.model.VerifyStartChoices
 import dev.skillbill.desktop.core.testing.RecordingDiagnostics
+import java.nio.file.Path
+import kotlinx.serialization.json.JsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlin.test.assertFalse
 
 class ChatReplyStreamTest {
+  private val repositoryPath = Path.of("repository-candidate").toAbsolutePath().toString()
+
   @Test
-  fun `message boundaries flush held text and actions without hiding the following message`() {
+  fun `repository candidate stays hidden across chunks and message boundaries until completed`() {
+    val diagnostics = RecordingDiagnostics()
+    val stream = ChatReplyStream(diagnostics)
+    val prefix = "I found it.\n\n"
+    val block = "```skillbill-repository\n{\"contract_version\":\"1\",\"path\":${JsonPrimitive(repositoryPath)}}\n```"
+    val first = prefix + block.take(13)
+    assertEquals(listOf(ChatEvent.TextDelta(prefix)), stream.accept(ChatEvent.TextDelta(first)))
+    assertEquals(listOf(ChatEvent.MessageStarted), stream.accept(ChatEvent.MessageStarted))
+    assertTrue(stream.accept(ChatEvent.TextDelta(block.drop(13))).none { it is ChatEvent.RepositoryCandidate })
+    assertEquals(
+      listOf(ChatEvent.RepositoryCandidate(repositoryPath), ChatEvent.Completed),
+      stream.accept(ChatEvent.Completed),
+    )
+    assertTrue(diagnostics.categories.isEmpty())
+  }
+
+  @Test
+  fun `invalid repository metadata produces a notice and never a candidate`() {
+    val malformed = listOf(
+      "```skillbill-repository\n{\"contract_version\":\"2\",\"path\":${JsonPrimitive(repositoryPath)}}\n```",
+      "```skillbill-repository\n{\"contract_version\":\"1\",\"path\":\"relative\"}\n```",
+      "```skillbill-repository\n{\"contract_version\":\"1\",\"path\":${JsonPrimitive(repositoryPath)},\"extra\":true}\n```",
+      "```skillbill-repository\n{\"contract_version\":\"1\",\"path\":${JsonPrimitive(repositoryPath)}}\n``` trailing",
+      "```skillbill-repository\n{\"contract_version\":\"1\",\"path\":${JsonPrimitive(repositoryPath)}}\n```\n```skillbill-repository\n{\"contract_version\":\"1\",\"path\":${JsonPrimitive(repositoryPath + "-other")}}\n```",
+      "```skillbill-repository\n{\"contract_version\":\"1\",\"path\":${JsonPrimitive(repositoryPath)}}\n```\n```skillbill-actions\n[]\n```",
+      "```skillbill-repository\n${"x".repeat(8_200)}\n```",
+    )
+    malformed.forEach { block ->
+      val diagnostics = RecordingDiagnostics()
+      val stream = ChatReplyStream(diagnostics)
+      stream.accept(ChatEvent.TextDelta(block))
+      val terminal = stream.accept(ChatEvent.Completed)
+      assertFalse(terminal.any { it is ChatEvent.RepositoryCandidate })
+      assertTrue(terminal.filterIsInstance<ChatEvent.TextDelta>().any { "could not use the repository selection block" in it.text })
+      assertTrue(diagnostics.categories.isNotEmpty())
+    }
+  }
+
+  @Test
+  fun `failed and unprompted repository replies cannot select`() {
+    val failed = ChatReplyStream(RecordingDiagnostics())
+    val block = "```skillbill-repository\n{\"contract_version\":\"1\",\"path\":${JsonPrimitive(repositoryPath)}}\n```"
+    failed.accept(ChatEvent.TextDelta(block))
+    assertFalse(failed.accept(ChatEvent.Failed(ChatFailure.ProcessFailed, null)).any { it is ChatEvent.RepositoryCandidate })
+
+    val unprompted = ChatReplyStream(RecordingDiagnostics(), allowRepositoryCandidates = false)
+    unprompted.accept(ChatEvent.TextDelta(block))
+    assertFalse(unprompted.accept(ChatEvent.Completed).any { it is ChatEvent.RepositoryCandidate })
+  }
+
+  @Test
+  fun `message boundaries retain actions until the turn ends without hiding the following message`() {
     val stream = ChatReplyStream(RecordingDiagnostics())
     assertEquals(listOf(ChatEvent.TextDelta("Before")), stream.accept(ChatEvent.TextDelta("Before`")))
-    assertEquals(listOf(ChatEvent.TextDelta("`"), ChatEvent.MessageStarted), stream.accept(ChatEvent.MessageStarted))
+    assertEquals(listOf(ChatEvent.MessageStarted), stream.accept(ChatEvent.MessageStarted))
     val action = ChatSuggestedAction("Inspect", "Inspect it", ChatPermissionMode.ReadOnly)
-    stream.accept(ChatEvent.TextDelta(
+    assertEquals(listOf(ChatEvent.TextDelta("`")), stream.accept(ChatEvent.TextDelta(
       "```skillbill-actions\n" +
         """[{"label":"Inspect","instruction":"Inspect it","mode":"read"}]""" + "\n```",
-    ))
-    assertEquals(listOf(ChatEvent.SuggestedActions(listOf(action)), ChatEvent.MessageStarted), stream.accept(ChatEvent.MessageStarted))
+    )))
+    assertEquals(listOf(ChatEvent.MessageStarted), stream.accept(ChatEvent.MessageStarted))
     assertEquals(listOf(ChatEvent.TextDelta("After")), stream.accept(ChatEvent.TextDelta("After")))
-    assertEquals(listOf(ChatEvent.Completed), stream.accept(ChatEvent.Completed))
+    assertEquals(listOf(ChatEvent.SuggestedActions(listOf(action)), ChatEvent.Completed), stream.accept(ChatEvent.Completed))
   }
 
   @Test

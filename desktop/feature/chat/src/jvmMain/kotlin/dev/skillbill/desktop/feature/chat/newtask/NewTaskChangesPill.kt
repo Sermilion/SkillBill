@@ -55,7 +55,7 @@ internal fun NewTaskChangesPill(changes: ChatChanges, expanded: Boolean, focusRe
 }
 
 @Composable
-internal fun ChatChangesAnchor(chat: NewTaskChat?, state: ChatChangesState, composerFocus: FocusRequester, onOpenChanges: (ChangesSource.Chat, String?) -> Unit = { _, _ -> }, repositoryRoot: String? = chat?.repositoryRoot) {
+internal fun ChatChangesAnchor(chat: NewTaskChat?, state: ChatChangesState, composerFocus: FocusRequester, onOpenChanges: (ChangesSource.Chat, String?) -> Unit = { _, _ -> }, repositoryRoot: String? = chat?.selectedRepositoryRoot) {
   LaunchedEffect(chat) { chat?.observeChanges() }
   val pillFocus = remember { FocusRequester() }
   var open by remember(chat) { mutableStateOf(false) }

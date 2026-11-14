@@ -14,4 +14,8 @@ internal class OperationCardRequests {
   operator fun get(launchId: String): NewTaskStart? = requests[launchId]
 
   operator fun contains(launchId: String): Boolean = requests.containsKey(launchId)
+
+  fun remove(launchId: String) {
+    requests.remove(launchId)
+  }
 }
