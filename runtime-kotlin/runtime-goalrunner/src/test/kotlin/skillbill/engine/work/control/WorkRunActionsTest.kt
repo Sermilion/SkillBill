@@ -52,6 +52,7 @@ import skillbill.ports.operation.EmptyOperationCardRepository
 import skillbill.ports.system.CheckedOutBranchSource
 import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.work.WorkRunLauncher
+import skillbill.ports.work.model.WorkRunExit
 import skillbill.ports.work.model.WorkRunLaunchKind
 import skillbill.ports.work.model.WorkRunLaunchRequest
 import skillbill.ports.work.model.WorkRunLaunchResult
@@ -66,10 +67,12 @@ import skillbill.workflow.decomposition.model.DecompositionDependency
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.decomposition.model.SpecSource
+import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStatus
 import java.nio.file.Path
 import java.sql.Connection
+import java.util.concurrent.CompletableFuture
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -159,29 +162,8 @@ class WorkRunActionsTest {
       val status = ideStatusService(database, manifests)
       val goals = testGoalRunnerStatusService(manifests, EmptyOutcomeStore, database = database, clock = ideStatusClock)
       val launches = mutableListOf<WorkRunLaunchRequest>()
-      val exit = java.util.concurrent.CompletableFuture<skillbill.ports.work.model.WorkRunExit>()
-      val launcher =
-        object : WorkRunLauncher {
-          override fun start(request: WorkRunLaunchRequest): WorkRunLaunchResult {
-            launches += request
-            return WorkRunLaunchResult.Started(root.resolve("goal.log"), exit)
-          }
-
-          override fun stop(request: WorkRunStopRequest) = WorkRunStopResult.NotRunning
-        }
-
-      fun target(): WorkRunTarget {
-        val item = assertNotNull(status.detail(WorkDetailRequest("goal-1")).item)
-        return WorkRunTarget(
-          "goal-1",
-          item.snapshot.repositoryIdentity,
-          Path.of(item.repositoryRoot),
-          item.snapshot.execution?.executionId,
-          item.snapshot.execution?.statusRevision,
-          item.snapshot.updatedAt,
-          assertNotNull(item.databaseFileObservation),
-        )
-      }
+      val exit = CompletableFuture<WorkRunExit>()
+      val launcher = recordingLauncher(root, launches, exit)
       val cancel =
         WorkCancellation(
           database,
@@ -191,7 +173,7 @@ class WorkRunActionsTest {
           ideStatusClock,
           launcher,
         )
-      assertEquals(WorkControlResult.Accepted, cancel.cancel(target()))
+      assertEquals(WorkControlResult.Accepted, cancel.cancel(goalOneTarget(status)))
       val canceled =
         database.read { unit ->
           listOf("goal-1", "w-child").map { assertNotNull(unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, it)) }
@@ -204,12 +186,12 @@ class WorkRunActionsTest {
       val actions = workRunActions(database, status, goals, launcher)
 
       val running =
-        actions.launchForTest(target(), "codex", QaNamedDevice(QaNamedDeviceKind.SERIAL, "R58M123"))
+        actions.launchForTest(goalOneTarget(status), "codex", QaNamedDevice(QaNamedDeviceKind.SERIAL, "R58M123"))
           as WorkControlResult.Running
       val failure = running.failure.toCompletableFuture()
       assertFalse(failure.isDone)
       exit.complete(
-        skillbill.ports.work.model.WorkRunExit(1, listOf("Durable execution plan refused: incompatible_descriptor.")),
+        WorkRunExit(1, listOf("Durable execution plan refused: incompatible_descriptor.")),
       )
       assertTrue(requireNotNull(failure.join()).contains("incompatible_descriptor"))
       assertTrue(requireNotNull(failure.join()).contains("goal.log"))
@@ -218,20 +200,7 @@ class WorkRunActionsTest {
           listOf("--qa-device", "serial:R58M123"),
         ),
       )
-
-      database.read { unit ->
-        canceled.forEach { prior ->
-          val resumed = assertNotNull(unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, prior.workflowId))
-          assertEquals(WorkflowStatus.PAUSED, resumed.workflowStatus)
-          assertNull(resumed.finishedAt)
-          assertEquals(prior.currentStepId, resumed.currentStepId)
-          assertEquals(prior.steps, resumed.steps)
-          assertEquals(prior.toRecord().artifactsJson, resumed.toRecord().artifactsJson)
-        }
-        val control = unit.goalRunnerControls.controlState("goal-1")
-        assertFalse(control.paused)
-        assertFalse(control.pauseRequested)
-      }
+      assertResumedSnapshots(database, canceled)
       assertEquals(1, launches.size)
       assertFalse(
         status.detail(WorkDetailRequest("goal-1")).item?.snapshot?.lifecycleState == IdeStatusLifecycleState.CANCELED,
@@ -574,6 +543,52 @@ class WorkRunActionsTest {
       it.setString(1, ideStatusObservedAt.minusSeconds(60).toString())
       it.setString(2, ideStatusObservedAt.minusSeconds(30).toString())
       it.executeUpdate()
+    }
+  }
+
+  private fun recordingLauncher(
+    root: Path,
+    launches: MutableList<WorkRunLaunchRequest>,
+    exit: CompletableFuture<WorkRunExit>,
+  ): WorkRunLauncher =
+    object : WorkRunLauncher {
+      override fun start(request: WorkRunLaunchRequest): WorkRunLaunchResult {
+        launches += request
+        return WorkRunLaunchResult.Started(root.resolve("goal.log"), exit)
+      }
+
+      override fun stop(request: WorkRunStopRequest) = WorkRunStopResult.NotRunning
+    }
+
+  private fun goalOneTarget(status: IdeStatusService): WorkRunTarget {
+    val item = assertNotNull(status.detail(WorkDetailRequest("goal-1")).item)
+    return WorkRunTarget(
+      "goal-1",
+      item.snapshot.repositoryIdentity,
+      Path.of(item.repositoryRoot),
+      item.snapshot.execution?.executionId,
+      item.snapshot.execution?.statusRevision,
+      item.snapshot.updatedAt,
+      assertNotNull(item.databaseFileObservation),
+    )
+  }
+
+  private fun assertResumedSnapshots(
+    database: DatabaseSessionFactory,
+    canceled: List<WorkflowStateSnapshot>,
+  ) {
+    database.read { unit ->
+      canceled.forEach { prior ->
+        val resumed = assertNotNull(unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, prior.workflowId))
+        assertEquals(WorkflowStatus.PAUSED, resumed.workflowStatus)
+        assertNull(resumed.finishedAt)
+        assertEquals(prior.currentStepId, resumed.currentStepId)
+        assertEquals(prior.steps, resumed.steps)
+        assertEquals(prior.toRecord().artifactsJson, resumed.toRecord().artifactsJson)
+      }
+      val control = unit.goalRunnerControls.controlState("goal-1")
+      assertFalse(control.paused)
+      assertFalse(control.pauseRequested)
     }
   }
 

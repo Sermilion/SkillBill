@@ -77,14 +77,14 @@ internal fun acpRejection(
 ): String {
   val provider = launch.provider
   val code = (error?.get(K.CODE) as? JsonPrimitive)?.intOrNull
-  val detail = error?.text(K.MESSAGE).orEmpty().take(MAX_REJECTION_DETAIL)
+  val detail = redactProviderDetail(error?.text(K.MESSAGE).orEmpty()).take(MAX_REJECTION_DETAIL)
   val suffix = "(code ${code ?: "absent"}): $detail"
   val setup = method == K.SESSION_NEW || method == K.SESSION_LOAD
   val login = provider.loginCommand
   return when {
     code == K.AUTH_REQUIRED_CODE && login != null ->
-      "${provider.name} requires authentication during $method; run `$login` outside the worker, then retry. " +
-        "No prompt was sent."
+      "${provider.name} requires authentication during $method; run `$login` outside the worker, then retry." +
+        if (method == K.SESSION_PROMPT) "" else " No prompt was sent."
     selectingModel ->
       "${provider.name} rejected the requested model '${launch.model}' $suffix. No prompt was sent."
     setup && (launch.mcpServers.isNotEmpty() || launch.additionalDirectories.isNotEmpty()) ->
@@ -95,3 +95,6 @@ internal fun acpRejection(
 }
 
 private const val MAX_REJECTION_DETAIL = 500
+
+private fun redactProviderDetail(value: String): String =
+  value.replace(Regex("(?i)(token|password|secret|api[_-]?key)(\\s*[:=]\\s*)[^\\s,;]+"), "\$1\$2[redacted]")

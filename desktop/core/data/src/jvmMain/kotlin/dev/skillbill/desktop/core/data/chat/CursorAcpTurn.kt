@@ -27,6 +27,7 @@ internal fun cursorAcpTurn(
   expectedDatabaseSession: DatabaseSessionComponent? = null,
   stopRequested: CompletableDeferred<String>? = null,
   onDisposition: (ChatEvent) -> Unit = {},
+  workingDirectory: String = openCodeBinding?.workingDirectory ?: request.scope.repositoryRoot,
 ): Flow<ChatEvent> = acpTurn(
   live,
   authority,
@@ -35,7 +36,7 @@ internal fun cursorAcpTurn(
   launchFactory = { dependency ->
     val (command, launch) = acpTurnLaunch(
       provider, shell, environment, request, saved, prompt, dependency,
-      openCodeBinding?.workingDirectory ?: request.scope.repositoryRoot,
+      workingDirectory,
     )
     command to launch.copy(mcpServers = mcpServers)
   },
@@ -52,4 +53,5 @@ internal fun cursorAcpTurn(
   expectedDatabaseSession = expectedDatabaseSession,
   stopRequested = stopRequested,
   onDisposition = onDisposition,
+  workingDirectory = workingDirectory,
 )

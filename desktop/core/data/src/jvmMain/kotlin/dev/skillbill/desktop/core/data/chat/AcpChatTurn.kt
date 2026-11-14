@@ -27,6 +27,7 @@ import kotlinx.coroutines.selects.SelectClause1
 import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import skillbill.contracts.approval.ApprovalRequestRecord
 import skillbill.contracts.system.AgentHomeEnvironmentKeys
 import skillbill.install.model.AGENT_LAUNCHER_CLIS
@@ -168,8 +169,8 @@ internal fun acpTurn(
   expectedDatabaseSession: DatabaseSessionComponent? = null,
   stopRequested: CompletableDeferred<String>? = null,
   onDisposition: (ChatEvent) -> Unit = {},
+  workingDirectory: String = openCodeBinding?.workingDirectory ?: request.scope.repositoryRoot,
 ): Flow<ChatEvent> = channelFlow {
-  val workingDirectory = openCodeBinding?.workingDirectory ?: request.scope.repositoryRoot
   val dependency = when (request.cursorMcpDependency) {
     CursorMcpDependency.ProjectUserOnly -> CursorAcpMcpDependency.ProjectUserOnly
     CursorMcpDependency.TeamDashboardRequired -> CursorAcpMcpDependency.TeamDashboardRequired
@@ -184,7 +185,7 @@ internal fun acpTurn(
   if (provider.exactModels && request.agent.effort != null) {
     diagnostics.record("chat.${provider.seam}_effort_refused")
     send(ChatEvent.Failed(ChatFailure.AgentUnsupported,
-      "${provider.name} selects exact model variants and takes no separate effort; choose a model variant instead. The chat was not started."))
+      "${provider.name} requires a complete model UID. Remove the separate effort setting; the chat was not started."))
     return@channelFlow
   }
   val inputs = Channel<ChatProcessInput>(Channel.UNLIMITED) { it.written.complete(false) }
@@ -203,6 +204,8 @@ internal fun acpTurn(
     saveSession = {
       if (provider == AcpProvider.OpenCode && openCodeBinding != null) {
         store.saveOpenCodeSession(request.sessionId, it, openCodeBinding, request.savedHistory)
+      } else if (provider == AcpProvider.Devin) {
+        request.savedHistory?.let { history -> store.saveDevinSession(request.sessionId, it, history) } ?: false
       } else if (binding == null) {
         true
       } else if (saved == null) {
@@ -277,16 +280,16 @@ internal fun acpTurn(
     when (output) {
       is ChatProcessOutput.Line -> protocol.observe(output.text)
       is ChatProcessOutput.StdoutEnded -> {
-        if (protocol.outcome() == null) {
+        if (protocol.outcome().let { it == null || it.deliveryUncertain }) {
           val reason = output.readFailure?.let { "${provider.name} stdout read failed: $it" }
             ?: "${provider.name} stdout disconnected."
-          generation.stop(listOf(reason, output.stderrTail).filter(String::isNotBlank).joinToString("\n"))
+          generation.stop(providerProcessFailure(provider, reason, output.stderrTail))
         }
       }
-      is ChatProcessOutput.Exited -> generation.stop(
-        "${provider.name} exited before prompt completion (${output.code}): ${output.stderrTail}",
-      )
-      is ChatProcessOutput.StartFailed -> generation.stop(output.message)
+      is ChatProcessOutput.Exited -> generation.stop(providerProcessFailure(
+        provider, "${provider.name} exited before prompt completion (${output.code}).", output.stderrTail,
+      ))
+      is ChatProcessOutput.StartFailed -> generation.stop(providerProcessFailure(provider, output.message, ""))
     }
   }
   @OptIn(ExperimentalCoroutinesApi::class)
@@ -307,6 +310,14 @@ internal fun acpTurn(
     while (protocol.outcome() == null) {
       val output = receiveOutput() ?: break
       accept(output)
+    }
+    if (protocol.outcome()?.deliveryUncertain == true) {
+      withTimeoutOrNull(OBSERVED_OUTPUT_DRAIN_MS) {
+        while (true) {
+          val output = outputs.receiveCatching().getOrNull() ?: break
+          accept(output)
+        }
+      }
     }
     val outcome = protocol.outcome()
     terminal = if (outcome?.failure == null && outcome != null) ChatEvent.Completed else
@@ -361,3 +372,17 @@ internal fun acpTurn(
   }
   cancelled?.let { throw it }
 }
+
+private const val OBSERVED_OUTPUT_DRAIN_MS = 5_000L
+
+private fun providerProcessFailure(provider: AcpProvider, primary: String, detail: String): String {
+  val recovery = "Install ${provider.name} and make its CLI available on PATH, then retry."
+  val observed = redactProviderDetail(detail)
+  return listOf(redactProviderDetail(primary), recovery, observed.takeIf(String::isNotBlank)).filterNotNull().joinToString(" ")
+}
+
+internal fun redactProviderDetail(value: String): String =
+  value.trim().takeLast(1_200).replace(
+    Regex("(?i)(token|password|secret|api[_-]?key)(\\s*[:=]\\s*)[^\\s,;]+"),
+    "\$1\$2[redacted]",
+  )

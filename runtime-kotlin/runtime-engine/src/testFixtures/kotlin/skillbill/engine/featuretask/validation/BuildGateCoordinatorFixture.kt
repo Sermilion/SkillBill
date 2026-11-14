@@ -14,6 +14,7 @@ import skillbill.ports.process.ShutdownHookPort
 import skillbill.ports.process.ShutdownHookRegistration
 import skillbill.ports.validation.ValidationGateRunner
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
+import skillbill.ports.workflow.gitops.WorkflowGitOperations
 
 fun buildFeatureTaskRuntimeBuildGateCoordinator(
   resolver: ValidationGateResolver,
@@ -21,13 +22,14 @@ fun buildFeatureTaskRuntimeBuildGateCoordinator(
   repoLocalConfig: RepoLocalConfigPort,
   diagnostics: RuntimeDiagnostics,
   shutdownHooks: ShutdownHookPort = NoShutdownHooks,
+  gitOperations: WorkflowGitOperations = NoopWorkflowGitOperations,
 ): FeatureTaskRuntimeBuildGateCoordinator {
   val strategies = statusProjectionPhaseStrategies()
   val validator = FeatureTaskRuntimeExecutionPlanSchemaValidator()
   val codec = featureTaskRuntimeExecutionPlanCodecForTest(validator)
   val plans =
     FeatureTaskRuntimeExecutionPlanResolver(
-      strategies, codec, validator, resolver, NoopWorkflowGitOperations, repoLocalConfig,
+      strategies, codec, validator, resolver, gitOperations, repoLocalConfig,
       FakeDatabaseSessionFactory(InMemoryWorkflowStates()),
       FeatureTaskRuntimeExecutionPlanCompatibility(codec, strategies),
       projectCheckCommandResolverForTests(),

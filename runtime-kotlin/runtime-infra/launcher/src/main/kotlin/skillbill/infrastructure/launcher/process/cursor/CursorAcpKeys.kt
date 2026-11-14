@@ -27,6 +27,7 @@ internal object CursorAcpKeys {
   const val ADDITIONAL_DIRECTORIES = "additionalDirectories"
   const val SESSION_CAPABILITIES = "sessionCapabilities"
   const val AUTH_REQUIRED_CODE = -32000
+  const val METHOD_NOT_FOUND_CODE = -32601
   const val PROMPT = "prompt"
   const val TYPE = "type"
   const val TEXT = "text"

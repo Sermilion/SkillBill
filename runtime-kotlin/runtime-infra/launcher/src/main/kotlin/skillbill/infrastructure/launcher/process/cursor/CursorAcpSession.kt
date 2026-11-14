@@ -80,6 +80,7 @@ data class CursorAcpOutcome(
   val sessionId: String?,
   val model: String?,
   val failure: String?,
+  val deliveryUncertain: Boolean = false,
 )
 
 class CursorAcpSession(
@@ -510,6 +511,24 @@ class CursorAcpSession(
       }
       return
     }
+    if (launch.provider != AcpProvider.Cursor) {
+      onEvent(CursorAcpEvent.Unsupported(method, ""))
+      record("seam=$seam outcome=unsupported_request method=$method")
+      write(
+        buildJsonObject {
+          put(K.JSONRPC, "2.0")
+          put(K.ID, id)
+          put(
+            K.ERROR,
+            buildJsonObject {
+              put(K.CODE, K.METHOD_NOT_FOUND_CODE)
+              put(K.MESSAGE, "Method not supported by $providerName.")
+            },
+          )
+        },
+      )
+      return
+    }
     reply(id, cursorExtensionAcceptance(method, message.obj(K.PARAMS)))
     record("seam=$seam outcome=extension_accepted method=$method")
   }
@@ -570,9 +589,22 @@ class CursorAcpSession(
   }
 
   private fun finish(failure: String?) {
-    synchronized(lock) {
-      if (closed || closing) return
-      closing = true
+    val superseded =
+      synchronized(lock) {
+        if (closing) return
+        val stored = result
+        if (closed) {
+          if (failure == null || stored == null || !stored.deliveryUncertain) return
+          result = stored.copy(failure = failure, deliveryUncertain = false)
+          true
+        } else {
+          closing = true
+          false
+        }
+      }
+    if (superseded) {
+      record("seam=$seam outcome=uncertain_write_superseded")
+      return
     }
     try {
       if (failure == null) permissions?.clear() else permissions?.release()
@@ -623,6 +655,7 @@ class CursorAcpSession(
             sessionId,
             model,
             "$providerName response delivery is uncertain; it will not be replayed.",
+            deliveryUncertain = true,
           )
       }
       record("seam=$seam outcome=uncertain_write")

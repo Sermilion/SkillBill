@@ -4,6 +4,7 @@ import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
+import dev.skillbill.desktop.core.domain.model.ChatSessionAcquisition
 import dev.skillbill.desktop.core.domain.model.ChatImage
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.CursorMcpDependency
@@ -25,6 +26,8 @@ import dev.skillbill.desktop.core.domain.repository.ExecutionChatRepository
 import dev.skillbill.desktop.core.domain.repository.WorkDetailRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.withLock
 import kotlin.time.Clock
 import java.io.File
@@ -154,7 +157,7 @@ internal class ChatTurns(
     val header = state?.header ?: session.item
     session.item = header
     if (session.thread.hasDeliveryClaim() || session.thread.delivery.value != null) return null
-    followRoot(session)
+    if (!followRoot(session)) return null
     session.coordinationModeState.value = coordinationModeFor(header)
     if (sections is DetailSections.Loaded) return ExecutionRead(header, sections.detail, sections.runOptions)
     session.append(ChatMessage.Notice(UNREADABLE_NOTICE))
@@ -162,20 +165,54 @@ internal class ChatTurns(
   }
 
   /** Follows a removed checkout, then ends the agent session when its root differs from the next turn's root. */
-  suspend fun followRoot(session: ChatSession) {
+  suspend fun followRoot(session: ChatSession): Boolean {
     followWorktree(session)
-    if (session.item.goalWorktree != null && session.started && session.startedRoot != session.item.workingRoot()) {
-      if (session.agentState.value?.agentId == "opencode") {
+    val agent = session.agentState.value
+    if (agent?.agentId == "devin" || agent?.agentId == "opencode") {
+      when (val acquisition = chat.acquisition(session.sessionId)) {
+        is ChatSessionAcquisition.Acquired -> {
+          val saved = acquisition.entry
+          val captured = saved.executionCheckoutRoot ?: saved.newTask?.workingDirectory
+          if (saved.agent.agentId != agent.agentId || saved.executionId != session.item.id || saved.newTask != null ||
+            captured == null || !session.canContinue(saved, session.item.workingRoot())) {
+            refuseProviderCheckout(session, agent.agentId)
+            return false
+          }
+          session.recordAcquired(agent.agentId, captured)
+        }
+        is ChatSessionAcquisition.Recovery -> {
+          refuseProviderCheckout(session, agent.agentId, acquisition.guidance)
+          return false
+        }
+        is ChatSessionAcquisition.Draft, ChatSessionAcquisition.Missing -> Unit
+      }
+      if (session.providerCheckoutRefused) return false
+    }
+    if (session.item.goalWorktree != null && session.started && session.startedRoot != null &&
+      !sameRealDirectory(session.startedRoot!!, session.item.workingRoot())) {
+      if (session.agentState.value?.agentId == "opencode" || session.agentState.value?.agentId == "devin") {
         if (!session.openCodeCheckoutChangedNoticed) {
           chat.end(session.sessionId)
+          session.providerCheckoutRefused = true
+          session.recoveryOnly = true
           session.openCodeCheckoutChangedNoticed = true
-          session.append(ChatMessage.Notice("This OpenCode conversation is bound to its saved checkout. Start a new chat to continue from the current checkout."))
+          session.append(ChatMessage.Notice("This ${session.agentState.value?.agentId} conversation is bound to its saved checkout. Restore that checkout or start a new chat."))
         }
       } else {
         chat.end(session.sessionId)
         session.restart(UUID.randomUUID().toString())
       }
     }
+    return !session.providerCheckoutRefused
+  }
+
+  private fun refuseProviderCheckout(session: ChatSession, provider: String, detail: String? = null) {
+    if (session.providerCheckoutRefused) return
+    session.providerCheckoutRefused = true
+    session.recoveryOnly = true
+    chat.end(session.sessionId)
+    session.append(ChatMessage.Notice(detail ?:
+      "This $provider conversation belongs to its original checkout, which is missing or different. Restore that checkout or start a separate new chat."))
   }
 
   /**
@@ -199,7 +236,7 @@ internal class ChatTurns(
 
   internal suspend fun followWorktreeWhileLocked(session: ChatSession) {
     if (session.thread.hasDeliveryClaim() || session.thread.delivery.value != null) return
-    session.recoveryOnly = false
+    if (!session.providerCheckoutRefused) session.recoveryOnly = false
     val item = session.item
     if (!session.worktreeRemovedNoticed) {
       val source = relocationSource(item)
@@ -312,17 +349,18 @@ internal class ChatTurns(
     images: List<ChatImage>,
     cursorMcpDependency: CursorMcpDependency,
   ): Boolean {
-    val root = header.workingRoot()
+    val root = session.capturedRoot ?: header.workingRoot()
+    session.recordRequestRoot(root)
     val scope = ChatScope.Execution(
       header.id, header.kind, header.issueKey, header.title, root,
       verifySourceBranch = if (header.kind == WorkKind.Operation && header.runKindLabel == "verify") {
         header.branch?.takeIf(String::isNotBlank) ?: "HEAD"
       } else null,
     )
-    val savedHistory = if (agent.agentId == "opencode") savedHistory(session, agent) else null
+    val savedHistory = if (agent.agentId == "opencode" || agent.agentId == "devin") savedHistory(session, agent, root) else null
     val request = ChatTurnRequest(
       session.sessionId,
-      !session.started,
+      !session.started && session.acquiredProvider != agent.agentId,
       agent,
       scope,
       ChatPermissionMode.Act,
@@ -346,6 +384,7 @@ internal class ChatTurns(
       }
     } finally {
       session.endStreaming()
+      withContext(NonCancellable) { refreshAcquisition(session, agent) }
     }
     if (session.started && delivered) save(session, agent)
     return delivered
@@ -387,8 +426,18 @@ internal class ChatTurns(
     session.endStreaming()
     session.append(ChatMessage.Notice(STOPPED_NOTICE))
     val agent = session.agentState.value
+    val acquisition = if (agent?.agentId == "devin" || agent?.agentId == "opencode") chat.acquisition(session.sessionId)
+      else ChatSessionAcquisition.Missing
+    val acquired = (acquisition as? ChatSessionAcquisition.Acquired)?.entry?.also { saved ->
+      (saved.executionCheckoutRoot ?: saved.newTask?.workingDirectory)?.let { session.recordAcquired(agent!!.agentId, it) }
+    }
     when {
-      !session.started && agent?.agentId != "opencode" -> session.restart(UUID.randomUUID().toString())
+      acquisition is ChatSessionAcquisition.Recovery -> {
+        session.recoveryOnly = true
+        session.append(ChatMessage.Notice(acquisition.guidance))
+      }
+      !session.started && acquired != null -> save(session, agent!!)
+      !session.started -> session.restart(UUID.randomUUID().toString())
       agent != null -> save(session, agent)
     }
   }
@@ -408,9 +457,7 @@ internal class ChatTurns(
 
   internal fun acceptedTranscript(session: ChatSession): ChatHistoryEntry? {
     val agent = session.agentState.value ?: return null
-    val lines = session.historyLines()
-    val title = lines.firstOrNull { it.role == ChatHistoryRole.Operator }?.text.orEmpty()
-    return ChatHistoryEntry(session.sessionId, session.item.id, agent, clock.now(), title, lines, executionCheckoutRoot = session.startedRoot)
+    return savedHistory(session, agent)
   }
 
   internal suspend fun saveAccepted(session: ChatSession, entry: ChatHistoryEntry) {
@@ -421,9 +468,31 @@ internal class ChatTurns(
     chat.saveChat(savedHistory(session, agent))
   }
 
-  private fun savedHistory(session: ChatSession, agent: ChatAgent): ChatHistoryEntry {
+  private suspend fun refreshAcquisition(session: ChatSession, agent: ChatAgent) {
+    if (agent.agentId != "devin" && agent.agentId != "opencode") return
+    when (val acquisition = chat.acquisition(session.sessionId)) {
+      is ChatSessionAcquisition.Acquired -> (acquisition.entry.executionCheckoutRoot ?: acquisition.entry.newTask?.workingDirectory)
+        ?.let { session.recordAcquired(agent.agentId, it) }
+      is ChatSessionAcquisition.Recovery -> {
+        session.recoveryOnly = true
+        session.append(ChatMessage.Notice(acquisition.guidance))
+      }
+      is ChatSessionAcquisition.Draft, ChatSessionAcquisition.Missing -> Unit
+    }
+  }
+
+  private fun sameRealDirectory(left: String, right: String): Boolean {
+    if (left == right) return true
+    return try {
+      java.nio.file.Path.of(left).toRealPath() == java.nio.file.Path.of(right).toRealPath()
+    } catch (_: Exception) {
+      false
+    }
+  }
+
+  private fun savedHistory(session: ChatSession, agent: ChatAgent, root: String = session.capturedRoot ?: session.requestedRoot ?: session.startedRoot ?: session.item.workingRoot()): ChatHistoryEntry {
     val lines = session.historyLines()
     val title = lines.firstOrNull { it.role == ChatHistoryRole.Operator }?.text.orEmpty()
-    return ChatHistoryEntry(session.sessionId, session.item.id, agent, clock.now(), title, lines)
+    return ChatHistoryEntry(session.sessionId, session.item.id, agent, clock.now(), title, lines, executionCheckoutRoot = root)
   }
 }

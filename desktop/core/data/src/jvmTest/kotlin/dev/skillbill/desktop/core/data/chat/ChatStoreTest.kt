@@ -147,6 +147,31 @@ class ChatStoreTest {
     assertEquals(binding, reopened.openCodeBinding("opencode-chat"))
     assertEquals(saved.lines, reopened.savedChats("wf-1").entries.single().lines)
     assertEquals("opencode", reopened.savedChats("wf-1").entries.single().agent.agentId)
+    assertEquals("/work/repo", reopened.savedChats("wf-1").entries.single().executionCheckoutRoot)
+  }
+
+  @Test
+  fun `Devin acquisition binds its handle to the saved identity and preserves unknown fields`() {
+    val store = ChatStore(host, RecordingDiagnostics(), Clock.System)
+    val saved = entry("devin-chat", 8).copy(
+      agent = ChatAgent("devin", "devin/swe-1", null, null),
+      executionCheckoutRoot = "/work/repo",
+      lines = listOf(ChatHistoryLine(ChatHistoryRole.Operator, "continue")),
+    )
+    assertTrue(store.saveChat(saved))
+    val file = File(host.userHome, "$CHAT_STORE_PATH/devin-chat.json")
+    file.writeText(file.readText().dropLast(1) + ",\"custom_source\":\"keep\"}")
+
+    assertTrue(store.saveDevinSession("devin-chat", "native-42", saved))
+    assertTrue(store.saveDevinSession("devin-chat", "native-42", saved))
+    val acquired = file.readText()
+    assertFalse(store.saveDevinSession("devin-chat", "different-native", saved))
+
+    val reopened = ChatStore(host, RecordingDiagnostics(), Clock.System)
+    assertEquals("native-42", reopened.agentSession("devin-chat"))
+    assertEquals("keep", Json.parseToJsonElement(file.readText()).jsonObject.getValue("custom_source").jsonPrimitive.content)
+    assertEquals("/work/repo", reopened.savedChats("wf-1").entries.single().executionCheckoutRoot)
+    assertEquals(acquired, file.readText())
   }
 
   // A partial binding is recovery evidence; an incidental chat save must not normalize it away or replace the handle.

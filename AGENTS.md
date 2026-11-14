@@ -13,8 +13,8 @@ Required contracts:
 - Platform behavior lives in manifest-declared packs under `platform-packs/<slug>/`.
 - `orchestration/` owns shared routing, review, delegation, telemetry, workflow, and shell contracts.
 - `agent-addons/<slug>/` contains only user-owned `agent-addon.yaml` and `content.md`.
-- Keep generated support pointers, provider-specific native-agent outputs, and staging artifacts uncommitted.
-- Discovery, install, routing, and validation stay dynamic and manifest-driven.
+- Keep generated support pointers, provider native-agent outputs, and staging artifacts uncommitted.
+- Discovery, install, routing, and validation stay manifest-driven.
 - Missing manifests, content or required sections, and wrong contract versions fail loudly with typed errors.
 - Fallbacks, degradations, and swallowed failures emit records; see `docs/observability-policy.md`.
 
@@ -22,7 +22,7 @@ Required contracts:
 
 Every `orchestration/contracts/` YAML is a runtime contract. New contracts require Draft 2020-12 YAML, Kotlin `*_CONTRACT_VERSION`, a parity test, and an owner `RuntimeFailureCode` thrown as `SkillBillRuntimeException`. Every parse seam fails loudly. See `runtime-kotlin/ARCHITECTURE.md`.
 
-Every schema change needs a persisted-data migration. Prove compatible reads; document version bumps and incompatible migrations. Validate source and migrated records, apply coupled updates atomically, and make migration repeatable. Preserve run identity, completed work, commits, checkpoints, and history. Test the previous supported version and retain earlier migration steps for older supported records.
+Every schema change needs a persisted-data migration. Prove compatible reads; document version bumps and incompatible migrations. Validate source and migrated records, apply coupled updates atomically, make migration repeatable. Preserve run identity, completed work, commits, checkpoints, and history. Test the previous supported version and retain earlier migration steps for older supported records.
 
 Install and upgrade without losing runs or persisted data. Migrate automatically before reading or resuming data. On failure, preserve original data and a recovery path. Never reset, discard, or replace data with defaults. Test populated previous-version stores, interrupted migrations, and repeated installation.
 
@@ -44,7 +44,7 @@ Before command or workflow work, read [Runtime command guidance](docs/runtime-co
 
 ## Linear work tracking
 
-Track repository work in Linear under `SONA`, except direct tasks explicitly requested on `main`; do not create issues for those. Let Linear assign complete keys. Never mint or reserve local keys.
+Track repository work in Linear under `SONA`; direct tasks explicitly requested on `main` get no issues. Let Linear assign complete keys. Never mint or reserve local keys.
 
 Use `.codex/config.toml`'s `linear-sona` connection. Verify its workspace and team. Switch connections only on operator instruction.
 
@@ -118,7 +118,7 @@ For `runtime-kotlin` planning, design, changes, or review, read [Runtime Archite
 
 For `runtime-kotlin` design, changes, or review, apply [Design Principles](runtime-kotlin/ARCHITECTURE.md#design-principles) for dependencies, ownership, persistence, contracts, simplicity, and test value. `PrincipleEnforcementInventory.enforceableRules` pairs rules with tests; review the rest. Existing violations do not excuse new ones.
 
-Follow [Code Principles](docs/code-principles.md) for Kotlin patterns, packages, imports, file-size limits, and architecture guards under `runtime-kotlin/runtime-core/src/repoTest/kotlin/skillbill/architecture/`.
+Follow [Code Principles](docs/code-principles.md) for Kotlin patterns, packages, imports, file-size limits, and architecture guards in `runtime-kotlin/runtime-core/src/repoTest/kotlin/skillbill/architecture/`.
 
 **Wire and payload keys.** At governed seams, declare each key once in its owner's `*Keys` or `*PayloadKeys`; never inline keys in `get`, `put`, `mapOf`, or bracket access. See `runtime-kotlin/ARCHITECTURE.md`. `runtime-contracts` holds only keys read by two or more production modules or exposed by `runtime-ports` signatures. Shared owners:
 

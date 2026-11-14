@@ -16,6 +16,7 @@ import dev.skillbill.desktop.core.domain.model.ChatStoreRead
 import dev.skillbill.desktop.core.domain.model.ChatStoreReadFailure
 import dev.skillbill.desktop.core.domain.model.ChatRecoveryEntry
 import dev.skillbill.desktop.core.domain.model.ChatRecoveryReason
+import dev.skillbill.desktop.core.domain.model.ChatSessionAcquisition
 import dev.skillbill.desktop.core.domain.model.SavedChatProjection
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
@@ -72,6 +73,19 @@ internal sealed interface OpenCodeSavedState {
   data object Missing : OpenCodeSavedState
   data class Readable(val agentId: String?, val handle: String?, val binding: OpenCodeSessionBinding?) : OpenCodeSavedState
   data class Unusable(val path: String) : OpenCodeSavedState
+}
+
+internal sealed interface DevinSavedState {
+  data object Missing : DevinSavedState
+  data class Readable(
+    val entry: ChatHistoryEntry?,
+    val handle: String?,
+    val executionId: String?,
+    val agent: ChatAgent?,
+    val checkoutRoot: String?,
+    val newTask: ChatNewTaskContext?,
+  ) : DevinSavedState
+  data class Unusable(val path: String) : DevinSavedState
 }
 
 private object ChatStoreKeys {
@@ -209,8 +223,102 @@ class ChatStore(host: HostEnvironment, private val diagnostics: Diagnostics, pri
     }
   }
 
+  internal fun devinSavedState(sessionId: String): DevinSavedState = synchronized(lock) {
+    val file = fileFor(sessionId) ?: return@synchronized DevinSavedState.Unusable(File(directory, "$sessionId.json").absolutePath)
+    when (val result = readFile(file)) {
+      ChatStoreRead.Missing -> DevinSavedState.Missing
+      is ChatStoreRead.Failed -> DevinSavedState.Unusable(file.absolutePath)
+      is ChatStoreRead.Value -> {
+        val stored = result.value
+        if (stored.needsRecovery() || (stored.agentSession != null && stored.agent?.agentId != "devin")) {
+          DevinSavedState.Unusable(file.absolutePath)
+        } else DevinSavedState.Readable(
+          stored.toEntry(), stored.agentSession, stored.executionId, stored.agent,
+          stored.executionCheckoutRoot ?: stored.newTask?.workingDirectory, stored.newTask,
+        )
+      }
+    }
+  }
+
+  internal fun saveDevinSession(sessionId: String, handle: String, history: ChatHistoryEntry): Boolean = synchronized(lock) {
+    if (handle.isBlank() || history.sessionId != sessionId || history.agent.agentId != "devin" ||
+      !history.hasDevinOwnership()
+    ) {
+      diagnostics.record("chat.devin_acquisition_refused")
+      return@synchronized false
+    }
+    val file = fileFor(sessionId) ?: return@synchronized false
+    val current = when (val result = readFile(file)) {
+      ChatStoreRead.Missing -> null
+      is ChatStoreRead.Failed -> return@synchronized false
+      is ChatStoreRead.Value -> result.value.also { stored ->
+        val priorEntry = stored.toEntry()
+        if (stored.needsRecovery() || (stored.agentSession != null && stored.agentSession != handle) ||
+          (stored.agentSession != null && stored.agent?.agentId != "devin") ||
+          (stored.agent != null && (stored.agent.agentId != "devin" || stored.agent.profile != history.agent.profile)) ||
+          (stored.executionId != null && stored.executionId != history.executionId) ||
+          (stored.newTask != null && stored.newTask.resumeIdentity() != history.newTask?.resumeIdentity()) ||
+          ((stored.executionCheckoutRoot ?: stored.newTask?.workingDirectory) != null &&
+            !sameDirectory(stored.executionCheckoutRoot ?: stored.newTask?.workingDirectory,
+              history.executionCheckoutRoot ?: history.newTask?.workingDirectory)) ||
+          (priorEntry != null && !sameDevinIdentity(priorEntry, history))
+        ) {
+          diagnostics.record("chat.devin_acquisition_refused")
+          return@synchronized false
+        }
+      }
+    }
+    val stored = current ?: StoredChat(sessionId)
+    write(file, stored.copy(
+      executionId = history.executionId ?: stored.executionId,
+      agent = history.agent.copy(model = stored.agent?.model ?: history.agent.model),
+      updatedAt = history.updatedAt,
+      lines = history.lines,
+      agentSession = handle,
+      newTask = history.newTask ?: stored.newTask,
+      summary = history.summary ?: stored.summary,
+      executionCheckoutRoot = stored.executionCheckoutRoot ?: history.executionCheckoutRoot ?: history.newTask?.workingDirectory,
+    ))
+  }
+
   internal fun savedEntry(sessionId: String): ChatHistoryEntry? =
     (savedForRead(sessionId) as? ChatStoreRead.Value)?.value
+
+  internal fun acquisition(sessionId: String): ChatSessionAcquisition = synchronized(lock) {
+    val file = fileFor(sessionId) ?: return@synchronized ChatSessionAcquisition.Recovery(null, "The saved chat identifier is invalid. Keep the original record unchanged.")
+    when (val result = readFile(file)) {
+      ChatStoreRead.Missing -> ChatSessionAcquisition.Missing
+      is ChatStoreRead.Failed -> ChatSessionAcquisition.Recovery(null,
+        "The saved chat could not be read. Keep the original file at ${file.absolutePath} unchanged and restore it before retrying.")
+      is ChatStoreRead.Value -> {
+        val stored = result.value
+        val entry = stored.toEntry() ?: stored.toDraftEntry()
+        if (stored.needsRecovery()) {
+          ChatSessionAcquisition.Recovery(entry,
+            "The saved provider identity is incomplete. Keep the original file at ${file.absolutePath} unchanged, or start a separate new chat.")
+        } else when {
+          stored.agent?.agentId == "devin" && !stored.agentSession.isNullOrBlank() ->
+            ChatSessionAcquisition.Acquired(entry ?: return@synchronized ChatSessionAcquisition.Recovery(null,
+              "The Devin handle has no projectable conversation identity. Keep the original file at ${file.absolutePath} unchanged."))
+          stored.agent?.agentId == "opencode" && !stored.agentSession.isNullOrBlank() ->
+            ChatSessionAcquisition.Acquired(entry ?: return@synchronized ChatSessionAcquisition.Recovery(null,
+              "The OpenCode handle has no projectable conversation identity. Keep the original file at ${file.absolutePath} unchanged."))
+          stored.newTask != null && !stored.newTask.sessionEstablished ->
+            ChatSessionAcquisition.Draft(entry ?: return@synchronized ChatSessionAcquisition.Recovery(null,
+              "The saved draft has incomplete identity. Keep the original file at ${file.absolutePath} unchanged."))
+          stored.agent?.agentId in setOf("devin", "opencode") && stored.executionId != null ->
+            ChatSessionAcquisition.Draft(entry ?: return@synchronized ChatSessionAcquisition.Recovery(null,
+              "The saved conversation has incomplete identity. Keep the original file at ${file.absolutePath} unchanged."))
+          stored.agent?.agentId in setOf("devin", "opencode") ->
+            ChatSessionAcquisition.Recovery(entry,
+              "The saved ${stored.agent?.agentId} conversation has no safe native handle. Keep the original file at ${file.absolutePath} unchanged, or start a separate new chat.")
+          entry != null -> ChatSessionAcquisition.Draft(entry)
+          else -> ChatSessionAcquisition.Recovery(null,
+            "The saved conversation is missing resume metadata. Keep the original file at ${file.absolutePath} unchanged.")
+        }
+      }
+    }
+  }
 
   internal fun saveOpenCodeSession(
     sessionId: String,
@@ -244,7 +352,17 @@ class ChatStore(host: HostEnvironment, private val diagnostics: Diagnostics, pri
     if (context == null) emptyList() else chat.lines.take(context.pendingTurnLineIndex ?: chat.lines.size)
   }.orElse(emptyList())
 
-  internal fun saveChat(entry: ChatHistoryEntry): Boolean {
+  internal fun saveChat(entry: ChatHistoryEntry): Boolean = synchronized(lock) {
+    val existing = (read(entry.sessionId) as? ChatStoreRead.Value)?.value
+    if (existing != null && !existing.needsRecovery() && !existing.agentSession.isNullOrBlank() &&
+      existing.agent?.agentId in setOf("devin", "opencode")) {
+      val original = existing.executionCheckoutRoot ?: existing.newTask?.workingDirectory ?: existing.openCodeBinding?.workingDirectory
+      val proposed = entry.executionCheckoutRoot ?: entry.newTask?.workingDirectory
+      if (original == null || proposed == null || !sameDirectory(original, proposed)) {
+        diagnostics.record("chat.saved_checkout_conflict")
+        return false
+      }
+    }
     val saved = update(entry.sessionId) { stored, exists ->
       stored.copy(
         executionId = entry.executionId,
@@ -252,15 +370,13 @@ class ChatStore(host: HostEnvironment, private val diagnostics: Diagnostics, pri
         updatedAt = if (exists && stored.lines == entry.lines) stored.updatedAt else entry.updatedAt,
         lines = entry.lines,
         newTask = entry.newTask,
-        executionCheckoutRoot = entry.executionCheckoutRoot ?: stored.executionCheckoutRoot,
+        executionCheckoutRoot = stored.executionCheckoutRoot ?: entry.executionCheckoutRoot,
       )
     }
-    if (!saved) return false
-    val executionId = entry.executionId ?: return saved
-    synchronized(lock) {
-      chatsOf(executionId).filterNot(StoredChat::needsRecovery).drop(CHATS_PER_EXECUTION).forEach { fileFor(it.sessionId)?.delete() }
-    }
-    return saved
+    if (!saved) return@synchronized false
+    val executionId = entry.executionId ?: return@synchronized saved
+    chatsOf(executionId).filterNot(StoredChat::needsRecovery).drop(CHATS_PER_EXECUTION).forEach { fileFor(it.sessionId)?.delete() }
+    saved
   }
 
   internal fun savedChats(executionId: String): SavedChatProjection = savedProjection(executionId = executionId)
@@ -344,6 +460,10 @@ class ChatStore(host: HostEnvironment, private val diagnostics: Diagnostics, pri
   internal fun saveSummary(sessionId: String, summary: String, sourceUpdatedAt: Instant): Boolean = synchronized(lock) {
     val file = fileFor(sessionId) ?: return@synchronized false
     val stored = (readFile(file) as? ChatStoreRead.Value)?.value ?: return@synchronized false
+    if (stored.needsRecovery()) {
+      diagnostics.record("chat.store_recovery_write_refused")
+      return@synchronized false
+    }
     write(file, stored.copy(summary = summary, summarySourceUpdatedAt = sourceUpdatedAt))
   }
 
@@ -428,7 +548,7 @@ class ChatStore(host: HostEnvironment, private val diagnostics: Diagnostics, pri
     reason = when {
       stored == null -> ChatRecoveryReason.UnreadableFile
       stored.invalidOpenCodeBinding -> ChatRecoveryReason.InvalidOpenCodeBinding
-      stored.needsRecovery() -> ChatRecoveryReason.OpenCodeHandleUnbound
+      stored.needsRecovery() && stored.agent?.agentId == "opencode" -> ChatRecoveryReason.OpenCodeHandleUnbound
       else -> ChatRecoveryReason.MissingResumeMetadata
     },
     executionId = stored?.executionId,
@@ -450,7 +570,12 @@ class ChatStore(host: HostEnvironment, private val diagnostics: Diagnostics, pri
     val existing = when (result) {
       is ChatStoreRead.Failed -> return@synchronized false
       ChatStoreRead.Missing -> null
-      is ChatStoreRead.Value -> result.value.also { if (it.needsRecovery()) return@synchronized false }
+      is ChatStoreRead.Value -> result.value.also {
+        if (it.needsRecovery()) {
+          diagnostics.record("chat.store_recovery_write_refused")
+          return@synchronized false
+        }
+      }
     }
     write(file, change(existing ?: StoredChat(sessionId), existing != null))
   }
@@ -570,13 +695,49 @@ private fun StoredChat.toEntry(): ChatHistoryEntry? {
   val operator = lines.firstOrNull { it.role == ChatHistoryRole.Operator }
   val boundExecution = executionId != null && newTask == null && agent?.agentId == "opencode" &&
     !agentSession.isNullOrBlank() && openCodeBinding != null
-  if (operator == null && !boundExecution) return null
+  val boundDevinExecution = executionId != null && newTask == null && agent?.agentId == "devin" &&
+    !agentSession.isNullOrBlank() && !executionCheckoutRoot.isNullOrBlank()
+  val boundNativeDraft = newTask != null && agent?.agentId in setOf("devin", "opencode") && !agentSession.isNullOrBlank()
+  if (operator == null && !boundExecution && !boundDevinExecution && !boundNativeDraft) return null
   val title = operator?.text ?: lines.firstOrNull { it.role == ChatHistoryRole.Agent && it.text.isNotBlank() }?.text
-    ?: "OpenCode conversation"
+    ?: if (agent?.agentId == "devin") "Devin conversation" else "OpenCode conversation"
   return ChatHistoryEntry(
     sessionId, executionId, agent ?: return null, updatedAt ?: Instant.DISTANT_PAST, title, lines, newTask, summary,
-    executionCheckoutRoot = executionCheckoutRoot ?: cursorWorkingDirectory,
+    executionCheckoutRoot = executionCheckoutRoot ?: cursorWorkingDirectory ?: openCodeBinding?.workingDirectory,
   )
+}
+
+private fun StoredChat.toDraftEntry(): ChatHistoryEntry? {
+  if (newTask == null && executionId == null) return null
+  val agent = agent ?: return null
+  return ChatHistoryEntry(
+    sessionId, executionId, agent, updatedAt ?: Instant.DISTANT_PAST,
+    lines.firstOrNull { it.role == ChatHistoryRole.Operator }?.text ?: when {
+      agent.agentId == "devin" -> "Devin conversation"
+      agent.agentId == "opencode" -> "OpenCode conversation"
+      else -> "New task draft"
+    },
+    lines, newTask, summary, executionCheckoutRoot = executionCheckoutRoot ?: newTask?.workingDirectory,
+  )
+}
+
+private fun sameDevinIdentity(left: ChatHistoryEntry, right: ChatHistoryEntry): Boolean =
+  left.sessionId == right.sessionId && left.executionId == right.executionId &&
+    left.agent.agentId == right.agent.agentId && left.agent.effort == right.agent.effort && left.agent.profile == right.agent.profile &&
+    left.newTask?.resumeIdentity() == right.newTask?.resumeIdentity() &&
+    sameDirectory(left.executionCheckoutRoot ?: left.newTask?.workingDirectory,
+      right.executionCheckoutRoot ?: right.newTask?.workingDirectory)
+
+private fun sameDirectory(left: String?, right: String?): Boolean {
+  if (left.isNullOrBlank() || right.isNullOrBlank()) return false
+  if (left == right) return true
+  return try {
+    File(left).toPath().toRealPath() == File(right).toPath().toRealPath()
+  } catch (_: IOException) {
+    false
+  } catch (_: SecurityException) {
+    false
+  }
 }
 
 /** Staleness rule: a listable chat whose summary source differs from its `updated_at`. */
@@ -584,7 +745,30 @@ private fun StoredChat.needsSummary(): Boolean =
   toEntry() != null && summarySourceUpdatedAt?.toEpochMilliseconds() != updatedAt?.toEpochMilliseconds()
 
 private fun StoredChat.needsRecovery(): Boolean = invalidOpenCodeBinding ||
-  (agent?.agentId == "opencode" && ((agentSession != null && openCodeBinding == null) || (agentSession.isNullOrBlank() && openCodeBinding != null)))
+  (agent?.agentId == "opencode" && ((agentSession != null && openCodeBinding == null) || (agentSession.isNullOrBlank() && openCodeBinding != null) ||
+    (agentSession.isNullOrBlank() && openCodeBinding == null && when {
+      newTask != null -> newTask.sessionEstablished
+      executionId != null -> lines.isNotEmpty()
+      else -> true
+    }))) ||
+  (agent?.agentId == "devin" && when {
+    agentSession.isNullOrBlank() -> when {
+      newTask != null -> newTask.sessionEstablished
+      executionId != null -> lines.isNotEmpty()
+      else -> true
+    }
+    executionId != null -> executionCheckoutRoot.isNullOrBlank() || newTask != null
+    newTask != null -> newTask.workingDirectory.isBlank()
+    else -> true
+  })
+
+private fun ChatHistoryEntry.hasDevinOwnership(): Boolean = when {
+  executionId != null && !executionCheckoutRoot.isNullOrBlank() && newTask == null -> true
+  executionId == null && newTask?.let { context ->
+    context.workingDirectory.isNotBlank() && context.selectedRepositoryRoot?.isNotBlank() != false
+  } == true -> true
+  else -> false
+}
 
 private fun StoredChat.isResumeOnly(): Boolean = executionId == null && newTask == null && lines.isEmpty() &&
   !agentSession.isNullOrBlank() && summary == null && !needsRecovery()

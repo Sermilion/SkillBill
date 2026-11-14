@@ -812,6 +812,12 @@ class ChatWorkspace(
     launchTurn(session) {
       if (running != null) stopTurnAndJoin(session, runningSessionId, running)
       turns.followWorktree(session)
+      val workingRoot = session.item.workingRoot()
+      if (!session.canContinue(entry, workingRoot)) {
+        session.append(ChatMessage.Error(null,
+          "This ${entry.agent.agentId} session belongs to a different or unavailable checkout. Its saved history is unchanged. Restore the original checkout or start a separate new chat."))
+        return@launchTurn
+      }
       val lines = try {
         chat.openSavedChat(entry)
       } catch (failure: IOException) {
@@ -819,7 +825,7 @@ class ChatWorkspace(
         return@launchTurn
       }
       endAgent(session)
-      session.resumeFrom(entry.sessionId, session.item.workingRoot(), entry.agent)
+      session.resumeFrom(entry.sessionId, workingRoot, entry.agent)
       session.agentState.value = entry.agent
       session.agentSupportedState.value = chat.supports(entry.agent.agentId)
       val shown = if (lines.isEmpty()) "The app can't read this session's messages; the agent still has them." else "Showing its last ${lines.size} messages."
@@ -1047,14 +1053,16 @@ class ChatWorkspace(
       if (session.approvalObserver?.isActive == true) return
       lateinit var observer: Job
       observer = scope.launch(session.job, start = CoroutineStart.LAZY) {
-        approvalFlow.follow(
-          thread = session.thread,
-          live = session.approvalLiveState,
-          repositoryRoot = { session.item.workingRoot() },
-          // The chat's own process requests, and the execution's phase requests, whose run is the execution itself.
-          owns = { it.key.runId == session.sessionId || it.key.runId == session.item.id },
-          changed = { if (session.approvalObserver === observer && sessions[session.id] === session && session.job.isActive) turns.approvalChanged(session) },
-        )
+        session.admittedRoots.collectLatest { admitted ->
+          approvalFlow.follow(
+            thread = session.thread,
+            live = session.approvalLiveState,
+            repositoryRoot = { admitted },
+            // The chat's own process requests, and the execution's phase requests, whose run is the execution itself.
+            owns = { it.key.runId == session.sessionId || it.key.runId == session.item.id },
+            changed = { if (session.approvalObserver === observer && sessions[session.id] === session && session.job.isActive) turns.approvalChanged(session) },
+          )
+        }
       }
       session.approvalObserver = observer
       observer.invokeOnCompletion { synchronized(session) { if (session.approvalObserver === observer) session.approvalObserver = null } }
