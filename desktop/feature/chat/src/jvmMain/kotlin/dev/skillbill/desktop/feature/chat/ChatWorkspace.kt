@@ -819,6 +819,12 @@ class ChatWorkspace(
     launchTurn(session) {
       if (running != null) stopTurnAndJoin(session, runningSessionId, running)
       turns.followWorktree(session)
+      val workingRoot = session.item.workingRoot()
+      if (entry.agent.agentId in setOf("devin", "opencode") && !session.canContinue(entry, workingRoot)) {
+        session.append(ChatMessage.Error(null,
+          "This ${entry.agent.agentId} session belongs to a different or unavailable checkout. Its saved history is unchanged. Restore the original checkout or start a separate new chat."))
+        return@launchTurn
+      }
       val lines = try {
         chat.openSavedChat(entry)
       } catch (failure: IOException) {
@@ -826,7 +832,7 @@ class ChatWorkspace(
         return@launchTurn
       }
       endAgent(session)
-      session.resumeFrom(entry.sessionId, session.item.workingRoot(), entry.agent)
+      session.resumeFrom(entry.sessionId, workingRoot, entry.agent)
       session.agentState.value = entry.agent
       session.agentSupportedState.value = chat.supports(entry.agent.agentId)
       val shown = if (lines.isEmpty()) "The app can't read this session's messages; the agent still has them." else "Showing its last ${lines.size} messages."

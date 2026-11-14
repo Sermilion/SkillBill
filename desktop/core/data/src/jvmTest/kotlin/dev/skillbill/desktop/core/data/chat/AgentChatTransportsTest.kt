@@ -56,10 +56,23 @@ class AgentChatTransportsTest {
       request.sessionId, "execution", request.agent, Clock.System.now(), "earlier question", history,
     )))
     store.saveAgentSession(request.sessionId, "saved-provider-thread")
+    val sessions = dev.skillbill.desktop.core.data.session.DatabaseSessionManager(
+      dev.skillbill.desktop.core.data.session.ComponentSessionGraphFactory(
+        object : dev.skillbill.desktop.core.data.session.DatabaseSessionComponent.Factory {
+          override fun createDatabaseSessionComponent(): dev.skillbill.desktop.core.data.session.DatabaseSessionComponent =
+            error("A refused chat must not open a runtime session")
+        },
+      ),
+      dev.skillbill.desktop.core.testing.FakeAppSettingsRepository(),
+      dev.skillbill.desktop.core.common.DatabaseDispatcher(kotlinx.coroutines.test.StandardTestDispatcher(testScheduler)),
+      RecordingDiagnostics(),
+      dev.skillbill.desktop.core.data.session.LaunchReservations(),
+      dev.skillbill.desktop.core.common.ApplicationCoroutineScope(backgroundScope),
+    )
     val transports = listOf(
       CodexChatTransport(host, launcher, store, RecordingDiagnostics()),
       CursorChatTransport(host, store, RecordingDiagnostics(), liveLauncher = launcher),
-      DevinChatTransport(host, store, RecordingDiagnostics(), liveLauncher = launcher),
+      DevinChatTransport(host, store, RecordingDiagnostics(), liveLauncher = launcher, approvalAuthority = null, sessions = sessions),
     )
     for (transport in transports) {
       val failure = assertIs<ChatEvent.Failed>(transport.run(request.copy(

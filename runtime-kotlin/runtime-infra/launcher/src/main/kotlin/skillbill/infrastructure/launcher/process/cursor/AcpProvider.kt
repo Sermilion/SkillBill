@@ -33,6 +33,7 @@ data class AcpProvider(
         listOf("acp"),
         authMethodId = null,
         lacksTeamDashboardMcp = false,
+        loginCommand = "opencode auth login",
       )
 
     val Devin =

@@ -504,6 +504,40 @@ class CursorAcpSessionTest {
   }
 
   @Test
+  fun `Devin refuses an unimplemented blocking method with its request id`() {
+    val harness = Harness(provider = AcpProvider.Devin)
+    harness.session.start()
+    harness.respond("""{"protocolVersion":1,"agentCapabilities":{}}""")
+    harness.respond("""{"sessionId":"s"}""")
+
+    harness.session.observe(
+      """{"jsonrpc":"2.0","id":73,"method":"fs/read_text_file","params":{"path":"secret.txt"}}""",
+    )
+
+    val response = harness.frames.last()
+    assertEquals(JsonPrimitive(73), response[CursorAcpKeys.ID])
+    assertEquals(
+      -32601,
+      response.obj(CursorAcpKeys.ERROR)?.get(CursorAcpKeys.CODE)?.let {
+        (it as? JsonPrimitive)?.content?.toIntOrNull()
+      },
+    )
+    assertTrue(harness.events.any { it is CursorAcpEvent.Unsupported })
+    assertTrue(harness.records.any { "outcome=unsupported_request" in it })
+  }
+
+  @Test
+  fun `OpenCode authentication rejection names its login command before prompt delivery`() {
+    val harness = Harness(provider = AcpProvider.OpenCode)
+    harness.session.start()
+    harness.respond("""{"protocolVersion":1,"agentCapabilities":{}}""")
+    harness.reject(CursorAcpKeys.AUTH_REQUIRED_CODE)
+
+    assertContains(requireNotNull(harness.session.outcome()?.failure), "opencode auth login")
+    assertTrue(harness.frames.none { it.text(CursorAcpKeys.METHOD) == "session/prompt" })
+  }
+
+  @Test
   fun `missing one time option cancels while rule deliveries always select offered allow once`() {
     val harness = Harness()
     harness.open()

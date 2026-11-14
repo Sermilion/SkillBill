@@ -530,6 +530,24 @@ class CursorAcpSession(
       }
       return
     }
+    if (launch.provider != AcpProvider.Cursor) {
+      onEvent(CursorAcpEvent.Unsupported(method, ""))
+      record("seam=$seam outcome=unsupported_request method=$method")
+      write(
+        buildJsonObject {
+          put(K.JSONRPC, "2.0")
+          put(K.ID, id)
+          put(
+            K.ERROR,
+            buildJsonObject {
+              put(K.CODE, METHOD_NOT_FOUND)
+              put(K.MESSAGE, "Method not supported by $providerName.")
+            },
+          )
+        },
+      )
+      return
+    }
     reply(id, cursorExtensionAcceptance(method, message.obj(K.PARAMS)))
     record("seam=$seam outcome=extension_accepted method=$method")
   }
@@ -652,6 +670,7 @@ class CursorAcpSession(
 
   private companion object {
     const val MAX_CAPTURE = 4_000_000
+    const val METHOD_NOT_FOUND = -32601
     val OPENING_TIMEOUT: Duration = Duration.ofSeconds(30)
   }
 }

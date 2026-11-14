@@ -18,6 +18,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import java.io.File
 import kotlin.time.Clock
 
 internal data class QueuedChatMessage(
@@ -64,6 +65,10 @@ class ChatSession internal constructor(
   internal var delivered: ExecutionSnapshot? = null
   internal var started: Boolean = false
   internal var startedRoot: String? = null
+  internal var requestedRoot: String? = null
+  internal var acquiredProvider: String? = null
+  internal var capturedRoot: String? = null
+  internal var providerCheckoutRefused: Boolean = false
   internal var openCodeCheckoutChangedNoticed: Boolean = false
   internal var worktreeRemovedNoticed: Boolean = false
   internal var worktreeMoveOutcome: WorktreeMoveOutcome? = null
@@ -107,6 +112,10 @@ class ChatSession internal constructor(
     delivered = null
     started = false
     startedRoot = null
+    requestedRoot = null
+    acquiredProvider = null
+    capturedRoot = null
+    providerCheckoutRefused = false
   }
 
   /** The next turn continues the saved agent session [savedSessionId] and sends the full snapshot, since what it last saw is unknown. */
@@ -122,10 +131,23 @@ class ChatSession internal constructor(
     providerSessionRoots[ProviderSessionIdentity(sessionId, agent.agentId)] = root
   }
 
+  internal fun recordAcquired(provider: String, root: String) {
+    acquiredProvider = provider
+    capturedRoot = root
+  }
+
+  internal fun recordRequestRoot(root: String) {
+    requestedRoot = root
+  }
+
   internal fun hasProviderSessionAt(entry: ChatHistoryEntry, root: String): Boolean =
     providerSessionRoots[ProviderSessionIdentity(entry.appSessionId ?: entry.sessionId, entry.agent.agentId)] == root
 
   internal fun canContinue(entry: ChatHistoryEntry, root: String): Boolean {
+    if (entry.agent.agentId == "devin" || entry.agent.agentId == "opencode") {
+      val original = entry.executionCheckoutRoot ?: entry.newTask?.workingDirectory ?: return false
+      return File(original).isDirectory && File(root).isDirectory && canonicalDirectory(original) != null && canonicalDirectory(original) == canonicalDirectory(root)
+    }
     if (hasProviderSessionAt(entry, root) || entry.executionCheckoutRoot == root) return true
     val moveOutcome = worktreeMoveOutcome
     if (moveOutcome != null) return moveOutcome.canContinue(entry.agent.agentId)
@@ -202,6 +224,12 @@ class ChatSession internal constructor(
   internal fun suggestActions(actions: List<ChatSuggestedAction>) = thread.suggestActions(actions)
 
   internal fun endStreaming() = thread.endStreaming()
+}
+
+private fun canonicalDirectory(path: String): String? = try {
+  java.nio.file.Path.of(path).toRealPath().toString()
+} catch (_: Exception) {
+  null
 }
 
 /** A goal or plan start the runtime sent back for an issue prefix; choosing one retries [action]. */

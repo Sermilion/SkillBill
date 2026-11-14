@@ -13,6 +13,7 @@ import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
 import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
+import dev.skillbill.desktop.core.domain.model.ChatSessionAcquisition
 import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
 import dev.skillbill.desktop.core.domain.model.ChatStopSettlement
 import dev.skillbill.desktop.core.domain.model.Detail
@@ -123,6 +124,7 @@ class FakeExecutionChatRepository(
 
   /** Saved chats by session id, as the store keeps them. */
   val saved: MutableMap<String, ChatHistoryEntry> = Collections.synchronizedMap(linkedMapOf())
+  val acquisitionStates: MutableMap<String, ChatSessionAcquisition> = Collections.synchronizedMap(linkedMapOf())
 
   override suspend fun savedChats(executionId: String, repositoryRoot: String, currentSessionId: String): SavedChatProjection =
     SavedChatProjection(saved.values.filter { entry ->
@@ -130,6 +132,16 @@ class FakeExecutionChatRepository(
     }.sortedByDescending { it.updatedAt })
 
   override suspend fun openSavedChat(entry: ChatHistoryEntry): List<ChatHistoryLine> = entry.lines
+
+  override suspend fun acquisition(sessionId: String): ChatSessionAcquisition = acquisitionStates[sessionId]
+    ?: saved[sessionId]?.let { entry ->
+      when {
+        entry.agent.agentId in setOf("devin", "opencode") && entry.newTask?.sessionEstablished == false -> ChatSessionAcquisition.Draft(entry)
+        entry.agent.agentId in setOf("devin", "opencode") && entry.executionCheckoutRoot != null -> ChatSessionAcquisition.Acquired(entry)
+        entry.agent.agentId in setOf("devin", "opencode") -> ChatSessionAcquisition.Recovery(entry, "No safe native handle is saved.")
+        else -> ChatSessionAcquisition.Draft(entry)
+      }
+    } ?: ChatSessionAcquisition.Missing
 
   override suspend fun saveChat(entry: ChatHistoryEntry) {
     saved[entry.sessionId] = entry

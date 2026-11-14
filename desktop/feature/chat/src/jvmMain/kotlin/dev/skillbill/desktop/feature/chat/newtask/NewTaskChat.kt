@@ -15,6 +15,7 @@ import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatScope
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
+import dev.skillbill.desktop.core.domain.model.ChatSessionAcquisition
 import dev.skillbill.desktop.core.domain.model.CursorMcpDependency
 import dev.skillbill.desktop.core.domain.repository.ApprovalFeedRepository
 import dev.skillbill.desktop.core.domain.repository.ExecutionChatRepository
@@ -95,6 +96,7 @@ internal class NewTaskChat(
   private val selectedContextRevision: () -> Long = { 0 },
   private val repositoryRequestGeneration: () -> Long = { 0 },
   private val onRepositoryCandidate: suspend (NewTaskChat, String, String, Long, Long) -> Unit = { _, _, _, _, _ -> },
+  initiallyAcquired: Boolean = false,
 ) {
   @Volatile
   var agent: ChatAgent = agent
@@ -160,6 +162,9 @@ internal class NewTaskChat(
     { captured -> job.isActive && !closing && sessionId == captured && canPersist() }, ::scheduleDrain, ::persistAccepted)
   @Volatile
   var started = initiallyStarted
+    private set
+  @Volatile
+  var acquired = initiallyAcquired
     private set
 
   /** Earlier conversation sent once with the first turn that reaches the agent; never saved. */
@@ -355,7 +360,16 @@ internal class NewTaskChat(
     try {
       withContext(NonCancellable) {
         if (hadNormalReply && !unpromptedReplyActive) thread.endStreaming()
-        if (stopped && !started) rotateSession()
+        if (stopped) {
+          when (val acquisition = chat.acquisition(sessionId)) {
+            is ChatSessionAcquisition.Acquired -> acquired = true
+            is ChatSessionAcquisition.Recovery -> {
+              recoveryOnly = true
+              thread.append(ChatMessage.Notice(acquisition.guidance))
+            }
+            is ChatSessionAcquisition.Draft, ChatSessionAcquisition.Missing -> if (!started) rotateSession()
+          }
+        }
         finishSaved = save()
         if (!finishSaved) thread.append(ChatMessage.Notice(COULD_NOT_SAVE_NOTICE))
         changesTracker.refresh()
@@ -601,6 +615,41 @@ internal class NewTaskChat(
     val originatingSessionId = sessionId
     val originatingContextRevision = selectedContextRevision()
     val originatingRequestGeneration = repositoryRequestGeneration()
+    if (agent.agentId == "devin" || agent.agentId == "opencode") {
+      when (val acquisition = chat.acquisition(sessionId)) {
+        is ChatSessionAcquisition.Acquired -> {
+          val saved = acquisition.entry
+          val expected = historyEntry(sessionId)
+          val savedRoot = saved.executionCheckoutRoot ?: saved.newTask?.workingDirectory
+          if (saved.agent.agentId != agent.agentId || saved.agent.effort != agent.effort || saved.agent.profile != agent.profile ||
+            saved.newTask != expected.newTask || savedRoot == null || !sameDirectory(savedRoot, repositoryRoot)) {
+            recoveryOnly = true
+            thread.append(ChatMessage.Notice("This ${agent.agentId} conversation no longer matches its saved provider, settings, or checkout. Keep the saved source unchanged or start a separate new chat."))
+            onRejected?.invoke()
+            return
+          }
+          acquired = true
+        }
+        is ChatSessionAcquisition.Recovery -> {
+          recoveryOnly = true
+          thread.append(ChatMessage.Notice(acquisition.guidance))
+          onRejected?.invoke()
+          return
+        }
+        is ChatSessionAcquisition.Draft -> if (acquisition.entry.newTask?.sessionEstablished == true) {
+          recoveryOnly = true
+          thread.append(ChatMessage.Notice("This established ${agent.agentId} conversation has no safe native handle. Keep the saved source unchanged or start a separate new chat."))
+          onRejected?.invoke()
+          return
+        }
+        ChatSessionAcquisition.Missing -> if (started || acquired) {
+          recoveryOnly = true
+          thread.append(ChatMessage.Notice("This ${agent.agentId} continuation has no saved native handle. Keep the source unchanged or start a separate new chat."))
+          onRejected?.invoke()
+          return
+        }
+      }
+    }
     changesTracker.beginTurn(started)
     if (!save()) {
       changesTracker.endTurn()
@@ -614,10 +663,15 @@ internal class NewTaskChat(
     var candidate: String? = null
     var duplicateCandidate = false
     var completed = false
-    val preamble = pendingReplay?.takeIf { !started }?.let { newTaskReplayPreamble(it, repositoryRoot, baseBranch, selectedRepositoryRoot) }
+    val preamble = pendingReplay?.takeIf { !started && !acquired }?.let { newTaskReplayPreamble(it, repositoryRoot, baseBranch, selectedRepositoryRoot) }
     val prompt = if (preamble == null) text else "$preamble\n\n$text"
     try {
-      chat.send(ChatTurnRequest(sessionId, !started, agent, ChatScope.NewTask(repositoryRoot, selectedRepositoryRoot, baseBranch, userHome), ChatPermissionMode.Act, prompt, images, cursorMcpDependency)).collect { event ->
+      chat.send(ChatTurnRequest(
+        sessionId, !started && !acquired, agent,
+        ChatScope.NewTask(repositoryRoot, selectedRepositoryRoot, baseBranch, userHome),
+        ChatPermissionMode.Act, prompt, images, cursorMcpDependency,
+        savedHistory = historyEntry(sessionId),
+      )).collect { event ->
         coroutineContext.ensureActive()
         if (!seenEvent) {
           seenEvent = true
@@ -759,6 +813,12 @@ internal class NewTaskChat(
     val title = lines.firstOrNull { it.role == ChatHistoryRole.Operator }?.text.orEmpty()
     val context = ChatNewTaskContext(repositoryRoot, baseBranch, started, pendingTurnLineIndex, changesTracker.baseline, changesTracker.captureAttempted, changesAttributedPaths = changesTracker.attributedPaths, selectedRepositoryRoot = selectedRepositoryRoot)
     return ChatHistoryEntry(identity, null, agent, clock.now(), title, lines, context)
+  }
+
+  private fun sameDirectory(left: String, right: String): Boolean = try {
+    java.nio.file.Path.of(left).toRealPath() == java.nio.file.Path.of(right).toRealPath()
+  } catch (_: Exception) {
+    false
   }
 
   private suspend fun saveAs(identity: String, refresh: Boolean = true): Boolean {
