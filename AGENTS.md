@@ -4,7 +4,7 @@
 
 skill-bill owns authoring, routing, validation, installation, measurement, orchestration, telemetry, workflow state and shells.
 
-Public commands: `/sona`, `sona`. MCP: `sona-mcp`, server `sona`. Desktop: `sona-app`, named Sona. Keep canonical source `skills/skill-bill/`, `internal-for: skill-bill`, durable state paths and raw operation identities. `skill-bill` is notice-only.
+Public commands: `/sona`, `sona`. MCP: `sona-mcp`, server `sona`. Desktop: `sona-app`, named Sona. Keep canonical source `skills/skill-bill/`, `internal-for: skill-bill`, durable state paths and raw operation identities. Use `sona` for every executable command. Do not install the retired command.
 
 Required contracts:
 

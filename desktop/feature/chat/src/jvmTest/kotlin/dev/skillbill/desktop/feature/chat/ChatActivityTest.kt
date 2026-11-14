@@ -100,10 +100,10 @@ class ChatActivityTest {
 
   @Test
   fun `service calls and explicit waits describe activity without exposing their payloads`() {
-    val mcp = ChatToolCall("mcp", "mcp__skill-bill__work_status", """{"command":"long internal command"}""", "work_status")
+    val mcp = ChatToolCall("mcp", "mcp__sona__work_status", """{"command":"long internal command"}""", "work_status")
     val wait = ChatToolCall("wait", "functions.wait", """{"cell_id":"private-id"}""", null)
     val reply = ChatMessage.Agent("", streaming = true, tools = listOf(ChatToolEntry(mcp)))
-    assertEquals("Calling skill-bill MCP", chatActivityStatus(true, agent, false, listOf(reply)))
+    assertEquals("Calling sona MCP", chatActivityStatus(true, agent, false, listOf(reply)))
     val waiting = reply.copy(tools = listOf(ChatToolEntry(wait)))
     assertEquals("Waiting for response...", chatActivityStatus(true, agent, false, listOf(waiting)))
     assertEquals("Ready", chatActivityStatus(false, agent, false, listOf(waiting)))

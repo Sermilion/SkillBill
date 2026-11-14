@@ -143,7 +143,7 @@ internal fun ProcessWaitLoop.pollApprovalWait(nowNanos: Long) {
   if (holding && !approvalWaitActive) {
     request.launch.outputSink.write(
       AgentRunOutputStream.STDERR,
-      "skill-bill: awaiting operator approval: ${pending.latestTitle}\n",
+      "sona: awaiting operator approval: ${pending.latestTitle}\n",
     )
   }
   if (approvalWaitActive && !holding) lastApprovalEndedNanos = nowNanos

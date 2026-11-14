@@ -17,7 +17,7 @@ internal fun CliRunState.refuseInstallMutationDuringGoalContinuation(
     return false
   }
   val message =
-    "Refusing to run sona install $commandName during skill-bill goal-continuation.\n" +
+    "Refusing to run sona install $commandName during sona goal-continuation.\n" +
       "Goal workers must preserve the active workflow store; run install sync after the goal completes."
   completeText(
     "$message\n",

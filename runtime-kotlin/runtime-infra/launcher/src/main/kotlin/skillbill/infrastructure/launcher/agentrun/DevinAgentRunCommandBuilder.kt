@@ -37,10 +37,10 @@ internal class DevinAgentRunCommandBuilder(
     if (wrapper || !attachesRuntimeMcp(request)) return null
     return when {
       runtimeMcpBin == null ->
-        "Devin phase workers require the skill-bill runtime MCP executable; install or repair the runtime MCP " +
+        "Devin phase workers require the sona runtime MCP executable; install or repair the runtime MCP " +
           "server, then retry. The phase was not started."
       databasePath == null ->
-        "Devin phase workers require the selected runtime database for the skill-bill runtime MCP server; " +
+        "Devin phase workers require the selected runtime database for the sona runtime MCP server; " +
           "the phase was not started."
       else -> null
     }

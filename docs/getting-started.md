@@ -1,8 +1,8 @@
 # Getting Started
 
-Skill Bill installs governed agent workflows plus a local runtime. The fastest way to understand the product is to run `/skill-bill` on a small feature spec: it prepares the spec, then routes to implementation, which plans the work, implements it, reviews it, validates it, records history when relevant, and prepares the PR handoff.
+Skill Bill installs governed agent workflows plus a local runtime. The fastest way to understand the product is to run `/sona` on a small feature spec: it prepares the spec, then routes to implementation, which plans the work, implements it, reviews it, validates it, records history when relevant, and prepares the PR handoff.
 
-The runtime is packaged Kotlin: normal `skill-bill` and `skill-bill-mcp` use distribution scripts built by `./install.sh`, not Gradle `run` tasks and not a legacy runtime selector.
+The runtime is packaged Kotlin: normal `sona` and `sona-mcp` use distribution scripts built by `./install.sh`, not Gradle `run` tasks and not a legacy runtime selector.
 
 Use this guide when you want to install Skill Bill, understand the runtime model, and know which behavior is enforced by contracts versus model reasoning. Terms such as goal, workflow, subtask, phase, slot, step, operation, pack, lane, and add-on are defined in the [glossary](../README.md#glossary).
 
@@ -10,9 +10,9 @@ Use this guide when you want to install Skill Bill, understand the runtime model
 
 Skill Bill has three operator surfaces:
 
-- the one installed slash command, `/skill-bill`, which runs the full feature workflow, one phase (`phase:review`, `phase:validation`, ...), or one runtime operation (`operation:verify`, `operation:release`, ...)
-- the local `skill-bill` CLI
-- the local `skill-bill-mcp` stdio MCP server
+- the one installed slash command, `/sona`, which runs the full feature workflow, one phase (`phase:review`, `phase:validation`, ...), or one runtime operation (`operation:verify`, `operation:release`, ...)
+- the local `sona` CLI
+- the local `sona-mcp` stdio MCP server
 
 The bundled skills are reference workflows and reusable workflow components. They are useful defaults, but the framework does not depend on them being preserved. Teams can fork, replace, or remove bundled skills and author their own governed workflows and platform packs.
 
@@ -64,10 +64,10 @@ SKILL_BILL_RELEASE_TAG=v0.x.y ./install.sh
 
 `--release` pins the prebuilt artifacts to a specific release tag. It is ignored under `--from-source`, where the runtime is built from your current checkout.
 
-On the default prebuilt path the installer fetches and checksum-verifies the Kotlin CLI and MCP distribution images from the matching GitHub release — it does **not** build them locally. With `--from-source` the installer instead builds the Kotlin CLI and MCP distributions with Gradle (**JDK 21+ required**). Either way it then copies the packaged runtime into `~/.skill-bill/runtime/`, verifies the installed bin scripts, installs `skill-bill` and `skill-bill-mcp` launchers into `${SKILL_BILL_BIN_DIR:-~/.local/bin}`, renders selected skills into staging, then links those staged skills into detected agent directories. MCP registrations point at the installed runtime copy so Gradle cleanup or IDE rebuilds inside the checkout do not break agent startup. If that launcher directory is not on `PATH`, install finishes with an explicit warning.
+On the default prebuilt path the installer fetches and checksum-verifies the Kotlin CLI and MCP distribution images from the matching GitHub release — it does **not** build them locally. With `--from-source` the installer instead builds the Kotlin CLI and MCP distributions with Gradle (**JDK 21+ required**). Either way it then copies the packaged runtime into `~/.skill-bill/runtime/`, verifies the installed bin scripts, installs `sona` and `sona-mcp` launchers into `${SKILL_BILL_BIN_DIR:-~/.local/bin}`, renders selected skills into staging, then links those staged skills into detected agent directories. MCP registrations point at the installed runtime copy so Gradle cleanup or IDE rebuilds inside the checkout do not break agent startup. If that launcher directory is not on `PATH`, install finishes with an explicit warning.
 
 `./install.sh` collects install choices and delegates the durable work to the
-packaged runtime command `skill-bill install apply`. The shell script still owns
+packaged runtime command `sona install apply`. The shell script still owns
 bootstrap prompts and runtime distribution installation, but the runtime owns
 planning, staging, symlink/native-agent linking, telemetry configuration, MCP
 registration, replacement cleanup, and structured failure reporting.
@@ -132,14 +132,14 @@ Feature-task model and effort preferences also belong in this machine-wide JSON 
 
 The pre-install cleanup still wipes the rest of `~/.skill-bill/`, preserving `skills/`, `platform-packs/`, `orchestration/`, `baseline-manifest.json`, and durable `*.db` state (goal/workflow stores, `review-metrics.db`). Only the config was ever at risk, and it now lives outside that tree. See [External Addon Sources](external-addons.md#persisting-config-across-installs) for details. For a one-off install that must not wipe any state, `SKILL_BILL_SKIP_PREINSTALL_UNINSTALL=1 ./install.sh …` skips the cleanup entirely (intended for dev iteration).
 
-On Claude, Codex, and Cursor, orchestrators that delegate review work also install native subagent definitions for supported runtime surfaces. The stack-specific code-review skills (e.g. `bill-go-code-review-security`, `bill-kotlin-code-review`, `bill-php-code-review-security`, `bill-python-code-review-security`) are **internal sidecars** of `/skill-bill` — they are not listed slash commands; `/skill-bill phase:review` detects the dominant stack and routes to the matching sidecar. Invoke quality checks through `/skill-bill phase:validation`; it selects the dominant pack and runs that pack's `validation_gate` (`routed_skill` telemetry stays `bill-code-check`). Each declared platform-pack bundle registers its baseline reviewer and specialist reviewers as native subagents. Native subagent sources live as provider-neutral `native-agents/agents.yaml` bundles or standalone `native-agents/<name>.md` files. New and rendered neutral sources include `contract_version: "0.1"`; the parser still accepts older unpinned sources so existing repos can migrate gradually. Install renders those sources into `~/.skill-bill/native-agents/` before linking Claude markdown into `~/.claude/agents/`, Codex TOMLs into `~/.codex/agents/`, and Cursor markdown into `~/.cursor/agents/`; generated provider files are not checked into the repo. `~/.agents/agents/` is only a Skill Bill compatibility path for Codex homes without a `.codex` root, not the primary documented Codex custom-agent location. Claude and Cursor use Markdown/YAML custom-subagent frontmatter; Codex resolves spawn instructions by TOML `name`. Today this covers shipped platform-pack baseline and specialist reviewers selected by manifest. Feature-task execution uses the Kotlin runtime driver (`skill-bill feature-task` / `skill-bill goal`); `operation:verify` has no verify-specific native subagents and runs its review through the review phase while keeping feature-flag, completeness, and verdict audits inline.
+On Claude, Codex, and Cursor, orchestrators that delegate review work also install native subagent definitions for supported runtime surfaces. The stack-specific code-review skills (e.g. `bill-go-code-review-security`, `bill-kotlin-code-review`, `bill-php-code-review-security`, `bill-python-code-review-security`) are **internal sidecars** of `/sona` — they are not listed slash commands; `/sona phase:review` detects the dominant stack and routes to the matching sidecar. Invoke quality checks through `/sona phase:validation`; it selects the dominant pack and runs that pack's `validation_gate` (`routed_skill` telemetry stays `bill-code-check`). Each declared platform-pack bundle registers its baseline reviewer and specialist reviewers as native subagents. Native subagent sources live as provider-neutral `native-agents/agents.yaml` bundles or standalone `native-agents/<name>.md` files. New and rendered neutral sources include `contract_version: "0.1"`; the parser still accepts older unpinned sources so existing repos can migrate gradually. Install renders those sources into `~/.skill-bill/native-agents/` before linking Claude markdown into `~/.claude/agents/`, Codex TOMLs into `~/.codex/agents/`, and Cursor markdown into `~/.cursor/agents/`; generated provider files are not checked into the repo. `~/.agents/agents/` is only a Skill Bill compatibility path for Codex homes without a `.codex` root, not the primary documented Codex custom-agent location. Claude and Cursor use Markdown/YAML custom-subagent frontmatter; Codex resolves spawn instructions by TOML `name`. Today this covers shipped platform-pack baseline and specialist reviewers selected by manifest. Feature-task execution uses the Kotlin runtime driver (`sona feature-task` / `sona goal`); `operation:verify` has no verify-specific native subagents and runs its review through the review phase while keeping feature-flag, completeness, and verdict audits inline.
 
 ## Runtime Model
 
 Normal use is Kotlin-only:
 
-- `skill-bill` launches the packaged Kotlin CLI distribution.
-- `skill-bill-mcp` launches the packaged Kotlin stdio MCP distribution.
+- `sona` launches the packaged Kotlin CLI distribution.
+- `sona-mcp` launches the packaged Kotlin stdio MCP distribution.
 - The installer registers MCP shims to the packaged Kotlin server.
 - Gradle is not used by the default prebuilt install or by installed commands during normal use; it is needed only by maintainers building/validating the runtime and by the opt-in `./install.sh --from-source` install path.
 - Repo validation commands are Kotlin-backed. The legacy maintainer stack is no longer required for current install, validation, or maintainer workflows.
@@ -151,29 +151,29 @@ If a packaged Kotlin distribution is missing, launcher behavior fails closed wit
 After install:
 
 ```bash
-skill-bill version
-skill-bill doctor
-skill-bill telemetry status --format json
+sona version
+sona doctor
+sona telemetry status --format json
 ```
 
-Then try the `/skill-bill` forms in your agent, in this order:
+Then try the `/sona` forms in your agent, in this order:
 
-- `/skill-bill <KEY> phase:plan` (optional prep-first path for spec-only sessions)
-- `/skill-bill <KEY> <description>`
-- `/skill-bill phase:review`
-- `/skill-bill phase:validation`
-- `/skill-bill operation:verify <linear-issue|requirements|spec:<path>> [target:<pr>]`
+- `/sona <KEY> phase:plan` (optional prep-first path for spec-only sessions)
+- `/sona <KEY> <description>`
+- `/sona phase:review`
+- `/sona phase:validation`
+- `/sona operation:verify <linear-issue|requirements|spec:<path>> [target:<pr>]`
 
-Use the full run first because it exercises the full governed path: feature spec, planning, implementation, routed review, validation, history, and PR handoff. Use `phase:plan` when you need standalone spec/decomposition preparation before implementation. Use `phase:review` directly when you only need the review phase. `/skill-bill` is the only listed skill; each form runs `skill-bill phase <name>` or `skill-bill operation <name>`.
+Use the full run first because it exercises the full governed path: feature spec, planning, implementation, routed review, validation, history, and PR handoff. Use `phase:plan` when you need standalone spec/decomposition preparation before implementation. Use `phase:review` directly when you only need the review phase. `/sona` is the only listed skill; each form runs `sona phase <name>` or `sona operation <name>`.
 
 Choose standalone review execution explicitly with:
 
 ```text
-/skill-bill phase:review mode:inline
-/skill-bill phase:review mode:delegated
+/sona phase:review mode:inline
+/sona phase:review mode:delegated
 ```
 
-Review mode is `mode:inline|delegated`; omission means inline, the default reduced-depth review in one review session that merges the selected lanes' rubrics into one prompt, and `mode:auto` is still accepted as inline. `mode:delegated` is the experimental full-depth specialist subagent fan-out, reached only by that explicit selection on `phase:review`. Feature workflows review inline (`/skill-bill <issue-key> code-review:auto|inline`); delegated review is a standalone launch.
+Review mode is `mode:inline|delegated`; omission means inline, the default reduced-depth review in one review session that merges the selected lanes' rubrics into one prompt, and `mode:auto` is still accepted as inline. `mode:delegated` is the experimental full-depth specialist subagent fan-out, reached only by that explicit selection on `phase:review`. Feature workflows review inline (`/sona <issue-key> code-review:auto|inline`); delegated review is a standalone launch.
 
 ## Runtime Fallback Boundary
 
@@ -207,7 +207,7 @@ Strict and loud-fail guarantees:
 
 - MCP tools publish strict schemas for priority workflow, telemetry, review, learning, scaffold, and workflow-state tools. Unknown top-level arguments are rejected before handler dispatch when the schema is strict.
 - Shell and platform-pack fixtures enforce the governed contract version, manifest shape, declared files, generated wrapper sections, and generated support pointers.
-- Scaffold and validation commands operate on structured manifests and `content.md` source files; invalid wizard input, invalid payloads, source-shape violations, or render drift fail the command. `skill-bill new --dry-run` previews planned files and manifest edits, including platform-pack baseline composition blocks; `skill-bill new --payload <file> --dry-run` is the scripted equivalent. `skill-bill show <skill>` exposes manifest-declared review composition for inspection. Legacy platform-pack payloads without `baseline_layers` continue to produce manifests with no composition section.
+- Scaffold and validation commands operate on structured manifests and `content.md` source files; invalid wizard input, invalid payloads, source-shape violations, or render drift fail the command. `sona new --dry-run` previews planned files and manifest edits, including platform-pack baseline composition blocks; `sona new --payload <file> --dry-run` is the scripted equivalent. `sona show <skill>` exposes manifest-declared review composition for inspection. Legacy platform-pack payloads without `baseline_layers` continue to produce manifests with no composition section.
 - `install link-skill` creates real symlinks to staged rendered skill directories and is covered by Kotlin CLI tests.
 
 Model-mediated guarantees:
@@ -223,7 +223,7 @@ Use strict guarantees for compatibility and safety boundaries. Use model-mediate
 Skill Bill has two layers:
 
 - the governed workflow framework: authoring rules, render/install staging, shell contracts, manifests, validators, CLI/MCP runtime, workflow state, telemetry, and cross-agent installation
-- bundled reference workflows: the `/skill-bill` dispatcher, the phases and operations it reaches, and the platform-pack review skills
+- bundled reference workflows: the `/sona` dispatcher, the phases and operations it reaches, and the platform-pack review skills
 
 The bundled workflows are production-usable defaults, not a lock-in boundary. A team can delete or replace them and still use the framework to build its own governed workflow system.
 
@@ -246,7 +246,7 @@ Seven packs—Go, iOS, Kotlin, PHP, Python, Rust, and TypeScript—declare all t
 - `rust`: Rust crates and Cargo workspaces, services, CLIs, async runtimes, FFI, persistence, safety, testing, UI/UX, and validation gate
 - `typescript`: TypeScript applications, libraries, services, Node/browser runtimes, APIs, persistence, async behavior, TSX UI/UX, and validation gate
 
-`skill-bill validate` discovers maintained packs from their manifests and applies the normal substance gate without exemptions: at least three platform-specific failure-mode clusters and ten evidence-bearing rules per effective specialist, no forbidden placeholders, at most 35% shared normalized five-word sequences per pack, and at most 65% similarity for corresponding authored rubrics.
+`sona validate` discovers maintained packs from their manifests and applies the normal substance gate without exemptions: at least three platform-specific failure-mode clusters and ten evidence-bearing rules per effective specialist, no forbidden placeholders, at most 35% shared normalized five-word sequences per pack, and at most 65% similarity for corresponding authored rubrics.
 
 ## Common CLI Surfaces
 
@@ -254,52 +254,52 @@ Review and telemetry:
 
 | Command                       | Purpose                                             |
 |-------------------------------|-----------------------------------------------------|
-| `skill-bill import-review`    | Import review output into the local SQLite store    |
-| `skill-bill record-feedback`  | Record feedback for imported findings               |
-| `skill-bill triage`           | Record triage decisions                             |
-| `skill-bill stats`            | Show review acceptance metrics                      |
-| `skill-bill feature-task-stats` | Show local feature-task runtime metrics           |
-| `skill-bill goal-stats`       | Show local decomposed-goal run metrics              |
-| `skill-bill verify-stats`     | Show local `operation:verify` metrics               |
-| `skill-bill telemetry status` | Show telemetry configuration and pending sync state |
-| `skill-bill telemetry sync`   | Reconcile stale sessions, then flush queued telemetry |
-| `skill-bill telemetry capabilities` | Show configured proxy capabilities            |
-| `skill-bill telemetry stats`  | Fetch aggregate remote workflow stats from the proxy |
+| `sona import-review`    | Import review output into the local SQLite store    |
+| `sona record-feedback`  | Record feedback for imported findings               |
+| `sona triage`           | Record triage decisions                             |
+| `sona stats`            | Show review acceptance metrics                      |
+| `sona feature-task-stats` | Show local feature-task runtime metrics           |
+| `sona goal-stats`       | Show local decomposed-goal run metrics              |
+| `sona verify-stats`     | Show local `operation:verify` metrics               |
+| `sona telemetry status` | Show telemetry configuration and pending sync state |
+| `sona telemetry sync`   | Reconcile stale sessions, then flush queued telemetry |
+| `sona telemetry capabilities` | Show configured proxy capabilities            |
+| `sona telemetry stats`  | Fetch aggregate remote workflow stats from the proxy |
 
 Workflow state:
 
 | Command                               | Purpose                                    |
 |---------------------------------------|--------------------------------------------|
-| `skill-bill feature-task status`      | Inspect a durable feature-task runtime run |
-| `skill-bill feature-task lookup`      | Resolve continuation for an issue key      |
-| `skill-bill goal status`              | Inspect a decomposed goal run              |
-| `skill-bill goal watch`               | Follow a decomposed goal until terminal    |
-| `skill-bill verify-workflow list`     | List persisted verify workflows            |
-| `skill-bill verify-workflow latest`   | Show the latest verify workflow            |
-| `skill-bill verify-workflow show`     | Show one verify workflow, including full durable state |
-| `skill-bill verify-workflow resume`   | Build a verify resume/recovery explanation |
-| `skill-bill verify-workflow continue` | Reopen a resumable verify workflow and emit compact continuation guidance |
+| `sona feature-task status`      | Inspect a durable feature-task runtime run |
+| `sona feature-task lookup`      | Resolve continuation for an issue key      |
+| `sona goal status`              | Inspect a decomposed goal run              |
+| `sona goal watch`               | Follow a decomposed goal until terminal    |
+| `sona verify-workflow list`     | List persisted verify workflows            |
+| `sona verify-workflow latest`   | Show the latest verify workflow            |
+| `sona verify-workflow show`     | Show one verify workflow, including full durable state |
+| `sona verify-workflow resume`   | Build a verify resume/recovery explanation |
+| `sona verify-workflow continue` | Reopen a resumable verify workflow and emit compact continuation guidance |
 
 Authoring and install:
 
 | Command                                 | Purpose                                                                                           |
 |-----------------------------------------|---------------------------------------------------------------------------------------------------|
-| `skill-bill list`                       | List content-managed skills                                                                       |
-| `skill-bill show <skill>`               | Inspect one governed skill                                                                        |
-| `skill-bill explain [skill]`            | Explain the governed authoring boundary                                                           |
-| `skill-bill validate`                   | Run repo or targeted governed-skill validation                                                    |
-| `skill-bill render`                     | Render generated wrappers to stdout or install output without writing generated files into source |
-| `skill-bill fill <skill>`               | Write authored `content.md` text and validate                                                     |
-| `skill-bill upgrade`                    | Validate governed render output and regenerate native-agent artifacts through runtime guardrails   |
-| `skill-bill new`                        | Scaffold a governed skill or platform pack through deterministic prompts                           |
-| `skill-bill create-and-fill`            | Scaffold and immediately author one content-managed skill                                         |
-| `skill-bill new-addon`                  | Create a pack-owned or external add-on skeleton, then edit the generated markdown file             |
-| `skill-bill remove`                     | Remove a horizontal skill, platform pack, or governed add-on with cleanup                         |
-| `skill-bill doctor`                     | Show local install and telemetry health                                                           |
-| `skill-bill install agent-path <agent>` | Print an agent install path                                                                       |
-| `skill-bill install detect-agents`      | List detected agents                                                                              |
-| `skill-bill install link-skill`         | Render one skill into staging and symlink it into a target path                                   |
-| `skill-bill validate-agent-configs`     | Run the agent-config/catalog/workflow-contract validator                                          |
+| `sona list`                       | List content-managed skills                                                                       |
+| `sona show <skill>`               | Inspect one governed skill                                                                        |
+| `sona explain [skill]`            | Explain the governed authoring boundary                                                           |
+| `sona validate`                   | Run repo or targeted governed-skill validation                                                    |
+| `sona render`                     | Render generated wrappers to stdout or install output without writing generated files into source |
+| `sona fill <skill>`               | Write authored `content.md` text and validate                                                     |
+| `sona upgrade`                    | Validate governed render output and regenerate native-agent artifacts through runtime guardrails   |
+| `sona new`                        | Scaffold a governed skill or platform pack through deterministic prompts                           |
+| `sona create-and-fill`            | Scaffold and immediately author one content-managed skill                                         |
+| `sona new-addon`                  | Create a pack-owned or external add-on skeleton, then edit the generated markdown file             |
+| `sona remove`                     | Remove a horizontal skill, platform pack, or governed add-on with cleanup                         |
+| `sona doctor`                     | Show local install and telemetry health                                                           |
+| `sona install agent-path <agent>` | Print an agent install path                                                                       |
+| `sona install detect-agents`      | List detected agents                                                                              |
+| `sona install link-skill`         | Render one skill into staging and symlink it into a target path                                   |
+| `sona validate-agent-configs`     | Run the agent-config/catalog/workflow-contract validator                                          |
 
 ## External Author Dry Run
 
@@ -313,7 +313,7 @@ The supported external-author flow is:
 Example payload:
 
 ```bash
-cat > /tmp/skill-bill-pack.json <<'JSON'
+cat > /tmp/sona-pack.json <<'JSON'
 {
   "scaffold_payload_version": "1.0",
   "kind": "platform-pack",
@@ -323,13 +323,13 @@ cat > /tmp/skill-bill-pack.json <<'JSON'
 }
 JSON
 
-skill-bill new --payload /tmp/skill-bill-pack.json
-skill-bill validate
-skill-bill install link-skill \
+sona new --payload /tmp/sona-pack.json
+sona validate
+sona install link-skill \
   --source platform-packs/java/code-review/bill-java-code-review \
-  --target-dir /tmp/skill-bill-agent/skills \
+  --target-dir /tmp/sona-agent/skills \
   --agent codex
-rm /tmp/skill-bill-agent/skills/bill-java-code-review
+rm /tmp/sona-agent/skills/bill-java-code-review
 rm -rf platform-packs/java
 ```
 
@@ -344,8 +344,8 @@ directory.
 
 ## Goal Observability
 
-`/skill-bill` hands confirmed goals to the foreground
-`skill-bill goal` runtime. The runtime owns a flat worker model: one runnable
+`/sona` hands confirmed goals to the foreground
+`sona goal` runtime. The runtime owns a flat worker model: one runnable
 subtask, one durable child workflow, one fresh child process. Native or nested
 subagents may help the child session stay focused, but workflow-store state is
 the reliability contract.
@@ -365,7 +365,7 @@ Run the goal normally to see compact progress while raw child output stays
 hidden:
 
 ```bash
-skill-bill goal SKILL-901
+sona goal SKILL-901
 ```
 
 ```text
@@ -376,8 +376,8 @@ goal_observability: issue_key=SKILL-901 subtask_id=1 workflow_phase=implement wo
 Use read-only status or watch commands when checking an in-flight run. Goal status is CLI-only; no skill wraps it:
 
 ```bash
-skill-bill goal status SKILL-901
-skill-bill goal watch SKILL-901 --interval-seconds 5
+sona goal status SKILL-901
+sona goal watch SKILL-901 --interval-seconds 5
 ```
 
 The watch command follows until the goal finishes and prints every refresh,
@@ -392,8 +392,8 @@ watch_observability: index=2 phase=implement role=phase_subagent liveness=durabl
 Add current git activity only when needed:
 
 ```bash
-skill-bill goal status SKILL-901 --diff-stat
-skill-bill goal status SKILL-901 \
+sona goal status SKILL-901 --diff-stat
+sona goal status SKILL-901 \
   --diff-hunk runtime-kotlin/runtime-cli/src/main/kotlin/skillbill/cli/GoalCliCommands.kt \
   --diff-hunk-max-hunks 2 \
   --diff-hunk-max-lines 20 \
@@ -409,7 +409,7 @@ selected_diff_line: hunk_index=1 line_index=1 path=runtime-kotlin/runtime-cli/sr
 ### Resuming, inspecting state, and accounting
 
 Feature-task continuation is database-first. Before preparing a feature spec,
-`/skill-bill` performs a read-only lookup using the normalized issue key and
+`/sona` performs a read-only lookup using the normalized issue key and
 the canonical repository identity (`repo-root-realpath-v1:` plus the resolved
 Git top-level path). A unique resumable result keeps its persisted workflow ID,
 mode, governed spec path, and completed phase artifacts. Ambiguous, running,
@@ -427,7 +427,7 @@ the runtime does not relaunch or overwrite either planning phase.
 `feature-task` / `goal` activation and `verify-workflow continue` /
 `verify-workflow show` are different surfaces:
 
-- `skill-bill feature-task` and `skill-bill goal` own feature-task and goal
+- `sona feature-task` and `sona goal` own feature-task and goal
   activation, continuation lookup, and foreground execution.
 - `verify-workflow continue` is **mutating activation** for verify runs — it
   re-opens resumable state and returns the **compact** continuation payload a
@@ -459,7 +459,7 @@ field reference and the cached-token caveat in detail.
 
 ## MCP Server
 
-`skill-bill-mcp` exposes the same local runtime primitives as structured MCP tools. It is useful when an agent can call local tools directly and should not parse CLI text.
+`sona-mcp` exposes the same local runtime primitives as structured MCP tools. It is useful when an agent can call local tools directly and should not parse CLI text.
 
 Primary MCP groups:
 
@@ -477,14 +477,14 @@ and continuation lookup in-process. Settlement-only MCP tools
 `feature_task_audit_settle`) let a child agent choose the next edge without
 schema-policing a stdout envelope. The preplan, plan, and implement briefings
 pin the workflow id and attempt and instruct the child to finish through those
-tools with one prose `value` and an optional `prompt`. Use `skill-bill
-feature-task` and `skill-bill feature-task-stats` for lifecycle control. When a
+tools with one prose `value` and an optional `prompt`. Use `sona
+feature-task` and `sona feature-task-stats` for lifecycle control. When a
 phase ends through stdout with no settlement record, the runtime takes the
 non-blank stdout prose as the value; it does not parse a JSON envelope or
 relaunch for format. Later phases read the selected spec as a persisted
 handoff rather than a value restated in the briefing.
 
-Claude and Codex phase workers get the `skill-bill` server on their own command
+Claude and Codex phase workers get the `sona` server on their own command
 line, bound to the runtime's database, so settlement does not depend on the
 user's agent config still registering it. The runtime finds the server binary
 through `SKILL_BILL_RUNTIME_MCP_BIN`, falling back to
@@ -496,7 +496,7 @@ keep only their isolated evidence server.
 Maintainers should run the full gate before shipping runtime, scaffold, contract, docs, or agent-config changes:
 
 ```bash
-skill-bill validate
+sona validate
 (cd runtime-kotlin && ./gradlew check)
 npx --yes agnix --strict .
 scripts/validate_agent_configs
@@ -517,6 +517,6 @@ scripts/validate_agent_configs
 
 Agent add-ons are explicit, agent-compatible extensions. For Codex, invoke the
 execution boundary guidance with
-`/skill-bill <ISSUE_KEY> agent-addon:execution-budget`; omit the token for the
+`/sona <ISSUE_KEY> agent-addon:execution-budget`; omit the token for the
 unchanged baseline workflow. See [Agent add-on authored sources](skill-source-generation.md#agent-add-on-authored-sources)
 for precedence, source shape, staging, and resume guarantees.

@@ -20,7 +20,7 @@ class ChatSystemPromptTest {
     assertTrue("Effective working directory: /home/operator" in prompt)
     assertTrue("Do not inspect repository branches, default branches or issue-key inventories" in prompt)
     assertTrue("manual repository picker remains available after chat starts" in prompt)
-    assertTrue("Do not emit an executable start card or invoke a skill-bill CLI or MCP run command" in prompt)
+    assertTrue("Do not emit an executable start card or invoke a sona CLI or MCP run command" in prompt)
     assertTrue("Git metadata in home" in prompt)
     assertFalse("\"start\":\"goal\"" in prompt)
     assertFalse("Inspect the repository and connected context" in prompt)

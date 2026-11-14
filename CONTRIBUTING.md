@@ -42,7 +42,7 @@ source layout and render contract.
 
 ## Extending via the MCP Tool Surface
 
-`skill-bill-mcp` exposes local runtime primitives as structured MCP tools.
+`sona-mcp` exposes local runtime primitives as structured MCP tools.
 These are documented in the
 [MCP Server section of Getting Started](docs/getting-started.md#mcp-server).
 The tool surface is stable for review, workflow-state, and telemetry

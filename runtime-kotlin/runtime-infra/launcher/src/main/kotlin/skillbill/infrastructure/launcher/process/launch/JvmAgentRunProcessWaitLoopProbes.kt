@@ -86,7 +86,7 @@ internal fun ProcessWaitLoop.pollStatusHeartbeat(nowNanos: Long) {
       .orEmpty()
   request.launch.outputSink.write(
     AgentRunOutputStream.STDERR,
-    "skill-bill: status heartbeat (${request.timing.statusHeartbeatInterval}): child run still active$details\n",
+    "sona: status heartbeat (${request.timing.statusHeartbeatInterval}): child run still active$details\n",
   )
 }
 
@@ -97,7 +97,7 @@ internal fun ProcessWaitLoop.writeProgressLabel(nowNanos: Long) {
       lastProgressLabel = label
       lastSnapshotInstant = clock.instant()
       observeWorkflowStepLabel(label, nowNanos)
-      request.launch.outputSink.write(AgentRunOutputStream.STDERR, "skill-bill: workflow progress: $label\n")
+      request.launch.outputSink.write(AgentRunOutputStream.STDERR, "sona: workflow progress: $label\n")
     }
 }
 
@@ -125,7 +125,7 @@ internal fun ProcessWaitLoop.writeActivityLabel() {
       .orEmpty()
   request.launch.outputSink.write(
     AgentRunOutputStream.STDERR,
-    "skill-bill: file activity observed; durable workflow progress is still pending$suffix\n",
+    "sona: file activity observed; durable workflow progress is still pending$suffix\n",
   )
 }
 

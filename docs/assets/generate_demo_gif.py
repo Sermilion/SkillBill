@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Generate the skill-bill terminal demo GIF (scripted playback, not a live capture).
 
-Renders a macOS-style terminal window streaming a /skill-bill run: each phase
+Renders a macOS-style terminal window streaming a /sona run: each phase
 starts (spinner) and finishes (check), the run halts at the claude -p usage limit, then
 resumes from durable workflow state and completes. Pure Pillow frame-by-frame so the
 style matches docs/assets/skill-bill-demo-placeholder.svg.
@@ -74,7 +74,7 @@ def base_canvas():
         cx = WX + 26 + i * 26
         d.ellipse([cx - 7, cy - 7, cx + 7, cy + 7], fill=col)
     # centered title
-    t = "skill-bill — demo"
+    t = "sona — demo"
     tw = d.textlength(t, font=font_title)
     d.text((WX + (WW - tw) / 2, cy - 10), t, font=font_title, fill=TITLE)
     return img
@@ -138,7 +138,7 @@ def note(segments, hold=360):
     emit(render(log), S(hold))
 
 # ---- script ---------------------------------------------------------------
-type_cmd("/skill-bill .feature-specs/SKILL-81/spec.md")
+type_cmd("/sona .feature-specs/SKILL-81/spec.md")
 
 run_step("assess",   frames_n=5, detail="acceptance criteria · size: M")
 run_step("branch",   frames_n=4, detail="feat/SKILL-81-launch-readiness")

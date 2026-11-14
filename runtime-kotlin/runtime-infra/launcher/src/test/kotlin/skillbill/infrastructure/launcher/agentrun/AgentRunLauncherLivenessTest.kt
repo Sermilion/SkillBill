@@ -37,7 +37,7 @@ class AgentRunLauncherLivenessTest {
         )
 
       assertEquals(64, result.exitStatus, "$scriptName stdout=${result.stdout} stderr=${result.stderr}")
-      assertContains(result.stdout, "Refusing to run $scriptName during skill-bill goal-continuation.")
+      assertContains(result.stdout, "Refusing to run $scriptName during sona goal-continuation.")
       assertFalse(result.stdout.contains("Applying install through the runtime plan/apply path."))
       assertFalse(result.stdout.contains("Uninstall complete"))
     }

@@ -7,8 +7,7 @@ These instructions apply to runtime commands, planning, execution, and goal comm
 `/sona` is the only public listed skill. Its canonical source remains
 `skills/skill-bill/`. The `sona` executable runs the foreground goal runtime
 with durable state, telemetry, packs, add-ons, and native subagents. The
-`sona-app` desktop launcher displays the name Sona. The final SONA-5 subtask
-leaves `skill-bill` as a notice-only compatibility command.
+`sona-app` desktop launcher displays the name Sona. Installation removes the retired CLI command.
 
 The generic dispatcher supports local key allocation for new requirements.
 This repository's `AGENTS.md` overrides that default: new work must use an

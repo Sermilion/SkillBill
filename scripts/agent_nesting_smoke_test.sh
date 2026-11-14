@@ -2,7 +2,7 @@
 # 3-level Agent tool nesting smoke test for the runtime goal path (SKILL-83 nesting gate).
 # Verifies: Level-0 (claude -p session) can spawn Level-1 (Agent tool) which can spawn
 # Level-2 (Agent tool), that the Level-2 sentinel propagates back to Level-0, and that
-# Level-1 has access to the skill-bill MCP tools used by the runtime feature/goal family.
+# Level-1 has access to the sona MCP tools used by the runtime feature/goal family.
 #
 # Subject: runtime goal / feature-task path (not a deleted prose orchestrator). This remains
 # a nesting capability probe for Agent-tool depth plus MCP reachability. It must not require
@@ -13,7 +13,7 @@
 #
 # Requires:
 #   - claude CLI on PATH (or CLAUDE_BIN env var pointing to it)
-#   - ./install.sh must have run so MCP tools are registered for skill-bill
+#   - ./install.sh must have run so MCP tools are registered for sona
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -59,7 +59,7 @@ L1_RESULT|<level2_text>|<mcp_ok_or_mcp_err>
 
 Where:
   <level2_text>     = the exact text Level-2 returned (no quotes around it)
-  <mcp_ok_or_mcp_err> = "mcp_ok" if any MCP tool call was accepted, "mcp_err" if no skill-bill MCP tool was available
+  <mcp_ok_or_mcp_err> = "mcp_ok" if any MCP tool call was accepted, "mcp_err" if no sona MCP tool was available
 EOF
 
 cat >"$TMP/l0_prompt.txt" <<EOF

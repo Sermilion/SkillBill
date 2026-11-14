@@ -36,7 +36,7 @@ The current app takes about 5 seconds to open a goal or spec. Section 5.2 explai
 | New app | Built fresh, not a restyle of `desktop-tray`. `desktop-tray` stays the reference for behavior, edge cases and copy. |
 | Feature scope | Match the current desktop app where behavior overlaps. Keep added mock functionality for later implementation, including Confirm criteria, the queue popup and the device picker. |
 | Stack | Kotlin/JVM with Kotlin Flow for all observation. Compose Multiplatform Desktop is the natural toolkit (the current app uses it and its terminal, tray and notification integrations are proven), but the toolkit is not otherwise fixed by this document. |
-| No CLI | The app never runs `skill-bill`, never parses CLI output and has no CLI fallback. |
+| No CLI | The app never runs `sona`, never parses CLI output and has no CLI fallback. |
 | Embedded runtime | The app loads the runtime that `install.sh` installed in `.skill-bill/runtime/runtime-cli/lib` under the user's home directory into its own JVM and calls runtime services directly. There is one installed copy; the app ships no runtime jars. |
 | No coordinator daemon | Considered and rejected (section 5.7). |
 | Dark only | One theme, the tokens in section 6. |

@@ -162,7 +162,7 @@ internal class OpenCodeReviewLaunchScope(
       val diagnosticFailure = captureLaunchResourceOutcome { diagnostics?.warning(evidence) }.exceptionOrNull()
       val sinkFailure =
         captureLaunchResourceOutcome {
-          outputSink.write(AgentRunOutputStream.STDERR, "skill-bill: $evidence\n")
+          outputSink.write(AgentRunOutputStream.STDERR, "sona: $evidence\n")
         }.exceptionOrNull()
       if (diagnostics == null || diagnosticFailure != null || sinkFailure != null) {
         CLEANUP_LOGGER.warning("skill-bill OpenCode review cleanup evidence: $evidence")

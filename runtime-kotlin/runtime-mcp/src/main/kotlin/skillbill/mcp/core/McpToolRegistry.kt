@@ -93,7 +93,7 @@ internal object McpToolRegistry {
       ),
       McpTool(
         name = "doctor",
-        description = "Check skill-bill installation health.",
+        description = "Check Sona installation health.",
         handler = { _, component -> doctor(component) },
       ),
       McpTool(
@@ -235,7 +235,7 @@ internal object McpToolRegistry {
       ),
       McpTool(
         name = "update_check",
-        description = "Check whether the installed skill-bill runtime is up to date.",
+        description = "Check whether the installed Sona runtime is up to date.",
         handler = { _, component -> updateCheck(component) },
       ),
     )

@@ -174,7 +174,7 @@ Stopped the desktop app and private display processes. Stopped the Gradle and Ko
 
   /* ---------- Validation runs (validation run design) ----------
    * A standalone validation phase's run, shaped like the desktop's Detail for phase_id 'validation': the current
-   * execution's liveChecks ('available' when the skill-bill MCP server started for the launch, so the agent can report
+   * execution's liveChecks ('available' when the sona MCP server started for the launch, so the agent can report
    * checks through validation_check), validationOutcome (passed | blocked | failed, derived by the runtime once the checks
    * settle), validationChecks ({ id, name, dir, cmd, attempts: { outcome, at, ms, exit, note } }), the report
    * (terminal_result), currentActivity, the last agent signal (agent_activity_stamps) and validationBranchRuns (every
@@ -247,7 +247,7 @@ Stopped the desktop app and private display processes. Stopped the Gradle and Ko
     /* Live checks available, none reported yet: the Checks section holds its place. */
     waiting: { runSeq: 413, liveChecks: true, outcome: null, checks: [], result: null, activity: ACTIVE_LINE, signal: { label: 'tool stream', ago: '1s ago' },
       branchRuns: [R406, R411, Object.assign({}, R413, { lifecycle: 'active', ms: 24000, line: 'Reading AGENTS.md and the CI workflows', item: null })] },
-    /* The skill-bill MCP server never started for this launch, so no checks: the report-only running layout. */
+    /* The sona MCP server never started for this launch, so no checks: the report-only running layout. */
     noChecks: { runSeq: 412, liveChecks: false, outcome: null, checks: [], result: null, activity: ACTIVE_LINE, signal: { label: 'stdout', ago: '3s ago' }, branchRuns: [] },
     /* Live checks reported: four of eight settled, the fifth running. */
     running: { runSeq: 413, liveChecks: true, outcome: null, checks: VAL_CHECKS_RUNNING, result: null, activity: 'Running Tray check and distributable', signal: { label: 'tool stream', ago: '2s ago' },

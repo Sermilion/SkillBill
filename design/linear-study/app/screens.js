@@ -2513,7 +2513,7 @@
     let body;
     if (!project.checkout) body = S.EmptyState({ icon: 'folder', title: 'This project has no checkout on this machine.' });
     else if (project.problem) body = S.EmptyState({ icon: 'alert', title: 'Plans unavailable', body: esc(project.problem), actions: [S.Button({ label: 'Retry', act: 'spec-retry' })] });
-    else if (!mine.length) { specRows = []; body = S.EmptyState({ icon: 'fileText', title: 'No plans yet', body: 'Plan a feature with <span class="mono">/skill-bill phase:plan</span> and its bundle shows up here.' }); }
+    else if (!mine.length) { specRows = []; body = S.EmptyState({ icon: 'fileText', title: 'No plans yet', body: 'Plan a feature with <span class="mono">/sona phase:plan</span> and its bundle shows up here.' }); }
     else {
       const tree = specTree(st, project);
       body = tree || S.EmptyState({ icon: 'search', title: 'No plans match', body: 'Nothing in this project matches the filter and status.', actions: [S.Button({ label: 'Clear filters', act: 'spec-clear' })] });

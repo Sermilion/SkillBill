@@ -15,7 +15,7 @@
 #
 # Requires:
 #   - Cursor CLI on PATH (or CURSOR_BIN env var pointing to it)
-#   - skill-bill runtime installed (run ./install.sh first)
+#   - Sona runtime installed (run ./install.sh first)
 #   - Authenticated Cursor session (run 'cursor' once to log in)
 set -uo pipefail
 
@@ -105,7 +105,7 @@ fi
 section "Scenario 2: MCP startup"
 
 if [[ -x "$MCP_BIN" ]]; then
-  echo "  Testing skill-bill MCP server startup..."
+  echo "  Testing Sona MCP server startup..."
   W2="$TMP/scenario2"; mkdir -p "$W2"
 
   # Start MCP server in background, kill after 5 seconds

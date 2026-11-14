@@ -160,7 +160,7 @@ internal class ClaudeApprovalChannel(
   }
 
   private fun announce(line: String) {
-    catchingNonCancellation { launch.outputSink.write(AgentRunOutputStream.STDERR, "skill-bill: $line\n") }
+    catchingNonCancellation { launch.outputSink.write(AgentRunOutputStream.STDERR, "sona: $line\n") }
   }
 
   private companion object {

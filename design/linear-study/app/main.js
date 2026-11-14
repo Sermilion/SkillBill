@@ -706,7 +706,7 @@
     if (scenario === 'few') { nt.chats = [empty()]; nt.active = 0; nt.saved = nt.saved.filter((chat) => chat.newTask.repositoryRoot === 'skill-bill').slice(0, 3); nt.few = true; }
     if (['pending', 'firstRun', 'noAgent', 'noRepo', 'detectionFailed'].includes(scenario)) {
       nt.chats = [empty()]; nt.active = 0; nt.saved = []; nt.homeState = scenario === 'pending' ? 'pending' : 'firstRun';
-      nt.readiness = { firstRun: 'Ready: claude, codex found, skill-bill selected', noAgent: 'Not ready: no agent found', noRepo: 'Not ready: choose a repository', detectionFailed: 'Readiness unknown: agent detection failed' }[scenario] || null;
+      nt.readiness = { firstRun: 'Ready: claude, codex found, sona selected', noAgent: 'Not ready: no agent found', noRepo: 'Not ready: choose a repository', detectionFailed: 'Readiness unknown: agent detection failed' }[scenario] || null;
       if (scenario === 'noRepo') nt.chats[0].repo = null;
     }
     return nt;
